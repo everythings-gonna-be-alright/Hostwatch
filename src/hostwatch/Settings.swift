@@ -59,7 +59,7 @@ enum SettingsPane: Int, CaseIterable {
 /// The Settings window (⌘,): toolbar tabs, like System Settings-era Mac apps.
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    private let tabs = NSTabViewController()
+    private let tabs = SettingsTabs()
     private let state = SettingsState()
 
     init(context c: SettingsContext) {
@@ -78,12 +78,14 @@ final class SettingsWindowController: NSWindowController {
             }
             let host = NSHostingController(rootView: view.frame(width: 560).fixedSize(horizontal: false, vertical: true))
             host.sizingOptions = [.preferredContentSize]
+            host.title = pane.title          // the window shows the selected tab's title
             let item = NSTabViewItem(viewController: host)
             item.label = pane.title
             item.image = NSImage(systemSymbolName: pane.symbol, accessibilityDescription: pane.title)
             tabs.addTabViewItem(item)
         }
         let window = NSWindow(contentViewController: tabs)
+        window.title = SettingsPane.general.title
         window.styleMask = [.titled, .closable]
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
@@ -100,6 +102,14 @@ final class SettingsWindowController: NSWindowController {
         if window?.isVisible != true { window?.center() }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+}
+
+/// Keeps the window title on the selected tab's name.
+final class SettingsTabs: NSTabViewController {
+    override func tabView(_ tabView: NSTabView, didSelect item: NSTabViewItem?) {
+        super.tabView(tabView, didSelect: item)
+        if let label = item?.label { view.window?.title = label }
     }
 }
 
