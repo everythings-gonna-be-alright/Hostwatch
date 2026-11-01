@@ -54,7 +54,8 @@ else
   echo "Note: ad-hoc signed. Re-grant Full Disk Access to Hostwatch after each rebuild."
 fi
 
-if ! codesign -dv "$APP" 2>&1 | grep -q "flags=.*runtime"; then
+SIGNATURE="$(codesign -dv "$APP" 2>&1 || true)"
+if [[ "$SIGNATURE" != *"runtime"* ]]; then
   echo "error: $APP is not signed with the hardened runtime" >&2
   exit 1
 fi
