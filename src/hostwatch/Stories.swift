@@ -77,6 +77,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 struct StoryStep: Codable, Identifiable {
     var id = UUID()
     var date: Date
+    /// When this step's process started (exec event or kernel); tells process instances apart.
+    var processStart: Date?
     var stage: StoryStage
     var note: String              // one-line explanation
     // Event snapshot, for display and Ask Claude.
@@ -160,9 +162,33 @@ final class StoryEngine: ObservableObject {
     @Published private(set) var stories: [Story] = []
     @Published private(set) var revision = 0
 
-    private struct Proc { var ppid: Int; var path: String; var seen: Date }
+    private struct Proc { var ppid: Int; var path: String; var seen: Date; var start: Date? }
     private var procs: [Int: Proc] = [:]
-    private var working: [Int: Story] = [:]                  // root pid -> story (fired or not)
+    private var working: [UUID: Story] = [:]                 // story id -> story (fired or not)
+    /// Recent steps and the story each belongs to: what new steps can link to.
+    private var linkable: [(step: StoryStep, story: UUID)] = []
+
+    // Causal-link windows (see `related`).
+    static let sameProcessWindow: TimeInterval = 120
+    static let processStartWindow: TimeInterval = 10 * 60
+    static let lineageWindow: TimeInterval = 10 * 60
+    static let scriptWindow: TimeInterval = 3 * 60
+    /// Unsigned / ad-hoc programs, or ones run from Downloads or temp: every run is one story.
+    static let untrustedProgramWindow: TimeInterval = 60 * 60
+    /// Different programs reaching the same new domain or raw IP.
+    static let destinationWindow: TimeInterval = 30 * 60
+    /// Login items: the plist's writer and the program it starts, even days later (after a reboot).
+    static let loginItemMemory: TimeInterval = 30 * 24 * 3600
+
+    struct LoginItemLink: Codable {
+        var plist: String
+        var step: StoryStep
+        var story: UUID
+    }
+    private var loginItems: [LoginItemLink] = []
+    private var plistPrograms: [String: [String]] = [:]       // plist -> programs it starts
+    /// Reads a login-item plist (tests supply their own).
+    var readPlist: (String) -> Data? = { FileManager.default.contents(atPath: $0) }
     private var files: [String: (date: Date, step: StoryStep)] = [:]  // recent writes in drop zones
     private var unquarantines: [StoryStep] = []              // recent xattr -d quarantine runs
     private var ignored: Set<String>
@@ -186,6 +212,7 @@ final class StoryEngine: ObservableObject {
         ignored = persistent ? Set(UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? []) : []
         guard persistent else { return }
         load()
+        loadLoginItems()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.maintain() }
         }
@@ -198,6 +225,9 @@ final class StoryEngine: ObservableObject {
         stories.filter { !$0.dismissed && Date().timeIntervalSince($0.lastSeen) < seconds }
     }
 
+    /// Every open chain, fired or not (tests and replay).
+    var openChains: [Story] { Array(working.values) }
+
     // MARK: Ingest
 
     /// Adds the event to its story; returns the stages it added (with notes), for the process hold.
@@ -205,7 +235,11 @@ final class StoryEngine: ObservableObject {
     func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date()) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0 {
-            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date)
+            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
+            // Replay: a parent that started before the recording is still known by its path.
+            if !liveLookups, e.ppid > 1, procs[e.ppid] == nil, !e.parent.isEmpty {
+                procs[e.ppid] = Proc(ppid: 0, path: e.parent, seen: date, start: nil)
+            }
         }
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
@@ -222,31 +256,51 @@ final class StoryEngine: ObservableObject {
         let linkedQuarantine = linkedUnquarantine(for: e)
         if linked != nil { found.removeAll { $0.0 == .runFromDrop } }   // the linked step says it better
 
-        let root = rootOf(e.pid)
-        var story = working[root.pid] ?? Story(rootPid: root.pid, originName: root.originName,
-                                               originPath: root.originPath, origin: root.origin)
         let now = clock
-        story.steps.removeAll { now.timeIntervalSince($0.date) > window }
-        if story.steps.isEmpty { story.firstSeen = now; story.fired = false; story.dismissed = false }
+        let start = node(e.pid)?.start
+        let candidate = found.map { StoryStep(e, stage: $0.0, note: $0.1, date: now) }
 
-        for (stage, note) in found {
-            let step = StoryStep(e, stage: stage, note: note, date: now)
+        // Steps this event is linked to: by cause (see `related`), by a file it runs, or by the login
+        // item that started it.
+        linkable.removeAll { now.timeIntervalSince($0.step.date) > Self.untrustedProgramWindow }
+        if linkable.count > 5000 { linkable.removeFirst(linkable.count - 5000) }
+        let link = LinkContext(pid: e.pid, start: start, ancestors: ancestry(of: e.pid),
+                               program: Self.program(e), untrusted: isUntrustedProgram(Self.program(e)),
+                               destinations: Set(candidate.compactMap(Self.rareDestination)), now: now)
+        var hits = linkable.filter { related($0.step, link) }
+        for extra in [linked, linkedQuarantine].compactMap({ $0 }) {
+            if let owner = linkable.first(where: { $0.step.id == extra.id }) { hits.append(owner) }
+        }
+        hits += loginItemLinks(for: link.program, args: e.args)
+        var story = resolve(hits)
+        if hits.isEmpty {
+            let root = rootOf(e.pid)
+            story = Story(rootPid: root.pid, originName: root.originName, originPath: root.originPath, origin: root.origin)
+            story.firstSeen = now
+        }
+
+        for var step in candidate {
+            step.processStart = start
             // One directory walk or a burst of connections is one step, not sixty.
             let key = Self.dedupeKey(step)
             // Same tool run again (new pid each time) or same process touching the same place.
-            if story.steps.contains(where: { $0.stage == stage && Self.dedupeKey($0) == key
+            if story.steps.contains(where: { $0.stage == step.stage && Self.dedupeKey($0) == key
                                              && ($0.pid == step.pid || step.kind == .exec) }) {
                 continue
             }
-            if story.steps.filter({ $0.stage == stage }).count >= 8 { continue }
+            if story.steps.filter({ $0.stage == step.stage }).count >= 8 { continue }
             story.steps.append(step)
+            linkable.append((step, story.id))
+            if step.stage == .persistence, step.target.hasSuffix(".plist") { rememberLoginItem(step, story: story.id) }
         }
         // Running a file another tree wrote (or un-quarantined) pulls those steps into this story.
         if let linked, !story.steps.contains(where: { $0.id == linked.id }) {
             story.steps.append(linked)
-            story.steps.append(StoryStep(e, stage: .runFromDrop,
-                                         note: "ran a file \(linked.name) wrote \(Self.ago(linked.date, now: now))",
-                                         date: now))
+            var ran = StoryStep(e, stage: .runFromDrop,
+                                note: "ran a file \(linked.name) wrote \(Self.ago(linked.date, now: now))", date: now)
+            ran.processStart = start
+            story.steps.append(ran)
+            linkable.append((ran, story.id))
         }
         if let q = linkedQuarantine, !story.steps.contains(where: { $0.id == q.id }) {
             story.steps.append(q)
@@ -256,9 +310,211 @@ final class StoryEngine: ObservableObject {
         if story.steps.count > 60 { story.steps.removeFirst(story.steps.count - 60) }
         story.lastSeen = now
         evaluate(&story)
-        working[root.pid] = story
+        working[story.id] = story
         if let linked { found.append((.runFromDrop, "runs a file \(linked.name) just wrote")) }
         return found
+    }
+
+    // MARK: Causal links
+
+    /// The new event, as far as linking is concerned.
+    private struct LinkContext {
+        var pid: Int
+        var start: Date?
+        var ancestors: [Int]
+        var program: String
+        var untrusted: Bool
+        var destinations: Set<String>
+        var now: Date
+    }
+
+    /// Is the new event caused by, or part of the same activity as, `step`? Only concrete links
+    /// count: sharing a long-lived ancestor (an app, your terminal) does not.
+    private func related(_ step: StoryStep, _ c: LinkContext) -> Bool {
+        let age = c.now.timeIntervalSince(step.date)
+        guard age >= -1 else { return false }
+        // Evidence links, regardless of the process tree:
+        // the same untrusted program (unsigned, ad-hoc, or from Downloads/temp), any run…
+        if c.untrusted, Self.program(of: step) == c.program, age <= Self.untrustedProgramWindow { return true }
+        // …or the same new domain / raw IP reached again, by any program.
+        if !c.destinations.isEmpty, let d = Self.rareDestination(step), c.destinations.contains(d),
+           age <= Self.destinationWindow { return true }
+        return causal(step, age: age, pid: c.pid, start: c.start, ancestors: c.ancestors)
+    }
+
+    /// Process-tree links: same process, parent -> child, same script.
+    private func causal(_ step: StoryStep, age: TimeInterval, pid: Int, start: Date?, ancestors: [Int]) -> Bool {
+        // 1. Same process instance: close in time, or its own start (a dropped binary launching).
+        if step.pid == pid, sameInstance(step.processStart, start) {
+            if age <= Self.sameProcessWindow { return true }
+            if step.kind == .exec, age <= Self.processStartWindow { return true }
+            return false
+        }
+        // 2. Parent -> child: the step happened in an ancestor before this process was started.
+        // Not for long-lived hosts (apps, terminals, agents): they start children all day, so timing
+        // alone means nothing there. A real hand-off (download, then run) is linked by the file.
+        if let i = ancestors.firstIndex(of: step.pid) {
+            guard let start, start.timeIntervalSince(step.date) >= -2 else { return false }
+            if isHost(step.pid, parent: i + 1 < ancestors.count ? ancestors[i + 1] : 0) { return false }
+            return age <= Self.lineageWindow
+        }
+        // 3. Same script: both under the same short-lived parent (not an app or an interactive shell).
+        if age <= Self.scriptWindow {
+            let theirs = ancestry(of: step.pid)
+            if let common = ancestors.first(where: theirs.contains), common > 1 {
+                let parentOfCommon = node(common)?.ppid ?? 0
+                if !isHost(common, parent: parentOfCommon) { return true }
+            }
+        }
+        return false
+    }
+
+    /// Same process instance unless both start times are known and differ (pid reuse).
+    private func sameInstance(_ a: Date?, _ b: Date?) -> Bool {
+        guard let a, let b else { return true }
+        return abs(a.timeIntervalSince(b)) < 1
+    }
+
+    /// Ancestor pids, parent first (stops at launchd or an unknown process).
+    private func ancestry(of pid: Int) -> [Int] {
+        var out: [Int] = []
+        var current = pid
+        for _ in 0..<16 {
+            guard let p = node(current), p.ppid > 0, !out.contains(p.ppid) else { break }
+            out.append(p.ppid)
+            if p.ppid == 1 { break }
+            current = p.ppid
+        }
+        return out
+    }
+
+    /// Long-lived hosts whose descendants are independent of each other: launchd, a GUI app's main
+    /// binary, a session starter (login/sshd/tmux/terminal) or an interactive shell.
+    private func isHost(_ pid: Int, parent: Int) -> Bool {
+        guard pid > 1, let p = node(pid) else { return true }
+        if p.path.contains(".app/Contents/MacOS/") || Self.isSessionStarter(p.path) { return true }
+        if Self.isShell(p.path) {
+            let parentPath = node(parent)?.path ?? ""
+            // Interactive only under a terminal, IDE, agent or login: a shell an app (Slack…) starts
+            // runs a script, and its steps belong together.
+            return parentPath.isEmpty || Self.isSessionStarter(parentPath)
+        }
+        return false
+    }
+
+    /// The story for a set of linked steps: their stories merged (fired ones revived if they went
+    /// quiet). Steps whose story is gone are carried into the result. Empty if nothing links.
+    private func resolve(_ hits: [(step: StoryStep, story: UUID)]) -> Story {
+        let ids = Set(hits.map(\.story))
+        for id in ids where working[id] == nil {
+            if let fired = stories.first(where: { $0.id == id }) { working[id] = fired }
+        }
+        let alive = ids.filter { working[$0] != nil }
+        var story = alive.isEmpty ? Story(rootPid: 0, originName: "", originPath: "", origin: .background, steps: [])
+                                  : merge(Array(alive))
+        for h in hits where working[h.story] == nil && !story.steps.contains(where: { $0.id == h.step.id }) {
+            story.steps.append(h.step)
+        }
+        if alive.isEmpty, let first = story.steps.min(by: { $0.date < $1.date }) {
+            // A story rebuilt around old evidence: origin from where that evidence came from.
+            let root = rootOf(first.pid)
+            story.rootPid = root.pid; story.originName = root.originName
+            story.originPath = root.originPath; story.origin = root.origin
+            story.firstSeen = first.date
+        }
+        return story
+    }
+
+    // MARK: Evidence links
+
+    static func program(_ e: ActivityEvent) -> String { e.kind == .exec ? e.target : e.proc }
+    static func program(of s: StoryStep) -> String { s.kind == .exec ? s.target : s.proc }
+
+    /// A new domain or a raw IP: rare enough that two programs reaching it are related.
+    static func rareDestination(_ s: StoryStep) -> String? {
+        switch s.stage {
+        case .newDomain: return s.event.registrableDomain ?? (s.host.isEmpty ? nil : s.host)
+        case .rawIP: return s.event.remoteHost
+        default: return nil
+        }
+    }
+
+    /// Unsigned or ad-hoc code, or anything run from Downloads, temp or a mounted volume.
+    func isUntrustedProgram(_ path: String) -> Bool {
+        guard path.hasPrefix("/"), !SignatureBuilder.isSealedSystem(path), !Self.isOwn(path) else { return false }
+        if Self.inZone(path, Self.dropZones) { return true }
+        return SigningCache.shared.cached(path)?.untrustedCode ?? false
+    }
+
+    private func rememberLoginItem(_ step: StoryStep, story: UUID) {
+        loginItems.removeAll { $0.plist == step.target || clock.timeIntervalSince($0.step.date) > Self.loginItemMemory }
+        loginItems.append(LoginItemLink(plist: step.target, step: step, story: story))
+        if loginItems.count > 50 { loginItems.removeFirst(loginItems.count - 50) }
+        plistPrograms[step.target] = nil
+        saveLoginItems()
+    }
+
+    /// Persistence steps whose plist starts this program (or runs this script).
+    private func loginItemLinks(for program: String, args: String) -> [(step: StoryStep, story: UUID)] {
+        guard !program.isEmpty, !loginItems.isEmpty else { return [] }
+        return loginItems.filter { item in
+            guard clock.timeIntervalSince(item.step.date) >= 0 else { return false }
+            let programs = programs(startedBy: item.plist)
+            return programs.contains(program) || programs.contains { args.contains($0) }
+        }.map { ($0.step, $0.story) }
+    }
+
+    /// Program and script paths a launchd plist starts (read once it has content).
+    private func programs(startedBy plist: String) -> [String] {
+        if let known = plistPrograms[plist] { return known }
+        guard let data = readPlist(plist), !data.isEmpty,
+              let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { return [] }
+        var paths = (dict["ProgramArguments"] as? [String]) ?? []
+        if let program = dict["Program"] as? String { paths.insert(program, at: 0) }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let found = paths.map { $0.hasPrefix("~/") ? home + $0.dropFirst() : $0 }
+            .filter { $0.hasPrefix("/") && !SignatureBuilder.isSealedSystem($0) }
+        plistPrograms[plist] = found
+        return found
+    }
+
+    private func saveLoginItems() {
+        guard persistent, let data = try? JSONEncoder().encode(loginItems) else { return }
+        UserDefaults.standard.set(data, forKey: "storyLoginItems")
+    }
+
+    private func loadLoginItems() {
+        guard let data = UserDefaults.standard.data(forKey: "storyLoginItems"),
+              let items = try? JSONDecoder().decode([LoginItemLink].self, from: data) else { return }
+        loginItems = items.filter { Date().timeIntervalSince($0.step.date) < Self.loginItemMemory }
+    }
+
+    /// Other open stories within 30 minutes of this one: shown as "possibly related", never merged.
+    func possiblyRelated(to story: Story) -> [Story] {
+        stories.filter { other in
+            other.id != story.id && !other.dismissed
+                && other.firstSeen.timeIntervalSince(story.lastSeen) < 30 * 60
+                && story.firstSeen.timeIntervalSince(other.lastSeen) < 30 * 60
+        }
+    }
+
+    /// Joins linked stories into the oldest one (each step, once).
+    private func merge(_ ids: [UUID]) -> Story {
+        let parts = ids.compactMap { working[$0] }.sorted { $0.firstSeen < $1.firstSeen }
+        guard var base = parts.first else {
+            let root = Root(pid: 0, originName: "?", originPath: "", origin: .background)
+            return Story(rootPid: root.pid, originName: root.originName, originPath: root.originPath, origin: root.origin)
+        }
+        for other in parts.dropFirst() {
+            for step in other.steps where !base.steps.contains(where: { $0.id == step.id }) { base.steps.append(step) }
+            base.firstSeen = min(base.firstSeen, other.firstSeen)
+            base.fired = base.fired || other.fired
+            working[other.id] = nil
+            stories.removeAll { $0.id == other.id }
+            for i in linkable.indices where linkable[i].story == other.id { linkable[i].story = base.id }
+        }
+        return base
     }
 
     private static func dedupeKey(_ s: StoryStep) -> String {
@@ -320,6 +576,14 @@ final class StoryEngine: ObservableObject {
         #"[A-Za-z0-9+/]{120,}={0,2}"#,
     ].map { try! NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
 
+    /// Claude Code runs each command as `zsh -c 'source …/shell-snapshots/… && eval '<command>''`.
+    /// Only the command inside is judged; the wrapper's own `eval` is not evidence.
+    static func unwrapAgentCommand(_ args: String) -> String {
+        guard args.contains("/shell-snapshots/snapshot-"),
+              let eval = args.range(of: "&& eval ", options: .backwards) else { return args }
+        return String(args[eval.upperBound...])
+    }
+
     private static func inZone(_ path: String, _ zones: [String]) -> Bool {
         zones.contains { path.contains($0) || path.hasPrefix(String($0.dropLast())) }
     }
@@ -358,13 +622,17 @@ final class StoryEngine: ObservableObject {
                 }
             }
             let range = NSRange(e.args.startIndex..., in: e.args)
-            if !e.args.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: e.args, range: range) != nil }) {
+            // `security`'s arguments are keychain data (hex tokens), not commands.
+            let command = name == "security" ? "" : Self.unwrapAgentCommand(e.args)
+            let commandRange = NSRange(command.startIndex..., in: command)
+            if !command.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: command, range: commandRange) != nil }) {
                 out.append((.encodedCommand, "suspicious command line"))
             }
             // Reading keychain secrets counts, unless a trusted, validly signed program reads its own
             // items (e.g. Claude Code reading "Claude Code-credentials").
             if name == "security", Self.keychainDump.firstMatch(in: e.args, range: range) != nil,
-               !(SigningCache.shared.identity(e.parent).map { SigningCache.shared.isTrusted($0) } ?? false) {
+               !(SigningCache.shared.identity(e.parent).map { SigningCache.shared.isTrusted($0) } ?? false),
+               !Self.readsOwnKeychainItem(args: e.args, parent: e.parent) {
                 out.append((.credential, "read keychain secrets: \(e.args)"))
             }
             // A real GUI app (not Python.app & co. inside a framework) starting a shell/interpreter/tool.
@@ -380,7 +648,10 @@ final class StoryEngine: ObservableObject {
             let writes = e.extra.contains("w")
             if writes, e.signaturePattern.hasSuffix("[persistence]") {
                 out.append((.persistence, "wrote \(e.target)"))
-            } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor {
+            } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor,
+                      !(SigningCache.shared.identity(e.proc).map { SigningCache.shared.trusts(e.proc, $0) } ?? false) {
+                // A trusted, validly signed program reading credential files (its own config, an
+                // SDK's cache) is not theft; a swapped or modified binary is not trusted.
                 out.append((.credential, "accessed \(e.target)"))
             } else if writes, !sealedActor, Self.inZone(e.target, Self.userDropZones) {
                 out.append((.drop, "wrote \(Self.base(e.target))"))
@@ -462,10 +733,34 @@ final class StoryEngine: ObservableObject {
         guard pid > 0, proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         var buf = [CChar](repeating: 0, count: 4096)
         let n = proc_pidpath(Int32(pid), &buf, UInt32(buf.count))
-        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cString: buf) : "", seen: Date())
+        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cString: buf) : "", seen: Date(),
+                     start: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
         procs[pid] = p
         return p
     }
+
+    /// A program reading its own keychain item (gh reading "gh:github.com", claude reading
+    /// "Claude Code-credentials") is using its own login, not stealing one. Never for browser and
+    /// app "Safe Storage" keys (what stealers want), dumps, or programs in Downloads/temp folders.
+    static func readsOwnKeychainItem(args: String, parent: String) -> Bool {
+        // Claude Code's binary is named after its version (…/claude/versions/2.1.316).
+        let program = parent.contains("/claude/versions/") ? "claude" : base(parent).lowercased()
+        let temp = parent.hasPrefix("/tmp/") || parent.hasPrefix("/private/tmp/") || parent.contains("/var/folders/")
+        guard program.count >= 2, !temp, !inZone(parent, userDropZones),
+              !args.contains("dump-keychain"), !args.lowercased().contains("safe storage") else { return false }
+        let range = NSRange(args.startIndex..., in: args)
+        let names = keychainItemName.matches(in: args, range: range).compactMap { m -> String? in
+            (1...3).lazy.compactMap { Range(m.range(at: $0), in: args).map { String(args[$0]) } }.first
+        }
+        guard !names.isEmpty else { return false }
+        return names.allSatisfy { name in
+            name.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { $0 == program }
+        }
+    }
+
+    /// The item named by `-s` (service) or `-l` (label): quoted or a bare word.
+    private static let keychainItemName = try! NSRegularExpression(
+        pattern: #"(?:^|\s)-[sl]\s+(?:'([^']*)'|"([^"]*)"|([^\s'"]+))"#)
 
     private static func isShell(_ path: String) -> Bool {
         ["sh", "bash", "zsh", "dash", "ksh", "tcsh", "csh", "fish", "nu", "elvish"].contains(base(path))
@@ -521,7 +816,8 @@ final class StoryEngine: ObservableObject {
         ignored.insert(s.signature)
         UserDefaults.standard.set(Array(ignored), forKey: "ignoredStories")
         stories.removeAll { $0.id == id }
-        working = working.filter { $0.value.id != id }
+        working[id] = nil
+        linkable.removeAll { $0.story == id }
         dirty = true; revision += 1
     }
 
@@ -540,7 +836,7 @@ final class StoryEngine: ObservableObject {
     private func update(_ id: UUID, _ change: (inout Story) -> Void) {
         guard let i = stories.firstIndex(where: { $0.id == id }) else { return }
         change(&stories[i])
-        if let key = working.first(where: { $0.value.id == id })?.key { change(&working[key]!) }
+        if working[id] != nil { change(&working[id]!) }
         dirty = true; revision += 1
     }
 
@@ -549,6 +845,7 @@ final class StoryEngine: ObservableObject {
     private func maintain() {
         let now = Date()
         working = working.filter { now.timeIntervalSince($0.value.lastSeen) < window }
+        linkable.removeAll { now.timeIntervalSince($0.step.date) > Self.untrustedProgramWindow }
         files = files.filter { now.timeIntervalSince($0.value.date) < fileMemory }
         if procs.count > 20_000 { procs = procs.filter { now.timeIntervalSince($0.value.seen) < 3600 } }
         if stories.count > 300 { stories.removeLast(stories.count - 300) }
@@ -715,6 +1012,15 @@ private struct StoryCard: View {
                 .padding(.top, 4)
             }
             .font(.system(size: 11))
+            let nearby = stories.possiblyRelated(to: story)
+            if !nearby.isEmpty {
+                Label("Possibly related (within 30 min, no direct link): "
+                      + nearby.prefix(3).map(\.title).joined(separator: " · "),
+                      systemImage: "link.badge.plus")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
             HStack(spacing: 8) {
                 Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
                     .buttonStyle(.glassProminent)
@@ -776,11 +1082,21 @@ struct StoryBanner: View {
 
 // MARK: - Replay (developer tool)
 
+/// The value of the `"ts":"…"` field, searched from the end of the line.
+private func replayTimestamp(_ line: Data) -> String? {
+    guard let key = line.range(of: Data(#""ts":""#.utf8), options: .backwards),
+          let end = line[key.upperBound...].firstIndex(of: UInt8(ascii: "\""))
+    else { return nil }
+    return String(decoding: line[key.upperBound..<end], as: UTF8.self)
+}
+
 /// `Hostwatch --story-replay history.jsonl`: feeds recorded events through the story engine
 /// with their recorded timestamps and prints the stories it would raise.
 @MainActor
 func runStoryReplay(_ path: String) -> Never {
-    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { print("cannot read \(path)"); exit(1) }
+    // Streamed line by line: history files are hundreds of MB.
+    guard let file = fopen(path, "r") else { print("cannot read \(path)"); exit(1) }
+    defer { fclose(file) }
     SigningCache.shared.live = false
     SigningCache.shared.trustInstalledAppsInMemory()
     let engine = StoryEngine(persistent: false)
@@ -795,11 +1111,16 @@ func runStoryReplay(_ path: String) -> Never {
     var rawIPs = Set<String>()
     var newDomains: [(String, String, String)] = []   // time, domain, program
     var n = 0
-    for line in text.split(separator: "\n") {
-        let data = Data(line.utf8)
+    var buffer: UnsafeMutablePointer<CChar>?
+    var capacity = 0
+    defer { free(buffer) }
+    while true {
+        let length = getline(&buffer, &capacity, file)
+        guard length > 0, let buffer else { break }
+        let data = Data(bytesNoCopy: buffer, count: length, deallocator: .none)
         guard var e = try? decoder.decode(ActivityEvent.self, from: data) else { continue }
-        let ts = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["ts"] as? String
-        let date = ts.flatMap { iso.date(from: $0) } ?? Date()
+        // The recorder writes "ts" last; read it without parsing the line a second time.
+        let date = replayTimestamp(data).flatMap { iso.date(from: $0) } ?? Date()
         if domains == nil { domains = DomainRegistry(replayLearningUntil: date.addingTimeInterval(learnMinutes * 60)) }
         if e.kind == .net {
             if let d = domains?.observe(e, at: date) {
