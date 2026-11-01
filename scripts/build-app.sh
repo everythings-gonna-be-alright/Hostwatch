@@ -18,7 +18,6 @@ cp "$BIN" "$APP/Contents/MacOS/Hostwatch"
 # Shipped binaries don't need debug symbols (they also list build paths); strip before signing.
 strip -S -x "$APP/Contents/MacOS/Hostwatch"
 # The collector ships inside the app; Hostwatch starts it with an admin prompt.
-cp "agent/hostwatch_agent.py" "$APP/Contents/Resources/hostwatch_agent.py"
 # Icon: regenerate with `swift scripts/make-icon.swift` after changing the design.
 [ -f assets/AppIcon.icns ] || swift scripts/make-icon.swift
 cp "assets/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"

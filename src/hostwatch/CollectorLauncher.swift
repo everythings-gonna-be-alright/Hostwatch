@@ -2,10 +2,10 @@ import Foundation
 
 let collectorLauncherFlag = "--collector-launcher"
 
-/// Collector-launcher mode, run as root by launchd. It spawns the agent as a child
-/// and waits; it does not exec into it. The agent and eslogger then inherit this
-/// process as their TCC "responsible process", so Hostwatch.app's Full Disk
-/// Access grant applies.
+/// Collector-launcher mode, run as root by launchd. It spawns the collector
+/// (`Hostwatch --collector`) as a child and waits; it does not exec into it. The
+/// collector and eslogger then inherit this process as their TCC "responsible
+/// process", so Hostwatch.app's Full Disk Access grant applies.
 func runCollectorLauncher(_ args: [String]) -> Never {
     guard let program = args.first else {
         FileHandle.standardError.write(Data("collector launcher: missing program\n".utf8))

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs every test: Swift (patterns, stories, signing, domains) and Python (collector parsers).
+# Runs every test (Swift Testing: the app, the collector, the MCP server).
 # Exit code is non-zero if anything fails. Used by the pre-merge-commit hook.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -13,14 +13,6 @@ else
   status=1
   grep -E "error:|✘|Expectation failed|recorded an issue" "$log" | head -40
   grep -qE "✘ Test run with" "$log" || tail -20 "$log"   # build failure: show the end of the log
-fi
-
-echo "== Collector tests"
-if python3 -I -m unittest discover -s tests/agent >"$log" 2>&1; then
-  tail -3 "$log" | grep -E "^Ran|^OK"
-else
-  status=1
-  cat "$log"
 fi
 
 rm -f "$log"
