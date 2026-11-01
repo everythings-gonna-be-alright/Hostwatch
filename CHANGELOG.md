@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Collector CPU fix:** the `nettop` network backstop used about 1.4 CPU cores all the time (it polled
+  its `/dev/null` stdin for key presses in a tight loop). It now gets an open pipe as stdin: about 1%.
+
 ## 0.5.0 – resources and compact history
 
 - **CPU, memory, network and disk** in the Events footer, live with sparklines, and recorded every 5 s for

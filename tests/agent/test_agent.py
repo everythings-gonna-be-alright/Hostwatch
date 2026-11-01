@@ -235,3 +235,22 @@ class OwnActivity(unittest.TestCase):
         agent.normalize(self.exec_event(502, 500, "/usr/bin/true"))
         self.assertIsNotNone(agent.normalize(self.exec_event(502, 1, "/usr/bin/curl")))
         self.assertFalse(agent.is_ours_pid(502))
+
+
+class NettopBackstop(unittest.TestCase):
+    def test_nettop_gets_an_open_pipe_as_stdin(self):
+        # With /dev/null as stdin, nettop spins at ~140% CPU polling for key presses.
+        seen = {}
+        original = agent.subprocess.Popen
+
+        def fake_popen(cmd, **kwargs):
+            seen.update(kwargs, cmd=cmd)
+            raise OSError("not started in tests")
+
+        agent.subprocess.Popen = fake_popen
+        try:
+            agent.run_nettop_backstop()
+        finally:
+            agent.subprocess.Popen = original
+        self.assertEqual(seen["cmd"][0], "/usr/bin/nettop")
+        self.assertIs(seen.get("stdin"), agent.subprocess.PIPE)
