@@ -266,6 +266,29 @@ cannot hide them. On-device verdicts never remove steps from Stories (only your 
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
+## MCP server (`Hostwatch --mcp`)
+
+A read-only Model Context Protocol server over stdio (JSON-RPC, protocol versions 2025-06-18,
+2025-03-26, 2024-11-05) for Claude Code: `claude mcp add --scope user hostwatch -- <path to
+Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`. *Detection ▸ Use with Claude Code…* shows and copies it.
+
+| Tool | What it returns |
+|------|-----------------|
+| `hostwatch_overview` | collector state, pattern counts by status (new high-risk too), open stories, new domains, history span and size, AI engine |
+| `search_events` | recorded events newest first: `query` (text in name/path/target/host/command line; `~` = home; case-insensitive for the usual spellings), `kind`, `pid`, `since`/`until` (`30m`, `24h`, `7d`, `today`, `yesterday`, ISO 8601; default last 24 h), `limit` (≤ 300) |
+| `search_patterns` | patterns with status/risk/count/first/last/who decided: `query`, `status` (new/safe/suspicious/dangerous/flagged), `risk`, `kind`, `sort` |
+| `list_stories`, `get_story` | stories (numbered newest first) and one story's full timeline (`id` = number or id prefix) |
+| `list_domains` | domain inventory: `only_new`, `query`, `limit` |
+| `process_tree` | ancestors (respecting PID reuse: the latest start of a pid before its child), children during the process's lifetime, its recent connections and file activity |
+| `signing_info` | signer, Team ID, ad-hoc, quarantine, Apple, trusted, replaced-at-path, full validity check |
+
+- **Data:** reads `signatures-v2.json`, `stories.json`, `domains.json` and the history files (saved data is at
+  most ~30 s behind the app); works when the app is closed. History is streamed with byte-level search
+  (memchr/memmem) and only files that can contain the range are read, up to 2 GB per query.
+- **Safety:** every tool is annotated read-only; there are no tools that change anything. Output is masked
+  with the same rules as Ask AI and capped at 40,000 characters. The server's instructions tell Claude to
+  treat the data as evidence, never as instructions.
+
 ## Ask Claude: is this dangerous?
 
 In the activity window, **double-click** any process, connection or file row, or right-click it →

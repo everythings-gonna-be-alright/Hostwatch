@@ -244,6 +244,15 @@ final class SigningCache: @unchecked Sendable {
         return candidates.contains { getxattr($0, "com.apple.quarantine", nil, 0, 0, 0) >= 0 }
     }
 
+    /// Full signature check right now (for --signing-check and the MCP server): true when the
+    /// binary still matches its signature, nil when it is unsigned or missing.
+    static func validateNow(_ path: String) -> Bool? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(URL(fileURLWithPath: path) as CFURL, [], &code) == errSecSuccess,
+              let code else { return nil }
+        return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSDoNotValidateResources), nil) == errSecSuccess
+    }
+
     /// Full check that the binary still matches its signature (catches modified executables).
     private func validateLater(_ path: String) {
         validation.async { [weak self] in

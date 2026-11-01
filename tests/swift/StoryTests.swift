@@ -86,6 +86,14 @@ import Testing
         #expect(story.stages.contains(.credential))
     }
 
+    @Test func unknownDestinationIsNotAnOutboundConnection() {
+        let s = Scenario()
+        s.feed(exec("/usr/bin/security", pid: 1100, ppid: 1, parent: "/sbin/launchd",
+                    args: "security find-generic-password -s x -w"))
+        s.feed(net("\(home)/.local/bin/tool", pid: 1110, to: "?:?"))
+        #expect(s.fired.allSatisfy { !$0.stages.contains(.network) })
+    }
+
     @Test func singleEverydayStepsDoNotFire() {
         let s = Scenario()
         s.feed(exec(slack, pid: 1000, ppid: 1, parent: "/sbin/launchd"))

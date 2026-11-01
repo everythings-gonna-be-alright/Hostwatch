@@ -382,7 +382,8 @@ final class StoryEngine: ObservableObject {
                 out.append((.drop, "wrote \(Self.base(e.target))"))
             }
         case .net:
-            guard !sealedActor || SignatureBuilder.isLolbin(e.proc) else { break }
+            // Inferred connections with an unknown destination ("?:?") are not evidence of anything public.
+            guard !sealedActor || SignatureBuilder.isLolbin(e.proc), !e.target.hasPrefix("?") else { break }
             let host = e.remoteHost ?? e.target
             let bucket = SignatureBuilder.hostBucket(host)
             if !["loopback", "lan", "link-local", "multicast", "any", "cgnat"].contains(bucket) {

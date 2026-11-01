@@ -447,6 +447,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                                   color: status.isReady ? .systemGreen : .systemOrange)
         statusItem.isEnabled = false
         sub.addItem(statusItem)
+        let mcp = item("Use with Claude Code…", #selector(showMCPSetup))
+        mcp.toolTip = "Let Claude Code investigate this Mac's recorded activity through Hostwatch's read-only MCP server."
+        sub.addItem(mcp)
         sub.addItem(.separator())
         let learning = item(domains.isLearning ? "End Domain Learning Now" : "Domain Learning Finished",
                             #selector(endDomainLearning))
@@ -462,6 +465,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func endDomainLearning() { domains.endLearning() }
+    /// The one command that registers Hostwatch's read-only MCP server with Claude Code.
+    static var mcpCommand: String {
+        let exe = Bundle.main.executablePath ?? "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
+        return "claude mcp add --scope user hostwatch -- \"\(exe)\" --mcp"
+    }
+
+    @objc private func showMCPSetup() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Investigate with Claude Code"
+        alert.informativeText = """
+        Hostwatch includes a read-only MCP server. Add it to Claude Code once, then ask things like \
+        "what talked to new domains last night?" or "walk me through story #1".
+
+        \(Self.mcpCommand)
+
+        Claude only sees what you ask about; secrets are masked. Nothing can be changed through it. \
+        If you move Hostwatch.app, run the command again.
+        """
+        alert.addButton(withTitle: "Copy Command")
+        alert.addButton(withTitle: "Close")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(Self.mcpCommand, forType: .string)
+        }
+    }
+
     @objc private func setAIEngine(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let engine = AIEngine(rawValue: raw) else { return }
         classifier.engine = engine
@@ -788,6 +818,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 enum Entry {
     static func main() {
         let args = CommandLine.arguments
+        if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
             runSignatureReport(args[i + 1])
         }
