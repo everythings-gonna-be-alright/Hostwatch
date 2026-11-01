@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **MCP server for Claude Code** (`Hostwatch --mcp`, *Detection ▸ Use with Claude Code…*): read-only tools to
+  search events, patterns, stories, domains, process trees and code signatures, for investigating by
+  conversation.
+- Stories: an inferred connection with an unknown destination no longer counts as an outbound connection.
+
 ## 0.2.0 – on-device AI
 
 - **On-device AI triage:** Apple's on-device model triages new patterns first (private, offline, free);

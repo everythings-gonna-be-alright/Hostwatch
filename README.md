@@ -59,6 +59,9 @@ block anything.
   are never marked safe on-device.
 - **Ask AI.** Double-click anything for a verdict and an explanation, from Claude or the on-device model.
   The evidence includes the code signature, parent chain, command line and connections.
+- **Investigate with Claude Code.** A built-in, read-only MCP server lets Claude search your recorded
+  activity, stories, patterns, domains and process trees. Ask *"what talked to new domains last night?"*
+  or *"walk me through story #1"*.
 - **A real Mac app.** Native tables you can sort, a Stories timeline, a Domains inventory, filters,
   exclusions, recorded history.
 
@@ -74,7 +77,7 @@ block anything.
  ┌──────────────────────────▼──────────────────────────────────┐
  │ Hostwatch.app (your user)                                   │
  │ patterns + risk → code signing → stories → domains/beacons  │
- │ HUD · Activity window · Ask Claude · history on disk        │
+ │ HUD · Activity window · Ask AI · MCP · history on disk      │
  └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -131,6 +134,27 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 - Use **Show → Only Important** to see only flagged patterns, new high-risk activity, new domains,
   beacons and raw-IP connections.
 - Right-click to mark patterns safe or suspicious, trust a developer, or add exclusions.
+
+## Investigate with Claude Code (MCP)
+
+Hostwatch ships a read-only [MCP](https://modelcontextprotocol.io) server, so Claude Code can investigate
+what it recorded. Add it once (*Detection ▸ Use with Claude Code…* shows and copies the exact command):
+
+```bash
+claude mcp add --scope user hostwatch -- /Applications/Hostwatch.app/Contents/MacOS/Hostwatch --mcp
+```
+
+Then ask Claude Code things like:
+
+- *"Did anything touch my SSH keys this week?"*
+- *"What talked to new domains last night, and which programs?"*
+- *"Walk me through story #1. Is it dangerous?"*
+- *"Show the process tree of pid 4242 and what it connected to."*
+
+Tools: `hostwatch_overview`, `search_events`, `search_patterns`, `list_stories`, `get_story`,
+`list_domains`, `process_tree`, `signing_info`. They are read-only: nothing can be marked, trusted or
+deleted through them. The server reads what Hostwatch saves, so it works even when the app is closed.
+Results are secret-masked and size-capped, and only what Claude asks for is sent.
 
 ## Privacy and security
 
