@@ -3,30 +3,35 @@ import SwiftUI
 
 // MARK: - Reading history by time
 
-/// Recorded history, read by time without loading whole files. Lines are in time order, so the
-/// byte offset of any moment is a binary search away, and the bytes between two moments say how
-/// busy the Mac was then.
+/// Recorded history, read by time without loading whole files. In a plain file lines are in time
+/// order, so the byte offset of any moment is a binary search away and the bytes between two moments
+/// say how busy the Mac was. A compressed file's index gives the same per ~4 MB block.
 struct HistoryArchive: Sendable {
     let directory: URL
 
     struct Segment: Sendable {
-        let url: URL
-        let size: Int64
+        let url: URL                       // the .jsonl, or the .jsonl.gz
+        let size: Int64                    // uncompressed bytes
         let start: Date
         let end: Date
+        var index: HistoryFiles.Index? = nil
     }
 
     /// History files with their first and last timestamps, oldest first.
     func segments() -> [Segment] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-        return names.filter { $0.hasPrefix("activity-") && $0.hasSuffix(".jsonl") }.sorted().compactMap { name in
-            let url = directory.appendingPathComponent(name)
-            guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-            defer { try? handle.close() }
-            let size = Int64((try? handle.seekToEnd()) ?? 0)
-            guard size > 0, let first = Self.firstTimestamp(handle, at: 0),
-                  let last = Self.lastTimestamp(handle, size: size) else { return nil }
-            return Segment(url: url, size: size, start: first, end: last)
+        HistoryFiles.list(in: directory).compactMap { file in
+            switch file {
+            case .compressed(let gz, let index):
+                guard let start = index.start, let end = index.end else { return nil }
+                return Segment(url: gz, size: index.size, start: start, end: end, index: index)
+            case .plain(let url):
+                guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+                defer { try? handle.close() }
+                let size = Int64((try? handle.seekToEnd()) ?? 0)
+                guard size > 0, let first = Self.firstTimestamp(handle, at: 0),
+                      let last = Self.lastTimestamp(handle, size: size) else { return nil }
+                return Segment(url: url, size: size, start: first, end: last)
+            }
         }
     }
 
@@ -42,6 +47,30 @@ struct HistoryArchive: Sendable {
         guard buckets > 0, span > 0 else { return [] }
         var out = [Double](repeating: 0, count: buckets)
         for seg in segments {
+            if let minutes = seg.index?.minutes {
+                // Exact bytes per minute from the index: real gaps stay empty.
+                for pair in minutes where pair.count == 2 {
+                    let t = Date(timeIntervalSince1970: Double(pair[0]) * 60 + 30)
+                    let i = Int(t.timeIntervalSince(range.lowerBound) / span * Double(buckets))
+                    if i >= 0, i < buckets { out[i] += Double(pair[1]) }
+                }
+                continue
+            }
+            if let index = seg.index {
+                // Older index without per-minute counts: spread each block over the time it covers.
+                for block in index.blocks {
+                    let a = block.start.timeIntervalSince(range.lowerBound) / span * Double(buckets)
+                    let b = block.end.timeIntervalSince(range.lowerBound) / span * Double(buckets)
+                    let first = max(0, Int(a)), last = min(buckets - 1, Int(b))
+                    guard first <= last else { continue }
+                    if first == last || b - a <= 0 { out[first] += Double(block.size); continue }
+                    for i in first...last {
+                        let overlap = min(b, Double(i + 1)) - max(a, Double(i))
+                        if overlap > 0 { out[i] += Double(block.size) * overlap / (b - a) }
+                    }
+                }
+                continue
+            }
             guard let handle = try? FileHandle(forReadingFrom: seg.url) else { continue }
             defer { try? handle.close() }
             var previous: Int64?
@@ -63,6 +92,27 @@ struct HistoryArchive: Sendable {
         var budget = maxBytes
         var clipped = false
         for seg in segments.reversed() where seg.end >= from && seg.start < to && budget > 0 {
+            if let index = seg.index {
+                // Only the blocks the slice touches, newest first, lines inside the slice.
+                for block in index.blocks.reversed() where block.end >= from && block.start < to && budget > 0 {
+                    guard let data = HistoryFiles.read(block, from: seg.url) else { continue }
+                    var chunk: [Data] = []
+                    var lineStart = data.startIndex
+                    while let nl = data[lineStart...].firstIndex(of: 0x0A) {
+                        let line = data[lineStart..<nl]
+                        if let ts = Self.timestamp(line), ts >= from, ts < to { chunk.append(line) }
+                        lineStart = nl + 1
+                    }
+                    var kept: [Data] = []
+                    for line in chunk.reversed() {
+                        guard budget > 0 else { clipped = true; break }
+                        budget -= Int64(line.count + 1)
+                        kept.append(line)
+                    }
+                    lines.insert(contentsOf: kept.reversed(), at: 0)
+                }
+                continue
+            }
             guard let handle = try? FileHandle(forReadingFrom: seg.url) else { continue }
             defer { try? handle.close() }
             let a = from <= seg.start ? 0 : Self.offset(of: from, in: handle, size: seg.size)
@@ -222,6 +272,13 @@ final class TimeTravel: ObservableObject {
     @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
     @Published var hoverX: CGFloat?             // pointer over the scrubber (for the time label)
+    /// CPU and memory over the whole recording, per timeline bucket (0...1; nil where nothing was recorded).
+    @Published private(set) var cpuLane: [Double?] = []
+    @Published private(set) var memLane: [Double?] = []
+    /// Resource samples inside the shown slice, for the strip and the banner.
+    @Published private(set) var windowSamples: [MetricSample] = []
+    /// The last sample at or before the playhead.
+    var sampleAtPlayhead: MetricSample? { windowSamples.last { $0.date <= playhead } }
 
     static let spans: [(String, TimeInterval)] = [("1 min", 60), ("5 min", 300), ("15 min", 900), ("1 hour", 3600)]
     static let speeds: [(String, Double)] = [("1×", 1), ("10×", 10), ("60×", 60), ("600×", 600)]
@@ -230,16 +287,18 @@ final class TimeTravel: ObservableObject {
     private let history: HistoryRecorder
     private let stories: StoryEngine
     private let domains: DomainRegistry
+    private let metrics: MetricsStore
     private var segments: [HistoryArchive.Segment] = []
     private var loadTask: Task<Void, Never>?
     private var overviewTask: Task<Void, Never>?
     private var playTimer: Timer?
     private var refreshTimer: Timer?
 
-    init(history: HistoryRecorder, stories: StoryEngine, domains: DomainRegistry) {
+    init(history: HistoryRecorder, stories: StoryEngine, domains: DomainRegistry, metrics: MetricsStore) {
         self.history = history
         self.stories = stories
         self.domains = domains
+        self.metrics = metrics
     }
 
     private var archive: HistoryArchive { HistoryArchive(directory: history.directory) }
@@ -328,6 +387,7 @@ final class TimeTravel: ObservableObject {
             self.activity = peak > 0 ? scaled.map { $0 / peak } : scaled
             self.markers = self.collectMarkers()
             if thenLoad { self.move(to: self.playhead) }
+            if let range = result.1 { await self.loadLanes(range) }
         }
     }
 
@@ -345,8 +405,26 @@ final class TimeTravel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.events = result.events
             self.clipped = result.clipped
+            self.windowSamples = await self.metrics.samples(from: from, to: to)
             self.loading = false
         }
+    }
+
+    /// Average CPU and memory per timeline bucket.
+    private func loadLanes(_ range: ClosedRange<Date>) async {
+        let samples = await metrics.samples(from: range.lowerBound, to: range.upperBound)
+        let span = range.upperBound.timeIntervalSince(range.lowerBound)
+        let n = Self.buckets
+        guard span > 0 else { return }
+        var cpu = [Double](repeating: 0, count: n), mem = cpu, count = cpu
+        for s in samples {
+            let i = min(n - 1, max(0, Int(s.date.timeIntervalSince(range.lowerBound) / span * Double(n))))
+            cpu[i] += s.cpu / 100
+            mem[i] += s.mem
+            count[i] += 1
+        }
+        cpuLane = (0..<n).map { count[$0] > 0 ? cpu[$0] / count[$0] : nil }
+        memLane = (0..<n).map { count[$0] > 0 ? mem[$0] / count[$0] : nil }
     }
 
     private func collectMarkers() -> [TimelineMarker] {
@@ -377,6 +455,7 @@ struct TimelineBar: View {
         VStack(spacing: 8) {
             if let range = travel.range {
                 scrubber(range)
+                if travel.cpuLane.contains(where: { $0 != nil }) { lanes }
                 HStack {
                     Text(range.lowerBound, format: Self.dayTime)
                     Spacer()
@@ -460,6 +539,30 @@ struct TimelineBar: View {
         .accessibilityAdjustableAction { direction in travel.step(direction == .increment ? 1 : -1) }
     }
 
+    /// CPU and memory over the whole recording, on the same time axis as the bars.
+    private var lanes: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Sparkline(values: travel.memLane, color: .green, width: nil, height: 22)
+                Sparkline(values: travel.cpuLane, color: .blue, width: nil, height: 22)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 8) {
+                Label("CPU", systemImage: "circle.fill").foregroundStyle(.blue)
+                Label("Memory", systemImage: "circle.fill").foregroundStyle(.green)
+            }
+            .font(.system(size: 9, weight: .medium))
+            .labelStyle(.titleAndIcon)
+            .imageScale(.small)
+            .padding(.leading, 2)
+            .offset(y: -2)
+            .allowsHitTesting(false)
+        }
+        .accessibilityLabel("CPU and memory over time")
+    }
+
     /// Clicking near a marker lands just after it, so its activity is in the slice.
     private func snapped(_ date: Date, x: (Date) -> CGFloat, at position: CGFloat) -> Date {
         guard let m = travel.markers.min(by: { abs(x($0.date) - position) < abs(x($1.date) - position) }),
@@ -476,19 +579,29 @@ struct TimelineBar: View {
 
     // MARK: Controls
 
+    /// Transport icons get room inside their circles; play is a little larger than the steps.
+    private func transportIcon(_ name: String, size: CGFloat = 10, frame: CGFloat = 15) -> some View {
+        Image(systemName: name)
+            .font(.system(size: size, weight: .semibold))
+            .frame(width: frame, height: frame)
+    }
+
     private var controls: some View {
         HStack(spacing: 10) {
             HStack(spacing: 2) {
-                Button { travel.step(-1) } label: { Image(systemName: "backward.fill") }
+                Button { travel.step(-1) } label: { transportIcon("backward.fill") }
                     .help("Earlier (⌘[)")
-                Button { travel.togglePlay() } label: { Image(systemName: travel.playing ? "pause.fill" : "play.fill") }
-                    .help(travel.playing ? "Pause" : "Play history forward")
-                    .disabled(travel.range == nil)
-                Button { travel.step(1) } label: { Image(systemName: "forward.fill") }
+                Button { travel.togglePlay() } label: {
+                    transportIcon(travel.playing ? "pause.fill" : "play.fill", size: 13, frame: 21)
+                }
+                .help(travel.playing ? "Pause" : "Play history forward")
+                .disabled(travel.range == nil)
+                Button { travel.step(1) } label: { transportIcon("forward.fill") }
                     .help("Later (⌘])")
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
+            .controlSize(.regular)
             Menu {
                 Picker("Speed", selection: $travel.speed) {
                     ForEach(TimeTravel.speeds, id: \.1) { Text($0.0).tag($0.1) }
@@ -543,6 +656,14 @@ struct TimeTravelBanner: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .help(travel.clipped ? "This slice is very busy; only its newest part is shown. Choose a shorter window." : "")
+            if let s = travel.sampleAtPlayhead {
+                Text("·").foregroundStyle(.secondary)
+                Text("CPU \(Int(s.cpu.rounded()))% · Memory \(Int((s.mem * 100).rounded()))%"
+                     + (s.top?.first.map { " · busiest: \($0.name) \(Int($0.cpu.rounded()))%" } ?? ""))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .help("Resource use at the playhead")
+            }
             Spacer()
         }
         .font(.system(size: 12))

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **Hostwatch's own activity is hidden:** the app (history and metrics writes, update check, codesign
+  checks), the MCP server and their children no longer show up in the HUD, events, history or stories.
+  Only the exact executable of the app that started the collector counts; exited pids are dropped.
+
+- **CPU, memory, network and disk** in the Events footer, live with sparklines, and recorded every 5 s for
+  Time Travel: CPU and memory lines under the timeline, values and the busiest process at the playhead.
+  A popover lists the busiest processes (from the collector, which sees every user's processes).
+
+- **Compressed history:** finished history files are gzip-compressed in the background (≈24× smaller on
+  real history, so the size cap now holds weeks instead of a day). Files are split into independent
+  ≈4 MB gzip blocks with a time index, so Time Travel and the MCP server read only what they need, as
+  fast as before. Still normal `.gz` files (`zcat`/`zgrep`). Existing history is compressed on first start.
+- History files rotate at 100 MB at most (was 256 MB), so recent history is compressed sooner.
+
 ## 0.4.0 – time travel
 
 - **Time Travel** (toolbar button, *View ▸ Time Travel* ⌥⌘T): browse recorded history in the Events tab.

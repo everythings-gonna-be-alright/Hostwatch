@@ -149,3 +149,89 @@ class Exclusions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TopProcesses(unittest.TestCase):
+    def test_cpu_percent_disk_rates_and_new_processes(self):
+        sec = 1_000_000_000
+        before = {(10, 1): (0, 100, 0, 0), (20, 2): (5 * sec, 900, 1000, 0), (30, 3): (0, 50, 0, 0)}
+        after = {(10, 1): (int(2.5 * sec), 100, 0, 5000),    # 2.5 s of CPU in 5 s = 50 %
+                 (20, 2): (5 * sec, 900, 6000, 0),             # idle, biggest memory, reads 5000 B
+                 (30, 4): (9 * sec, 70, 0, 0)}                 # pid reused (new start): no baseline
+        rows, read, write = agent.top_from_snapshots(before, after, 5.0, limit=1)
+        self.assertEqual(rows[0][0], 10)
+        self.assertAlmostEqual(rows[0][1], 50.0)
+        self.assertEqual([r[0] for r in rows], [10, 20])        # top CPU, then top memory not already listed
+        self.assertAlmostEqual(read, 1000.0)                   # 5000 B / 5 s
+        self.assertAlmostEqual(write, 1000.0)
+        self.assertNotIn(30, [r[0] for r in rows])
+
+    def test_only_clients_that_asked_get_top_samples(self):
+        client = agent.Client(sock=None)
+        ev = {"kind": "top", "procs": []}
+        self.assertFalse(client.wants(ev))                    # history recorder, default
+        client.configure({"top": True})
+        self.assertTrue(client.wants(ev))
+        client.configure({"kinds": ["exec"]})                 # kinds don't affect top
+        self.assertTrue(client.wants(ev))
+
+    def test_snapshot_reads_real_processes(self):
+        if agent._LIBPROC is None:
+            self.skipTest("no libproc")
+        snap = agent.process_snapshot(agent._LIBPROC, 1.0)
+        mine = [v for (pid, _), v in snap.items() if pid == os.getpid()]
+        self.assertEqual(len(mine), 1)
+        self.assertGreater(mine[0][1], 0)                      # memory footprint
+
+
+class OwnActivity(unittest.TestCase):
+    APP = "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
+
+    def setUp(self):
+        agent.OWN_EXE = self.APP
+        with agent.OUR_TREE_LOCK:
+            agent.OUR_TREE.clear()
+            agent.OUR_TREE.add(500)                        # the verified owner app
+
+    def tearDown(self):
+        agent.OWN_EXE = ""
+        with agent.OUR_TREE_LOCK:
+            agent.OUR_TREE.clear()
+
+    def exec_event(self, pid, ppid, path, caller_pid=None):
+        return {"event": {"exec": {"target": {"audit_token": {"pid": pid}, "ppid": ppid,
+                                              "executable": {"path": path}}, "args": [path]}},
+                "process": {"audit_token": {"pid": caller_pid or pid}, "ppid": ppid,
+                            "executable": {"path": "/bin/sh"}}}
+
+    def open_event(self, pid, path="/tmp/x"):
+        return {"event": {"open": {"file": {"path": path}, "fflag": 2}},
+                "process": {"audit_token": {"pid": pid}, "ppid": 1, "executable": {"path": "/x"}}}
+
+    def exit_event(self, pid):
+        return {"event": {"exit": {"stat": 0}}, "process": {"audit_token": {"pid": pid}, "ppid": 1,
+                                                            "executable": {"path": "/x"}}}
+
+    def test_app_and_its_children_are_hidden(self):
+        self.assertIsNone(agent.normalize(self.open_event(500, "/tmp/metrics-a")))     # the app's own writes
+        self.assertIsNone(agent.normalize(self.exec_event(501, 500, "/usr/bin/codesign")))
+        self.assertIsNone(agent.normalize(self.open_event(501, "/tmp/metrics-b")))     # its child too
+        self.assertTrue(agent.is_ours_pid(501))
+
+    def test_same_executable_elsewhere_is_hidden_others_are_not(self):
+        # Claude Code (pid 700) starts `Hostwatch --mcp`: same executable, so it's ours.
+        self.assertIsNone(agent.normalize(self.exec_event(710, 700, self.APP)))
+        # A look-alike in another place is reported.
+        ev = agent.normalize(self.exec_event(720, 700, "/tmp/Hostwatch.app/Contents/MacOS/Hostwatch"))
+        self.assertIsNotNone(ev)
+        self.assertIsNotNone(agent.normalize(self.open_event(720, "/tmp/evil")))
+
+    def test_reused_pid_is_reported_again(self):
+        self.assertIsNone(agent.normalize(self.exec_event(501, 500, "/usr/bin/codesign")))
+        self.assertIsNone(agent.normalize(self.exit_event(501)))                       # exit: never published
+        self.assertFalse(agent.is_ours_pid(501))
+        self.assertIsNotNone(agent.normalize(self.open_event(501, "/tmp/after-reuse")))
+        # Reused by an unrelated exec even without a seen exit.
+        agent.normalize(self.exec_event(502, 500, "/usr/bin/true"))
+        self.assertIsNotNone(agent.normalize(self.exec_event(502, 1, "/usr/bin/curl")))
+        self.assertFalse(agent.is_ours_pid(502))

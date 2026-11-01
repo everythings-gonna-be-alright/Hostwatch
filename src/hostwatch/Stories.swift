@@ -1099,9 +1099,7 @@ private func replayTimestamp(_ line: Data) -> String? {
 /// with their recorded timestamps and prints the stories it would raise.
 @MainActor
 func runStoryReplay(_ path: String) -> Never {
-    // Streamed line by line: history files are hundreds of MB.
-    guard let file = fopen(path, "r") else { print("cannot read \(path)"); exit(1) }
-    defer { fclose(file) }
+    guard FileManager.default.isReadableFile(atPath: path) else { print("cannot read \(path)"); exit(1) }
     SigningCache.shared.live = false
     SigningCache.shared.trustInstalledAppsInMemory()
     let engine = StoryEngine(persistent: false)
@@ -1116,14 +1114,9 @@ func runStoryReplay(_ path: String) -> Never {
     var rawIPs = Set<String>()
     var newDomains: [(String, String, String)] = []   // time, domain, program
     var n = 0
-    var buffer: UnsafeMutablePointer<CChar>?
-    var capacity = 0
-    defer { free(buffer) }
-    while true {
-        let length = getline(&buffer, &capacity, file)
-        guard length > 0, let buffer else { break }
-        let data = Data(bytesNoCopy: buffer, count: length, deallocator: .none)
-        guard var e = try? decoder.decode(ActivityEvent.self, from: data) else { continue }
+    // Streamed: a .jsonl, a .jsonl.gz, or a whole history folder (plain and compressed files).
+    HistoryFiles.forEachLine(path: path) { data in
+        guard var e = try? decoder.decode(ActivityEvent.self, from: data) else { return }
         // The recorder writes "ts" last; read it without parsing the line a second time.
         let date = replayTimestamp(data).flatMap { iso.date(from: $0) } ?? Date()
         if domains == nil { domains = DomainRegistry(replayLearningUntil: date.addingTimeInterval(learnMinutes * 60)) }

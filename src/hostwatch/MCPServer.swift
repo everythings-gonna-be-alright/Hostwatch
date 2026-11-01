@@ -295,20 +295,29 @@ final class MCPServer {
     /// `match` runs on the parsed event. Only files that can contain the range are read.
     func scanHistory(since: Date, until: Date, limit: Int, terms: [Term],
                      match: (HistoryEvent) -> Bool) -> ScanResult {
-        let fm = FileManager.default
-        let files = ((try? fm.contentsOfDirectory(at: data.history, includingPropertiesForKeys: [.contentModificationDateKey]))
-            ?? []).filter { $0.pathExtension == "jsonl" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        // Newest file first; plain files are checked by name and modification time, compressed ones
+        // by their block index (only blocks inside the range are decompressed).
+        let files = HistoryFiles.list(in: data.history).reversed()
         var found: [HistoryEvent] = []
         var budget = data.historyByteBudget, read = 0, hit = false
         let iso = Self.isoFormatters[0]
         for file in files {
-            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantFuture
-            if modified < since { break }                       // older files end before the range
-            if let started = Self.fileStart(file.lastPathComponent), started > until { continue }
-            guard let handle = try? FileHandle(forReadingFrom: file) else { continue }
+            // When did this file start and end? Files are newest first, so one ending before the
+            // range means every remaining file does too.
+            let (started, ended): (Date?, Date)
+            switch file {
+            case .plain(let url):
+                started = Self.fileStart(url.lastPathComponent)
+                ended = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                    ?? .distantFuture
+            case .compressed(_, let index):
+                started = index.start
+                ended = index.end ?? .distantPast
+            }
+            if ended < since { break }
+            if let started, started > until { continue }
             read += 1
             var ring: [HistoryEvent] = []                       // newest `limit` matches in this file
-            var carry = Data()
             func consume(_ line: UnsafeRawBufferPointer) {
                 guard line.count > 0 else { return }
                 for term in terms {
@@ -326,26 +335,20 @@ final class MCPServer {
                 ring.append(e)
                 if ring.count > limit { ring.removeFirst(ring.count - limit) }
             }
-            while let chunk = try? handle.read(upToCount: 8 << 20), !chunk.isEmpty {
+            HistoryFiles.forEachChunk(file, in: since...max(since, until)) { chunk in
                 budget -= chunk.count
-                var buffer = carry
-                buffer.append(chunk)
-                var rest = 0
-                buffer.withUnsafeBytes { raw in
+                chunk.withUnsafeBytes { raw in
                     guard let base = raw.baseAddress else { return }
                     var start = 0
-                    while start < raw.count, let nl = memchr(base + start, 0x0A, raw.count - start) {
-                        let end = base.distance(to: nl)
+                    while start < raw.count {
+                        let end = memchr(base + start, 0x0A, raw.count - start).map { base.distance(to: $0) } ?? raw.count
                         consume(UnsafeRawBufferPointer(rebasing: raw[start..<end]))
                         start = end + 1
                     }
-                    rest = start
                 }
-                carry = buffer.subdata(in: rest..<buffer.count)
-                if budget <= 0 { hit = true; break }
+                if budget <= 0 { hit = true; return false }
+                return true
             }
-            carry.withUnsafeBytes { consume($0) }
-            try? handle.close()
             found.append(contentsOf: ring)
             if found.count >= limit || hit { break }
         }
@@ -393,10 +396,9 @@ final class MCPServer {
         }
         let open = stories(includeDismissed: false)
         let doms = domains()
-        let files = ((try? FileManager.default.contentsOfDirectory(at: data.history, includingPropertiesForKeys: [.fileSizeKey])) ?? [])
-            .filter { $0.pathExtension == "jsonl" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        let bytes = files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
-        let from = files.first.flatMap { Self.fileStart($0.lastPathComponent) }
+        let files = HistoryFiles.list(in: data.history)
+        let bytes = files.reduce(Int64(0)) { $0 + HistoryFiles.diskSize(data.history.appendingPathComponent($1.name)) }
+        let from = files.first.flatMap { Self.fileStart($0.name) }
         var lines = ["Hostwatch \(version) — read-only view of this Mac's recorded activity",
                      "Collector: \(Self.collectorListening() ? "running (\(CollectorSocket.path))" : "not running")",
                      "Patterns: \(entries.count) total · \(counts[.unclassified, default: 0]) new (\(highNew) high-risk) · "
@@ -404,7 +406,7 @@ final class MCPServer {
                         + "\(counts[.safe, default: 0]) safe",
                      "Stories: \(open.count) open" + (open.first.map { " · latest: [\($0.severity.rawValue)] \($0.title)" } ?? ""),
                      "Domains: \(doms.count) known · \(doms.filter(isNewDomain).count) new in the last 24 h",
-                     "History: \(files.count) files, \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))"
+                     "History: \(files.count) files, \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)) on disk"
                         + (from.map { " since \(show($0))" } ?? ""),
                      "AI engine: \(AIEngine.load().title)"]
         if let s = open.first {

@@ -399,10 +399,32 @@ from the live stream to recorded history. Live collection carries on in the back
 - **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 1× (real time), 10×, 60× or 600×; the date
   picker jumps anywhere. **Return to Live** (Esc) goes back.
 - **From a story:** *Show in Timeline* opens the slice around it.
-- **How it reads history:** lines are stored in time order, so the offset of any moment is a binary
-  search away and bar heights are byte counts between offsets. Nothing is loaded except the slice
+- **How it reads history:** in the plain (current) file lines are in time order, so the offset of any
+  moment is a binary search away; compressed files are found through their block index, and bar
+  heights come from byte counts (per-minute counts for compressed files). Nothing is loaded except the slice
   you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
   `Hostwatch --time-travel-probe [dir]` prints these timings.
+
+## Resource use (CPU, memory, network, disk)
+
+Every 5 seconds Hostwatch records system-wide resource use. The Events tab's footer shows it live with
+5-minute sparklines: **CPU** (share of all cores), **Mem** (apps + wired + compressed, the same as Activity
+Monitor's "Memory Used"; the line turns orange or red with macOS memory pressure), **network**
+download ↓ / upload ↑ (Wi-Fi, Ethernet, cellular; VPN tunnels and loopback aren't double-counted) and
+**disk** read/write. The list button shows the **busiest processes** at that moment (CPU % of one core,
+memory footprint, disk throughput).
+
+- **Sources:** CPU, memory and network come from the kernel's counters (no special rights). The busiest
+  processes and disk throughput come from the collector: as root it can see every user's processes
+  (`proc_pid_rusage`), which the app can't (about a third of processes, all of them system ones). It sends
+  them every 5 s only to the live window, never into the event history.
+- **Recording:** one line per sample in `History/metrics-YYYYMMDD.jsonl` (a few MB per day); past days are
+  gzip-compressed, and days older than the oldest activity history are deleted with it. *Clear History*
+  removes them too. Resource use is recorded while Hostwatch is open.
+- **Time Travel:** the timeline shows CPU (blue) and memory (green) lines under the activity bars, on the
+  same time axis. The footer strip shows the slice around the playhead, and the banner shows the values
+  and the busiest process at the playhead. Times before this feature existed simply have no line.
+- `Hostwatch --metrics-probe` prints three readings, for comparing with Activity Monitor or `top`.
 
 ## Updates
 
@@ -423,26 +445,43 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 {"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
 ```
 
-- **Max size** (default **5 GB**) caps the total size of all history files. Files rotate at about
-  1/20 of the cap (1–256 MB each). The oldest files are deleted so the total never goes over the cap.
+- **Compression:** the file being written stays plain, so appends are cheap and a crash loses nothing.
+  When it is full (see Max size below), it is compressed in the background (≈1 s per 100 MB) into
+  `activity-….jsonl.gz` plus a small index `activity-….jsonl.idx`. Plain files left from older versions
+  are compressed on the next start. Activity logs are very repetitive: on real history, 250 MB became
+  ≈10 MB (≈24×).
+  - The `.gz` is a series of independent gzip members of ≈4 MB of whole lines, so it is a normal gzip
+    file (`zcat`, `zgrep`, `gzip -d` work).
+  - The index records each block's earliest and latest timestamp, offset and sizes, plus bytes per
+    minute. Time Travel and the MCP server decompress only the blocks a time range needs, and the
+    timeline's bars come from the per-minute counts (exact, with real gaps).
+  - Compression is crash-safe: the index is written first, then the `.gz`, and only then is the plain
+    file removed. A `.gz` without an index is ignored, and the plain file stays authoritative.
+- **Max size** (default **5 GB**) caps the bytes on disk of all history files (compressed files count
+  compressed, so the cap holds roughly 10–20× more history than before). Files rotate at about 1/20 of
+  the cap (1–100 MB of plain text each; 100 MB with the default cap). The oldest files are deleted so the total never goes over.
 - The recorder has its own connection with the 40/s display cap turned off. It keeps recording
   while the overlay is paused or a kind is hidden.
-- **Apply Exclusions to History** is off by default, so everything is recorded. Turn it on to record
+- **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record
   only what passes your exclusions.
-- Menu bar 〰 → **History**: on/off, Max Size (500 MB … 50 GB or Custom…), Show in Finder,
-  Change Location…, Clear History…. The activity window footer shows current usage.
+- *Settings ▸ History*: on/off, maximum size (500 MB … 50 GB or Custom…), location, Show in Finder,
+  Clear History…. The activity window footer shows current usage.
 - Query examples:
   ```bash
   cd ~/Library/Logs/Hostwatch/History
-  cat activity-*.jsonl | jq -c 'select(.kind=="net")' | tail
-  grep -h '"name":"curl"' activity-*.jsonl
+  zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
+  zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
   ```
+- Tools: `--story-replay` and `--signature-report` accept a `.jsonl`, a `.jsonl.gz` or the whole
+  history folder; `--compress-history <folder>` compresses plain files by hand; `--time-travel-probe`
+  prints read timings.
 
 ## How the collector works
 
 `agent/hostwatch_agent.py` (run as root) combines:
 
-- `eslogger exec open` (Endpoint Security) → processes and file opens.
+- `eslogger exec exit open` (Endpoint Security) → processes and file opens (`exit` is only used to
+  keep the list of Hostwatch's own processes exact; it is never published).
   Opens are deduplicated per (pid, path) for 2 minutes and capped at 40/s per client.
 - Packet capture (`tcpdump -i pktap,all -k NPD`, read-only) → every outgoing TCP connection, from
   its SYN packet, with the owning process. This catches connections too short for any polling,
@@ -462,6 +501,12 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
   answer was seen (cached before the collector started, or encrypted DNS/DoH), reverse DNS is used
   instead, shown as `~name` (often a provider name like `~bt-in-f100.1e100.net`). The Activity list
   still shows the IP, Claude gets both, and exclusions match hostnames: `net:*.google.com:*`.
+
+**Hostwatch's own activity is not reported** (live, in history or in stories): the app that started the
+collector (verified by pid), any other run of the exact same executable (such as the MCP server Claude
+Code starts), the collector's own helpers (eslogger, tcpdump, lsof, nettop) and the children of all of
+these. A look-alike binary elsewhere is reported as usual, and a pid leaves the list when its process
+exits, so a reused pid is watched again.
 
 Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --socket /var/run/hostwatch/collector.sock`.
 Started by hand, the collector accepts connections only from the user who ran `sudo`. For development,

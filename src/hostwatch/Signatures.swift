@@ -864,14 +864,12 @@ final class SignatureStore: ObservableObject {
 func runSignatureReport(_ path: String) -> Never {
     SigningCache.shared.live = false
     SigningCache.shared.trustInstalledAppsInMemory()
-    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
-        print("cannot read \(path)"); exit(1)
-    }
+    guard FileManager.default.isReadableFile(atPath: path) else { print("cannot read \(path)"); exit(1) }
     var counts: [String: Int] = [:]
     var total = 0
     let decoder = JSONDecoder()
-    for line in text.split(separator: "\n") {
-        guard let e = try? decoder.decode(ActivityEvent.self, from: Data(line.utf8)) else { continue }
+    HistoryFiles.forEachLine(path: path) { line in
+        guard let e = try? decoder.decode(ActivityEvent.self, from: line) else { return }
         total += 1
         counts["[\(e.kind.rawValue)/\(e.signatureRisk)] \(e.signatureProcess) -> \(e.signaturePattern)", default: 0] += 1
     }

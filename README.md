@@ -57,6 +57,8 @@ block anything.
   asks you: Allow, Always Allow or Kill. Off by default; see Limitations.
 - **Time travel.** Scrub back through recorded activity on a timeline marked with stories and new
   domains, step or play it forward, and open any story at its moment with everything around it.
+- **Resource use.** CPU, memory, network and disk live in the footer, recorded for Time Travel (CPU and
+  memory lines under the timeline), with the busiest processes at any moment.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
 - **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,
@@ -71,7 +73,7 @@ block anything.
   activity, stories, patterns, domains and process trees. Ask *"what talked to new domains last night?"*
   or *"walk me through story #1"*.
 - **A real Mac app.** Native tables you can sort, a Stories timeline, a Domains inventory, filters,
-  exclusions, recorded history.
+  exclusions, and recorded history compressed about 24× on disk (weeks of activity in the default 5 GB).
 
 ## How it works
 
@@ -223,8 +225,8 @@ Merges are gated: `git config core.hooksPath scripts/hooks` enables a pre-merge 
 when tests fail. Developer tools are built into the app binary:
 
 ```bash
-.build/release/Hostwatch --signature-report <history.jsonl>   # how events group into patterns
-.build/release/Hostwatch --story-replay <history.jsonl>       # which stories/domains/beacons would fire
+.build/release/Hostwatch --signature-report <history file or folder>   # how events group into patterns
+.build/release/Hostwatch --story-replay <history file or folder>       # which stories/domains/beacons would fire
 .build/release/Hostwatch --signing-check <binary>…            # signer, trust and swap verdict
 ```
 

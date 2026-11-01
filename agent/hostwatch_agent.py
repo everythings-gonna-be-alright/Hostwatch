@@ -20,8 +20,9 @@ the folder is root-owned (nobody else can create or replace the socket), the soc
 client user with mode 0600, and each connection is checked: only the Hostwatch app that launched the
 collector (--owner-pid) is accepted, or, when started by hand, the user who ran sudo.
 Each client may send JSON config lines back:
-  {"exclude": ["pattern", ...], "kinds": ["exec", "net", "file"]}
-and only receives events that pass its filter.
+  {"exclude": ["pattern", ...], "kinds": ["exec", "net", "file"], "top": true}
+and only receives events that pass its filter. With "top", it also gets a "top" message every 5 s:
+the busiest processes by CPU and memory (all users, including root) and total disk throughput.
 
 Exclusion pattern syntax (case-insensitive; glob if it contains * or ?,
 otherwise substring):
@@ -34,6 +35,7 @@ Apple says eslogger output is not a stable API; this is a prototype adapter.
 """
 import argparse
 import concurrent.futures
+import ctypes
 import fnmatch
 import ipaddress
 import json
@@ -59,6 +61,58 @@ SHUTDOWN_HOOKS = []          # callables run once when the agent should exit
 SHUTDOWN_TOKEN = None        # secret a client must present to stop the agent
 SELF_PID = os.getpid()
 IGNORED_PIDS = {SELF_PID}
+
+# Hostwatch's own activity is not reported: the app that started us (verified by pid), any other run
+# of the very same executable (e.g. the MCP server Claude Code starts), and their children. Only the
+# exact executable of the verified owner counts, and pids leave the set when they exit, so this is
+# no hiding place for other programs.
+OWN_EXE = ""
+OUR_TREE = set()
+OUR_TREE_LOCK = threading.Lock()
+
+
+def is_ours_pid(pid):
+    if pid in IGNORED_PIDS:
+        return True
+    with OUR_TREE_LOCK:
+        return pid in OUR_TREE
+
+
+def note_exec(pid, ppid, path):
+    """Called for every exec: True if it belongs to Hostwatch (and remembers it)."""
+    with OUR_TREE_LOCK:
+        ours = ppid in OUR_TREE or ppid in IGNORED_PIDS or (bool(OWN_EXE) and path == OWN_EXE)
+        if ours:
+            OUR_TREE.add(pid)
+        else:
+            OUR_TREE.discard(pid)          # a reused pid now running something else
+        return ours
+
+
+def note_exit(pid):
+    with OUR_TREE_LOCK:
+        OUR_TREE.discard(pid)
+
+
+def adopt_own_processes(owner_pid):
+    """At start: the owner app, our launcher, and Hostwatch processes already running."""
+    global OWN_EXE
+    OWN_EXE = pid_path(owner_pid) if owner_pid else ""
+    with OUR_TREE_LOCK:
+        if owner_pid:
+            OUR_TREE.add(owner_pid)
+        OUR_TREE.add(os.getppid())         # Hostwatch --collector-launcher
+    if not OWN_EXE or _LIBPROC is None:
+        return
+    count = _LIBPROC.proc_listallpids(None, 0)
+    pids = (ctypes.c_int * (count + 64))()
+    count = _LIBPROC.proc_listallpids(pids, ctypes.sizeof(pids))
+    buf = ctypes.create_string_buffer(4096)
+    for pid in pids[:max(count, 0)]:
+        if pid > 0 and _LIBPROC.proc_pidpath(pid, buf, ctypes.c_uint32(4096)) > 0:
+            if buf.value.decode("utf-8", "replace") == OWN_EXE:
+                with OUR_TREE_LOCK:
+                    OUR_TREE.add(pid)
 
 # pid -> executable path, learned from ES events, used to label net events.
 PID_PATHS = OrderedDict()
@@ -104,7 +158,6 @@ def pid_parent(pid):
 
 
 try:
-    import ctypes
     _LIBPROC = ctypes.CDLL("/usr/lib/libproc.dylib")
 except OSError:
     _LIBPROC = None
@@ -257,6 +310,7 @@ class Client:
         self.rules = []
         self.kinds = set(ALL_KINDS)
         self.rate_limit = True
+        self.top = False           # wants the 5-second "top" process samples
         self.window = 0
         self.file_count = 0
         self.lock = threading.Lock()
@@ -266,11 +320,15 @@ class Client:
             self.rules = compile_rules(cfg.get("exclude"))
         if "kinds" in cfg:
             self.kinds = {k for k in cfg.get("kinds") or [] if k in ALL_KINDS}
+        if "top" in cfg:
+            self.top = bool(cfg.get("top"))
         if "rate_limit" in cfg:
             # History recorders want every event, not the 40/s display cap.
             self.rate_limit = bool(cfg.get("rate_limit"))
 
     def wants(self, ev):
+        if ev["kind"] == "top":
+            return self.top
         if ev["kind"] not in self.kinds or is_excluded(self.rules, ev):
             return False
         if ev["kind"] == "file" and self.rate_limit:
@@ -377,7 +435,7 @@ def _pid(proc):
 
 
 def _is_ours(proc):
-    return _pid(proc) in IGNORED_PIDS or int((proc or {}).get("ppid") or 0) == SELF_PID
+    return is_ours_pid(_pid(proc)) or int((proc or {}).get("ppid") or 0) == SELF_PID
 
 
 _SECRET_PATTERNS = [
@@ -438,7 +496,10 @@ SEEN_CONNS = LockedRecentSet(ttl=600.0)
 def normalize(raw):
     event = raw.get("event") or {}
     caller = raw.get("process") or {}
-    if _is_ours(caller):
+    if "exit" in event:
+        note_exit(_pid(caller))
+        return None
+    if _is_ours(caller) and "exec" not in event:
         return None
 
     if "exec" in event:
@@ -449,6 +510,8 @@ def normalize(raw):
         pid = _pid(target)
         ppid = int(target.get("ppid") or caller.get("ppid") or 0)
         remember_pid(pid, path, ppid)
+        if note_exec(pid, ppid, path) or _pid(caller) in IGNORED_PIDS:
+            return None
         args = format_args((event.get("exec") or {}).get("args"))
         remember_args(pid, args)
         return {
@@ -482,7 +545,8 @@ def normalize(raw):
 
 
 def run_eslogger(kinds):
-    events = ["exec"] + (["open"] if "file" in kinds else [])
+    # "exit" only keeps the set of Hostwatch's own pids exact; it is never published.
+    events = ["exec", "exit"] + (["open"] if "file" in kinds else [])
     # New session: eslogger suppresses events from its own process group,
     # which would otherwise hide the user's Terminal session.
     proc = subprocess.Popen(
@@ -567,7 +631,7 @@ def parse_syn(line, meta):
 
 def publish_connection(pid, remote, proto, name_hint="", budget=0.3):
     """Publishes a net event unless this (pid, remote) was already reported."""
-    if pid in IGNORED_PIDS or SEEN_CONNS.seen((pid, remote)):
+    if is_ours_pid(pid) or SEEN_CONNS.seen((pid, remote)):
         return
     mark_net_pid(pid)
     exe = pid_path(pid)
@@ -792,7 +856,7 @@ def run_nettop_backstop(settle=1.5):
         now = time.monotonic()
         if pid not in known and rx + tx > 0:
             known.add(pid)
-            if now - started > 3 and pid not in IGNORED_PIDS:   # first samples = baseline
+            if now - started > 3 and not is_ours_pid(pid):   # first samples = baseline
                 pending[pid] = (now, name, rx, tx)
         # Anything lsof or packet capture did not report within `settle` seconds gets inferred.
         for p, (seen, pname, prx, ptx) in list(pending.items()):
@@ -859,7 +923,7 @@ def poll_network(interval):
             continue
         if previous is not None:
             new = [k for k in current.keys() - previous.keys()
-                   if k[0] not in IGNORED_PIDS and not SEEN_CONNS.seen((k[0], k[3]))]
+                   if not is_ours_pid(k[0]) and not SEEN_CONNS.seen((k[0], k[3]))]
             hosts = resolve_hosts([_strip_host(k[3]) for k in new]) if new else {}
             for key in new:
                 pid, proto, _local, remote = key
@@ -880,6 +944,89 @@ def poll_network(interval):
 
 
 # -------------------------------------------------------------------- main
+
+# --- Top processes (CPU, memory, disk) -------------------------------------------------
+
+class RUsageInfoV2(ctypes.Structure):
+    """<libproc.h> rusage_info_v2: CPU times in mach ticks, memory and disk I/O in bytes."""
+    _fields_ = [("uuid", ctypes.c_uint8 * 16), ("user_time", ctypes.c_uint64), ("system_time", ctypes.c_uint64),
+                ("pkg_idle_wkups", ctypes.c_uint64), ("interrupt_wkups", ctypes.c_uint64),
+                ("pageins", ctypes.c_uint64), ("wired_size", ctypes.c_uint64), ("resident_size", ctypes.c_uint64),
+                ("phys_footprint", ctypes.c_uint64), ("proc_start_abstime", ctypes.c_uint64),
+                ("proc_exit_abstime", ctypes.c_uint64), ("child_user_time", ctypes.c_uint64),
+                ("child_system_time", ctypes.c_uint64), ("child_pkg_idle_wkups", ctypes.c_uint64),
+                ("child_interrupt_wkups", ctypes.c_uint64), ("child_pageins", ctypes.c_uint64),
+                ("child_elapsed_abstime", ctypes.c_uint64), ("diskio_bytesread", ctypes.c_uint64),
+                ("diskio_byteswritten", ctypes.c_uint64)]
+
+
+class Timebase(ctypes.Structure):
+    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+def process_snapshot(libproc, tick_ns):
+    """{(pid, start): (cpu_ns, footprint, read, written)} for every process."""
+    count = libproc.proc_listallpids(None, 0)
+    pids = (ctypes.c_int * (count + 64))()
+    count = libproc.proc_listallpids(pids, ctypes.sizeof(pids))
+    out = {}
+    info = RUsageInfoV2()
+    for pid in pids[:max(count, 0)]:
+        if pid <= 0 or libproc.proc_pid_rusage(pid, 2, ctypes.byref(info)) != 0:
+            continue
+        cpu = (info.user_time + info.system_time) * tick_ns
+        out[(pid, info.proc_start_abstime)] = (cpu, info.phys_footprint, info.diskio_bytesread, info.diskio_byteswritten)
+    return out
+
+
+def top_from_snapshots(before, after, seconds, limit=5):
+    """Busiest processes between two snapshots: [(pid, cpu %, footprint, read B/s, write B/s)] by CPU,
+    plus the biggest by memory; and total disk read/write per second."""
+    rows, disk_read, disk_write = [], 0.0, 0.0
+    for key, (cpu, mem, rd, wr) in after.items():
+        prev = before.get(key)
+        if prev is None:
+            continue                      # started during the interval: no baseline yet
+        dcpu, drd, dwr = max(0, cpu - prev[0]), max(0, rd - prev[2]), max(0, wr - prev[3])
+        disk_read += drd
+        disk_write += dwr
+        rows.append((key[0], 100.0 * dcpu / (seconds * 1e9), mem, drd / seconds, dwr / seconds))
+    by_cpu = sorted(rows, key=lambda r: r[1], reverse=True)[:limit]
+    by_mem = [r for r in sorted(rows, key=lambda r: r[2], reverse=True)[:3] if r not in by_cpu]
+    return by_cpu + by_mem, disk_read / seconds, disk_write / seconds
+
+
+def run_top_sampler(interval=5.0):
+    """Every `interval` s, while a client asked for it: publish the busiest processes."""
+    libproc = _LIBPROC
+    try:
+        timebase = Timebase()
+        ctypes.CDLL(None).mach_timebase_info(ctypes.byref(timebase))
+        tick_ns = timebase.numer / timebase.denom
+    except (OSError, AttributeError) as exc:
+        print(f"top sampler unavailable: {exc}", flush=True)
+        return
+    if libproc is None:
+        return
+    before, started = None, time.monotonic()
+    while not STOP.wait(interval):
+        with CLIENTS_LOCK:
+            wanted = any(c.top for c in CLIENTS)
+        if not wanted:
+            before = None
+            continue
+        now = time.monotonic()
+        snap = process_snapshot(libproc, tick_ns)
+        if before is not None:
+            rows, disk_read, disk_write = top_from_snapshots(before, snap, now - started)
+            procs = []
+            for pid, cpu, mem, rd, wr in rows:
+                path = pid_path(pid) or ""
+                procs.append({"pid": pid, "name": os.path.basename(path) or str(pid), "path": path,
+                              "cpu": round(cpu, 1), "mem": mem, "read": round(rd), "write": round(wr)})
+            publish({"kind": "top", "procs": procs, "disk_read": round(disk_read), "disk_write": round(disk_write)})
+        before, started = snap, now
+
 
 def main():
     parser = argparse.ArgumentParser(description="Hostwatch collector")
@@ -921,10 +1068,12 @@ def main():
         return 1
     threading.Thread(target=accept_clients, args=(server, args.owner_pid, client_uid), daemon=True).start()
 
+    adopt_own_processes(args.owner_pid)        # before events flow: Hostwatch's own processes
     proc = run_eslogger(kinds)
     SHUTDOWN_HOOKS.append(proc.terminate)
     if args.owner_pid:
         threading.Thread(target=watch_owner, args=(args.owner_pid,), daemon=True).start()
+    threading.Thread(target=run_top_sampler, daemon=True).start()
     if "net" in kinds:
         threading.Thread(target=run_packet_sniffer, args=(True,), daemon=True).start()
         threading.Thread(target=run_nettop_backstop, daemon=True).start()

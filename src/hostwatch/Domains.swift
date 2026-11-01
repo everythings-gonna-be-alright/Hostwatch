@@ -139,15 +139,13 @@ final class DomainRegistry: ObservableObject {
         UserDefaults.standard.set(true, forKey: "domainsSeeded")
         DispatchQueue.global(qos: .utility).async {
             var found: [String: String] = [:]   // domain -> a host
-            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
             let decoder = JSONDecoder()
-            for file in files where file.pathExtension == "jsonl" {
-                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
-                for line in text.split(separator: "\n") where line.contains("\"host\"") {
-                    guard let e = try? decoder.decode(ActivityEvent.self, from: Data(line.utf8)),
-                          let (domain, host) = Self.trackedDomain(e) else { continue }
-                    found[domain] = host
-                }
+            let hostKey = Data(#""host":""#.utf8)
+            HistoryFiles.forEachLine(path: directory.path) { line in
+                guard line.range(of: hostKey) != nil,
+                      let e = try? decoder.decode(ActivityEvent.self, from: line),
+                      let (domain, host) = Self.trackedDomain(e) else { return }
+                found[domain] = host
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {

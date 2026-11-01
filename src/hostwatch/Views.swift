@@ -408,6 +408,7 @@ struct ActivityWindowView: View {
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var travel: TimeTravel
+    @ObservedObject var metrics: MetricsStore
     let actions: HUDActions
 
     private var traveling: Bool { travel.active && model.windowTab == 0 }
@@ -607,13 +608,11 @@ struct ActivityWindowView: View {
             }
             Divider()
             HStack {
-                Text(collector.statusText)
-                Text("·")
+                MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
+                Spacer(minLength: 12)
                 Button(history.statusText) { history.revealInFinder() }
                     .buttonStyle(.link)
                     .help("Show history files in Finder")
-                Spacer()
-                Text("Double-click a row to ask AI · click a column to sort")
                 Text("·")
                 let total = traveling ? travel.events.count : model.history.count
                 Text(rows.count == total ? "\(total) events" : "\(rows.count) of \(total) events")
