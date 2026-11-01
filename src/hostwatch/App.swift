@@ -574,12 +574,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         return image?.withSymbolConfiguration(.init(paletteColors: [color]).applying(.init(scale: .small)))
     }
 
-    /// The one command that registers Hostwatch's read-only MCP server with Claude Code.
-    static var mcpCommand: String {
-        let exe = Bundle.main.executablePath ?? "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
-        return "claude mcp add --scope user hostwatch -- \"\(exe)\" --mcp"
-    }
-
     private func item(_ title: String, _ action: Selector, key: String = "",
                       modifiers: NSEvent.ModifierFlags = .command, symbol name: String? = nil) -> NSMenuItem {
         let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
