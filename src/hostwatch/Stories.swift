@@ -475,7 +475,8 @@ final class StoryEngine: ObservableObject {
             // Reading keychain secrets counts, unless a trusted, validly signed program reads its own
             // items (e.g. Claude Code reading "Claude Code-credentials").
             if name == "security", Self.keychainDump.firstMatch(in: e.args, range: range) != nil,
-               !(SigningCache.shared.identity(e.parent).map { SigningCache.shared.isTrusted($0) } ?? false) {
+               !(SigningCache.shared.identity(e.parent).map { SigningCache.shared.isTrusted($0) } ?? false),
+               !Self.readsOwnKeychainItem(args: e.args, parent: e.parent) {
                 out.append((.credential, "read keychain secrets: \(e.args)"))
             }
             // A real GUI app (not Python.app & co. inside a framework) starting a shell/interpreter/tool.
@@ -578,6 +579,28 @@ final class StoryEngine: ObservableObject {
         procs[pid] = p
         return p
     }
+
+    /// A program reading its own keychain item (gh reading "gh:github.com", claude reading
+    /// "Claude Code-credentials") is using its own login, not stealing one. Never for browser and
+    /// app "Safe Storage" keys (what stealers want), dumps, or programs in Downloads/temp folders.
+    static func readsOwnKeychainItem(args: String, parent: String) -> Bool {
+        let program = base(parent).lowercased()
+        let temp = parent.hasPrefix("/tmp/") || parent.hasPrefix("/private/tmp/") || parent.contains("/var/folders/")
+        guard program.count >= 2, !temp, !inZone(parent, userDropZones),
+              !args.contains("dump-keychain"), !args.lowercased().contains("safe storage") else { return false }
+        let range = NSRange(args.startIndex..., in: args)
+        let names = keychainItemName.matches(in: args, range: range).compactMap { m -> String? in
+            (1...3).lazy.compactMap { Range(m.range(at: $0), in: args).map { String(args[$0]) } }.first
+        }
+        guard !names.isEmpty else { return false }
+        return names.allSatisfy { name in
+            name.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { $0 == program }
+        }
+    }
+
+    /// The item named by `-s` (service) or `-l` (label): quoted or a bare word.
+    private static let keychainItemName = try! NSRegularExpression(
+        pattern: #"(?:^|\s)-[sl]\s+(?:'([^']*)'|"([^"]*)"|([^\s'"]+))"#)
 
     private static func isShell(_ path: String) -> Bool {
         ["sh", "bash", "zsh", "dash", "ksh", "tcsh", "csh", "fish", "nu", "elvish"].contains(base(path))

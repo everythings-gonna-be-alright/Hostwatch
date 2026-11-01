@@ -168,4 +168,30 @@ import Testing
         s.feed(net("/usr/bin/curl", pid: 920, to: "45.1.1.1:80"))
         #expect(chained(s))
     }
+
+    // MARK: Own keychain items
+
+    @Test(arguments: [
+        ("/opt/homebrew/bin/gh", "security find-generic-password -s gh:github.com -w", true),
+        ("\(home)/.local/bin/claude", "security find-generic-password -a me -w -s 'Claude Code-credentials'", true),
+        ("/opt/homebrew/bin/go", "security find-generic-password -s 'Google Chrome' -w", false),     // "go" ≠ "google"
+        ("\(home)/.local/bin/chrome", "security find-generic-password -s 'Chrome Safe Storage' -w", false),
+        ("\(home)/Downloads/gh", "security find-generic-password -s gh:github.com -w", false),
+        ("/private/var/folders/ab/T/gh", "security find-generic-password -s gh:github.com -w", false),
+        ("/opt/homebrew/bin/gh", "security dump-keychain -d login.keychain", false),
+        ("/opt/homebrew/bin/gh", "security find-generic-password -s gh:github.com -s 'Slack' -w", false),
+    ])
+    func ownKeychainItem(parent: String, args: String, own: Bool) {
+        #expect(StoryEngine.readsOwnKeychainItem(args: args, parent: parent) == own)
+    }
+
+    @Test func ghReadingItsTokenThenCallingGitHubIsQuiet() {
+        let s = Scenario()
+        let gh = "/opt/homebrew/bin/gh"
+        s.feed(exec(gh, pid: 1200, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(exec("/usr/bin/security", pid: 1210, ppid: 1200, parent: gh,
+                    args: "security find-generic-password -s gh:github.com -w"))
+        s.feed(net(gh, pid: 1200, to: "140.82.121.6:443", host: "api.github.com"))
+        #expect(s.stories.openChains.allSatisfy { !$0.stages.contains(.credential) })
+    }
 }
