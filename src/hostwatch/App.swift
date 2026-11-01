@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let domainsState = DomainsViewState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
+    private lazy var ruleBook = RuleBook(store: signatures)
     private let collector = Collector()
     private let history = HistoryRecorder()
     private var panel: NSPanel?
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         model.connect()
         setUpHistory()
+        _ = ruleBook                      // load approved rules and apply them before events arrive
         // Signing: re-score a binary's patterns if its signature turns out invalid; trust the
         // developers of already-installed apps on first run, then re-score everything.
         SigningCache.shared.onChange = { [weak self] path in
@@ -752,7 +754,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
@@ -819,6 +821,7 @@ enum Entry {
     static func main() {
         let args = CommandLine.arguments
         if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
+        if args.contains("--suggest-rules") { runRuleSuggestionDryRun() }
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
             runSignatureReport(args[i + 1])
         }

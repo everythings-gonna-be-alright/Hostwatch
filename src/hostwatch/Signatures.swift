@@ -534,10 +534,11 @@ final class SignatureStore: ObservableObject {
     private var timer: Timer?
     private let maxEntries = 50_000
 
-    init() {
+    /// `directory`: where signatures-v2.json lives (tests use a temporary folder).
+    init(directory: URL = AppPaths.support) {
         patternOrder = SortMemory.load(key: "patternTableSort", columns: PatternItem.sortColumns,
                                        fallback: KeyPathComparator(\.priority))
-        let dir = AppPaths.support
+        let dir = directory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         // v2: zone-based patterns with risk; the old per-folder format is not migrated.
         fileURL = dir.appendingPathComponent("signatures-v2.json")
@@ -545,6 +546,43 @@ final class SignatureStore: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+    }
+
+    // MARK: Learned rules
+
+    /// Active rules you approved (Rules tab). Authority: you > your rules > Claude/on-device > auto.
+    private(set) var learnedRules: [LearnedRule] = []
+    /// Called after you mark something, so rules can re-check themselves against your decisions.
+    var onDecisionsChanged: (() -> Void)?
+
+    var allEntries: [SignatureEntry] { Array(entries.values) }
+    var entriesByKey: [String: SignatureEntry] { entries }
+
+    /// Sources a rule may override (never you or the baseline you trusted).
+    private static let ruleOverridable: Set<String?> = [nil, "auto", "claude", "on-device", "rule"]
+
+    /// Re-applies rules everywhere: patterns a removed or paused rule had classified go back to their
+    /// own state first, then each eligible pattern takes the first matching active rule.
+    func applyRules(_ rules: [LearnedRule]) {
+        learnedRules = rules.filter(\.isActive)
+        for (key, var e) in entries where Self.ruleOverridable.contains(e.source) {
+            if e.source == "rule" {
+                let routine = e.risk == .routine
+                e.status = routine ? .safe : .unclassified
+                e.source = routine ? "auto" : nil
+                e.note = nil
+            }
+            applyRule(to: &e)
+            entries[key] = e
+        }
+        changedNow()
+    }
+
+    private func applyRule(to e: inout SignatureEntry) {
+        guard Self.ruleOverridable.contains(e.source), let rule = learnedRules.first(where: { $0.matches(e) }) else { return }
+        e.status = rule.action
+        e.source = "rule"
+        e.note = rule.name
     }
 
     // MARK: Observing events
@@ -577,6 +615,10 @@ final class SignatureStore: ObservableObject {
             exampleName: e.name, examplePid: e.pid, exampleProc: e.proc, exampleTarget: e.target,
             exampleExtra: e.extra, exampleParent: e.parent,
             exampleHost: e.host.isEmpty ? nil : e.host, exampleHostSource: e.host.isEmpty ? nil : e.hostSource)
+        if !learnedRules.isEmpty, var created = entries[e.signatureKey] {
+            applyRule(to: &created)
+            entries[e.signatureKey] = created
+        }
         if entries.count > maxEntries { evict() }
         markDirty()
         return !routine
@@ -634,7 +676,8 @@ final class SignatureStore: ObservableObject {
     /// judge one pattern alone, which is exactly what stories look past.
     func markedSafeByYou(_ e: ActivityEvent) -> Bool {
         if let entry = entries[e.signatureKey], entry.status != .unclassified {
-            return entry.status == .safe && entry.source == "you"
+            // A rule you approved counts as your decision.
+            return entry.status == .safe && (entry.source == "you" || entry.source == "rule")
         }
         return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.signatureProcess)]?.status == .safe
     }
@@ -654,9 +697,11 @@ final class SignatureStore: ObservableObject {
             e.status = status
             e.source = status == .unclassified ? nil : source
             if let note { e.note = note } else if status == .unclassified { e.note = nil }
+            if status == .unclassified { applyRule(to: &e) }   // cleared by you: your rules apply again
             entries[key] = e
         }
         changedNow()
+        if source == "you" { onDecisionsChanged?() }
     }
 
     /// Applies an automatic verdict only where nobody (you or a rule) has decided yet.
@@ -719,7 +764,7 @@ final class SignatureStore: ObservableObject {
     /// You decided this pattern: on the pattern itself, or through a whole-process rule you set.
     func reviewedByYou(_ key: String) -> Bool {
         guard let e = entries[key] else { return false }
-        if e.status != .unclassified { return e.source == "you" }
+        if e.status != .unclassified { return e.source == "you" || e.source == "rule" }
         return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.process)] != nil
     }
 

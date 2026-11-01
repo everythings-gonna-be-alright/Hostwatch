@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Rules learned from your decisions** (Rules tab): Claude proposes general rules from the patterns you
+  marked. Hostwatch refuses any that contradict your decisions or are too broad, and applies only
+  those you approve. Each rule re-checks itself and pauses if it contradicts you later.
 - **MCP server for Claude Code** (`Hostwatch --mcp`, *Detection ▸ Use with Claude Code…*): read-only tools to
   search events, patterns, stories, domains, process trees and code signatures, for investigating by
   conversation.
