@@ -1,0 +1,5 @@
+#!/bin/bash
+# Local MRs: a merge into main is only recorded when every test passes on the merged result.
+# Skip in an emergency with: git merge --no-verify
+echo "pre-merge-commit: running tests…"
+exec "$(git rev-parse --show-toplevel)/scripts/test.sh"

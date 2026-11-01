@@ -1,0 +1,572 @@
+import AppKit
+import Darwin
+import Network
+import SwiftUI
+
+// MARK: - Event model
+
+enum EventKind: String, CaseIterable, Codable {
+    case exec, net, file
+
+    var title: String {
+        switch self {
+        case .exec: return "Processes"
+        case .net: return "Connections"
+        case .file: return "Files"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .exec: return "play.fill"
+        case .net: return "network"
+        case .file: return "doc.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .exec: return .cyan
+        case .net: return .green
+        case .file: return .orange
+        }
+    }
+}
+
+struct ActivityEvent: Identifiable, Decodable {
+    let id = UUID()
+    let kind: EventKind
+    let time: String
+    let pid: Int
+    let ppid: Int
+    let name: String
+    let proc: String
+    let target: String
+    let extra: String
+    let parent: String           // exec only: program that spawned it
+    let host: String             // net only: DNS name for the remote IP ("" if unknown)
+    let hostSource: String       // "dns" (name the program looked up) or "ptr" (reverse DNS)
+    let args: String             // exec only: command line, secrets masked by the collector
+    let inferred: Bool           // net only: seen via traffic stats after it closed; target inferred
+    let note: String             // collector's remark (e.g. why a connection is inferred)
+    private(set) var signatureKey = ""
+    private(set) var signatureProcess = ""
+    private(set) var signaturePattern = ""
+    private(set) var signatureRisk = PatternRisk.normal
+    private(set) var signatureReason = ""
+    var isFirst = false          // first time this pattern was ever seen
+    var seq = 0                  // arrival order, for sorting by time
+    var newDomain = ""           // net: registrable domain first seen within the last hour
+    var beacon = ""              // net: "every ~60s" when part of a worrying beacon
+    var rawIP = false            // net: public IP, unusual port, no DNS, untrusted program
+
+    /// Any per-connection network signal that deserves attention.
+    var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, time, pid, ppid, name, proc, target, extra, parent, host, args, inferred, note
+        case hostSource = "host_src"
+    }
+
+    init(kind: EventKind, time: String, pid: Int, ppid: Int, name: String,
+         proc: String, target: String, extra: String, parent: String, host: String = "", hostSource: String = "", args: String = "") {
+        self.kind = kind; self.time = time; self.pid = pid; self.ppid = ppid; self.name = name
+        self.proc = proc; self.target = target; self.extra = extra; self.parent = parent
+        self.host = host; self.hostSource = hostSource; self.args = args
+        self.inferred = false; self.note = ""
+        applySignature()
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(EventKind.self, forKey: .kind)
+        time = (try? c.decode(String.self, forKey: .time)) ?? ""
+        pid = (try? c.decode(Int.self, forKey: .pid)) ?? 0
+        ppid = (try? c.decode(Int.self, forKey: .ppid)) ?? 0
+        name = (try? c.decode(String.self, forKey: .name)) ?? "?"
+        proc = (try? c.decode(String.self, forKey: .proc)) ?? ""
+        target = (try? c.decode(String.self, forKey: .target)) ?? ""
+        extra = (try? c.decode(String.self, forKey: .extra)) ?? ""
+        parent = (try? c.decode(String.self, forKey: .parent)) ?? ""
+        host = (try? c.decode(String.self, forKey: .host)) ?? ""
+        hostSource = (try? c.decode(String.self, forKey: .hostSource)) ?? ""
+        args = (try? c.decode(String.self, forKey: .args)) ?? ""
+        inferred = (try? c.decode(Bool.self, forKey: .inferred)) ?? false
+        note = (try? c.decode(String.self, forKey: .note)) ?? ""
+        applySignature()
+    }
+
+    private mutating func applySignature() {
+        let sig = SignatureBuilder.signature(for: self)
+        (signatureKey, signatureProcess, signaturePattern) = (sig.key, sig.process, sig.pattern)
+        (signatureRisk, signatureReason) = (sig.risk, sig.reason)
+    }
+
+    var detail: String {
+        switch kind {
+        case .exec: return "\(pid) ← \(ppid)"
+        case .net:
+            if target.hasPrefix("?") { return "\(extra) (closed too fast to read)" }
+            return "\(extra) \(hostLabel.map { "\($0):\(remotePort)" } ?? target)"
+        case .file: return "\(extra) \(abbreviate(target))"
+        }
+    }
+
+    /// Hostname to show: plain when it is the name the program looked up, "~name" when it is
+    /// only reverse DNS (often a CDN/provider name).
+    var hostLabel: String? {
+        guard kind == .net, !host.isEmpty else { return nil }
+        switch hostSource {
+        case "ptr": return "~" + host        // reverse DNS: often a provider name
+        case "args": return "≈" + host       // taken from the command line, not confirmed by DNS
+        default: return host
+        }
+    }
+
+    var remotePort: String { target.split(separator: ":").last.map(String.init) ?? "" }
+
+    /// "www.google.com" -> "google.com", "a.b.co.uk" -> "b.co.uk".
+    var registrableDomain: String? {
+        guard !host.isEmpty, hostSource == "dns" else { return nil }
+        return DomainRegistry.registrable(host)
+    }
+
+    /// Remote host part of a net target ("1.2.3.4:443" -> "1.2.3.4", "[::1]:53" -> "[::1]").
+    var remoteHost: String? {
+        guard kind == .net, let colon = target.lastIndex(of: ":") else { return nil }
+        return String(target[..<colon])
+    }
+}
+
+private let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+
+private func abbreviate(_ path: String) -> String {
+    path.hasPrefix(homeDir) ? "~" + path.dropFirst(homeDir.count) : path
+}
+
+// MARK: - Exclusion rules (same semantics as the agent)
+
+struct ExclusionRules {
+    private struct Rule {
+        let scope: String?   // nil = whole process, "proc", "net", "file"
+        let pattern: String
+        let isGlob: Bool
+    }
+
+    private let rules: [Rule]
+    let lines: [String]
+
+    init(text: String) {
+        var rules: [Rule] = []
+        var lines: [String] = []
+        for raw in text.split(whereSeparator: \.isNewline) {
+            var s = raw.trimmingCharacters(in: .whitespaces)
+            if s.isEmpty || s.hasPrefix("#") { continue }
+            lines.append(s)
+            var scope: String?
+            for prefix in ["proc:", "net:", "file:"] where s.lowercased().hasPrefix(prefix) {
+                scope = String(prefix.dropLast())
+                s = String(s.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                break
+            }
+            guard !s.isEmpty else { continue }
+            rules.append(Rule(scope: scope, pattern: s.lowercased(),
+                              isGlob: s.contains("*") || s.contains("?")))
+        }
+        self.rules = rules
+        self.lines = lines
+    }
+
+    func excludes(_ e: ActivityEvent) -> Bool {
+        let kindScope: String = e.kind == .exec ? "proc" : e.kind.rawValue
+        for rule in rules {
+            let fields: [String]
+            switch rule.scope {
+            case nil: fields = [e.name, e.proc]
+            case kindScope?: fields = rule.scope == "proc" ? [e.name, e.target] : [e.target]
+            default: continue
+            }
+            if fields.contains(where: { match(rule, $0) }) { return true }
+        }
+        return false
+    }
+
+    private func match(_ rule: Rule, _ value: String) -> Bool {
+        guard !value.isEmpty else { return false }
+        let v = value.lowercased()
+        return rule.isGlob ? fnmatch(rule.pattern, v, 0) == 0 : v.contains(rule.pattern)
+    }
+}
+
+let exclusionHelp = """
+One pattern per line, case-insensitive. Lines starting with # are ignored.
+With * or ? it is a glob (whole value must match), otherwise a substring.
+  name-or-path      hide everything from matching processes
+  proc:<pattern>    hide spawns of matching executables
+  net:<pattern>     hide connections to matching remote host:port
+  file:<pattern>    hide opens of matching file paths
+"""
+
+let defaultExclusions = [
+    "file:/dev/*",
+    "file:/System/*",
+    "file:/usr/lib/*",
+    "file:/usr/share/*",
+    "file:/Library/Preferences/*",
+    "file:/private/var/db/*",
+    "file:/private/var/folders/*",
+    "file:*/Library/Caches/*",
+    "file:*.dylib",
+    "net:127.0.0.1:*",
+    "net:[::1]:",
+    "mdworker",
+    "mds_stores",
+].joined(separator: "\n") + "\n"
+
+
+extension ActivityEvent {
+    /// Ready-made exclusion patterns for this row: (menu title, pattern).
+    var exclusionSuggestions: [(String, String)] {
+        var out: [(String, String)] = [("Hide process “\(name)”", name)]
+        switch kind {
+        case .exec:
+            out.append(("Hide spawns of \(target)", "proc:\(target)"))
+        case .net:
+            if !host.isEmpty, hostSource == "dns" {
+                out.append(("Hide host \(host)", "net:\(host):*"))
+                if let domain = registrableDomain, domain != host {
+                    out.append(("Hide domain *.\(domain)", "net:*.\(domain):*"))
+                }
+            }
+            if let host = remoteHost {
+                // IPv6 hosts contain [ ], which glob treats as a class, so use substring form.
+                out.append(("Hide host \(host)", host.hasPrefix("[") ? "net:\(host):" : "net:\(host):*"))
+            }
+            out.append(("Hide endpoint \(target)", "net:\(target)"))
+        case .file:
+            let folder = (target as NSString).deletingLastPathComponent
+            out.append(("Hide folder \(folder)/", "file:\(folder)/*"))
+            out.append(("Hide file \(target)", "file:\(target)"))
+        }
+        return out
+    }
+
+    var fullDetail: String {
+        switch kind {
+        case .exec: return args.isEmpty ? target : "\(target)  ·  \(args)"
+        case .net:
+            let tail = inferred ? "  · inferred (\(note))" : ""
+            if target.hasPrefix("?") { return "\(extra) destination unknown\(tail)" }
+            guard let label = hostLabel else { return "\(extra) \(target)\(tail)" }
+            return "\(extra) \(label):\(remotePort)  [\(target)]\(tail)"
+        case .file: return "\(extra.padding(toLength: 3, withPad: " ", startingAt: 0)) \(target)"
+        }
+    }
+}
+
+enum OverlayBackground: String, CaseIterable {
+    case glass, blur, dark, transparent
+
+    var title: String {
+        switch self {
+        case .glass: return "Liquid Glass"
+        case .blur: return "Blur"
+        case .dark: return "Dark"
+        case .transparent: return "Transparent"
+        }
+    }
+}
+
+/// Collector port; override with HOSTWATCH_PORT for testing.
+let collectorPort: NWEndpoint.Port = {
+    let raw = ProcessInfo.processInfo.environment["HOSTWATCH_PORT"].flatMap(UInt16.init) ?? 47831
+    return NWEndpoint.Port(rawValue: raw) ?? 47831
+}()
+
+// MARK: - Model
+
+@MainActor
+final class HUDModel: ObservableObject {
+    @Published private(set) var history: [ActivityEvent] = []
+    @Published private(set) var connected = false
+    @Published private(set) var counts: [EventKind: Int] = [:]
+    @Published var paused = false
+    @Published var searchText = ""
+    @Published var windowTab = 0          // 0 = events, 1 = patterns, 2 = stories, 3 = domains
+    @Published var eventSelection = Set<UUID>()
+    /// Events table sort (click a column header); newest first by default.
+    @Published var eventOrder: [KeyPathComparator<EventItem>] {
+        didSet { SortMemory.save(eventOrder, key: "eventTableSort", columns: EventItem.sortColumns) }
+    }
+    private var nextSeq = 0
+
+    /// Which patterns the overlay and event list show.
+    @Published var signatureFilter: SignatureFilter {
+        didSet { UserDefaults.standard.set(signatureFilter.rawValue, forKey: "signatureFilter") }
+    }
+    let signatures: SignatureStore
+    let stories: StoryEngine
+    let domains: DomainRegistry
+    let beacons = BeaconDetector()
+
+    @Published var exclusionText: String {
+        didSet {
+            UserDefaults.standard.set(exclusionText, forKey: Keys.exclusions)
+            rules = ExclusionRules(text: exclusionText)
+            applyFilters()
+        }
+    }
+
+    /// Which kinds the HUD and event list *show*. Display only: the collector, patterns,
+    /// stories and recorded history always get every kind.
+    @Published var visibleKinds: Set<EventKind> {
+        didSet { UserDefaults.standard.set(visibleKinds.map(\.rawValue), forKey: Keys.kinds) }
+    }
+
+    @Published var overlayClickThrough: Bool {
+        didSet { UserDefaults.standard.set(overlayClickThrough, forKey: Keys.clickThrough) }
+    }
+
+    /// HUD on/off; remembered across launches.
+    @Published var overlayEnabled: Bool {
+        didSet { UserDefaults.standard.set(overlayEnabled, forKey: Keys.overlayEnabled) }
+    }
+
+    @Published var overlayBackground: OverlayBackground {
+        didSet { UserDefaults.standard.set(overlayBackground.rawValue, forKey: Keys.overlayBackground) }
+    }
+
+    /// Tint strength for the Blur and Dark backgrounds (0.1…1).
+    @Published var overlayOpacity: Double {
+        didSet { UserDefaults.standard.set(overlayOpacity, forKey: Keys.overlayOpacity) }
+    }
+
+    /// HUD size, all remembered across launches.
+    @Published var overlayRows: Int {
+        didSet { UserDefaults.standard.set(overlayRows, forKey: Keys.overlayRows) }
+    }
+    @Published var overlayWidth: CGFloat {
+        didSet { UserDefaults.standard.set(Double(overlayWidth), forKey: Keys.overlayWidth) }
+    }
+    @Published var overlayScale: CGFloat {
+        didSet { UserDefaults.standard.set(Double(overlayScale), forKey: Keys.overlayScale) }
+    }
+
+    static let rowRange = 3...200
+    static let widthRange: ClosedRange<CGFloat> = 240...2400
+    static let scaleOptions: [(String, CGFloat)] = [("Small", 0.85), ("Medium", 1.0), ("Large", 1.25), ("Extra Large", 1.5)]
+    let historyLimit = 5000
+    private var rules: ExclusionRules
+    private var connection: NWConnection?
+    private var reconnectScheduled = false
+    private let queue = DispatchQueue(label: "hostwatch.network")
+    private var pending = Data()
+    private let decoder = JSONDecoder()
+
+    private enum Keys {
+        static let exclusions = "exclusions"
+        static let kinds = "visibleKinds"
+        static let clickThrough = "overlayClickThrough"
+        static let overlayEnabled = "overlayEnabled"
+        static let overlayBackground = "overlayBackground"
+        static let overlayOpacity = "overlayOpacity"
+        static let overlayRows = "overlayRows"
+        static let overlayWidth = "overlayWidth"
+        static let overlayScale = "overlayScale"
+    }
+
+    init(signatures: SignatureStore, stories: StoryEngine, domains: DomainRegistry) {
+        self.signatures = signatures
+        self.stories = stories
+        self.domains = domains
+        eventOrder = SortMemory.load(key: "eventTableSort", columns: EventItem.sortColumns,
+                                     fallback: KeyPathComparator(\.seq, order: .reverse))
+        signatureFilter = UserDefaults.standard.string(forKey: "signatureFilter")
+            .flatMap(SignatureFilter.init(rawValue:)) ?? .all
+        let defaults = UserDefaults.standard
+        let text = defaults.string(forKey: Keys.exclusions) ?? defaultExclusions
+        exclusionText = text
+        rules = ExclusionRules(text: text)
+        if let stored = defaults.stringArray(forKey: Keys.kinds) {
+            visibleKinds = Set(stored.compactMap(EventKind.init(rawValue:)))
+        } else {
+            visibleKinds = Set(EventKind.allCases)
+        }
+        // Click-through is off by default: the HUD can be moved, resized and double-clicked.
+        // Installs that only had the old default (on) are switched off once.
+        if !defaults.bool(forKey: "clickThroughDefaultOff") {
+            defaults.set(true, forKey: "clickThroughDefaultOff")
+            defaults.removeObject(forKey: Keys.clickThrough)
+        }
+        overlayClickThrough = defaults.object(forKey: Keys.clickThrough) as? Bool ?? false
+        overlayEnabled = defaults.object(forKey: Keys.overlayEnabled) as? Bool ?? true
+        overlayBackground = defaults.string(forKey: Keys.overlayBackground)
+            .flatMap(OverlayBackground.init(rawValue:)) ?? .glass
+        // One-time switch to the Liquid Glass look for existing installs.
+        if !defaults.bool(forKey: "designGlassAdopted") {
+            defaults.set(true, forKey: "designGlassAdopted")
+            overlayBackground = .glass
+        }
+        overlayOpacity = defaults.object(forKey: Keys.overlayOpacity) as? Double ?? 0.45
+        overlayRows = defaults.object(forKey: Keys.overlayRows) as? Int ?? 24
+        overlayWidth = CGFloat(defaults.object(forKey: Keys.overlayWidth) as? Double ?? 360)
+        overlayScale = CGFloat(defaults.object(forKey: Keys.overlayScale) as? Double ?? 1.0)
+    }
+
+    private func passesSignatureFilter(_ e: ActivityEvent) -> Bool {
+        if signatureFilter == .all { return true }
+        // New domains, beacons and raw-IP connections count as new and important on their own.
+        if e.networkSignal, signatureFilter == .important || signatureFilter == .unclassified
+            || signatureFilter == .hideSafe { return true }
+        return signatureFilter.admits(signatures.status(for: e), risk: e.signatureRisk,
+                                      reviewed: signatures.reviewedByYou(e.signatureKey))
+    }
+
+    var overlayEvents: [ActivityEvent] {
+        var out: [ActivityEvent] = []
+        for e in history where visibleKinds.contains(e.kind) && passesSignatureFilter(e) {
+            out.append(e)
+            if out.count == overlayRows { break }
+        }
+        return out
+    }
+
+    var searchResults: [ActivityEvent] {
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        let visible = history.filter { visibleKinds.contains($0.kind) && passesSignatureFilter($0) }
+        guard !q.isEmpty else { return visible }
+        return visible.filter {
+            $0.name.lowercased().contains(q) || $0.proc.lowercased().contains(q)
+                || $0.target.lowercased().contains(q) || $0.host.contains(q) || String($0.pid) == q
+        }
+    }
+
+    // MARK: Exclusions
+
+    func addExclusion(_ pattern: String) {
+        guard !rules.lines.contains(pattern) else { return }
+        var text = exclusionText
+        if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
+        exclusionText = text + pattern + "\n"
+    }
+
+    func toggle(_ kind: EventKind) {
+        if visibleKinds.contains(kind) { visibleKinds.remove(kind) } else { visibleKinds.insert(kind) }
+    }
+
+    func clear() {
+        history.removeAll()
+        counts = [:]
+    }
+
+    private func applyFilters() {
+        history.removeAll { rules.excludes($0) }
+        sendConfig()
+    }
+
+    // MARK: Networking
+
+    func connect() {
+        reconnectScheduled = false
+        pending.removeAll()
+        let conn = NWConnection(host: "127.0.0.1", port: collectorPort, using: .tcp)
+        connection = conn
+
+        conn.stateUpdateHandler = { [weak self] state in
+            Task { @MainActor in
+                guard let self, conn === self.connection else { return }
+                switch state {
+                case .ready:
+                    self.connected = true
+                    self.sendConfig()
+                    self.receiveNext(conn)
+                case .waiting, .failed, .cancelled:
+                    self.dropConnection()
+                default:
+                    break
+                }
+            }
+        }
+        conn.start(queue: queue)
+    }
+
+    private func dropConnection() {
+        connected = false
+        connection?.cancel()
+        connection = nil
+        guard !reconnectScheduled else { return }
+        reconnectScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.connect()
+        }
+    }
+
+    private func send(_ object: [String: Any], completion: (() -> Void)? = nil) {
+        guard let connection, connected,
+              var data = try? JSONSerialization.data(withJSONObject: object)
+        else { completion?(); return }
+        data.append(0x0A)
+        connection.send(content: data, completion: .contentProcessed { _ in
+            DispatchQueue.main.async { completion?() }
+        })
+    }
+
+    /// The agent filters per client too, so exclusions also cut collector traffic.
+    private func sendConfig() {
+        send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue)])
+    }
+
+    /// Asks the collector to exit; it only obeys a client that knows its token.
+    /// Returns false when there is no connection to send it on.
+    @discardableResult
+    func sendShutdown(token: String, completion: (() -> Void)? = nil) -> Bool {
+        guard connected else { completion?(); return false }
+        send(["cmd": "shutdown", "token": token], completion: completion)
+        return true
+    }
+
+    private func receiveNext(_ conn: NWConnection) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, error in
+            Task { @MainActor in
+                guard let self, conn === self.connection else { return }
+                if let data, !data.isEmpty {
+                    self.pending.append(data)
+                    self.consumeLines()
+                }
+                if error != nil || isComplete {
+                    self.dropConnection()
+                } else {
+                    self.receiveNext(conn)
+                }
+            }
+        }
+    }
+
+    private func consumeLines() {
+        var fresh: [ActivityEvent] = []
+        while let newline = pending.firstIndex(of: 0x0A) {
+            let line = pending[pending.startIndex..<newline]
+            pending.removeSubrange(...newline)
+            guard !paused,
+                  var event = try? decoder.decode(ActivityEvent.self, from: Data(line)),
+                  !rules.excludes(event)
+            else { continue }
+            event.isFirst = signatures.observe(event)
+            nextSeq += 1
+            event.seq = nextSeq
+            if event.kind == .net {
+                if let domain = domains.observe(event) { event.newDomain = domain }
+                if let beacon = beacons.observe(event) { event.beacon = beacon }
+                event.rawIP = NetSignals.isRawIP(event)
+            }
+            stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
+            fresh.append(event)
+            counts[event.kind, default: 0] += 1
+        }
+        guard !fresh.isEmpty else { return }
+        history.insert(contentsOf: fresh.reversed(), at: 0)
+        if history.count > historyLimit {
+            history.removeLast(history.count - historyLimit)
+        }
+    }
+}
