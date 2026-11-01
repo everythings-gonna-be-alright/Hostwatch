@@ -398,6 +398,18 @@ final class HUDModel: ObservableObject {
     private var reconnectScheduled = false
     private let queue = DispatchQueue(label: "hostwatch.network")
     private var pending = Data()
+
+    // UI batching: detection (patterns, stories, hold, domains) sees every event at once; the list,
+    // counters and HUD get them in batches at most every `uiInterval`, and not at all while nothing
+    // is on screen (they catch up when shown).
+    static let uiInterval: TimeInterval = 0.2
+    private var uiBuffer: [ActivityEvent] = []
+    private var countBuffer: [EventKind: Int] = [:]
+    private var flushScheduled = false
+    /// Set by the app: the activity window or the HUD is visible on screen.
+    var uiVisible = true {
+        didSet { if uiVisible && !oldValue { flushUI() } }
+    }
     private let decoder = JSONDecoder()
 
     private enum Keys {
@@ -497,6 +509,8 @@ final class HUDModel: ObservableObject {
     }
 
     func clear() {
+        uiBuffer.removeAll()
+        countBuffer.removeAll()
         history.removeAll()
         counts = [:]
     }
@@ -586,8 +600,7 @@ final class HUDModel: ObservableObject {
             Task { @MainActor in
                 guard let self, conn === self.connection else { return }
                 if let data, !data.isEmpty {
-                    self.pending.append(data)
-                    self.consumeLines()
+                    self.receive(data)
                 }
                 if error != nil || isComplete {
                     self.dropConnection()
@@ -603,6 +616,12 @@ final class HUDModel: ObservableObject {
         var procs: [TopProcess]
         var disk_read: Double?
         var disk_write: Double?
+    }
+
+    /// Collector output (JSON lines, possibly partial) into the model.
+    func receive(_ data: Data) {
+        pending.append(data)
+        consumeLines()
     }
 
     private func consumeLines() {
@@ -631,12 +650,35 @@ final class HUDModel: ObservableObject {
             let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
             hold?.consider(event, stages: stages, status: signatures.status(for: event))
             fresh.append(event)
-            counts[event.kind, default: 0] += 1
+            countBuffer[event.kind, default: 0] += 1
         }
         guard !fresh.isEmpty else { return }
-        history.insert(contentsOf: fresh.reversed(), at: 0)
-        if history.count > historyLimit {
-            history.removeLast(history.count - historyLimit)
+        uiBuffer.append(contentsOf: fresh)
+        // While hidden, keep only what the list could show anyway.
+        if uiBuffer.count > historyLimit { uiBuffer.removeFirst(uiBuffer.count - historyLimit) }
+        guard uiVisible, !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.uiInterval) { [weak self] in
+            MainActor.assumeIsolated { self?.flushUI() }
+        }
+    }
+
+    /// Hands buffered events to the list, counters and HUD in one update.
+    func flushUI() {
+        flushScheduled = false
+        guard !uiBuffer.isEmpty || !countBuffer.isEmpty else { return }
+        if !uiBuffer.isEmpty {
+            var updated = history
+            updated.insert(contentsOf: uiBuffer.reversed(), at: 0)
+            if updated.count > historyLimit { updated.removeLast(updated.count - historyLimit) }
+            history = updated
+            uiBuffer.removeAll(keepingCapacity: true)
+        }
+        if !countBuffer.isEmpty {
+            var c = counts
+            for (kind, n) in countBuffer { c[kind, default: 0] += n }
+            counts = c
+            countBuffer.removeAll()
         }
     }
 }

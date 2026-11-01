@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Much lower CPU for the app:** the event list, counters and HUD now update in batches (at most 5 times a
+  second) instead of on every event, don't re-sort when showing newest first, and pause while neither the
+  window nor the HUD is on screen. Detection, stories, the hold and history still see every event at once.
+
 Security hardening from a design review:
 
 - **No AI marks a high-risk pattern Safe** anymore, including Claude (before, only the on-device model was

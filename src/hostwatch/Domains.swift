@@ -22,8 +22,12 @@ struct DomainRecord: Codable, Identifiable {
 
 @MainActor
 final class DomainRegistry: ObservableObject {
-    @Published private(set) var records: [String: DomainRecord] = [:]
+    /// Not @Published: a known domain's count changes on every connection. Views follow `revision`,
+    /// bumped at once for new domains and changes you make, and at most once a second for counts.
+    private(set) var records: [String: DomainRecord] = [:]
     @Published private(set) var revision = 0
+    private var pendingRevision = false
+    private var revisionTimer: Timer?
 
     /// A domain counts as new for this long after its first sighting (Domains tab, menu badge).
     let attentionWindow: TimeInterval = 24 * 3600
@@ -101,6 +105,20 @@ final class DomainRegistry: ObservableObject {
 
     /// Records a connection; returns the domain when its connections should carry the
     /// NEW DOMAIN badge (first hour after a post-baseline first sighting).
+    /// Coalesces count/last-seen changes into one revision bump per second.
+    private func scheduleRevision() {
+        guard !pendingRevision else { return }
+        pendingRevision = true
+        guard Thread.isMainThread, revisionTimer == nil else { return }
+        revisionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.revisionTimer = nil
+                if self.pendingRevision { self.pendingRevision = false; self.revision += 1 }
+            }
+        }
+    }
+
     func observe(_ e: ActivityEvent, at now: Date = Date()) -> String? {
         guard let (domain, host) = Self.trackedDomain(e) else { return nil }
         let program = displayProcessName(e.proc.isEmpty ? e.name : e.proc)
@@ -111,6 +129,7 @@ final class DomainRegistry: ObservableObject {
             if !r.hosts.contains(host), r.hosts.count < 6 { r.hosts.append(host) }
             records[domain] = r
             dirty = true
+            scheduleRevision()
             return !r.baseline && !r.known && now.timeIntervalSince(r.firstSeen) < badgeWindow ? domain : nil
         }
         let learning = now < learningUntil

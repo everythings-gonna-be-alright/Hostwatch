@@ -67,6 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        // Only draw events while the window or the HUD is actually on screen.
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateUIVisibility() }
+        }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
         updates.schedule()                // daily, if allowed in Settings ▸ General
@@ -268,6 +273,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         } else {
             panel.orderOut(nil)
         }
+        updateUIVisibility()
+    }
+
+    /// The event list and HUD redraw only while one of them is visible (not closed, minimised,
+    /// hidden or fully covered); the model buffers events meanwhile.
+    private func updateUIVisibility() {
+        func onScreen(_ window: NSWindow?) -> Bool {
+            guard let window, window.isVisible else { return false }
+            return window.occlusionState.contains(.visible)
+        }
+        model.uiVisible = onScreen(activityWindow) || onScreen(panel)
     }
 
     // MARK: Menu bar
@@ -723,6 +739,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        updateUIVisibility()
         if fullScreen && !window.styleMask.contains(.fullScreen) {
             DispatchQueue.main.async { window.toggleFullScreen(nil) }
         }
@@ -770,6 +787,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     func windowWillClose(_ notification: Notification) {
         guard notification.object as? NSWindow === activityWindow else { return }
+        DispatchQueue.main.async { [weak self] in self?.updateUIVisibility() }   // after it's gone
         activityFullScreen = false
         refreshOverlayVisibility()
         NSApp.setActivationPolicy(.accessory)
