@@ -229,16 +229,28 @@ that has its `INSTALL_RECEIPT.json` is treated like a trusted developer's (measu
 261 → 225). `/opt/homebrew` is writable by your user, so a binary planted there would be trusted too.
 *Detection ▸ End Domain Learning Now* is also there.
 
-## AI triage: on-device first, Claude for the rest
+## AI engine and triage
 
-**Classify New** and **Auto-classify new** (Patterns tab) run new patterns through two optional steps,
-set in **Detection ▸ AI Triage**:
+**Detection ▸ AI Engine** picks which AI Hostwatch uses (radio items, with the on-device model's status):
 
-1. **On-Device First Pass** (default on): Apple's on-device model (`SystemLanguageModel`, never Private
+| Engine | Classify New / Auto-classify | Ask AI (event or story) |
+|--------|------------------------------|-------------------------|
+| **Apple On-Device (private)** | on-device only; what it can't settle stays New | on-device model |
+| **Claude** | Claude only | Claude |
+| **On-Device First, Claude for the Rest** (default) | steps 1 and 2 below | Claude |
+
+The Ask window also has a **Claude / On-device** switch per question. On-device answers use the same
+format (VERDICT line first), with the evidence shortened to ~6,000 characters to fit the model's
+~4,000-token context window; reading local files is Claude-only. An on-device "SAFE" from Ask never marks
+a high-risk pattern Safe. Earlier versions' two toggles are migrated to the matching engine.
+
+Classification steps:
+
+1. **On-device pass** (engines with on-device): Apple's on-device model (`SystemLanguageModel`, never Private
    Cloud Compute) looks at each pattern on its own: program, activity, signer and trust, local risk,
    count, with secrets masked and the text marked as data. It answers SAFE / SUSPICIOUS / DANGEROUS /
    UNSURE with a confidence (structured output, greedy decoding).
-2. **Ask Claude for the Rest** (default on): one Claude call for whatever step 1 did not settle.
+2. **Claude** (engines with Claude): one Claude call for whatever step 1 did not settle.
 
 Routing (`TriageRouter`, unit-tested):
 

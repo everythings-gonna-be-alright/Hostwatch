@@ -118,7 +118,7 @@ struct PatternsView: View {
                 .width(min: 70, ideal: 90, max: 130)
             }
             .font(.system(size: 12, design: .monospaced))
-            // Double-click (primaryAction) asks Claude; right-click acts on the selection.
+            // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first, let entry = signatures.entry(id) { menu(for: entry) }
             } primaryAction: { ids in
@@ -173,7 +173,7 @@ struct PatternsView: View {
                 .buttonStyle(.glassProminent)
                     .disabled(signatures.count(.unclassified) == 0)
                     .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
-                          + "then Claude for what it can't settle. Configure in Detection ▸ AI Triage.")
+                          + "then Claude for what it can't settle. Choose the engine in Detection ▸ AI Engine.")
             }
             Button("Trust Baseline…") { confirmBaseline() }
                 .buttonStyle(.glass)
@@ -208,7 +208,7 @@ struct PatternsView: View {
     private func menu(for entry: SignatureEntry) -> some View {
         // Act on the whole selection when right-clicking inside it.
         let keys = signatures.selection.contains(entry.id) ? Array(signatures.selection) : [entry.id]
-        Button("Ask Claude About This Pattern…") { actions.askAI(entry.exampleEvent) }
+        Button("Ask AI About This Pattern…") { actions.askAI(entry.exampleEvent) }
         Divider()
         trustMenu(for: entry)
         ForEach(SignatureStatus.allCases, id: \.self) { status in

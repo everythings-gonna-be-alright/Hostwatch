@@ -860,12 +860,9 @@ final class PatternClassifier: ObservableObject {
         didSet { UserDefaults.standard.set(autoClassify, forKey: "autoClassifyPatterns") }
     }
 
-    /// On-device first pass (Apple's local model), then Claude for what it can't settle.
-    @Published var useOnDevice: Bool {
-        didSet { UserDefaults.standard.set(useOnDevice, forKey: "triageOnDevice") }
-    }
-    @Published var askClaude: Bool {
-        didSet { UserDefaults.standard.set(askClaude, forKey: "triageAskClaude") }
+    /// Which AI classifies new patterns (and answers Ask, see AIEngine.askEngine).
+    @Published var engine: AIEngine {
+        didSet { UserDefaults.standard.set(engine.rawValue, forKey: AIEngine.key); leftForYou.removeAll() }
     }
 
     private let store: SignatureStore
@@ -884,8 +881,7 @@ final class PatternClassifier: ObservableObject {
         self.store = store
         self.localModel = localModel
         autoClassify = UserDefaults.standard.bool(forKey: "autoClassifyPatterns")
-        useOnDevice = UserDefaults.standard.object(forKey: "triageOnDevice") as? Bool ?? true
-        askClaude = UserDefaults.standard.object(forKey: "triageAskClaude") as? Bool ?? true
+        engine = AIEngine.load()
         timer = Timer.scheduledTimer(withTimeInterval: 90, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.autoClassify, !self.running else { return }
@@ -939,11 +935,12 @@ final class PatternClassifier: ObservableObject {
     /// On-device first pass when available, then Claude for the rest (each step optional).
     private func classify(_ batch: [SignatureEntry]) {
         guard !running else { return }
-        let claudeOn = askClaude && ClaudeLocator.path != nil
-        guard useOnDevice && localModel.status().isReady else {
-            if claudeOn { sendToClaude(batch) } else {
-                lastMessage = askClaude ? "Claude Code CLI not found." : "AI triage is off (Detection ▸ AI Triage)."
-            }
+        let claudeOn = engine.usesClaude && ClaudeLocator.path != nil
+        let local = localModel.status()
+        guard engine.usesOnDevice && local.isReady else {
+            if claudeOn { sendToClaude(batch) }
+            else if engine == .onDevice { lastMessage = local.label + " (Detection ▸ AI Engine)." }
+            else { lastMessage = "Claude Code CLI not found." }
             return
         }
         running = true

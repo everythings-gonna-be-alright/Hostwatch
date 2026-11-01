@@ -173,6 +173,9 @@ final class AIAnalysis: ObservableObject {
     @Published private(set) var verdict: Verdict?
     @Published private(set) var footer = ""
     @Published var allowFileTools = false
+    /// Who answers: Claude, or Apple's on-device model (private, smaller, evidence shortened).
+    @Published var engine: AIEngine = AIEngine.load().askEngine
+    private var localTask: Task<Void, Never>?
     /// Called with the verdict and a one-line summary when Claude finishes.
     var onVerdict: ((Verdict, String?) -> Void)?
 
@@ -229,6 +232,7 @@ final class AIAnalysis: ObservableObject {
 
     func ask() {
         guard state == .ready || state == .done || isFailed else { return }
+        if engine == .onDevice { askOnDevice(); return }
         guard let claude = ClaudeLocator.path else {
             state = .failed("Claude Code CLI not found. Install it (https://claude.com/claude-code) or put `claude` in ~/.local/bin.")
             return
@@ -287,7 +291,37 @@ final class AIAnalysis: ObservableObject {
         }
     }
 
+    /// Same answer shape as Claude (VERDICT line first), from Apple's on-device model.
+    private func askOnDevice() {
+        let model = AppleOnDeviceModel()
+        let status = model.status()
+        guard status.isReady else { state = .failed(status.label + ". Switch the engine to Claude."); return }
+        answer = ""
+        verdict = nil
+        footer = ""
+        state = .asking
+        let prompt = AppleOnDeviceModel.askPrompt(evidence: context)
+        let instructions = Self.systemPrompt
+        let start = Date()
+        localTask = Task { [weak self] in
+            do {
+                let text = try await model.explain(prompt, instructions: instructions)
+                guard let self, !Task.isCancelled else { return }
+                self.answer = text
+                self.updateVerdict()
+                self.footer = String(format: "on-device · %.1fs · nothing left this Mac", Date().timeIntervalSince(start))
+                self.state = .done
+                if let verdict = self.verdict { self.onVerdict?(verdict, self.summaryLine) }
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.state = .failed("On-device model: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func cancel() {
+        localTask?.cancel()
+        localTask = nil
         process?.terminate()
         process = nil
         state = .ready
@@ -438,7 +472,9 @@ struct AskAIView: View {
                     .buttonStyle(.glass)
                     .disabled(analysis.state == .gathering || analysis.state == .asking)
             }
-            Text("Gathered locally. Review and edit it before sending; obvious secrets are masked automatically.")
+            Text(analysis.engine == .onDevice
+                 ? "Gathered locally and analysed on this Mac by Apple's on-device model; nothing is sent anywhere."
+                 : "Gathered locally. Review and edit it before sending to Claude; obvious secrets are masked automatically.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextEditor(text: $analysis.context)
@@ -452,9 +488,21 @@ struct AskAIView: View {
                 .disabled(analysis.state == .gathering || analysis.state == .asking)
 
             HStack {
-                Toggle("Let Claude read local files (Read/Grep/Glob)", isOn: $analysis.allowFileTools)
-                    .help("Off: Claude only sees the evidence above. On: it may read files on this Mac, read-only.")
-                    .disabled(analysis.state == .asking)
+                Picker("Engine", selection: $analysis.engine) {
+                    Text("Claude").tag(AIEngine.claude)
+                    Text("On-device").tag(AIEngine.onDevice)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Claude: strongest analysis, evidence is sent to Anthropic. On-device: Apple's private model, "
+                      + "smaller, evidence shortened to fit; nothing leaves the Mac.")
+                .disabled(analysis.state == .asking)
+                if analysis.engine == .claude {
+                    Toggle("Let Claude read local files", isOn: $analysis.allowFileTools)
+                        .help("Off: Claude only sees the evidence above. On: it may read files on this Mac, read-only.")
+                        .disabled(analysis.state == .asking)
+                }
                 Spacer()
                 if analysis.state == .asking {
                     ProgressView().controlSize(.small)
@@ -462,7 +510,8 @@ struct AskAIView: View {
                         .buttonStyle(.glass)
                 } else {
                     Button { analysis.ask() } label: {
-                        Label(analysis.answer.isEmpty ? "Ask Claude" : "Ask Again", systemImage: "sparkles")
+                        Label(analysis.answer.isEmpty ? (analysis.engine == .onDevice ? "Ask On-Device" : "Ask Claude")
+                              : "Ask Again", systemImage: "sparkles")
                     }
                         .keyboardShortcut(.return, modifiers: .command)
                         .buttonStyle(.glassProminent)
@@ -540,7 +589,7 @@ struct AskAIView: View {
         case .gathering: return "Collecting evidence…"
         case .asking: return "Waiting for Claude…"
         case .failed(let message): return message
-        default: return "Press Ask Claude (⌘↩) to get a verdict."
+        default: return "Choose Claude or On-device, then press Ask (⌘↩) to get a verdict."
         }
     }
 

@@ -3,8 +3,11 @@
 ## Unreleased
 
 - **On-device AI triage:** Apple's on-device model triages new patterns first (private, offline, free);
-  Claude only gets what it can't settle. High-risk patterns are never settled on-device. Configure in
-  *Detection ▸ AI Triage*; "Classify with Claude" is now "Classify New".
+  Claude only gets what it can't settle. High-risk patterns are never settled on-device.
+  "Classify with Claude" is now "Classify New".
+- **Choose the AI engine** in *Detection ▸ AI Engine*: Apple On-Device (private), Claude, or on-device
+  first with Claude for the rest. The Ask window has a Claude / On-device switch; "Ask Claude" menus are
+  now "Ask AI".
 
 ## 0.1.0 – first public version
 

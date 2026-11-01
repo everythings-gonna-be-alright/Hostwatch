@@ -66,3 +66,40 @@ import Testing
                        exampleHost: host, exampleHostSource: host == nil ? nil : "dns")
     }
 }
+
+/// Choosing the AI engine: what each choice uses, and migration from the earlier two toggles.
+@Suite struct AIEngineChoice {
+    func defaults(_ values: [String: Any]) -> UserDefaults {
+        let name = "hostwatch-tests-\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        for (k, v) in values { d.set(v, forKey: k) }
+        return d
+    }
+
+    @Test func whatEachEngineUses() {
+        #expect(AIEngine.onDevice.usesOnDevice && !AIEngine.onDevice.usesClaude)
+        #expect(!AIEngine.claude.usesOnDevice && AIEngine.claude.usesClaude)
+        #expect(AIEngine.hybrid.usesOnDevice && AIEngine.hybrid.usesClaude)
+        #expect(AIEngine.hybrid.askEngine == .claude)
+        #expect(AIEngine.onDevice.askEngine == .onDevice)
+    }
+
+    @Test func savedChoiceWins() {
+        #expect(AIEngine.load(defaults([AIEngine.key: "claude", "triageOnDevice": true])) == .claude)
+    }
+
+    @Test func migratesTheEarlierToggles() {
+        #expect(AIEngine.load(defaults([:])) == .hybrid)                                         // fresh install
+        #expect(AIEngine.load(defaults(["triageOnDevice": true, "triageAskClaude": false])) == .onDevice)
+        #expect(AIEngine.load(defaults(["triageOnDevice": false, "triageAskClaude": true])) == .claude)
+        #expect(AIEngine.load(defaults(["triageOnDevice": true, "triageAskClaude": true])) == .hybrid)
+    }
+
+    @Test func askEvidenceIsShortenedForTheOnDeviceModel() {
+        let long = String(repeating: "x", count: AppleOnDeviceModel.askEvidenceLimit + 5_000)
+        let prompt = AppleOnDeviceModel.askPrompt(evidence: long)
+        #expect(prompt.count < AppleOnDeviceModel.askEvidenceLimit + 300)
+        #expect(prompt.contains("shortened to fit"))
+        #expect(!AppleOnDeviceModel.askPrompt(evidence: "short").contains("shortened"))
+    }
+}
