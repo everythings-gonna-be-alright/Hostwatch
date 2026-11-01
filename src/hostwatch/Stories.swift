@@ -172,7 +172,6 @@ final class StoryEngine: ObservableObject {
     static let sameProcessWindow: TimeInterval = 120
     static let processStartWindow: TimeInterval = 10 * 60
     static let lineageWindow: TimeInterval = 10 * 60
-    static let hostLineageWindow: TimeInterval = 30
     static let scriptWindow: TimeInterval = 3 * 60
     /// Unsigned / ad-hoc programs, or ones run from Downloads or temp: every run is one story.
     static let untrustedProgramWindow: TimeInterval = 60 * 60
@@ -352,10 +351,12 @@ final class StoryEngine: ObservableObject {
             return false
         }
         // 2. Parent -> child: the step happened in an ancestor before this process was started.
+        // Not for long-lived hosts (apps, terminals, agents): they start children all day, so timing
+        // alone means nothing there. A real hand-off (download, then run) is linked by the file.
         if let i = ancestors.firstIndex(of: step.pid) {
             guard let start, start.timeIntervalSince(step.date) >= -2 else { return false }
-            let host = isHost(step.pid, parent: i + 1 < ancestors.count ? ancestors[i + 1] : 0)
-            return age <= (host ? Self.hostLineageWindow : Self.lineageWindow)
+            if isHost(step.pid, parent: i + 1 < ancestors.count ? ancestors[i + 1] : 0) { return false }
+            return age <= Self.lineageWindow
         }
         // 3. Same script: both under the same short-lived parent (not an app or an interactive shell).
         if age <= Self.scriptWindow {
@@ -394,7 +395,9 @@ final class StoryEngine: ObservableObject {
         if p.path.contains(".app/Contents/MacOS/") || Self.isSessionStarter(p.path) { return true }
         if Self.isShell(p.path) {
             let parentPath = node(parent)?.path ?? ""
-            return parentPath.isEmpty || Self.isSessionStarter(parentPath) || parentPath.contains(".app/Contents/MacOS/")
+            // Interactive only under a terminal, IDE, agent or login: a shell an app (Slack…) starts
+            // runs a script, and its steps belong together.
+            return parentPath.isEmpty || Self.isSessionStarter(parentPath)
         }
         return false
     }
@@ -619,7 +622,8 @@ final class StoryEngine: ObservableObject {
                 }
             }
             let range = NSRange(e.args.startIndex..., in: e.args)
-            let command = Self.unwrapAgentCommand(e.args)
+            // `security`'s arguments are keychain data (hex tokens), not commands.
+            let command = name == "security" ? "" : Self.unwrapAgentCommand(e.args)
             let commandRange = NSRange(command.startIndex..., in: command)
             if !command.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: command, range: commandRange) != nil }) {
                 out.append((.encodedCommand, "suspicious command line"))
@@ -644,7 +648,10 @@ final class StoryEngine: ObservableObject {
             let writes = e.extra.contains("w")
             if writes, e.signaturePattern.hasSuffix("[persistence]") {
                 out.append((.persistence, "wrote \(e.target)"))
-            } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor {
+            } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor,
+                      !(SigningCache.shared.identity(e.proc).map { SigningCache.shared.trusts(e.proc, $0) } ?? false) {
+                // A trusted, validly signed program reading credential files (its own config, an
+                // SDK's cache) is not theft; a swapped or modified binary is not trusted.
                 out.append((.credential, "accessed \(e.target)"))
             } else if writes, !sealedActor, Self.inZone(e.target, Self.userDropZones) {
                 out.append((.drop, "wrote \(Self.base(e.target))"))
@@ -736,7 +743,8 @@ final class StoryEngine: ObservableObject {
     /// "Claude Code-credentials") is using its own login, not stealing one. Never for browser and
     /// app "Safe Storage" keys (what stealers want), dumps, or programs in Downloads/temp folders.
     static func readsOwnKeychainItem(args: String, parent: String) -> Bool {
-        let program = base(parent).lowercased()
+        // Claude Code's binary is named after its version (…/claude/versions/2.1.316).
+        let program = parent.contains("/claude/versions/") ? "claude" : base(parent).lowercased()
         let temp = parent.hasPrefix("/tmp/") || parent.hasPrefix("/private/tmp/") || parent.contains("/var/folders/")
         guard program.count >= 2, !temp, !inZone(parent, userDropZones),
               !args.contains("dump-keychain"), !args.lowercased().contains("safe storage") else { return false }
