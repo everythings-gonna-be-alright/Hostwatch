@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **On-device AI triage:** Apple's on-device model triages new patterns first (private, offline, free);
+  Claude only gets what it can't settle. High-risk patterns are never settled on-device. Configure in
+  *Detection ▸ AI Triage*; "Classify with Claude" is now "Classify New".
+
 ## 0.1.0 – first public version
 
 Behavior-based intrusion detection for macOS.

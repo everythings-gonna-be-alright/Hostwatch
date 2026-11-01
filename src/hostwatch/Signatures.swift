@@ -860,21 +860,39 @@ final class PatternClassifier: ObservableObject {
         didSet { UserDefaults.standard.set(autoClassify, forKey: "autoClassifyPatterns") }
     }
 
+    /// On-device first pass (Apple's local model), then Claude for what it can't settle.
+    @Published var useOnDevice: Bool {
+        didSet { UserDefaults.standard.set(useOnDevice, forKey: "triageOnDevice") }
+    }
+    @Published var askClaude: Bool {
+        didSet { UserDefaults.standard.set(askClaude, forKey: "triageAskClaude") }
+    }
+
     private let store: SignatureStore
+    private let localModel: LocalTriageModel
     private var timer: Timer?
     private var process: Process?
+    private var localTask: Task<Void, Never>?
     private var signingCache: [String: String] = [:]
+    /// Patterns the on-device pass already left for you (Claude off): not re-run every cycle.
+    private var leftForYou = Set<String>()
     let batchSize = 40
 
-    init(store: SignatureStore) {
+    var localStatus: LocalModelStatus { localModel.status() }
+
+    init(store: SignatureStore, localModel: LocalTriageModel = AppleOnDeviceModel()) {
         self.store = store
+        self.localModel = localModel
         autoClassify = UserDefaults.standard.bool(forKey: "autoClassifyPatterns")
+        useOnDevice = UserDefaults.standard.object(forKey: "triageOnDevice") as? Bool ?? true
+        askClaude = UserDefaults.standard.object(forKey: "triageAskClaude") as? Bool ?? true
         timer = Timer.scheduledTimer(withTimeInterval: 90, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.autoClassify, !self.running else { return }
                 // Let new patterns settle for a minute so each batch is meaningful.
-                let ready = self.store.unclassifiedForReview(limit: self.batchSize)
-                    .filter { Date().timeIntervalSince($0.firstSeen) > 60 }
+                let ready = self.store.unclassifiedForReview(limit: self.batchSize + self.leftForYou.count)
+                    .filter { Date().timeIntervalSince($0.firstSeen) > 60 && !self.leftForYou.contains($0.id) }
+                    .prefix(self.batchSize).map { $0 }
                 if !ready.isEmpty { self.classify(ready) }
             }
         }
@@ -903,26 +921,78 @@ final class PatternClassifier: ObservableObject {
     """
 
     func classifyNow() {
+        leftForYou.removeAll()   // an explicit request retries everything
         let batch = store.unclassifiedForReview(limit: batchSize)
         guard !batch.isEmpty else { lastMessage = "Nothing to classify."; return }
         classify(batch)
     }
 
     func cancel() {
+        localTask?.cancel()
+        localTask = nil
         process?.terminate()
         process = nil
         running = false
         lastMessage = "Cancelled."
     }
 
+    /// On-device first pass when available, then Claude for the rest (each step optional).
     private func classify(_ batch: [SignatureEntry]) {
+        guard !running else { return }
+        let claudeOn = askClaude && ClaudeLocator.path != nil
+        guard useOnDevice && localModel.status().isReady else {
+            if claudeOn { sendToClaude(batch) } else {
+                lastMessage = askClaude ? "Claude Code CLI not found." : "AI triage is off (Detection ▸ AI Triage)."
+            }
+            return
+        }
+        running = true
+        lastMessage = "On-device triage of \(batch.count) patterns…"
+        let model = localModel
+        let prompts = batch.map { e -> String in
+            let path = SignatureStore.subjectPath(e)
+            let id = SigningCache.shared.cached(path)
+            return AppleOnDeviceModel.prompt(for: e, signer: id,
+                                             trusted: id.map { SigningCache.shared.trusts(path, $0) } ?? false)
+        }
+        localTask = Task { [weak self] in
+            var escalate: [SignatureEntry] = []
+            var settled = 0, flagged = 0, left = 0
+            for (entry, prompt) in zip(batch, prompts) {
+                if Task.isCancelled { return }
+                let verdict = try? await model.triage(prompt)
+                guard let self else { return }
+                switch TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: claudeOn) {
+                case .settle(let status, let note):
+                    self.store.suggest(status, key: entry.id, source: "on-device", note: note)
+                    if status == .safe { settled += 1 } else { flagged += 1 }
+                case .escalate:
+                    escalate.append(entry)
+                case .leave:
+                    self.leftForYou.insert(entry.id)
+                    left += 1
+                }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.running = false
+            self.localTask = nil
+            var parts = ["On-device: \(settled) safe"]
+            if flagged > 0 { parts.append("\(flagged) flagged") }
+            if left > 0 { parts.append("\(left) left for you") }
+            if !escalate.isEmpty { parts.append("\(escalate.count) sent to Claude") }
+            self.lastMessage = parts.joined(separator: ", ")
+            if !escalate.isEmpty { self.sendToClaude(escalate, prefix: self.lastMessage) }
+        }
+    }
+
+    private func sendToClaude(_ batch: [SignatureEntry], prefix: String = "") {
         guard !running else { return }
         guard let claude = ClaudeLocator.path else {
             lastMessage = "Claude Code CLI not found."
             return
         }
         running = true
-        lastMessage = "Classifying \(batch.count) patterns with Claude…"
+        lastMessage = (prefix.isEmpty ? "" : prefix + " · ") + "Classifying \(batch.count) patterns with Claude…"
 
         let procs = Set(batch.flatMap { [$0.exampleProc, $0.exampleParent] }.filter { !$0.isEmpty })
         let cached = signingCache

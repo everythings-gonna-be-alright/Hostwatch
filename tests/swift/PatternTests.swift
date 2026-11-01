@@ -33,7 +33,7 @@ import Testing
     }
 }
 
-@Suite struct PatternRisk {
+@Suite struct PatternRiskRules {
     @Test func sensitiveReadByNonOwnerIsHigh() {
         let e = file("/opt/homebrew/bin/python3", pid: 10, "r", "\(home)/.ssh/id_ed25519")
         #expect(e.signatureRisk == .high)

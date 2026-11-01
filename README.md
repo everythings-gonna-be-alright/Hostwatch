@@ -54,8 +54,10 @@ block anything.
   instead of five unrelated rows.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
+- **Private AI triage.** Apple's **on-device** model triages new patterns first: free, offline, and nothing
+  leaves the Mac. Only what it can't settle goes to Claude. High-risk patterns are never settled on-device.
 - **Ask Claude.** Double-click anything to send its evidence (code signature, parent chain, command
-  line, connections) to Claude for a verdict and an explanation. Optionally auto-classify new patterns.
+  line, connections) to Claude for a verdict and an explanation.
 - **A real Mac app.** Native tables you can sort, a Stories timeline, a Domains inventory, filters,
   exclusions, recorded history.
 
@@ -85,7 +87,8 @@ ask Claude about an event.
 - Xcode 26 or the Command Line Tools (`xcode-select --install`), Swift 6.2+
 - Python 3 (the system `python3` is fine)
 - An administrator password, and Full Disk Access for the app
-- Optional: [Claude Code](https://claude.com/claude-code) (`claude` CLI) for Ask Claude
+- Optional: Apple Intelligence turned on (Apple Silicon), for private on-device triage
+- Optional: [Claude Code](https://claude.com/claude-code) (`claude` CLI) for Ask Claude and escalations
 
 ## Install
 
@@ -132,9 +135,11 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 
 - **Local by default.** Events, patterns, stories and history stay in `~/Library/Application Support/Hostwatch`
   and `~/Library/Logs/Hostwatch`. The collector listens on `127.0.0.1` only.
+- **AI is on-device first.** Auto-classification asks Apple's on-device model first (never its cloud
+  model); nothing leaves the Mac for what it settles.
 - **Claude is opt-in.** Evidence is sent only when you click *Ask Claude* (you can review and edit it
-  before sending) or turn on *Auto-classify* (pattern summaries, sent automatically). Obvious secrets
-  are masked in both.
+  before sending), or when auto-classification passes on what the on-device model couldn't settle
+  (pattern summaries; turn off in *Detection ▸ AI Triage*). Obvious secrets are masked in both.
 - **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
   the collector, but other secrets passed as arguments can end up in history.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).
