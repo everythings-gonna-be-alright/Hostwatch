@@ -598,6 +598,11 @@ cat ~/.zshrc >/dev/null              # 📄 file
 
 ## Security notes
 
+- **Hardened runtime.** The app is signed with `--options runtime` (ad-hoc builds too; `build-app.sh`
+  refuses to finish without it). macOS then ignores `DYLD_INSERT_LIBRARIES` and similar variables and
+  loads only Apple-signed libraries into Hostwatch, so code can't be injected into the app, the root
+  collector or the MCP server (verified: a test library injected into a build without the flag ran, with
+  the flag it doesn't).
 - **Collector channel.** The collector serves a Unix socket, `/var/run/hostwatch/collector.sock`, never a
   network port:
   - The folder is created by root with mode 0755, and the collector refuses a folder it doesn't own, so no

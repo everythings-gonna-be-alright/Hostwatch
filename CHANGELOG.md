@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Hardened runtime:** Hostwatch is now signed with Apple's hardened runtime (free, also with ad-hoc
+  signing). macOS ignores `DYLD_INSERT_LIBRARIES` and similar variables for it and loads only Apple-signed
+  libraries, so no code can be injected into Hostwatch, its collector or its MCP server. The build fails
+  if the flag is missing.
+
 ## 0.5.1 – lighter and harder
 
 - **Much lower CPU for the app:** the event list, counters and HUD now update in batches (at most 5 times a

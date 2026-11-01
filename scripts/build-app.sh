@@ -45,12 +45,18 @@ PLIST
 # Full Disk Access is tied to the code signature. Ad-hoc signatures change on every
 # rebuild, so the grant must be redone. Set CODESIGN_IDENTITY (e.g. "Apple Development: …")
 # to keep a stable identity, and with it the grant.
+# Hardened runtime (free, works with ad-hoc signing too): macOS ignores DYLD_INSERT_LIBRARIES and
+# friends for Hostwatch and loads only Apple-signed libraries into it, so no code can be injected.
 if [ -n "${CODESIGN_IDENTITY:-}" ]; then
-  codesign --force --sign "$CODESIGN_IDENTITY" "$APP"
+  codesign --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP"
 else
-  codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+  codesign --force --options runtime --sign - "$APP" >/dev/null 2>&1 || true
   echo "Note: ad-hoc signed. Re-grant Full Disk Access to Hostwatch after each rebuild."
 fi
 
+if ! codesign -dv "$APP" 2>&1 | grep -q "flags=.*runtime"; then
+  echo "error: $APP is not signed with the hardened runtime" >&2
+  exit 1
+fi
 echo "Built: $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Hostwatch"))"
 echo "Launch with: open \"$APP\""
