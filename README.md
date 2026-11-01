@@ -144,7 +144,7 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 ## Investigate with Claude Code (MCP)
 
 Hostwatch ships a read-only [MCP](https://modelcontextprotocol.io) server, so Claude Code can investigate
-what it recorded. Add it once (*Detection ▸ Use with Claude Code…* shows and copies the exact command):
+what it recorded. Add it once (*Settings ▸ AI* shows and copies the exact command):
 
 ```bash
 claude mcp add --scope user hostwatch -- /Applications/Hostwatch.app/Contents/MacOS/Hostwatch --mcp
@@ -170,7 +170,7 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
   root-owned folder (`/var/run/hostwatch`), readable only by your user. The collector accepts only the
   Hostwatch app that started it, and the app connects only to a socket that only root could have
   created. Other programs and users can neither read the activity stream nor pose as the collector.
-- **You choose the AI** in *Detection ▸ AI Engine*. With *Apple On-Device*, nothing ever leaves the Mac
+- **You choose the AI** in *Settings ▸ AI*. With *Apple On-Device*, nothing ever leaves the Mac
   (Apple's on-device model only, never its cloud model).
 - **Claude only when chosen.** Evidence goes to Claude when you ask with Claude selected (you can review
   and edit it first) or when the engine includes Claude for classification (pattern summaries).
@@ -178,7 +178,8 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 - **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
   the collector, but other secrets passed as arguments can end up in history.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).
-- **Detection only.** Hostwatch never blocks, kills or deletes anything.
+- **Detection first.** Hostwatch never deletes anything. It only pauses or kills a process if you turn on
+  the opt-in hold, and only your own processes, with your answer.
 
 ## Limitations
 

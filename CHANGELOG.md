@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- **Hold suspicious processes** (opt-in, *Detection ▸ Hold Suspicious Processes*): freezes your own
+- **Menus reorganized:** a short menu bar icon menu (status and quick actions), a full app menu bar
+  (View, Activity, Window, Help, with ⌘1–⌘5 for tabs) and a **Settings window** (⌘,) with General, HUD,
+  Detection, AI, Exclusions and History. The window's More menu became a Settings button. A banner
+  says when the collector is off. Exclude is on right-click for events and HUD rows.
+- **Hold suspicious processes** (opt-in, *Settings ▸ Detection*): freezes your own
   process when it does something suspicious and asks you to allow or kill it. Fails open: a
   watchdog resumes it if Hostwatch quits or crashes. Best effort: quick commands can finish first.
 

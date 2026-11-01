@@ -59,7 +59,7 @@ struct RulesView: View {
                     .buttonStyle(.glassProminent)
                     .disabled(classifier.engine == .onDevice || book.yourDecisions.count < 2)
                     .help(classifier.engine == .onDevice
-                          ? "Needs Claude: rule learning is beyond the on-device model (Detection ▸ AI Engine)."
+                          ? "Needs Claude: rule learning is beyond the on-device model (Settings ▸ AI)."
                           : "Sends your decisions (patterns you marked, secrets masked) to Claude for rule proposals.")
             }
         }
