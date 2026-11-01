@@ -323,8 +323,21 @@ them, changing nothing.
 ## MCP server (`Hostwatch --mcp`)
 
 A read-only Model Context Protocol server over stdio (JSON-RPC, protocol versions 2025-06-18,
-2025-03-26, 2024-11-05) for Claude Code: `claude mcp add --scope user hostwatch -- <path to
-Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`. *Settings ▸ AI* (or *Help ▸ Use with Claude Code…*) shows and copies it.
+2025-03-26, 2024-11-05) for Claude Code. There's no network listener: Claude Code starts the process and talks over stdin/stdout.
+
+- **Access** (*Settings ▸ AI ▸ Use with Claude Code*, or *Help ▸ Use with Claude Code…*) is off by default.
+  Turning it on creates a random token (`hwmcp_` + 64 hex) and shows the command to run once:
+  `claude mcp add --scope user hostwatch -e HOSTWATCH_MCP_TOKEN=<token> -- <path to Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`
+  (it first removes an older `hostwatch` registration). The token is shown once: Hostwatch keeps only its
+  SHA-256 in `mcp-token.sha256` (mode 600) and compares in constant time.
+- **Refusals:** with access off, or a missing or outdated token, the server answers every request with an
+  error (`-32001`) saying how to fix it, and serves no data. **New Token…** invalidates earlier
+  registrations; turning access off invalidates all of them.
+- **Access log:** each session start is recorded (time, allowed/refused, the program that started it) in
+  `mcp-access.log`; the last five show in Settings.
+- **Limits of a token:** it keeps out MCP clients you didn't set up, and makes access revocable and visible.
+  A program already running as your user could still read Hostwatch's files directly, as it can any of
+  your files.
 
 | Tool | What it returns |
 |------|-----------------|

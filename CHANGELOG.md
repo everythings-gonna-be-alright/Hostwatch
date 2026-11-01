@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **MCP access requires permission and a token.** `Hostwatch --mcp` refuses everything until you allow it in
+  *Settings ▸ AI*, which issues a random token for the Claude Code registration command (only its hash is
+  stored). *New Token…* or turning access off cuts off earlier registrations; sessions are logged. Existing
+  registrations without a token stop working: copy the new command from Settings.
+
 - **Check for Updates…** (*Hostwatch* menu, *Settings ▸ General*): asks GitHub for the latest release and
   offers its page and notes. Automatic once a day (can be turned off); a new version also shows in the
   menu bar icon menu. Nothing is downloaded or installed by itself.

@@ -146,10 +146,11 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 ## Investigate with Claude Code (MCP)
 
 Hostwatch ships a read-only [MCP](https://modelcontextprotocol.io) server, so Claude Code can investigate
-what it recorded. Add it once (*Settings ▸ AI* shows and copies the exact command):
+what it recorded. It's off until you allow it in *Settings ▸ AI*, which gives you the command to run
+once. It includes a token that Claude Code must present:
 
 ```bash
-claude mcp add --scope user hostwatch -- /Applications/Hostwatch.app/Contents/MacOS/Hostwatch --mcp
+claude mcp add --scope user hostwatch -e HOSTWATCH_MCP_TOKEN=hwmcp_… -- /Applications/Hostwatch.app/Contents/MacOS/Hostwatch --mcp
 ```
 
 Then ask Claude Code things like:
@@ -177,6 +178,10 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 - **Claude only when chosen.** Evidence goes to Claude when you ask with Claude selected (you can review
   and edit it first) or when the engine includes Claude for classification (pattern summaries).
   Obvious secrets are masked either way.
+- **MCP access needs your permission and a token.** The MCP server has no network port: Claude Code starts
+  it and talks to it over stdin/stdout. It refuses every request unless you turned access on and the client
+  presents the current token. Hostwatch stores only the token's hash. A new token or turning access off
+  cuts off every earlier registration, and each session is logged in *Settings ▸ AI*.
 - **Update checks.** Once a day (and on *Check for Updates…*) Hostwatch asks GitHub's API for the latest
   release. Nothing about your Mac is sent, and nothing is downloaded or installed by itself. Turn it off in
   *Settings ▸ General*.
