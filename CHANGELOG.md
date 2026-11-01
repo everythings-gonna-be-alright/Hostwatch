@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Much lower CPU for the app:** the event list, counters and HUD now update in batches (at most 3 times a
+- **Much lower CPU for the app:** the event list, counters and HUD now update in batches (at most 5 times a
   second) instead of on every event, don't re-sort when showing newest first, and pause while neither the
   window nor the HUD is on screen. Detection, stories, the hold and history still see every event at once.
 

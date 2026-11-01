@@ -402,7 +402,7 @@ final class HUDModel: ObservableObject {
     // UI batching: detection (patterns, stories, hold, domains) sees every event at once; the list,
     // counters and HUD get them in batches at most every `uiInterval`, and not at all while nothing
     // is on screen (they catch up when shown).
-    static let uiInterval: TimeInterval = 0.33
+    static let uiInterval: TimeInterval = 0.2
     private var uiBuffer: [ActivityEvent] = []
     private var countBuffer: [EventKind: Int] = [:]
     private var flushScheduled = false
