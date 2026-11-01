@@ -75,9 +75,11 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             ?? Self.defaultDirectory
     }
 
-    /// Each file is ~1/20 of the cap (1 MB…256 MB), so rotation trims in small steps.
+    /// A file is full at ~1/20 of the cap, between 1 MB and 100 MB of plain text: rotation trims in
+    /// small steps, and finished files get compressed sooner.
+    static let maxSegmentBytes: Int64 = 100_000_000
     private var segmentBytes: Int64 {
-        min(max(limit / 20, 1_000_000), 256_000_000)
+        min(max(limit / 20, 1_000_000), Self.maxSegmentBytes)
     }
 
     // MARK: Public API (main thread)

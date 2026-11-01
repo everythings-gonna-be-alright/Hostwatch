@@ -425,9 +425,9 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 ```
 
 - **Compression:** the file being written stays plain, so appends are cheap and a crash loses nothing.
-  When it is full, it is compressed in the background (≈2 s per 250 MB) into
+  When it is full (see Max size below), it is compressed in the background (≈1 s per 100 MB) into
   `activity-….jsonl.gz` plus a small index `activity-….jsonl.idx`. Plain files left from older versions
-  are compressed on the next start. Activity logs are very repetitive: on real history, 250 MB becomes
+  are compressed on the next start. Activity logs are very repetitive: on real history, 250 MB became
   ≈10 MB (≈24×).
   - The `.gz` is a series of independent gzip members of ≈4 MB of whole lines, so it is a normal gzip
     file (`zcat`, `zgrep`, `gzip -d` work).
@@ -438,7 +438,7 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
     file removed. A `.gz` without an index is ignored, and the plain file stays authoritative.
 - **Max size** (default **5 GB**) caps the bytes on disk of all history files (compressed files count
   compressed, so the cap holds roughly 10–20× more history than before). Files rotate at about 1/20 of
-  the cap (1–256 MB of plain text each). The oldest files are deleted so the total never goes over.
+  the cap (1–100 MB of plain text each; 100 MB with the default cap). The oldest files are deleted so the total never goes over.
 - The recorder has its own connection with the 40/s display cap turned off. It keeps recording
   while the overlay is paused or a kind is hidden.
 - **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record

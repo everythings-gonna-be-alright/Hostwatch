@@ -6,6 +6,7 @@
   real history, so the size cap now holds weeks instead of a day). Files are split into independent
   ≈4 MB gzip blocks with a time index, so Time Travel and the MCP server read only what they need, as
   fast as before. Still normal `.gz` files (`zcat`/`zgrep`). Existing history is compressed on first start.
+- History files rotate at 100 MB at most (was 256 MB), so recent history is compressed sooner.
 
 ## 0.4.0 – time travel
 
