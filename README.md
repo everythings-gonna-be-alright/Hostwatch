@@ -21,10 +21,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/activity-window.png" alt="Hostwatch Activity window: sortable events with status, process and detail">
+  <img src="docs/images/window-0.5.0.png" alt="Hostwatch Activity window in Time Travel: events at a past moment, CPU and memory, and the timeline with stories and new domains">
 </p>
 
-<p align="center"><sub>The floating HUD (top) and the Activity window with its Events, Patterns, Stories and Domains tabs.</sub></p>
+<p align="center"><sub>The floating HUD (top) and the Activity window in Time Travel: events at a past moment, resource use, and the timeline marked with stories and new domains.</sub></p>
 
 ---
 
