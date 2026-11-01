@@ -36,8 +36,8 @@ such steps. Hostwatch watches processes, files and network connections, learns y
 behaviour, and shows you only what is new or suspicious, ideally already connected into the story of
 what happened.
 
-It is a personal **HIDS** (host-based intrusion detection system): it detects and explains, it does not
-block anything.
+It is a personal **HIDS** (host-based intrusion detection system): it detects and explains. It doesn't
+block anything, unless you turn on the opt-in hold that pauses suspicious processes and asks you.
 
 ## Features
 
@@ -49,9 +49,11 @@ block anything.
 - **Code signing aware.** Apple and trusted developers doing everyday things are routine. Unsigned code
   from Downloads or temp folders, modified binaries and binaries **replaced** at a known path are high
   risk.
-- **Stories.** Suspicious steps are added up along the process tree. *Chrome downloads a file →
-  quarantine removed → it runs → installs a LaunchAgent → calls home* becomes one **Dangerous** story
-  instead of five unrelated rows.
+- **Stories.** Suspicious steps that are really related become one story: linked by cause (same process,
+  parent → child, same script, a file one writes and another runs) or by shared evidence (the same
+  untrusted program, a login item and the program it starts, the same new domain). *Chrome downloads a
+  file → quarantine removed → it runs → installs a LaunchAgent → calls home* becomes one **Dangerous**
+  story instead of five unrelated rows, while unrelated things your apps and terminal do stay apart.
 - **Hold suspicious processes (opt-in).** Freezes your own process the moment it pipes a download
   into a shell, reads saved passwords, installs a login item or removes the download quarantine, and
   asks you: Allow, Always Allow or Kill. Off by default; see Limitations.
@@ -82,18 +84,21 @@ block anything.
  │ eslogger (Endpoint Security)   new processes, file opens    │
  │ tcpdump  (pktap)               DNS answers, connection SYNs │
  │ lsof · nettop                  connections, traffic stats   │
+ │ libproc                        busiest processes, disk I/O  │
  └──────────────────────────┬──────────────────────────────────┘
                             │ JSON lines on a verified Unix socket
  ┌──────────────────────────▼──────────────────────────────────┐
  │ Hostwatch.app (your user)                                   │
  │ patterns + risk → code signing → stories → domains/beacons  │
- │ HUD · Activity window · Ask AI · MCP · history on disk      │
+ │ HUD · Activity window · Time Travel · Ask AI · MCP          │
+ │ history on disk (gzip blocks + time index) · CPU/memory/net │
  └─────────────────────────────────────────────────────────────┘
 ```
 
 The collector is a small Python script bundled in the app and started with your administrator
-password. It only observes; nothing is blocked or modified. Everything stays on your Mac unless you
-ask Claude about an event.
+password. It only observes; nothing is blocked or modified. Hostwatch's own activity is filtered out.
+Everything stays on your Mac, except what you send to Claude (Ask AI, Classify, rule suggestions) and a
+daily anonymous update check on GitHub (both can be turned off; see Privacy).
 
 ## Requirements
 
@@ -136,14 +141,17 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 
 - **The first 12 hours are a learning period** for domains: whatever your Mac normally talks to becomes
   the baseline. Patterns are learned continuously; routine ones are marked safe automatically.
-- Open the **Activity Window** (⌘O) from the menu bar. Its tabs:
-  - **Events:** the live stream.
+- Choose **Open Hostwatch** (⌘O) from the menu bar icon. The window's tabs (⌘1–⌘5):
+  - **Events:** the live stream, with CPU, memory, network and disk in the footer.
   - **Patterns:** what has been learned.
   - **Stories:** suspicious chains.
   - **Domains:** where your apps connect.
-- Use **Show → Only Important** to see only flagged patterns, new high-risk activity, new domains,
-  beacons and raw-IP connections.
-- Right-click to mark patterns safe or suspicious, trust a developer, or add exclusions.
+  - **Rules:** rules learned from your decisions.
+- Set **Show** to *Only Important* to see only flagged patterns and new high-risk activity.
+- Click **Time Travel** in the toolbar (⌥⌘T) to go back to any recorded moment.
+- Right-click to mark patterns safe or suspicious, trust a developer, or exclude a process, host or folder.
+- Everything else (HUD, the opt-in hold, AI engine, MCP access, history size, updates) is in
+  **Settings** (⌘,).
 
 ## Investigate with Claude Code (MCP)
 
@@ -201,6 +209,9 @@ This is a working prototype, not a commercial security product.
   A production version would use a signed Endpoint Security system extension.
 - Very short connections hidden by other security software are inferred from traffic statistics, with less detail.
 - Anything that happens during the learning period becomes part of the baseline.
+- The collector asks for your administrator password each time it starts (Touch ID isn't offered by
+  macOS for this kind of request).
+- CPU, memory and network history is recorded only while the app is open.
 - The process hold is best effort. The process has already run for a few milliseconds when Hostwatch
   sees it, so a very quick command can finish first. It never holds root processes, and nothing stops
   before it starts. Real pre-execution blocking needs an Endpoint Security system extension.
@@ -228,6 +239,9 @@ when tests fail. Developer tools are built into the app binary:
 .build/release/Hostwatch --signature-report <history file or folder>   # how events group into patterns
 .build/release/Hostwatch --story-replay <history file or folder>       # which stories/domains/beacons would fire
 .build/release/Hostwatch --signing-check <binary>…            # signer, trust and swap verdict
+.build/release/Hostwatch --time-travel-probe [history folder]  # Time Travel read timings
+.build/release/Hostwatch --compress-history <history folder>   # compress plain history files by hand
+.build/release/Hostwatch --metrics-probe                       # CPU/memory/network readings
 ```
 
 See **[docs/reference.md](docs/reference.md)** for every rule, threshold and setting.
