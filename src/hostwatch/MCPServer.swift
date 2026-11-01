@@ -389,7 +389,7 @@ final class MCPServer {
         let bytes = files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
         let from = files.first.flatMap { Self.fileStart($0.lastPathComponent) }
         var lines = ["Hostwatch \(version) — read-only view of this Mac's recorded activity",
-                     "Collector: \(Self.collectorListening() ? "running (listening on 127.0.0.1:47831)" : "not running")",
+                     "Collector: \(Self.collectorListening() ? "running (\(CollectorSocket.path))" : "not running")",
                      "Patterns: \(entries.count) total · \(counts[.unclassified, default: 0]) new (\(highNew) high-risk) · "
                         + "\(counts[.suspicious, default: 0]) suspicious · \(counts[.dangerous, default: 0]) dangerous · "
                         + "\(counts[.safe, default: 0]) safe",
@@ -404,18 +404,8 @@ final class MCPServer {
         return lines.joined(separator: "\n")
     }
 
-    static func collectorListening() -> Bool {
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        guard fd >= 0 else { return false }
-        defer { close(fd) }
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(47831).bigEndian
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
-        return withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
-        } == 0
-    }
+    /// A verified collector socket exists. (No connection: the collector only accepts the app.)
+    static func collectorListening() -> Bool { CollectorSocket.check() == .ok }
 
     func searchEvents(_ args: [String: Any]) throws -> String {
         let limit = min(max((args["limit"] as? NSNumber)?.intValue ?? 50, 1), 300)

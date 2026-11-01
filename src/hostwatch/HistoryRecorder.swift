@@ -228,7 +228,12 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
 
     private func connect() {
         guard active, connection == nil else { return }
-        let conn = NWConnection(host: "127.0.0.1", port: collectorPort, using: .tcp)
+        // Same rule as the live view: only a socket that only the root collector could have made.
+        guard CollectorSocket.check() == .ok else {
+            queue.asyncAfter(deadline: .now() + 2) { [weak self] in self?.connect() }
+            return
+        }
+        let conn = NWConnection(to: CollectorSocket.endpoint, using: .tcp)
         connection = conn
         conn.stateUpdateHandler = { [weak self] state in
             guard let self, conn === self.connection else { return }

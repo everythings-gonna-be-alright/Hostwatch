@@ -110,6 +110,7 @@ struct HUDView: View {
     private var hudShape: RoundedRectangle { RoundedRectangle(cornerRadius: 16 * s, style: .continuous) }
 
     private var emptyTitle: String {
+        if model.socketWarning != nil { return "Refused an untrusted collector" }
         if model.connected { return "Waiting for activity…" }
         switch collector.state {
         case .starting: return "Starting collector…"
@@ -120,6 +121,7 @@ struct HUDView: View {
     }
 
     private var emptySubtitle: String {
+        if let why = model.socketWarning { return why }
         if case .failed(let message) = collector.state { return message }
         if collector.state == .needsFullDiskAccess {
             return "Settings → Privacy & Security → Full Disk Access → enable Hostwatch, then relaunch"
