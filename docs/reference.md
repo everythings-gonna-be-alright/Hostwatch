@@ -229,6 +229,31 @@ that has its `INSTALL_RECEIPT.json` is treated like a trusted developer's (measu
 261 → 225). `/opt/homebrew` is writable by your user, so a binary planted there would be trusted too.
 *Detection ▸ End Domain Learning Now* is also there.
 
+## AI triage: on-device first, Claude for the rest
+
+**Classify New** and **Auto-classify new** (Patterns tab) run new patterns through two optional steps,
+set in **Detection ▸ AI Triage**:
+
+1. **On-Device First Pass** (default on): Apple's on-device model (`SystemLanguageModel`, never Private
+   Cloud Compute) looks at each pattern on its own: program, activity, signer and trust, local risk,
+   count, with secrets masked and the text marked as data. It answers SAFE / SUSPICIOUS / DANGEROUS /
+   UNSURE with a confidence (structured output, greedy decoding).
+2. **Ask Claude for the Rest** (default on): one Claude call for whatever step 1 did not settle.
+
+Routing (`TriageRouter`, unit-tested):
+
+| On-device says | Normal-risk pattern | High-risk pattern |
+|----------------|---------------------|-------------------|
+| SAFE, high confidence | **settled Safe** (source *on-device*) | Claude, else left for you |
+| SAFE medium/low, UNSURE | Claude, else left for you | Claude, else left for you |
+| SUSPICIOUS / DANGEROUS | Claude, else flagged (*on-device*) | Claude, else flagged |
+| model unavailable | Claude, else left for you | Claude, else left for you |
+
+High-risk patterns are never marked Safe on-device: a small model, or text crafted by an attacker,
+cannot hide them. On-device verdicts never remove steps from Stories (only your own decisions do).
+The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
+(Intel). When unavailable, everything goes to Claude as before.
+
 ## Ask Claude: is this dangerous?
 
 In the activity window, **double-click** any process, connection or file row, or right-click it →

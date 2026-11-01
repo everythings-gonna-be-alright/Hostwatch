@@ -161,18 +161,19 @@ struct PatternsView: View {
             Toggle("Auto-classify new", isOn: $classifier.autoClassify)
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .help("Every 90 s, send up to 40 new patterns (seen for over a minute) to Claude in one headless call.")
+                .help("Every 90 s, triage up to 40 new patterns (seen for over a minute): on-device first, then Claude.")
             if classifier.running {
                 ProgressView().controlSize(.small)
                 Button("Cancel") { classifier.cancel() }
                     .buttonStyle(.glass)
             } else {
                 Button { classifier.classifyNow() } label: {
-                    Label("Classify with Claude", systemImage: "sparkles")
+                    Label("Classify New", systemImage: "sparkles")
                 }
                 .buttonStyle(.glassProminent)
                     .disabled(signatures.count(.unclassified) == 0)
-                    .help("Send the \(classifier.batchSize) most recent unclassified patterns to Claude (claude -p).")
+                    .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
+                          + "then Claude for what it can't settle. Configure in Detection ▸ AI Triage.")
             }
             Button("Trust Baseline…") { confirmBaseline() }
                 .buttonStyle(.glass)

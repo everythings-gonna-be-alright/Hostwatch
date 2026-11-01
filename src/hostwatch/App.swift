@@ -431,6 +431,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         brew.toolTip = "Treat tools in Homebrew's Cellar (with an install receipt) like a trusted developer. "
             + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too."
         sub.addItem(brew)
+
+        // AI triage of new patterns: private on-device pass first, Claude for the rest.
+        sub.addItem(.sectionHeader(title: "AI Triage"))
+        let status = classifier.localStatus
+        let onDevice = item("On-Device First Pass", #selector(toggleOnDeviceTriage))
+        onDevice.state = classifier.useOnDevice ? .on : .off
+        onDevice.toolTip = "Apple's on-device model triages new patterns first; nothing leaves the Mac. "
+            + "It may only mark ordinary, normal-risk patterns Safe."
+        sub.addItem(onDevice)
+        let claude = item("Ask Claude for the Rest", #selector(toggleClaudeTriage))
+        claude.state = classifier.askClaude ? .on : .off
+        claude.toolTip = "Patterns the on-device pass can't settle (and all of them when it's unavailable) go to Claude."
+        sub.addItem(claude)
+        let statusItem = NSMenuItem(title: status.label, action: nil, keyEquivalent: "")
+        statusItem.image = symbol(status.isReady ? "checkmark.circle" : "exclamationmark.circle",
+                                  color: status.isReady ? .systemGreen : .systemOrange)
+        statusItem.isEnabled = false
+        sub.addItem(statusItem)
         sub.addItem(.separator())
         let learning = item(domains.isLearning ? "End Domain Learning Now" : "Domain Learning Finished",
                             #selector(endDomainLearning))
@@ -446,6 +464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func endDomainLearning() { domains.endLearning() }
+    @objc private func toggleOnDeviceTriage() { classifier.useOnDevice.toggle() }
+    @objc private func toggleClaudeTriage() { classifier.askClaude.toggle() }
 
     private func collectorMenu() -> NSMenuItem {
         let parent = NSMenuItem(title: "Collector", action: nil, keyEquivalent: "")
