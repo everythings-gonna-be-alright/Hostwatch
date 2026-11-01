@@ -6,6 +6,10 @@
   search events, patterns, stories, domains, process trees and code signatures, for investigating by
   conversation.
 - Stories: an inferred connection with an unknown destination no longer counts as an outbound connection.
+- **Secure collector channel:** the TCP port 127.0.0.1:47831 is replaced by a Unix socket in a root-owned
+  folder. The collector accepts only the app that started it (kernel peer credentials). The app connects
+  only to a socket only root could have created. Other programs and users can no longer read the
+  activity stream or pose as the collector.
 
 ## 0.2.0 – on-device AI
 

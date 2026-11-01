@@ -38,7 +38,7 @@ Controlled from the menu bar icon (〰). The menu is grouped:
 ## Built-in collector
 
 The collector script is bundled in `Hostwatch.app/Contents/Resources`. At launch (toggle
-**Collector ▸ Start at Launch**), the app checks for an existing collector on port 47831. If none
+**Collector ▸ Start at Launch**), the app checks for an existing collector socket (`/var/run/hostwatch/collector.sock`). If none
 is running, it asks for an administrator password and starts it as root as a temporary
 launchd job (`system/local.hostwatch.collector`, gone after reboot). The job runs
 `Hostwatch --collector-launcher`, which spawns the agent. macOS then treats Hostwatch.app as
@@ -366,8 +366,9 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
   instead, shown as `~name` (often a provider name like `~bt-in-f100.1e100.net`). The Activity list
   still shows the IP, Claude gets both, and exclusions match hostnames: `net:*.google.com:*`.
 
-Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --port 47831`
-(the app's port can be overridden with the `HOSTWATCH_PORT` environment variable).
+Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --socket /var/run/hostwatch/collector.sock`.
+Started by hand, the collector accepts connections only from the user who ran `sudo`. For development,
+`HOSTWATCH_SOCKET` points the app at another socket path (then its folder need not be root-owned).
 
 The HUD sends its exclusions and enabled kinds to the agent, which filters
 per client before sending, so exclusions also reduce load.
@@ -452,9 +453,17 @@ cat ~/.zshrc >/dev/null              # 📄 file
 
 ## Security notes
 
-- The agent listens only on `127.0.0.1`; it is not exposed to the LAN.
-- The stream includes executable paths and process metadata. Do not expose the port
-  through port forwarding or a proxy.
+- **Collector channel.** The collector serves a Unix socket, `/var/run/hostwatch/collector.sock`, never a
+  network port:
+  - The folder is created by root with mode 0755, and the collector refuses a folder it doesn't own, so no
+    other process can create or replace the socket. A leftover socket is replaced; any other file is not.
+  - The socket belongs to the client user with mode 0600 (other users cannot connect).
+  - Every connection is checked with the kernel's peer credentials (`LOCAL_PEERPID`, `LOCAL_PEERCRED`):
+    when launched by the app, only that app process (and user) is accepted; started by hand, only the
+    `sudo` user. Rejections are logged with the process path.
+  - The app connects only when the socket is a socket owned by you, mode 0600, in a root-owned folder
+    that nobody else can write (and not a link). Otherwise it refuses and the HUD says why, so a fake
+    collector run by an ordinary user cannot feed it data.
 - New-process events carry the **command line**, which is forwarded to the app, shown, given to
   Claude and **written to history**. The collector masks obvious secrets first (Authorization
   headers, `password=`/`token=`-style values, URL credentials, common token prefixes), but other
@@ -466,9 +475,7 @@ cat ~/.zshrc >/dev/null              # 📄 file
 - The HUD itself runs as the logged-in user; only the collector is elevated.
 - The bundled agent script is run as root from the app bundle. Keep the app somewhere only
   you can write to (e.g. `/Applications`), or anything that can modify it gains root on next start.
-- The collector uses a fixed local TCP port, 47831. If it is occupied, change `PORT` in
-  `agent/hostwatch_agent.py` and `--port`, and start the app with `HOSTWATCH_PORT` set
-  (read in `src/hostwatch/Model.swift`).
+- The shutdown command additionally needs the per-launch token from `collector.token` (mode 0600).
 
 ## Known limitations
 

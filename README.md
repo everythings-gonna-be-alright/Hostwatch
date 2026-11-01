@@ -73,7 +73,7 @@ block anything.
  │ tcpdump  (pktap)               DNS answers, connection SYNs │
  │ lsof · nettop                  connections, traffic stats   │
  └──────────────────────────┬──────────────────────────────────┘
-                            │ JSON lines on 127.0.0.1
+                            │ JSON lines on a verified Unix socket
  ┌──────────────────────────▼──────────────────────────────────┐
  │ Hostwatch.app (your user)                                   │
  │ patterns + risk → code signing → stories → domains/beacons  │
@@ -159,7 +159,11 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 ## Privacy and security
 
 - **Local by default.** Events, patterns, stories and history stay in `~/Library/Application Support/Hostwatch`
-  and `~/Library/Logs/Hostwatch`. The collector listens on `127.0.0.1` only.
+  and `~/Library/Logs/Hostwatch`.
+- **Private channel to the collector.** The root collector talks to the app over a Unix socket in a
+  root-owned folder (`/var/run/hostwatch`), readable only by your user. The collector accepts only the
+  Hostwatch app that started it, and the app connects only to a socket that only root could have
+  created. Other programs and users can neither read the activity stream nor pose as the collector.
 - **You choose the AI** in *Detection ▸ AI Engine*. With *Apple On-Device*, nothing ever leaves the Mac
   (Apple's on-device model only, never its cloud model).
 - **Claude only when chosen.** Evidence goes to Claude when you ask with Claude selected (you can review

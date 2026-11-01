@@ -97,7 +97,7 @@ final class Collector: ObservableObject {
                 Self.python, "-I", script.path,
                 "--owner-pid", String(getpid()),
                 "--token-file", tokenURL.path,
-                "--port", String(collectorPort.rawValue),
+                "--socket", CollectorSocket.path,
             ],
             "RunAtLoad": true,
             "KeepAlive": false,

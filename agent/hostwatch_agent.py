@@ -15,7 +15,10 @@ Sources:
           Each connection is labelled with a hostname: the DNS name that resolved to the IP
           (DNS answers read passively from the same capture), else reverse DNS (PTR).
 
-Events are republished as compact JSON lines on 127.0.0.1:47831.
+Events are republished as compact JSON lines on a Unix socket, /var/run/hostwatch/collector.sock:
+the folder is root-owned (nobody else can create or replace the socket), the socket belongs to the
+client user with mode 0600, and each connection is checked: only the Hostwatch app that launched the
+collector (--owner-pid) is accepted, or, when started by hand, the user who ran sudo.
 Each client may send JSON config lines back:
   {"exclude": ["pattern", ...], "kinds": ["exec", "net", "file"]}
 and only receives events that pass its filter.
@@ -38,6 +41,7 @@ import os
 import re
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -45,8 +49,8 @@ import time
 from collections import OrderedDict
 from datetime import datetime
 
-HOST = "127.0.0.1"
-PORT = 47831
+SOCKET_PATH = "/var/run/hostwatch/collector.sock"
+SOL_LOCAL, LOCAL_PEERCRED, LOCAL_PEERPID = 0, 1, 2      # <sys/un.h>: peer credentials on Unix sockets
 ALL_KINDS = ("exec", "net", "file")
 SCOPE_FOR_KIND = {"exec": "proc", "net": "net", "file": "file"}
 
@@ -172,6 +176,64 @@ def request_shutdown():
             pass
 
 
+# ------------------------------------------------------------------ socket
+
+def pid_uid(pid):
+    """Real user id of a running process (proc_bsdinfo.pbi_uid), or None."""
+    if not _LIBPROC:
+        return None
+    info = ctypes.create_string_buffer(136)
+    if _LIBPROC.proc_pidinfo(int(pid), 3, ctypes.c_uint64(0), info, 136) >= 24:
+        return int.from_bytes(info.raw[20:24], "little")
+    return None
+
+
+def peer_identity(sock):
+    """(pid, uid) of the process on the other end of a Unix socket, from the kernel."""
+    pid = sock.getsockopt(SOL_LOCAL, LOCAL_PEERPID)
+    cred = sock.getsockopt(SOL_LOCAL, LOCAL_PEERCRED, 76)      # struct xucred
+    uid = int.from_bytes(cred[4:8], "little")
+    return pid, uid
+
+
+def peer_allowed(pid, uid, owner_pid, client_uid):
+    """Launched by the app: only that app process. Started by hand: only the user who ran sudo."""
+    if owner_pid:
+        return pid == owner_pid and uid == client_uid
+    return uid == client_uid
+
+
+def create_server_socket(path, client_uid):
+    """Binds `path` inside a folder only root can write, so no other process can create or replace
+    the socket; the socket itself belongs to `client_uid` with mode 0600 (only that user can connect)."""
+    folder = os.path.dirname(path)
+    os.makedirs(folder, mode=0o755, exist_ok=True)
+    st = os.lstat(folder)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+        raise RuntimeError(f"{folder} is not a folder owned by us; refusing to use it")
+    os.chmod(folder, 0o755)                              # no group/other write
+    try:
+        if stat.S_ISSOCK(os.lstat(path).st_mode):
+            os.unlink(path)                              # stale socket from a crashed collector
+        else:
+            raise RuntimeError(f"{path} exists and is not a socket; refusing to replace it")
+    except FileNotFoundError:
+        pass
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    old = os.umask(0o177)                                # created as 0600, never briefly wider
+    try:
+        server.bind(path)
+    finally:
+        os.umask(old)
+    if client_uid is not None and client_uid != os.geteuid():
+        os.chown(path, client_uid, -1)
+    os.chmod(path, 0o600)
+    server.listen(8)
+    server.settimeout(1.0)
+    SHUTDOWN_HOOKS.append(lambda: os.path.exists(path) and os.unlink(path))
+    return server
+
+
 def watch_owner(pid):
     """Exit when the app that launched us goes away."""
     while not STOP.wait(2.0):
@@ -279,7 +341,7 @@ def client_reader(client):
     drop_client(client)
 
 
-def accept_clients(server):
+def accept_clients(server, owner_pid=0, client_uid=None):
     while not STOP.is_set():
         try:
             sock, _ = server.accept()
@@ -287,7 +349,15 @@ def accept_clients(server):
             continue
         except OSError:
             break
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        try:
+            pid, uid = peer_identity(sock)
+        except OSError:
+            sock.close()
+            continue
+        if not peer_allowed(pid, uid, owner_pid, client_uid):
+            print(f"rejected connection from pid {pid} (uid {uid}, {pid_path(pid) or '?'})", flush=True)
+            sock.close()
+            continue
         sock.settimeout(2.0)
         client = Client(sock)
         with CLIENTS_LOCK:
@@ -816,7 +886,7 @@ def main():
     parser.add_argument("--no-files", action="store_true", help="do not subscribe to file-open events")
     parser.add_argument("--no-net", action="store_true", help="do not poll network connections")
     parser.add_argument("--net-interval", type=float, default=1.0, help="seconds between lsof snapshots")
-    parser.add_argument("--port", type=int, default=PORT, help="loopback TCP port")
+    parser.add_argument("--socket", default=SOCKET_PATH, help="Unix socket path (its folder must be root-owned)")
     parser.add_argument("--owner-pid", type=int, default=0, help="exit when this process exits")
     parser.add_argument("--token-file", default="", help="file holding the shutdown token")
     args = parser.parse_args()
@@ -842,12 +912,14 @@ def main():
     if args.no_net:
         kinds.discard("net")
 
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((HOST, args.port))
-    server.listen(8)
-    server.settimeout(1.0)
-    threading.Thread(target=accept_clients, args=(server,), daemon=True).start()
+    # Who may connect: the app that launched us, or (started by hand) the user who ran sudo.
+    client_uid = pid_uid(args.owner_pid) if args.owner_pid else int(os.environ.get("SUDO_UID", "0"))
+    try:
+        server = create_server_socket(args.socket, client_uid)
+    except (OSError, RuntimeError) as exc:
+        print(f"cannot create the collector socket: {exc}", file=sys.stderr, flush=True)
+        return 1
+    threading.Thread(target=accept_clients, args=(server, args.owner_pid, client_uid), daemon=True).start()
 
     proc = run_eslogger(kinds)
     SHUTDOWN_HOOKS.append(proc.terminate)
@@ -857,7 +929,9 @@ def main():
         threading.Thread(target=run_packet_sniffer, args=(True,), daemon=True).start()
         threading.Thread(target=run_nettop_backstop, daemon=True).start()
         threading.Thread(target=poll_network, args=(args.net_interval,), daemon=True).start()
-    print(f"Hostwatch agent listening on {HOST}:{args.port} ({', '.join(sorted(kinds))})", flush=True)
+    print(f"Hostwatch agent listening on {args.socket} for "
+          f"{'pid ' + str(args.owner_pid) if args.owner_pid else 'uid ' + str(client_uid)} "
+          f"({', '.join(sorted(kinds))})", flush=True)
 
     def stop_handler(_signum, _frame):
         request_shutdown()
