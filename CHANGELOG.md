@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 – lighter and harder
 
 - **Much lower CPU for the app:** the event list, counters and HUD now update in batches (at most 5 times a
   second) instead of on every event, don't re-sort when showing newest first, and pause while neither the
