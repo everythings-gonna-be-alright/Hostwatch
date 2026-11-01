@@ -348,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if stories.activeCount > 0 { storiesItem.badge = NSMenuItemBadge(count: stories.activeCount) }
         storiesItem.toolTip = "Suspicious chains of activity, correlated along the process tree"
         menu.addItem(storiesItem)
-        let patterns = item("Patterns", #selector(openPatterns), key: "p", modifiers: [.command, .shift],
+        let patterns = item("Patterns", #selector(openPatterns),
                             symbol: "square.stack.3d.up")
         let unreviewed = signatures.count(.unclassified)
         if unreviewed > 0 { patterns.badge = NSMenuItemBadge(count: unreviewed) }
