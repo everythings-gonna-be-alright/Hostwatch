@@ -76,6 +76,19 @@ import Testing
         return (text, result["isError"] as? Bool ?? false)
     }
 
+    @Test func compressedHistoryGivesTheSameAnswers() throws {
+        let queries: [(String, [String: Any])] = [("search_events", ["query": "curl", "since": "7d"]),
+                                                  ("search_events", ["kind": "file", "since": "7d"]),
+                                                  ("process_tree", ["pid": 300]),
+                                                  ("search_events", ["since": "30m"])]
+        let before = try queries.map { try call($0.0, $0.1).text }
+        let file = dir.appendingPathComponent("History/activity-20270112-000000-000.jsonl")
+        try HistoryFiles.compress(file, blockBytes: 300)               // several tiny blocks
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        let after = try queries.map { try call($0.0, $0.1).text }
+        #expect(after == before)
+    }
+
     @Test func handshakeAndToolList() throws {
         let initReply = try #require(server.handle(#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#))
         #expect(initReply.contains(#""protocolVersion":"2025-03-26""#))

@@ -399,8 +399,9 @@ from the live stream to recorded history. Live collection carries on in the back
 - **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 1× (real time), 10×, 60× or 600×; the date
   picker jumps anywhere. **Return to Live** (Esc) goes back.
 - **From a story:** *Show in Timeline* opens the slice around it.
-- **How it reads history:** lines are stored in time order, so the offset of any moment is a binary
-  search away and bar heights are byte counts between offsets. Nothing is loaded except the slice
+- **How it reads history:** in the plain (current) file lines are in time order, so the offset of any
+  moment is a binary search away; compressed files are found through their block index, and bar
+  heights come from byte counts (per-minute counts for compressed files). Nothing is loaded except the slice
   you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
   `Hostwatch --time-travel-probe [dir]` prints these timings.
 
@@ -423,20 +424,36 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 {"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
 ```
 
-- **Max size** (default **5 GB**) caps the total size of all history files. Files rotate at about
-  1/20 of the cap (1–256 MB each). The oldest files are deleted so the total never goes over the cap.
+- **Compression:** the file being written stays plain, so appends are cheap and a crash loses nothing.
+  When it is full, it is compressed in the background (≈2 s per 250 MB) into
+  `activity-….jsonl.gz` plus a small index `activity-….jsonl.idx`. Plain files left from older versions
+  are compressed on the next start. Activity logs are very repetitive: on real history, 250 MB becomes
+  ≈10 MB (≈24×).
+  - The `.gz` is a series of independent gzip members of ≈4 MB of whole lines, so it is a normal gzip
+    file (`zcat`, `zgrep`, `gzip -d` work).
+  - The index records each block's earliest and latest timestamp, offset and sizes, plus bytes per
+    minute. Time Travel and the MCP server decompress only the blocks a time range needs, and the
+    timeline's bars come from the per-minute counts (exact, with real gaps).
+  - Compression is crash-safe: the index is written first, then the `.gz`, and only then is the plain
+    file removed. A `.gz` without an index is ignored, and the plain file stays authoritative.
+- **Max size** (default **5 GB**) caps the bytes on disk of all history files (compressed files count
+  compressed, so the cap holds roughly 10–20× more history than before). Files rotate at about 1/20 of
+  the cap (1–256 MB of plain text each). The oldest files are deleted so the total never goes over.
 - The recorder has its own connection with the 40/s display cap turned off. It keeps recording
   while the overlay is paused or a kind is hidden.
-- **Apply Exclusions to History** is off by default, so everything is recorded. Turn it on to record
+- **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record
   only what passes your exclusions.
-- Menu bar 〰 → **History**: on/off, Max Size (500 MB … 50 GB or Custom…), Show in Finder,
-  Change Location…, Clear History…. The activity window footer shows current usage.
+- *Settings ▸ History*: on/off, maximum size (500 MB … 50 GB or Custom…), location, Show in Finder,
+  Clear History…. The activity window footer shows current usage.
 - Query examples:
   ```bash
   cd ~/Library/Logs/Hostwatch/History
-  cat activity-*.jsonl | jq -c 'select(.kind=="net")' | tail
-  grep -h '"name":"curl"' activity-*.jsonl
+  zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
+  zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
   ```
+- Tools: `--story-replay` and `--signature-report` accept a `.jsonl`, a `.jsonl.gz` or the whole
+  history folder; `--compress-history <folder>` compresses plain files by hand; `--time-travel-probe`
+  prints read timings.
 
 ## How the collector works
 

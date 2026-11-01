@@ -40,6 +40,7 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     // MARK: Queue-confined state
 
     private let queue = DispatchQueue(label: "hostwatch.history")
+    private let compressQueue = DispatchQueue(label: "hostwatch.history.compress", qos: .utility)
     private var active = false
     private var limit: Int64
     private var connection: NWConnection?
@@ -106,7 +107,7 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         let dir = directory, on = enabled
         queue.async {
             self.closeFile()
-            for url in self.segments(in: dir) { try? FileManager.default.removeItem(at: url) }
+            for stem in self.segments(in: dir) { HistoryFiles.remove(stem) }
             self.otherSegmentsSize = 0
             if on { self.openFiles(in: dir) }
             self.publishStatus(force: true)
@@ -135,16 +136,25 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
 
     // MARK: Files (queue)
 
+    /// History files as stems (`activity-x.jsonl`, whether plain or compressed), oldest first.
     private func segments(in dir: URL) -> [URL] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        return names
-            .filter { $0.hasPrefix("activity-") && $0.hasSuffix(".jsonl") }
-            .sorted()
-            .map { dir.appendingPathComponent($0) }
+        let stems = Set(names.filter(HistoryFiles.isHistoryName).map {
+            HistoryFiles.stem(dir.appendingPathComponent($0)).lastPathComponent
+        })
+        return stems.sorted().map { dir.appendingPathComponent($0) }
     }
 
-    private func size(of url: URL) -> Int64 {
-        ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+    /// Bytes on disk (compressed files count compressed).
+    private func size(of stem: URL) -> Int64 { HistoryFiles.diskSize(stem) }
+
+    /// Compresses a finished file in the background, then re-applies the size limit.
+    private func compressLater(_ plain: URL) {
+        compressQueue.async { [weak self] in
+            guard FileManager.default.fileExists(atPath: plain.path) else { return }
+            do { try HistoryFiles.compress(plain) } catch { self?.report("Compressing \(plain.lastPathComponent) failed") }
+            self?.queue.async { self?.enforceLimit() }
+        }
     }
 
     private func openFiles(in dir: URL) {
@@ -154,11 +164,17 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             report("Cannot create \(dir.path): \(error.localizedDescription)")
             return
         }
-        // Continue the newest file if it still has room, else start a new one.
-        if let newest = segments(in: dir).last, size(of: newest) < segmentBytes {
+        // Continue the newest file if it is still plain and has room, else start a new one.
+        let fm = FileManager.default
+        if let newest = segments(in: dir).last, fm.fileExists(atPath: newest.path),
+           !fm.fileExists(atPath: HistoryFiles.gzURL(newest).path), size(of: newest) < segmentBytes {
             openSegment(newest)
         } else {
             openSegment(dir.appendingPathComponent(Self.newSegmentName()))
+        }
+        // Finished files still plain (older versions, or compression interrupted): compress them.
+        for stem in segments(in: dir) where stem != currentURL && fm.fileExists(atPath: stem.path) {
+            compressLater(stem)
         }
         enforceLimit()
     }
@@ -217,8 +233,9 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             return
         }
         currentSize += Int64(chunk.count)
-        if currentSize >= segmentBytes, let dir = currentURL?.deletingLastPathComponent() {
-            openSegment(dir.appendingPathComponent(Self.newSegmentName()))
+        if currentSize >= segmentBytes, let finished = currentURL {
+            openSegment(finished.deletingLastPathComponent().appendingPathComponent(Self.newSegmentName()))
+            compressLater(finished)
             enforceLimit()
         }
         publishStatus(force: false)

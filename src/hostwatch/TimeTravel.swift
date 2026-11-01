@@ -3,30 +3,35 @@ import SwiftUI
 
 // MARK: - Reading history by time
 
-/// Recorded history, read by time without loading whole files. Lines are in time order, so the
-/// byte offset of any moment is a binary search away, and the bytes between two moments say how
-/// busy the Mac was then.
+/// Recorded history, read by time without loading whole files. In a plain file lines are in time
+/// order, so the byte offset of any moment is a binary search away and the bytes between two moments
+/// say how busy the Mac was. A compressed file's index gives the same per ~4 MB block.
 struct HistoryArchive: Sendable {
     let directory: URL
 
     struct Segment: Sendable {
-        let url: URL
-        let size: Int64
+        let url: URL                       // the .jsonl, or the .jsonl.gz
+        let size: Int64                    // uncompressed bytes
         let start: Date
         let end: Date
+        var index: HistoryFiles.Index? = nil
     }
 
     /// History files with their first and last timestamps, oldest first.
     func segments() -> [Segment] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-        return names.filter { $0.hasPrefix("activity-") && $0.hasSuffix(".jsonl") }.sorted().compactMap { name in
-            let url = directory.appendingPathComponent(name)
-            guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-            defer { try? handle.close() }
-            let size = Int64((try? handle.seekToEnd()) ?? 0)
-            guard size > 0, let first = Self.firstTimestamp(handle, at: 0),
-                  let last = Self.lastTimestamp(handle, size: size) else { return nil }
-            return Segment(url: url, size: size, start: first, end: last)
+        HistoryFiles.list(in: directory).compactMap { file in
+            switch file {
+            case .compressed(let gz, let index):
+                guard let start = index.start, let end = index.end else { return nil }
+                return Segment(url: gz, size: index.size, start: start, end: end, index: index)
+            case .plain(let url):
+                guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+                defer { try? handle.close() }
+                let size = Int64((try? handle.seekToEnd()) ?? 0)
+                guard size > 0, let first = Self.firstTimestamp(handle, at: 0),
+                      let last = Self.lastTimestamp(handle, size: size) else { return nil }
+                return Segment(url: url, size: size, start: first, end: last)
+            }
         }
     }
 
@@ -42,6 +47,30 @@ struct HistoryArchive: Sendable {
         guard buckets > 0, span > 0 else { return [] }
         var out = [Double](repeating: 0, count: buckets)
         for seg in segments {
+            if let minutes = seg.index?.minutes {
+                // Exact bytes per minute from the index: real gaps stay empty.
+                for pair in minutes where pair.count == 2 {
+                    let t = Date(timeIntervalSince1970: Double(pair[0]) * 60 + 30)
+                    let i = Int(t.timeIntervalSince(range.lowerBound) / span * Double(buckets))
+                    if i >= 0, i < buckets { out[i] += Double(pair[1]) }
+                }
+                continue
+            }
+            if let index = seg.index {
+                // Older index without per-minute counts: spread each block over the time it covers.
+                for block in index.blocks {
+                    let a = block.start.timeIntervalSince(range.lowerBound) / span * Double(buckets)
+                    let b = block.end.timeIntervalSince(range.lowerBound) / span * Double(buckets)
+                    let first = max(0, Int(a)), last = min(buckets - 1, Int(b))
+                    guard first <= last else { continue }
+                    if first == last || b - a <= 0 { out[first] += Double(block.size); continue }
+                    for i in first...last {
+                        let overlap = min(b, Double(i + 1)) - max(a, Double(i))
+                        if overlap > 0 { out[i] += Double(block.size) * overlap / (b - a) }
+                    }
+                }
+                continue
+            }
             guard let handle = try? FileHandle(forReadingFrom: seg.url) else { continue }
             defer { try? handle.close() }
             var previous: Int64?
@@ -63,6 +92,27 @@ struct HistoryArchive: Sendable {
         var budget = maxBytes
         var clipped = false
         for seg in segments.reversed() where seg.end >= from && seg.start < to && budget > 0 {
+            if let index = seg.index {
+                // Only the blocks the slice touches, newest first, lines inside the slice.
+                for block in index.blocks.reversed() where block.end >= from && block.start < to && budget > 0 {
+                    guard let data = HistoryFiles.read(block, from: seg.url) else { continue }
+                    var chunk: [Data] = []
+                    var lineStart = data.startIndex
+                    while let nl = data[lineStart...].firstIndex(of: 0x0A) {
+                        let line = data[lineStart..<nl]
+                        if let ts = Self.timestamp(line), ts >= from, ts < to { chunk.append(line) }
+                        lineStart = nl + 1
+                    }
+                    var kept: [Data] = []
+                    for line in chunk.reversed() {
+                        guard budget > 0 else { clipped = true; break }
+                        budget -= Int64(line.count + 1)
+                        kept.append(line)
+                    }
+                    lines.insert(contentsOf: kept.reversed(), at: 0)
+                }
+                continue
+            }
             guard let handle = try? FileHandle(forReadingFrom: seg.url) else { continue }
             defer { try? handle.close() }
             let a = from <= seg.start ? 0 : Self.offset(of: from, in: handle, size: seg.size)

@@ -179,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Delete all history files?"
-        alert.informativeText = "This removes every activity-*.jsonl file in \(history.directory.path)."
+        alert.informativeText = "This removes every history file (activity-*) in \(history.directory.path)."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
@@ -812,6 +812,9 @@ enum Entry {
         }
         if let i = args.firstIndex(of: "--story-replay"), i + 1 < args.count {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
+        }
+        if let i = args.firstIndex(of: "--compress-history"), i + 1 < args.count {
+            runCompressHistory(args[i + 1])
         }
         if let i = args.firstIndex(of: "--time-travel-probe") {
             runTimeTravelProbe(i + 1 < args.count ? args[i + 1] : nil)
