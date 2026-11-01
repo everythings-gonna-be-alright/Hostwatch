@@ -16,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let history = HistoryRecorder()
     private let hold = ProcessHold()
     private let updates = UpdateChecker()
-    private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains)
+    private lazy var metrics = MetricsStore(directory: { [history] in history.directory })
+    private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains, metrics: metrics)
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
@@ -66,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
+        metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
         updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
@@ -179,11 +182,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Delete all history files?"
-        alert.informativeText = "This removes every history file (activity-*) in \(history.directory.path)."
+        alert.informativeText = "This removes all recorded activity and resource history (activity-*, metrics-*) in \(history.directory.path)."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn { history.clearHistory() }
+        if alert.runModal() == .alertFirstButtonReturn {
+            history.clearHistory()
+            metrics.archive.removeAll()
+        }
     }
 
     // MARK: Overlay panel
@@ -736,7 +742,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
         let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, collector: collector, history: history,
-                                                                   signatures: signatures, classifier: classifier, travel: travel, actions: actions))
+                                                                   signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
         // preferred size (e.g. the small empty Stories view), which reset the window on tab switch.
@@ -813,6 +819,7 @@ enum Entry {
         if let i = args.firstIndex(of: "--story-replay"), i + 1 < args.count {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
         }
+        if args.contains("--metrics-probe") { runMetricsProbe() }
         if let i = args.firstIndex(of: "--compress-history"), i + 1 < args.count {
             runCompressHistory(args[i + 1])
         }

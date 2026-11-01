@@ -20,8 +20,9 @@ the folder is root-owned (nobody else can create or replace the socket), the soc
 client user with mode 0600, and each connection is checked: only the Hostwatch app that launched the
 collector (--owner-pid) is accepted, or, when started by hand, the user who ran sudo.
 Each client may send JSON config lines back:
-  {"exclude": ["pattern", ...], "kinds": ["exec", "net", "file"]}
-and only receives events that pass its filter.
+  {"exclude": ["pattern", ...], "kinds": ["exec", "net", "file"], "top": true}
+and only receives events that pass its filter. With "top", it also gets a "top" message every 5 s:
+the busiest processes by CPU and memory (all users, including root) and total disk throughput.
 
 Exclusion pattern syntax (case-insensitive; glob if it contains * or ?,
 otherwise substring):
@@ -34,6 +35,7 @@ Apple says eslogger output is not a stable API; this is a prototype adapter.
 """
 import argparse
 import concurrent.futures
+import ctypes
 import fnmatch
 import ipaddress
 import json
@@ -104,7 +106,6 @@ def pid_parent(pid):
 
 
 try:
-    import ctypes
     _LIBPROC = ctypes.CDLL("/usr/lib/libproc.dylib")
 except OSError:
     _LIBPROC = None
@@ -257,6 +258,7 @@ class Client:
         self.rules = []
         self.kinds = set(ALL_KINDS)
         self.rate_limit = True
+        self.top = False           # wants the 5-second "top" process samples
         self.window = 0
         self.file_count = 0
         self.lock = threading.Lock()
@@ -266,11 +268,15 @@ class Client:
             self.rules = compile_rules(cfg.get("exclude"))
         if "kinds" in cfg:
             self.kinds = {k for k in cfg.get("kinds") or [] if k in ALL_KINDS}
+        if "top" in cfg:
+            self.top = bool(cfg.get("top"))
         if "rate_limit" in cfg:
             # History recorders want every event, not the 40/s display cap.
             self.rate_limit = bool(cfg.get("rate_limit"))
 
     def wants(self, ev):
+        if ev["kind"] == "top":
+            return self.top
         if ev["kind"] not in self.kinds or is_excluded(self.rules, ev):
             return False
         if ev["kind"] == "file" and self.rate_limit:
@@ -881,6 +887,89 @@ def poll_network(interval):
 
 # -------------------------------------------------------------------- main
 
+# --- Top processes (CPU, memory, disk) -------------------------------------------------
+
+class RUsageInfoV2(ctypes.Structure):
+    """<libproc.h> rusage_info_v2: CPU times in mach ticks, memory and disk I/O in bytes."""
+    _fields_ = [("uuid", ctypes.c_uint8 * 16), ("user_time", ctypes.c_uint64), ("system_time", ctypes.c_uint64),
+                ("pkg_idle_wkups", ctypes.c_uint64), ("interrupt_wkups", ctypes.c_uint64),
+                ("pageins", ctypes.c_uint64), ("wired_size", ctypes.c_uint64), ("resident_size", ctypes.c_uint64),
+                ("phys_footprint", ctypes.c_uint64), ("proc_start_abstime", ctypes.c_uint64),
+                ("proc_exit_abstime", ctypes.c_uint64), ("child_user_time", ctypes.c_uint64),
+                ("child_system_time", ctypes.c_uint64), ("child_pkg_idle_wkups", ctypes.c_uint64),
+                ("child_interrupt_wkups", ctypes.c_uint64), ("child_pageins", ctypes.c_uint64),
+                ("child_elapsed_abstime", ctypes.c_uint64), ("diskio_bytesread", ctypes.c_uint64),
+                ("diskio_byteswritten", ctypes.c_uint64)]
+
+
+class Timebase(ctypes.Structure):
+    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+def process_snapshot(libproc, tick_ns):
+    """{(pid, start): (cpu_ns, footprint, read, written)} for every process."""
+    count = libproc.proc_listallpids(None, 0)
+    pids = (ctypes.c_int * (count + 64))()
+    count = libproc.proc_listallpids(pids, ctypes.sizeof(pids))
+    out = {}
+    info = RUsageInfoV2()
+    for pid in pids[:max(count, 0)]:
+        if pid <= 0 or libproc.proc_pid_rusage(pid, 2, ctypes.byref(info)) != 0:
+            continue
+        cpu = (info.user_time + info.system_time) * tick_ns
+        out[(pid, info.proc_start_abstime)] = (cpu, info.phys_footprint, info.diskio_bytesread, info.diskio_byteswritten)
+    return out
+
+
+def top_from_snapshots(before, after, seconds, limit=5):
+    """Busiest processes between two snapshots: [(pid, cpu %, footprint, read B/s, write B/s)] by CPU,
+    plus the biggest by memory; and total disk read/write per second."""
+    rows, disk_read, disk_write = [], 0.0, 0.0
+    for key, (cpu, mem, rd, wr) in after.items():
+        prev = before.get(key)
+        if prev is None:
+            continue                      # started during the interval: no baseline yet
+        dcpu, drd, dwr = max(0, cpu - prev[0]), max(0, rd - prev[2]), max(0, wr - prev[3])
+        disk_read += drd
+        disk_write += dwr
+        rows.append((key[0], 100.0 * dcpu / (seconds * 1e9), mem, drd / seconds, dwr / seconds))
+    by_cpu = sorted(rows, key=lambda r: r[1], reverse=True)[:limit]
+    by_mem = [r for r in sorted(rows, key=lambda r: r[2], reverse=True)[:3] if r not in by_cpu]
+    return by_cpu + by_mem, disk_read / seconds, disk_write / seconds
+
+
+def run_top_sampler(interval=5.0):
+    """Every `interval` s, while a client asked for it: publish the busiest processes."""
+    libproc = _LIBPROC
+    try:
+        timebase = Timebase()
+        ctypes.CDLL(None).mach_timebase_info(ctypes.byref(timebase))
+        tick_ns = timebase.numer / timebase.denom
+    except (OSError, AttributeError) as exc:
+        print(f"top sampler unavailable: {exc}", flush=True)
+        return
+    if libproc is None:
+        return
+    before, started = None, time.monotonic()
+    while not STOP.wait(interval):
+        with CLIENTS_LOCK:
+            wanted = any(c.top for c in CLIENTS)
+        if not wanted:
+            before = None
+            continue
+        now = time.monotonic()
+        snap = process_snapshot(libproc, tick_ns)
+        if before is not None:
+            rows, disk_read, disk_write = top_from_snapshots(before, snap, now - started)
+            procs = []
+            for pid, cpu, mem, rd, wr in rows:
+                path = pid_path(pid) or ""
+                procs.append({"pid": pid, "name": os.path.basename(path) or str(pid), "path": path,
+                              "cpu": round(cpu, 1), "mem": mem, "read": round(rd), "write": round(wr)})
+            publish({"kind": "top", "procs": procs, "disk_read": round(disk_read), "disk_write": round(disk_write)})
+        before, started = snap, now
+
+
 def main():
     parser = argparse.ArgumentParser(description="Hostwatch collector")
     parser.add_argument("--no-files", action="store_true", help="do not subscribe to file-open events")
@@ -925,6 +1014,7 @@ def main():
     SHUTDOWN_HOOKS.append(proc.terminate)
     if args.owner_pid:
         threading.Thread(target=watch_owner, args=(args.owner_pid,), daemon=True).start()
+    threading.Thread(target=run_top_sampler, daemon=True).start()
     if "net" in kinds:
         threading.Thread(target=run_packet_sniffer, args=(True,), daemon=True).start()
         threading.Thread(target=run_nettop_backstop, daemon=True).start()

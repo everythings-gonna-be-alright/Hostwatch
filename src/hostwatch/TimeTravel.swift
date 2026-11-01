@@ -272,6 +272,13 @@ final class TimeTravel: ObservableObject {
     @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
     @Published var hoverX: CGFloat?             // pointer over the scrubber (for the time label)
+    /// CPU and memory over the whole recording, per timeline bucket (0...1; nil where nothing was recorded).
+    @Published private(set) var cpuLane: [Double?] = []
+    @Published private(set) var memLane: [Double?] = []
+    /// Resource samples inside the shown slice, for the strip and the banner.
+    @Published private(set) var windowSamples: [MetricSample] = []
+    /// The last sample at or before the playhead.
+    var sampleAtPlayhead: MetricSample? { windowSamples.last { $0.date <= playhead } }
 
     static let spans: [(String, TimeInterval)] = [("1 min", 60), ("5 min", 300), ("15 min", 900), ("1 hour", 3600)]
     static let speeds: [(String, Double)] = [("1×", 1), ("10×", 10), ("60×", 60), ("600×", 600)]
@@ -280,16 +287,18 @@ final class TimeTravel: ObservableObject {
     private let history: HistoryRecorder
     private let stories: StoryEngine
     private let domains: DomainRegistry
+    private let metrics: MetricsStore
     private var segments: [HistoryArchive.Segment] = []
     private var loadTask: Task<Void, Never>?
     private var overviewTask: Task<Void, Never>?
     private var playTimer: Timer?
     private var refreshTimer: Timer?
 
-    init(history: HistoryRecorder, stories: StoryEngine, domains: DomainRegistry) {
+    init(history: HistoryRecorder, stories: StoryEngine, domains: DomainRegistry, metrics: MetricsStore) {
         self.history = history
         self.stories = stories
         self.domains = domains
+        self.metrics = metrics
     }
 
     private var archive: HistoryArchive { HistoryArchive(directory: history.directory) }
@@ -378,6 +387,7 @@ final class TimeTravel: ObservableObject {
             self.activity = peak > 0 ? scaled.map { $0 / peak } : scaled
             self.markers = self.collectMarkers()
             if thenLoad { self.move(to: self.playhead) }
+            if let range = result.1 { await self.loadLanes(range) }
         }
     }
 
@@ -395,8 +405,26 @@ final class TimeTravel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.events = result.events
             self.clipped = result.clipped
+            self.windowSamples = await self.metrics.samples(from: from, to: to)
             self.loading = false
         }
+    }
+
+    /// Average CPU and memory per timeline bucket.
+    private func loadLanes(_ range: ClosedRange<Date>) async {
+        let samples = await metrics.samples(from: range.lowerBound, to: range.upperBound)
+        let span = range.upperBound.timeIntervalSince(range.lowerBound)
+        let n = Self.buckets
+        guard span > 0 else { return }
+        var cpu = [Double](repeating: 0, count: n), mem = cpu, count = cpu
+        for s in samples {
+            let i = min(n - 1, max(0, Int(s.date.timeIntervalSince(range.lowerBound) / span * Double(n))))
+            cpu[i] += s.cpu / 100
+            mem[i] += s.mem
+            count[i] += 1
+        }
+        cpuLane = (0..<n).map { count[$0] > 0 ? cpu[$0] / count[$0] : nil }
+        memLane = (0..<n).map { count[$0] > 0 ? mem[$0] / count[$0] : nil }
     }
 
     private func collectMarkers() -> [TimelineMarker] {
@@ -427,6 +455,7 @@ struct TimelineBar: View {
         VStack(spacing: 8) {
             if let range = travel.range {
                 scrubber(range)
+                if travel.cpuLane.contains(where: { $0 != nil }) { lanes }
                 HStack {
                     Text(range.lowerBound, format: Self.dayTime)
                     Spacer()
@@ -508,6 +537,30 @@ struct TimelineBar: View {
         .accessibilityLabel("Timeline")
         .accessibilityValue(Text(travel.playhead, format: Self.dayTime))
         .accessibilityAdjustableAction { direction in travel.step(direction == .increment ? 1 : -1) }
+    }
+
+    /// CPU and memory over the whole recording, on the same time axis as the bars.
+    private var lanes: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Sparkline(values: travel.memLane, color: .green, width: nil, height: 22)
+                Sparkline(values: travel.cpuLane, color: .blue, width: nil, height: 22)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 8) {
+                Label("CPU", systemImage: "circle.fill").foregroundStyle(.blue)
+                Label("Memory", systemImage: "circle.fill").foregroundStyle(.green)
+            }
+            .font(.system(size: 9, weight: .medium))
+            .labelStyle(.titleAndIcon)
+            .imageScale(.small)
+            .padding(.leading, 2)
+            .offset(y: -2)
+            .allowsHitTesting(false)
+        }
+        .accessibilityLabel("CPU and memory over time")
     }
 
     /// Clicking near a marker lands just after it, so its activity is in the slice.
@@ -603,6 +656,14 @@ struct TimeTravelBanner: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .help(travel.clipped ? "This slice is very busy; only its newest part is shown. Choose a shorter window." : "")
+            if let s = travel.sampleAtPlayhead {
+                Text("·").foregroundStyle(.secondary)
+                Text("CPU \(Int(s.cpu.rounded()))% · Memory \(Int((s.mem * 100).rounded()))%"
+                     + (s.top?.first.map { " · busiest: \($0.name) \(Int($0.cpu.rounded()))%" } ?? ""))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .help("Resource use at the playhead")
+            }
             Spacer()
         }
         .font(.system(size: 12))

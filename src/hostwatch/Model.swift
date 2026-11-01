@@ -343,6 +343,8 @@ final class HUDModel: ObservableObject {
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
+    /// The collector's 5-second "top processes" samples (procs, disk read B/s, disk write B/s).
+    var onTop: (([TopProcess], Double, Double) -> Void)?
 
     @Published var exclusionText: String {
         didSet {
@@ -567,7 +569,7 @@ final class HUDModel: ObservableObject {
 
     /// The agent filters per client too, so exclusions also cut collector traffic.
     private func sendConfig() {
-        send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue)])
+        send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue), "top": true])
     }
 
     /// Asks the collector to exit; it only obeys a client that knows its token.
@@ -596,11 +598,24 @@ final class HUDModel: ObservableObject {
         }
     }
 
+    private static let topMarker = Data(#""kind":"top""#.utf8)
+    private struct TopMessage: Decodable {
+        var procs: [TopProcess]
+        var disk_read: Double?
+        var disk_write: Double?
+    }
+
     private func consumeLines() {
         var fresh: [ActivityEvent] = []
         while let newline = pending.firstIndex(of: 0x0A) {
             let line = pending[pending.startIndex..<newline]
             pending.removeSubrange(...newline)
+            if line.range(of: Self.topMarker) != nil {
+                if let top = try? decoder.decode(TopMessage.self, from: Data(line)) {
+                    onTop?(top.procs, top.disk_read ?? 0, top.disk_write ?? 0)
+                }
+                continue
+            }
             guard !paused,
                   var event = try? decoder.decode(ActivityEvent.self, from: Data(line)),
                   !rules.excludes(event)

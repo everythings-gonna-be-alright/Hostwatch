@@ -57,6 +57,8 @@ block anything.
   asks you: Allow, Always Allow or Kill. Off by default; see Limitations.
 - **Time travel.** Scrub back through recorded activity on a timeline marked with stories and new
   domains, step or play it forward, and open any story at its moment with everything around it.
+- **Resource use.** CPU, memory, network and disk live in the footer, recorded for Time Travel (CPU and
+  memory lines under the timeline), with the busiest processes at any moment.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
 - **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,

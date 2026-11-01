@@ -405,6 +405,27 @@ from the live stream to recorded history. Live collection carries on in the back
   you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
   `Hostwatch --time-travel-probe [dir]` prints these timings.
 
+## Resource use (CPU, memory, network, disk)
+
+Every 5 seconds Hostwatch records system-wide resource use. The Events tab's footer shows it live with
+5-minute sparklines: **CPU** (share of all cores), **Mem** (apps + wired + compressed, the same as Activity
+Monitor's "Memory Used"; the line turns orange or red with macOS memory pressure), **network**
+download ↓ / upload ↑ (Wi-Fi, Ethernet, cellular; VPN tunnels and loopback aren't double-counted) and
+**disk** read/write. The list button shows the **busiest processes** at that moment (CPU % of one core,
+memory footprint, disk throughput).
+
+- **Sources:** CPU, memory and network come from the kernel's counters (no special rights). The busiest
+  processes and disk throughput come from the collector: as root it can see every user's processes
+  (`proc_pid_rusage`), which the app can't (about a third of processes, all of them system ones). It sends
+  them every 5 s only to the live window, never into the event history.
+- **Recording:** one line per sample in `History/metrics-YYYYMMDD.jsonl` (a few MB per day); past days are
+  gzip-compressed, and days older than the oldest activity history are deleted with it. *Clear History*
+  removes them too. Resource use is recorded while Hostwatch is open.
+- **Time Travel:** the timeline shows CPU (blue) and memory (green) lines under the activity bars, on the
+  same time axis. The footer strip shows the slice around the playhead, and the banner shows the values
+  and the busiest process at the playhead. Times before this feature existed simply have no line.
+- `Hostwatch --metrics-probe` prints three readings, for comparing with Activity Monitor or `top`.
+
 ## Updates
 
 *Hostwatch ▸ Check for Updates…* asks `api.github.com/repos/everythings-gonna-be-alright/Hostwatch/releases/latest`
