@@ -266,6 +266,39 @@ cannot hide them. On-device verdicts never remove steps from Stories (only your 
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
+## Rules learned from your decisions (Rules tab)
+
+**Suggest Rules with Claude** sends your decisions (patterns *you* marked; secrets masked), your existing
+rules and the story chains you always ignore. Claude's own verdicts are deliberately not used, so rules
+don't amplify the AI. Claude returns up to 8 rules: `kind` (exec/net/file/any), `process` glob, `pattern`
+glob (`*`, `?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale. It
+needs Claude, so it's disabled when the engine is *Apple On-Device*.
+
+Every proposal is checked locally before you see it:
+
+| Check | Effect |
+|-------|--------|
+| matches one of your decisions with a different status | **refused** (conflict) |
+| program and pattern both name fewer than 4 letters/digits | **refused** (too general) |
+| matches no pattern, or > 25% of all patterns (with ≥ 200 patterns) | **refused** |
+| based on none of your decisions | warning |
+| a Safe rule covering New high-risk patterns | warning (shows how many) |
+
+**Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
+
+**Precedence:** your markings and the baseline > your rules > Claude/on-device verdicts > automatic
+routine. A rule's verdict counts as yours: it satisfies *Only New (not reviewed)*, and a Safe rule
+removes matching steps from Stories.
+
+**Each rule's own regression test:** at approval it stores the decisions it must keep matching
+(examples) and those it must never match (all your other decisions). It is re-checked at launch and
+whenever you mark something. If it now matches a counter-example, loses an example, or contradicts any
+of your decisions, it is **paused** with the reason, until you resume it (if it passes again) or delete
+it. Patterns a paused or deleted rule had classified go back to their own state.
+
+`Hostwatch --suggest-rules` is a dry run for development: it asks Claude, checks the proposals and prints
+them, changing nothing.
+
 ## MCP server (`Hostwatch --mcp`)
 
 A read-only Model Context Protocol server over stdio (JSON-RPC, protocol versions 2025-06-18,

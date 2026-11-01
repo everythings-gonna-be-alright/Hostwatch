@@ -391,6 +391,7 @@ struct ActivityWindowView: View {
     @ObservedObject var stories: StoryEngine
     @ObservedObject var domains: DomainRegistry
     let domainsState: DomainsViewState
+    @ObservedObject var rules: RuleBook
     @ObservedObject var collector: Collector
     @ObservedObject var history: HistoryRecorder
     @ObservedObject var signatures: SignatureStore
@@ -405,7 +406,8 @@ struct ActivityWindowView: View {
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
-            default: DomainsView(domains: domains, state: domainsState, search: model.searchText)
+            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText)
+            default: RulesView(book: rules, signatures: signatures, classifier: classifier)
             }
         }
         .frame(minWidth: 900, minHeight: 480)
@@ -413,7 +415,7 @@ struct ActivityWindowView: View {
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
                     prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
-                             "Domain, host, program"][min(model.windowTab, 3)])
+                             "Domain, host, program", "Not used on Rules"][min(model.windowTab, 4)])
         .navigationTitle("Hostwatch")
         .navigationSubtitle(subtitle)
     }
@@ -429,7 +431,8 @@ struct ActivityWindowView: View {
         case 0: return "\(state) · \(model.history.count) events"
         case 1: return "\(state) · \(signatures.total) patterns"
         case 2: return "\(state) · \(stories.activeCount) open stories"
-        default: return "\(state) · \(domains.newCount) new domains"
+        case 3: return "\(state) · \(domains.newCount) new domains"
+        default: return "\(state) · \(rules.activeCount) active rules"
         }
     }
 
@@ -443,6 +446,8 @@ struct ActivityWindowView: View {
                       systemImage: "point.3.connected.trianglepath.dotted").tag(2)
                 Label(domains.newCount > 0 ? "Domains (\(domains.newCount))" : "Domains",
                       systemImage: "globe").tag(3)
+                Label(rules.proposals.isEmpty ? "Rules" : "Rules (\(rules.proposals.count))",
+                      systemImage: "checklist").tag(4)
             }
             .pickerStyle(.segmented)
             .labelStyle(.titleAndIcon)

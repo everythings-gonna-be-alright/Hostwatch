@@ -59,6 +59,9 @@ block anything.
   are never marked safe on-device.
 - **Ask AI.** Double-click anything for a verdict and an explanation, from Claude or the on-device model.
   The evidence includes the code signature, parent chain, command line and connections.
+- **Learns from your decisions.** Claude proposes general rules from the patterns you marked. Hostwatch
+  checks each one against everything you decided, and only rules you approve apply. Each rule re-checks
+  itself and pauses if it ever contradicts you.
 - **Investigate with Claude Code.** A built-in, read-only MCP server lets Claude search your recorded
   activity, stories, patterns, domains and process trees. Ask *"what talked to new domains last night?"*
   or *"walk me through story #1"*.
