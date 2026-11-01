@@ -16,6 +16,16 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
 </p>
 
+<p align="center">
+  <img src="docs/images/hud.png" width="420" alt="Hostwatch HUD: live processes, connections and file opens">
+</p>
+
+<p align="center">
+  <img src="docs/images/activity-window.png" alt="Hostwatch Activity window: sortable events with status, process and detail">
+</p>
+
+<p align="center"><sub>The floating HUD (top) and the Activity window with its Events, Patterns, Stories and Domains tabs.</sub></p>
+
 ---
 
 ## Why
