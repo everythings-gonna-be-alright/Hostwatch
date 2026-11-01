@@ -1,15 +1,6 @@
 # Changelog
 
-## Unreleased
-
-- **MCP access requires permission and a token.** `Hostwatch --mcp` refuses everything until you allow it in
-  *Settings ▸ AI*, which issues a random token for the Claude Code registration command (only its hash is
-  stored). *New Token…* or turning access off cuts off earlier registrations; sessions are logged. Existing
-  registrations without a token stop working: copy the new command from Settings.
-
-- **Check for Updates…** (*Hostwatch* menu, *Settings ▸ General*): asks GitHub for the latest release and
-  offers its page and notes. Automatic once a day (can be turned off); a new version also shows in the
-  menu bar icon menu. Nothing is downloaded or installed by itself.
+## 0.4.0 – time travel
 
 - **Time Travel** (toolbar button, *View ▸ Time Travel* ⌥⌘T): browse recorded history in the Events tab.
   A floating timeline shows activity over the whole recording with marks for stories and new domains;
@@ -18,15 +9,21 @@
 - **Stories chain only related steps:** links by cause (same process, parent → child, same script, same
   file) and by shared evidence (the same untrusted program, a login item and the program it starts,
   the same new domain or raw IP). Programs reading their own keychain items, AI coding agents' command
-  wrappers and trusted apps reading their own config no longer raise stories.
-
-- **Menus reorganized:** a short menu bar icon menu (status and quick actions), a full app menu bar
+  wrappers and trusted apps reading their own config no longer raise stories. On a day of real use:
+  0 false stories, down from 10.
+- **Hold suspicious processes** (opt-in, *Settings ▸ Detection*): freezes your own process when it does
+  something suspicious and asks you to allow or kill it. Fails open: a watchdog resumes it if Hostwatch
+  quits or crashes. Best effort: quick commands can finish first.
+- **Menus and Settings:** a short menu bar icon menu (status and quick actions), a full app menu bar
   (View, Activity, Window, Help, with ⌘1–⌘5 for tabs) and a **Settings window** (⌘,) with General, HUD,
-  Detection, AI, Exclusions and History. The window's More menu became a Settings button. A banner
-  says when the collector is off. Exclude is on right-click for events and HUD rows.
-- **Hold suspicious processes** (opt-in, *Settings ▸ Detection*): freezes your own
-  process when it does something suspicious and asks you to allow or kill it. Fails open: a
-  watchdog resumes it if Hostwatch quits or crashes. Best effort: quick commands can finish first.
+  Detection, AI, Exclusions and History. A banner says when the collector is off; Exclude is on
+  right-click for events and HUD rows.
+- **MCP access requires permission and a token.** `Hostwatch --mcp` refuses everything until you allow it in
+  *Settings ▸ AI*, which issues a random token for the Claude Code registration command (only its hash is
+  stored). *New Token…* or turning access off cuts off earlier registrations; sessions are logged.
+  **Existing registrations stop working:** copy the new command from Settings ▸ AI.
+- **Check for Updates…** (*Hostwatch* menu, *Settings ▸ General*): asks GitHub for the latest release.
+  Automatic once a day (can be turned off); nothing is downloaded or installed by itself.
 
 ## 0.3.0 – learn, investigate, secure
 
