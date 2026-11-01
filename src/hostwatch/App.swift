@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private lazy var ruleBook = RuleBook(store: signatures)
     private let collector = Collector()
     private let history = HistoryRecorder()
+    private let hold = ProcessHold()
+    private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private var editorWindow: NSWindow?
@@ -51,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                               modifiers: UInt32(controlKey | optionKey | cmdKey)) { [weak self] in
             self?.model.overlayEnabled.toggle()
         }
+        setUpHold()
         model.connect()
         setUpHistory()
         _ = ruleBook                      // load approved rules and apply them before events arrive
@@ -70,6 +73,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 self.startCollector()
             }
         }
+    }
+
+    // MARK: Hold
+
+    private func setUpHold() {
+        model.hold = hold
+        hold.onAlwaysAllow = { [weak self] e in
+            self?.signatures.set(.safe, keys: [e.signatureKey], note: "allowed while held")
+        }
+        hold.onChange = { [weak self] in self?.refreshHeldPanel() }
+    }
+
+    /// The floating "Hostwatch paused a process" panel, shown while anything is held.
+    private func refreshHeldPanel() {
+        guard !hold.held.isEmpty else {
+            heldPanel?.orderOut(nil)
+            return
+        }
+        if heldPanel == nil {
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 200),
+                                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+                                backing: .buffered, defer: false)
+            panel.title = "Held by Hostwatch"
+            panel.titlebarAppearsTransparent = true
+            panel.level = .floating
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            let host = NSHostingController(rootView: HeldView(hold: hold) { [weak self] e in
+                self?.openAskAI(for: e)
+            })
+            host.sizingOptions = [.preferredContentSize]
+            panel.contentViewController = host
+            heldPanel = panel
+        }
+        guard let panel = heldPanel else { return }
+        if !panel.isVisible {
+            if let screen = NSScreen.main?.visibleFrame {
+                panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 20, y: screen.maxY - 20))
+            }
+            panel.orderFrontRegardless()
+        }
+    }
+
+    @objc private func toggleHold() { hold.enabled.toggle() }
+
+    @objc private func setHoldTimeout(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let action = HoldTimeoutAction(rawValue: raw) else { return }
+        hold.timeoutAction = action
     }
 
     // MARK: History
@@ -433,6 +485,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         brew.toolTip = "Treat tools in Homebrew's Cellar (with an install receipt) like a trusted developer. "
             + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too."
         sub.addItem(brew)
+        let holdItem = item("Hold Suspicious Processes", #selector(toggleHold))
+        holdItem.state = hold.enabled ? .on : .off
+        holdItem.toolTip = "Freeze your own processes the moment they do something suspicious (piped or encoded "
+            + "command, password or key read, login item, quarantine removal…) and ask you. Best effort: "
+            + "very quick commands can finish first."
+        sub.addItem(holdItem)
+        if hold.enabled {
+            let timeoutMenu = NSMenu()
+            for action in HoldTimeoutAction.allCases {
+                let mi = item(action.title, #selector(setHoldTimeout(_:)))
+                mi.representedObject = action.rawValue
+                mi.state = hold.timeoutAction == action ? .on : .off
+                timeoutMenu.addItem(mi)
+            }
+            let timeoutItem = NSMenuItem(title: "If No Answer in \(Int(hold.timeout)) s", action: nil, keyEquivalent: "")
+            timeoutItem.indentationLevel = 1
+            timeoutItem.submenu = timeoutMenu
+            sub.addItem(timeoutItem)
+        }
 
         // Which AI classifies new patterns and answers Ask.
         sub.addItem(.sectionHeader(title: "AI Engine"))
@@ -794,6 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Quitting from anywhere (menu, overlay ×, full-screen Quit, Cmd-Q) stops
     /// the collector we started before the app exits.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        hold.releaseAll()                 // never leave a process frozen behind
         history.stop()
         signatures.save(sync: true)
         stories.save()

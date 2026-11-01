@@ -52,6 +52,9 @@ block anything.
 - **Stories.** Suspicious steps are added up along the process tree. *Chrome downloads a file →
   quarantine removed → it runs → installs a LaunchAgent → calls home* becomes one **Dangerous** story
   instead of five unrelated rows.
+- **Hold suspicious processes (opt-in).** Freezes your own process the moment it pipes a download
+  into a shell, reads saved passwords, installs a login item or removes the download quarantine, and
+  asks you: Allow, Always Allow or Kill. Off by default; see Limitations.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
 - **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,
@@ -185,7 +188,9 @@ This is a working prototype, not a commercial security product.
   A production version would use a signed Endpoint Security system extension.
 - Very short connections hidden by other security software are inferred from traffic statistics, with less detail.
 - Anything that happens during the learning period becomes part of the baseline.
-- No response actions yet (stop process, quarantine file).
+- The process hold is best effort. The process has already run for a few milliseconds when Hostwatch
+  sees it, so a very quick command can finish first. It never holds root processes, and nothing stops
+  before it starts. Real pre-execution blocking needs an Endpoint Security system extension.
 
 ## Development
 

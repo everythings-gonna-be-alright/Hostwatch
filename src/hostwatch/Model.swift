@@ -341,6 +341,8 @@ final class HUDModel: ObservableObject {
     let stories: StoryEngine
     let domains: DomainRegistry
     let beacons = BeaconDetector()
+    /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
+    var hold: ProcessHold?
 
     @Published var exclusionText: String {
         didSet {
@@ -606,7 +608,8 @@ final class HUDModel: ObservableObject {
                 if let beacon = beacons.observe(event) { event.beacon = beacon }
                 event.rawIP = NetSignals.isRawIP(event)
             }
-            stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
+            let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
+            hold?.consider(event, stages: stages, status: signatures.status(for: event))
             fresh.append(event)
             counts[event.kind, default: 0] += 1
         }

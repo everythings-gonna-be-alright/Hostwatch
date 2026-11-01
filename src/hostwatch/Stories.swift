@@ -200,18 +200,20 @@ final class StoryEngine: ObservableObject {
 
     // MARK: Ingest
 
-    func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date()) {
+    /// Adds the event to its story; returns the stages it added (with notes), for the process hold.
+    @discardableResult
+    func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date()) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0 {
             procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date)
         }
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
-        guard !decidedSafe, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return }
+        guard !decidedSafe, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
 
         if e.kind == .file, e.extra.contains("w") { rememberWrite(e) }
         var found = stages(for: e)
-        guard !found.isEmpty else { return }
+        guard !found.isEmpty else { return [] }
         if let q = found.first(where: { $0.0 == .unquarantine }) {
             unquarantines.append(StoryStep(e, stage: .unquarantine, note: q.1, date: clock))
             if unquarantines.count > 200 { unquarantines.removeFirst(100) }
@@ -249,12 +251,14 @@ final class StoryEngine: ObservableObject {
         if let q = linkedQuarantine, !story.steps.contains(where: { $0.id == q.id }) {
             story.steps.append(q)
         }
-        guard !story.steps.isEmpty else { return }
+        guard !story.steps.isEmpty else { return found }
         story.steps.sort { $0.date < $1.date }
         if story.steps.count > 60 { story.steps.removeFirst(story.steps.count - 60) }
         story.lastSeen = now
         evaluate(&story)
         working[root.pid] = story
+        if let linked { found.append((.runFromDrop, "runs a file \(linked.name) just wrote")) }
+        return found
     }
 
     private static func dedupeKey(_ s: StoryStep) -> String {
@@ -325,7 +329,7 @@ final class StoryEngine: ObservableObject {
     /// This app's bundle; HOSTWATCH_OWN_BUNDLE lets replays recognise the installed app.
     private static let ownBundle = (ProcessInfo.processInfo.environment["HOSTWATCH_OWN_BUNDLE"]
                                     ?? Bundle.main.bundlePath) + "/"
-    private static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
+    static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
 
     private func stages(for e: ActivityEvent) -> [(StoryStage, String)] {
         var out: [(StoryStage, String)] = []

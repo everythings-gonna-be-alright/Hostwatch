@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Hold suspicious processes** (opt-in, *Detection ▸ Hold Suspicious Processes*): freezes your own
+  process when it does something suspicious and asks you to allow or kill it. Fails open: a
+  watchdog resumes it if Hostwatch quits or crashes. Best effort: quick commands can finish first.
+
 ## 0.3.0 – learn, investigate, secure
 
 - **Rules learned from your decisions** (Rules tab): Claude proposes general rules from the patterns you
