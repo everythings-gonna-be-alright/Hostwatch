@@ -126,3 +126,67 @@ struct AppleOnDeviceModel: LocalTriageModel {
         return EvidenceGatherer.redactSecrets(text)
     }
 }
+
+// MARK: - Engine choice
+
+/// Which AI Hostwatch uses: Apple's on-device model, Claude, or on-device first with Claude for the rest.
+enum AIEngine: String, CaseIterable, Sendable {
+    case onDevice, claude, hybrid
+
+    var title: String {
+        switch self {
+        case .onDevice: return "Apple On-Device (private)"
+        case .claude: return "Claude"
+        case .hybrid: return "On-Device First, Claude for the Rest"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .onDevice: return "Only Apple's on-device model: free, offline, nothing leaves the Mac. Patterns it can't settle stay New."
+        case .claude: return "Only Claude (Claude Code CLI): strongest analysis; evidence is sent to Anthropic."
+        case .hybrid: return "On-device model first; Claude only for what it can't settle. Ask uses Claude."
+        }
+    }
+
+    var usesOnDevice: Bool { self != .claude }
+    var usesClaude: Bool { self != .onDevice }
+
+    /// Engine for a single Ask: on-device only when that is the chosen engine.
+    var askEngine: AIEngine { self == .onDevice ? .onDevice : .claude }
+
+    static let key = "aiEngine"
+
+    /// Saved choice; earlier versions had two toggles ("triageOnDevice", "triageAskClaude").
+    static func load(_ defaults: UserDefaults = .standard) -> AIEngine {
+        if let raw = defaults.string(forKey: key), let engine = AIEngine(rawValue: raw) { return engine }
+        let onDevice = defaults.object(forKey: "triageOnDevice") as? Bool ?? true
+        let claude = defaults.object(forKey: "triageAskClaude") as? Bool ?? true
+        switch (onDevice, claude) {
+        case (true, false): return .onDevice
+        case (false, _): return .claude
+        default: return .hybrid
+        }
+    }
+}
+
+extension AppleOnDeviceModel {
+    /// The on-device context window is about 4,000 tokens (instructions + evidence + answer), so
+    /// evidence is cut to fit, keeping its beginning (the event, process and signature facts).
+    static let askEvidenceLimit = 6_000
+
+    static func askPrompt(evidence: String) -> String {
+        let trimmed = evidence.count > askEvidenceLimit
+            ? String(evidence.prefix(askEvidenceLimit)) + "\n… (evidence shortened to fit the on-device model)"
+            : evidence
+        return "Is this activity dangerous? Evidence collected on the Mac:\n\n" + trimmed
+    }
+
+    /// Free-text analysis in the same shape as Claude's answer (VERDICT line first).
+    func explain(_ prompt: String, instructions: String) async throws -> String {
+        let session = LanguageModelSession(model: .default, instructions: instructions)
+        let response = try await session.respond(to: prompt, options: GenerationOptions(samplingMode: .greedy,
+                                                                                        maximumResponseTokens: 600))
+        return response.content
+    }
+}

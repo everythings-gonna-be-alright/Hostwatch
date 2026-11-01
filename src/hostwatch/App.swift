@@ -432,18 +432,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too."
         sub.addItem(brew)
 
-        // AI triage of new patterns: private on-device pass first, Claude for the rest.
-        sub.addItem(.sectionHeader(title: "AI Triage"))
+        // Which AI classifies new patterns and answers Ask.
+        sub.addItem(.sectionHeader(title: "AI Engine"))
         let status = classifier.localStatus
-        let onDevice = item("On-Device First Pass", #selector(toggleOnDeviceTriage))
-        onDevice.state = classifier.useOnDevice ? .on : .off
-        onDevice.toolTip = "Apple's on-device model triages new patterns first; nothing leaves the Mac. "
-            + "It may only mark ordinary, normal-risk patterns Safe."
-        sub.addItem(onDevice)
-        let claude = item("Ask Claude for the Rest", #selector(toggleClaudeTriage))
-        claude.state = classifier.askClaude ? .on : .off
-        claude.toolTip = "Patterns the on-device pass can't settle (and all of them when it's unavailable) go to Claude."
-        sub.addItem(claude)
+        for engine in AIEngine.allCases {
+            let mi = item(engine.title, #selector(setAIEngine(_:)))
+            mi.representedObject = engine.rawValue
+            mi.state = classifier.engine == engine ? .on : .off
+            mi.toolTip = engine.help
+            sub.addItem(mi)
+        }
         let statusItem = NSMenuItem(title: status.label, action: nil, keyEquivalent: "")
         statusItem.image = symbol(status.isReady ? "checkmark.circle" : "exclamationmark.circle",
                                   color: status.isReady ? .systemGreen : .systemOrange)
@@ -464,8 +462,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     @objc private func endDomainLearning() { domains.endLearning() }
-    @objc private func toggleOnDeviceTriage() { classifier.useOnDevice.toggle() }
-    @objc private func toggleClaudeTriage() { classifier.askClaude.toggle() }
+    @objc private func setAIEngine(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let engine = AIEngine(rawValue: raw) else { return }
+        classifier.engine = engine
+    }
 
     private func collectorMenu() -> NSMenuItem {
         let parent = NSMenuItem(title: "Collector", action: nil, keyEquivalent: "")
@@ -646,7 +646,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let last = story.steps.last else { return }
         let related = story.steps.dropLast().map(\.event)
         openAskAI(for: last.event, related: related, preface: StoryEngine.evidence(for: story),
-                  title: "Ask Claude: \(story.title)", classifyPattern: false)
+                  title: "Ask AI: \(story.title)", classifyPattern: false)
     }
 
     @objc private func openDomains() {
@@ -665,9 +665,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let analysis = AIAnalysis(event: event, related: related, preface: preface)
         let key = event.signatureKey
         if classifyPattern {
-            analysis.onVerdict = { [weak self] verdict, summary in
+            analysis.onVerdict = { [weak self, weak analysis] verdict, summary in
+                guard let self else { return }
+                let onDevice = analysis?.engine == .onDevice
+                // Same guard as triage: the on-device model never marks a high-risk pattern Safe.
+                if onDevice, verdict == .safe, self.signatures.entry(key)?.risk == .high { return }
                 // A single verdict classifies the event's pattern unless you already decided it.
-                self?.signatures.suggest(SignatureStatus(verdict: verdict), key: key, source: "claude", note: summary)
+                self.signatures.suggest(SignatureStatus(verdict: verdict), key: key,
+                                        source: onDevice ? "on-device" : "claude", note: summary)
             }
         }
         let window = NSWindow(
@@ -676,7 +681,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             backing: .buffered,
             defer: false
         )
-        window.title = title ?? "Ask Claude: \(event.name)"
+        window.title = title ?? "Ask AI: \(event.name)"
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: AskAIView(analysis: analysis))
         window.center()

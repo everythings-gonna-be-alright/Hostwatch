@@ -567,7 +567,7 @@ struct ActivityWindowView: View {
                     .buttonStyle(.link)
                     .help("Show history files in Finder")
                 Spacer()
-                Text("Double-click a row to ask Claude · click a column to sort")
+                Text("Double-click a row to ask AI · click a column to sort")
                 Text("·")
                 Text(rows.count == model.history.count
                      ? "\(model.history.count) events"
@@ -583,7 +583,7 @@ struct ActivityWindowView: View {
 
     @ViewBuilder
     private func rowMenu(_ event: ActivityEvent) -> some View {
-        Button("Ask Claude: Is This Dangerous?…") { actions.askAI(event) }
+        Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
         Divider()
         Text("Pattern: \(event.signatureProcess) → \(event.signaturePattern)")
         ForEach(SignatureStatus.allCases, id: \.self) { status in

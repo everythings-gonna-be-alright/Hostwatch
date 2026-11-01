@@ -711,7 +711,7 @@ private struct StoryCard: View {
             }
             .font(.system(size: 11))
             HStack(spacing: 8) {
-                Button { actions.askStory(story) } label: { Label("Ask Claude", systemImage: "sparkles") }
+                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
                     .buttonStyle(.glassProminent)
                 if !story.dismissed {
                     Button("Dismiss") { stories.dismiss(story.id) }.buttonStyle(.glass)

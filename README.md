@@ -54,10 +54,11 @@ block anything.
   instead of five unrelated rows.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
-- **Private AI triage.** Apple's **on-device** model triages new patterns first: free, offline, and nothing
-  leaves the Mac. Only what it can't settle goes to Claude. High-risk patterns are never settled on-device.
-- **Ask Claude.** Double-click anything to send its evidence (code signature, parent chain, command
-  line, connections) to Claude for a verdict and an explanation.
+- **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,
+  or on-device first with Claude for the rest (default). It classifies new patterns; high-risk patterns
+  are never marked safe on-device.
+- **Ask AI.** Double-click anything for a verdict and an explanation, from Claude or the on-device model.
+  The evidence includes the code signature, parent chain, command line and connections.
 - **A real Mac app.** Native tables you can sort, a Stories timeline, a Domains inventory, filters,
   exclusions, recorded history.
 
@@ -135,11 +136,11 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 
 - **Local by default.** Events, patterns, stories and history stay in `~/Library/Application Support/Hostwatch`
   and `~/Library/Logs/Hostwatch`. The collector listens on `127.0.0.1` only.
-- **AI is on-device first.** Auto-classification asks Apple's on-device model first (never its cloud
-  model); nothing leaves the Mac for what it settles.
-- **Claude is opt-in.** Evidence is sent only when you click *Ask Claude* (you can review and edit it
-  before sending), or when auto-classification passes on what the on-device model couldn't settle
-  (pattern summaries; turn off in *Detection ▸ AI Triage*). Obvious secrets are masked in both.
+- **You choose the AI** in *Detection ▸ AI Engine*. With *Apple On-Device*, nothing ever leaves the Mac
+  (Apple's on-device model only, never its cloud model).
+- **Claude only when chosen.** Evidence goes to Claude when you ask with Claude selected (you can review
+  and edit it first) or when the engine includes Claude for classification (pattern summaries).
+  Obvious secrets are masked either way.
 - **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
   the collector, but other secrets passed as arguments can end up in history.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).
