@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 – on-device AI
 
 - **On-device AI triage:** Apple's on-device model triages new patterns first (private, offline, free);
   Claude only gets what it can't settle. High-risk patterns are never settled on-device.
