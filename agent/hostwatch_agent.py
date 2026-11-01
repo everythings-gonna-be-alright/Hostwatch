@@ -835,8 +835,11 @@ def parse_nettop_line(line):
 def run_nettop_backstop(settle=1.5):
     cmd = ["/usr/bin/nettop", "-L", "0", "-s", "1", "-m", "tcp", "-n", "-x", "-P"]
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                text=True, errors="replace", start_new_session=True)
+        # stdin must be a pipe that stays open: nettop polls stdin for key presses, and with the
+        # /dev/null stdin a launchd job has, every poll returns at once (~1.4 cores busy, not ~1%).
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True, errors="replace",
+                                start_new_session=True)
     except OSError as exc:
         print(f"nettop backstop disabled: {exc}", file=sys.stderr, flush=True)
         return
