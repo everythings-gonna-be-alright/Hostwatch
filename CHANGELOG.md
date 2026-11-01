@@ -1,16 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 – resources and compact history
 
 - **The collector is now Swift, built into the app** (`Hostwatch --collector`): no Python and no Command
   Line Tools needed to run Hostwatch. Same design and sources (eslogger, tcpdump, lsof, nettop, libproc),
   same socket security and the same history format; helpers no longer inherit open files.
-
 - **Collector CPU fix:** the `nettop` network backstop used about 1.4 CPU cores all the time (it polled
   its `/dev/null` stdin for key presses in a tight loop). It now gets an open pipe as stdin: about 1%.
-
-## 0.5.0 – resources and compact history
-
 - **CPU, memory, network and disk** in the Events footer, live with sparklines, and recorded every 5 s for
   Time Travel: CPU and memory lines under the timeline, values and the busiest process at the playhead.
   A popover lists the busiest processes (from the collector, which sees every user's processes).
