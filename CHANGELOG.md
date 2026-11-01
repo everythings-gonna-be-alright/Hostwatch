@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Hostwatch's own activity is hidden:** the app (history and metrics writes, update check, codesign
+  checks), the MCP server and their children no longer show up in the HUD, events, history or stories.
+  Only the exact executable of the app that started the collector counts; exited pids are dropped.
+
 - **CPU, memory, network and disk** in the Events footer, live with sparklines, and recorded every 5 s for
   Time Travel: CPU and memory lines under the timeline, values and the busiest process at the playhead.
   A popover lists the busiest processes (from the collector, which sees every user's processes).

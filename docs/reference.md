@@ -480,7 +480,8 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 
 `agent/hostwatch_agent.py` (run as root) combines:
 
-- `eslogger exec open` (Endpoint Security) → processes and file opens.
+- `eslogger exec exit open` (Endpoint Security) → processes and file opens (`exit` is only used to
+  keep the list of Hostwatch's own processes exact; it is never published).
   Opens are deduplicated per (pid, path) for 2 minutes and capped at 40/s per client.
 - Packet capture (`tcpdump -i pktap,all -k NPD`, read-only) → every outgoing TCP connection, from
   its SYN packet, with the owning process. This catches connections too short for any polling,
@@ -500,6 +501,12 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
   answer was seen (cached before the collector started, or encrypted DNS/DoH), reverse DNS is used
   instead, shown as `~name` (often a provider name like `~bt-in-f100.1e100.net`). The Activity list
   still shows the IP, Claude gets both, and exclusions match hostnames: `net:*.google.com:*`.
+
+**Hostwatch's own activity is not reported** (live, in history or in stories): the app that started the
+collector (verified by pid), any other run of the exact same executable (such as the MCP server Claude
+Code starts), the collector's own helpers (eslogger, tcpdump, lsof, nettop) and the children of all of
+these. A look-alike binary elsewhere is reported as usual, and a pid leaves the list when its process
+exits, so a reused pid is watched again.
 
 Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --socket /var/run/hostwatch/collector.sock`.
 Started by hand, the collector accepts connections only from the user who ran `sudo`. For development,
