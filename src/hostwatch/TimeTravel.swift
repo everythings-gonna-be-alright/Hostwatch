@@ -219,7 +219,7 @@ final class TimeTravel: ObservableObject {
     @Published private(set) var loading = false
     @Published private(set) var clipped = false
     @Published private(set) var playing = false
-    @Published var speed: Double = 60            // history seconds per real second
+    @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
     @Published var hoverX: CGFloat?             // pointer over the scrubber (for the time label)
 
