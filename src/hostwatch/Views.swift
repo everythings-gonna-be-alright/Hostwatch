@@ -10,6 +10,8 @@ struct HUDActions {
     var askAI: (ActivityEvent) -> Void
     var askStory: (Story) -> Void = { _ in }
     var openStories: () -> Void = {}
+    var openSettings: () -> Void = {}
+    var exclude: (String) -> Void = { _ in }
 }
 
 // MARK: - Overlay
@@ -54,6 +56,14 @@ struct HUDView: View {
                             .contentShape(Rectangle())
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
+                            .contextMenu {
+                                Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
+                                Menu("Exclude") {
+                                    ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
+                                        Button(title) { actions.exclude(pattern) }
+                                    }
+                                }
+                            }
                     }
                 }
             }
@@ -400,6 +410,7 @@ struct ActivityWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
             switch model.windowTab {
             case 0: eventsList
@@ -451,7 +462,7 @@ struct ActivityWindowView: View {
             }
             .pickerStyle(.segmented)
             .labelStyle(.titleAndIcon)
-            .help("Events: the live stream · Patterns: learned fingerprints (⇧⌘P) · Stories: correlated chains")
+            .help("Events: the live stream · Patterns: learned fingerprints · Stories: correlated chains (⌘1–⌘5)")
         }
         ToolbarItemGroup(placement: .principal) {
             ForEach(EventKind.allCases, id: \.self) { kind in
@@ -478,17 +489,25 @@ struct ActivityWindowView: View {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")
             }
             .help("Show or hide the HUD overlay (⌃⌥⌘H)")
-            Menu {
-                Button(collector.isRunning ? "Stop Collector" : "Start Collector", action: actions.toggleCollector)
-                    .disabled(collector.state == .starting)
-                Button("Exclusions…", action: actions.openExclusions)
-                Divider()
-                Button("Quit Hostwatch", role: .destructive, action: actions.quit)
-            } label: {
-                Label("More", systemImage: "ellipsis")
-            }
-            .help("Collector, exclusions, quit")
+            Button(action: actions.openSettings) { Label("Settings", systemImage: "gearshape") }
+                .help("Settings (⌘,)")
         }
+    }
+
+    /// Nothing is watched while the collector is off: say so where you look, with the fix.
+    private var collectorBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Text("The collector is off, so nothing is being watched.").fontWeight(.medium)
+            Spacer()
+            Button(collector.state == .starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
+                .buttonStyle(.glassProminent)
+                .disabled(collector.state == .starting)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.10))
     }
 
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
@@ -603,9 +622,12 @@ struct ActivityWindowView: View {
                 }
             }
         }
-        Divider()
-        ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
-            Button(title) { model.addExclusion(pattern) }
+        Menu("Exclude") {
+            ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
+                Button(title) { model.addExclusion(pattern) }
+            }
+            Divider()
+            Button("Edit Exclusions…", action: actions.openExclusions)
         }
         Divider()
         Button("Copy Detail") { copy(event.target) }

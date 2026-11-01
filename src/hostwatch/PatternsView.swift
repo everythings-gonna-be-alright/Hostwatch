@@ -173,7 +173,7 @@ struct PatternsView: View {
                 .buttonStyle(.glassProminent)
                     .disabled(signatures.count(.unclassified) == 0)
                     .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
-                          + "then Claude for what it can't settle. Choose the engine in Detection ▸ AI Engine.")
+                          + "then Claude for what it can't settle. Choose the engine in Settings ▸ AI.")
             }
             Button("Trust Baseline…") { confirmBaseline() }
                 .buttonStyle(.glass)

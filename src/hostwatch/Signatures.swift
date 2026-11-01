@@ -984,7 +984,7 @@ final class PatternClassifier: ObservableObject {
         let local = localModel.status()
         guard engine.usesOnDevice && local.isReady else {
             if claudeOn { sendToClaude(batch) }
-            else if engine == .onDevice { lastMessage = local.label + " (Detection ▸ AI Engine)." }
+            else if engine == .onDevice { lastMessage = local.label + " (Settings ▸ AI)." }
             else { lastMessage = "Claude Code CLI not found." }
             return
         }

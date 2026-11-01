@@ -10,40 +10,42 @@ A compact macOS activity overlay (optionally click-through). One line per event:
 | 🌐 green | new connection | name, `TCP/UDP remote:port`, time |
 | 📄 orange | newly opened file | name, `r/w/rw path`, time |
 
-Controlled from the menu bar icon (〰). The menu is grouped:
+Each kind of control has one home:
 
-- **Activity Window** (⌘O) and **Full Screen Activity** (⌃⌘F) on top: the full window with up to
-  5000 events in sortable columns, search, per-kind toggles, Pause/Clear and the HUD switch. Esc
-  leaves full screen. Right-click a row to exclude, copy or reveal it in Finder.
-- **Status line** next: Live / Paused / Collector off, plus open stories and high-risk patterns.
-  If the collector isn't running, **Start Collector…** appears right below it.
-- **Stories**, **Patterns** and **Domains**, with badges for open stories, unreviewed patterns
-  and new domains.
-- **Live Stream**: Pause/Resume, Clear, **Show ▸** (event kinds, and filtering by pattern status;
-  both apply to the HUD and the event list). Kind toggles here and in the window toolbar only
-  **hide** rows: collecting, patterns, stories and history always get every kind) and **Exclusions ▸** (hide a process, host or folder
-  that's on the HUD right now, or **Edit Exclusions…** ⌘,).
-- **HUD**: **Show HUD** (⌃⌥⌘H, works from any app), **Click-Through** (off by default; turn it on to
-  let clicks pass through the HUD to the windows below), and **Appearance ▸**:
-  - background: Liquid Glass (default), Blur, Dark or Transparent, plus the dark **Tint** (15–90%);
-  - text size, and **Reset Size & Position**.
-- **Move and resize with the mouse** (while Click-Through is off): drag the HUD's header bar to
-  move it and the ◣ grip in its bottom-left corner to resize. Width changes smoothly; height snaps
-  to whole rows; the top-right corner stays put. Position and size are remembered. The HUD has no
-  buttons.
-- **Collector ▸**: status, Start/Stop, Start at Launch, Show Log, Open Full Disk Access Settings.
-  **History ▸**: recording settings.
-- **Quit Hostwatch** (⌘Q). Quitting also stops the collector the app started.
+- **Menu bar icon (〰): a glance and quick actions.** The status line (Live / Paused / Collector off,
+  open stories, high-risk patterns), *N processes held — Review…* while something is held,
+  **Start Collector…** when it's off, **Open Hostwatch** (⌘O), **Stories / Patterns / Domains** with
+  badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
+  **Settings…** (⌘,) and Quit.
+- **App menu bar** (while a Hostwatch window is open):
+  - *View*: Events ⌘1 · Patterns ⌘2 · Stories ⌘3 · Domains ⌘4 · Rules ⌘5, the **Show** filter
+    (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
+  - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
+    Dangerous, Exclude Selection…, Start/Stop Collector.
+  - *Window*: Activity Window (⌘0), Held Processes. *Help*: this reference, Use with Claude Code…,
+    Collector Log, Full Disk Access Settings.
+- **Settings window (⌘,)**: *General* (collector, start at launch, log, Full Disk Access), *HUD*
+  (show, click-through, background, tint, text size, reset size and position), *Detection* (hold,
+  Homebrew trust, domain learning, ignored stories), *AI* (engine, on-device status, Claude Code
+  command), *Exclusions* (the editor) and *History* (recording, size, location, clear).
+- **Right-click a row** (events, patterns, domains, and the HUD while click-through is off): Ask AI,
+  mark its pattern, **Exclude ▸** a process, host or folder, copy, reveal in Finder.
+
+Kind toggles only **hide** rows: collecting, patterns, stories and history always get every kind.
+Turning **Click-through** off (it's off by default) lets you move and resize the HUD with the mouse:
+drag its header bar to move it and the ◣ grip in its bottom-left corner to resize. Width changes
+smoothly; height snaps to whole rows; the top-right corner stays put. Position and size are
+remembered. Quitting also stops the collector the app started.
 
 ## Built-in collector
 
 The collector script is bundled in `Hostwatch.app/Contents/Resources`. At launch (toggle
-**Collector ▸ Start at Launch**), the app checks for an existing collector socket (`/var/run/hostwatch/collector.sock`). If none
+**Settings ▸ General ▸ Start collector when Hostwatch opens**), the app checks for an existing collector socket (`/var/run/hostwatch/collector.sock`). If none
 is running, it asks for an administrator password and starts it as root as a temporary
 launchd job (`system/local.hostwatch.collector`, gone after reboot). The job runs
 `Hostwatch --collector-launcher`, which spawns the agent. macOS then treats Hostwatch.app as
 the responsible process for eslogger, so Full Disk Access must be granted to **Hostwatch.app**, with output going to
-`~/Library/Logs/Hostwatch/agent.log` (**Collector ▸ Show Log**).
+`~/Library/Logs/Hostwatch/agent.log` (*Help ▸ Collector Log*).
 
 - **Stop Collector** sends a shutdown command carrying a random token. The token is written
   with mode 0600 to `~/Library/Application Support/Hostwatch/collector.token` and passed to the agent.
@@ -124,7 +126,7 @@ auto or baseline) and a short reason. Patterns are saved to
 migrated and can be deleted.
 
 - **Show filter**: one setting, the same control on the Events and Patterns tabs and in the menu
-  (Show ▸ By Pattern Status). It applies to the HUD, Events and Patterns together: *All Activity*,
+  (*View ▸ Show*). It applies to the HUD, Events and Patterns together: *All Activity*,
   *Hide Safe*, *Only New (not reviewed)*: unclassified plus Suspicious/Dangerous decided only by
   Claude or the baseline, *Only Important* (flagged + new high-risk) or *Only Suspicious & Dangerous*.
   Events whose pattern is seen for the first time are tagged **NEW**. Flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
@@ -189,7 +191,7 @@ all everyday. Attacks are *chains*. Hostwatch tags suspicious **stages** and add
 
 ## Hold suspicious processes (opt-in)
 
-*Detection ▸ Hold Suspicious Processes* (off by default). When an event adds a strong story stage, Hostwatch
+*Settings ▸ Detection ▸ Hold suspicious processes*, also in the menu bar icon (off by default). When an event adds a strong story stage, Hostwatch
 sends its process `SIGSTOP` and shows a floating panel with Allow, Always Allow (marks the pattern Safe),
 Kill and Ask AI. The stages are a piped or encoded command, a credential read, a login item, quarantine
 removal, running a just-dropped file, or a swapped binary. A program that is a new high-risk pattern
@@ -242,15 +244,15 @@ Two more per-connection signals (like new domains, not part of pattern keys):
 - Both pass *Only Important*, *Only New* and *Hide Safe*. On ~2 hours of real history: 0 beacons and
   0 raw-IP alerts; the one periodic flow (Slack → slack.com every ~125 s) was correctly ignored.
 
-**Detection ▸ Trust Homebrew-Installed Tools** (off by default): Homebrew ad-hoc-signs what it builds,
+**Settings ▸ Detection ▸ Trust Homebrew-installed tools** (off by default): Homebrew ad-hoc-signs what it builds,
 so signing cannot vouch for `git`, `kubectl`, `fish`… With this on, a binary in Homebrew's `Cellar`
 that has its `INSTALL_RECEIPT.json` is treated like a trusted developer's (measured: normal patterns
 261 → 225). `/opt/homebrew` is writable by your user, so a binary planted there would be trusted too.
-*Detection ▸ End Domain Learning Now* is also there.
+*End Now* for domain learning is also there.
 
 ## AI engine and triage
 
-**Detection ▸ AI Engine** picks which AI Hostwatch uses (radio items, with the on-device model's status):
+**Settings ▸ AI** picks which AI Hostwatch uses (with the on-device model's status):
 
 | Engine | Classify New / Auto-classify | Ask AI (event or story) |
 |--------|------------------------------|-------------------------|
@@ -322,7 +324,7 @@ them, changing nothing.
 
 A read-only Model Context Protocol server over stdio (JSON-RPC, protocol versions 2025-06-18,
 2025-03-26, 2024-11-05) for Claude Code: `claude mcp add --scope user hostwatch -- <path to
-Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`. *Detection ▸ Use with Claude Code…* shows and copies it.
+Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`. *Settings ▸ AI* (or *Help ▸ Use with Claude Code…*) shows and copies it.
 
 | Tool | What it returns |
 |------|-----------------|

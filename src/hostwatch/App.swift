@@ -4,7 +4,7 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation, NSWindowDelegate {
     private let signatures = SignatureStore()
     private let stories = StoryEngine()
     private let domains = DomainRegistry()
@@ -18,7 +18,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
-    private var editorWindow: NSWindow?
+    private lazy var settings = SettingsWindowController(context: SettingsContext(
+        model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
+        signatures: signatures, classifier: classifier, editorDraft: editorDraft,
+        toggleCollector: { [weak self] in self?.toggleCollector() },
+        resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
+        customHistorySize: { [weak self] in self?.customHistorySize() },
+        changeHistoryLocation: { [weak self] in self?.changeHistoryLocation() },
+        clearHistory: { [weak self] in self?.clearHistory() }))
     private var activityWindow: NSWindow?
     private let editorDraft = EditorDraft()
     private var cancellables = Set<AnyCancellable>()
@@ -28,12 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private lazy var actions = HUDActions(
         openFullScreen: { [weak self] in self?.openActivityWindow(fullScreen: true) },
-        openExclusions: { [weak self] in self?.openEditor() },
+        openExclusions: { [weak self] in self?.openSettings(.exclusions) },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         quit: { NSApp.terminate(nil) },
         askAI: { [weak self] event in self?.openAskAI(for: event) },
         askStory: { [weak self] story in self?.openAskAI(for: story) },
-        openStories: { [weak self] in self?.openStories() }
+        openStories: { [weak self] in self?.openStories() },
+        openSettings: { [weak self] in self?.openSettings(nil) },
+        exclude: { [weak self] pattern in self?.model.addExclusion(pattern) }
     )
     private var askWindows: [NSWindow] = []
 
@@ -119,11 +128,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleHold() { hold.enabled.toggle() }
 
-    @objc private func setHoldTimeout(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let action = HoldTimeoutAction(rawValue: raw) else { return }
-        hold.timeoutAction = action
-    }
-
     // MARK: History
 
     private func setUpHistory() {
@@ -136,55 +140,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
             .store(in: &cancellables)
         history.start()
-    }
-
-    private func historyMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "History", action: nil, keyEquivalent: "")
-        let sub = NSMenu()
-
-        let status = NSMenuItem(title: history.statusText, action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        sub.addItem(status)
-        sub.addItem(.separator())
-
-        let record = item("Record Activity History", #selector(toggleHistory))
-        record.state = history.enabled ? .on : .off
-        sub.addItem(record)
-        let apply = item("Apply Exclusions to History", #selector(toggleHistoryExclusions))
-        apply.state = history.applyExclusions ? .on : .off
-        apply.toolTip = "Off: record everything the collector sees. On: record only what passes your exclusions."
-        sub.addItem(apply)
-
-        let sizeItem = NSMenuItem(title: "Max Size: \(HistoryRecorder.format(history.maxBytes))", action: nil, keyEquivalent: "")
-        let sizes = NSMenu()
-        for bytes in HistoryRecorder.sizePresets {
-            let mi = item(HistoryRecorder.format(bytes), #selector(setHistorySize(_:)))
-            mi.representedObject = NSNumber(value: bytes)
-            mi.state = bytes == history.maxBytes ? .on : .off
-            sizes.addItem(mi)
-        }
-        sizes.addItem(.separator())
-        let custom = item("Custom…", #selector(customHistorySize))
-        custom.state = HistoryRecorder.sizePresets.contains(history.maxBytes) ? .off : .on
-        sizes.addItem(custom)
-        sizeItem.submenu = sizes
-        sub.addItem(sizeItem)
-        sub.addItem(.separator())
-
-        sub.addItem(item("Show History in Finder", #selector(revealHistory)))
-        sub.addItem(item("Change Location…", #selector(changeHistoryLocation)))
-        sub.addItem(item("Clear History…", #selector(clearHistory)))
-        parent.submenu = sub
-        return parent
-    }
-
-    @objc private func toggleHistory() { history.enabled.toggle() }
-    @objc private func toggleHistoryExclusions() { history.applyExclusions.toggle() }
-    @objc private func revealHistory() { history.revealInFinder() }
-
-    @objc private func setHistorySize(_ sender: NSMenuItem) {
-        guard let bytes = (sender.representedObject as? NSNumber)?.int64Value else { return }
-        history.maxBytes = bytes
     }
 
     @objc private func customHistorySize() {
@@ -316,17 +271,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusItem = item
     }
 
-    /// Rebuilt on every open so the "Exclude" submenus reflect the rows on screen.
+    /// The tray menu: a glance and a few quick actions. Settings live in the Settings window,
+    /// commands in the app's menu bar, row actions on right-click.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === statusItem?.menu else { return }
         menu.removeAllItems()
 
-        // The main window first.
-        menu.addItem(item("Activity Window", #selector(openWindowed), key: "o", symbol: "list.bullet.rectangle"))
-        menu.addItem(item("Full Screen Activity", #selector(openFullScreen), key: "f", modifiers: [.command, .control],
-                          symbol: "arrow.up.left.and.arrow.down.right"))
-        menu.addItem(.separator())
-
-        // Then status: is it watching, and is there anything to look at?
         let state = model.paused ? "Paused" : model.connected ? "Live" : collector.isRunning ? "Starting…" : "Collector off"
         var attention: [String] = []
         if stories.activeCount > 0 { attention.append("\(stories.activeCount) open \(stories.activeCount == 1 ? "story" : "stories")") }
@@ -336,6 +286,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         status.image = symbol("circle.fill", color: model.paused ? .systemYellow : model.connected ? .systemGreen : .systemOrange)
         status.isEnabled = false
         menu.addItem(status)
+        if !hold.held.isEmpty {
+            let held = item("\(hold.held.count) \(hold.held.count == 1 ? "process" : "processes") held — Review…",
+                            #selector(showHeld), symbol: "pause.circle.fill")
+            menu.addItem(held)
+        }
         if !collector.isRunning, !model.connected {
             let start = item("Start Collector…", #selector(toggleCollector), symbol: "play.circle")
             start.isEnabled = collector.state != .starting
@@ -343,47 +298,229 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         menu.addItem(.separator())
 
-        // What you open.
+        menu.addItem(item("Open Hostwatch", #selector(openWindowed), key: "o", symbol: "macwindow"))
         let storiesItem = item("Stories", #selector(openStories), symbol: "point.3.connected.trianglepath.dotted")
         if stories.activeCount > 0 { storiesItem.badge = NSMenuItemBadge(count: stories.activeCount) }
-        storiesItem.toolTip = "Suspicious chains of activity, correlated along the process tree"
         menu.addItem(storiesItem)
-        let patterns = item("Patterns", #selector(openPatterns),
-                            symbol: "square.stack.3d.up")
+        let patterns = item("Patterns", #selector(openPatterns), symbol: "square.stack.3d.up")
         let unreviewed = signatures.count(.unclassified)
         if unreviewed > 0 { patterns.badge = NSMenuItemBadge(count: unreviewed) }
-        patterns.toolTip = "\(highRisk) high-risk · \(unreviewed) new · "
-            + "\(signatures.count(.suspicious) + signatures.count(.dangerous)) flagged"
         menu.addItem(patterns)
         let domainsItem = item("Domains", #selector(openDomains), symbol: "globe")
         if domains.newCount > 0 { domainsItem.badge = NSMenuItemBadge(count: domains.newCount) }
-        domainsItem.toolTip = domains.isLearning ? "Learning this Mac's usual domains"
-            : "Domains contacted for the first time are new"
         menu.addItem(domainsItem)
+        menu.addItem(.separator())
 
-        menu.addItem(.sectionHeader(title: "Live Stream"))
-        menu.addItem(item(model.paused ? "Resume" : "Pause", #selector(togglePause),
+        menu.addItem(item(model.paused ? "Resume Live Stream" : "Pause Live Stream", #selector(togglePause),
                           symbol: model.paused ? "play.fill" : "pause.fill"))
-        menu.addItem(item("Clear", #selector(clearEvents), symbol: "trash"))
-        menu.addItem(showMenu())
-        menu.addItem(exclusionsMenu())
-
-        menu.addItem(.sectionHeader(title: "HUD"))
         let hud = item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command])
         hud.state = model.overlayEnabled ? .on : .off
         menu.addItem(hud)
-        let clickThrough = item("Click-Through", #selector(toggleClickThrough))
-        clickThrough.state = model.overlayClickThrough ? .on : .off
-        clickThrough.toolTip = "Turn off to move, resize and double-click the HUD."
-        menu.addItem(clickThrough)
-        menu.addItem(appearanceMenu())
-
+        let holdItem = item("Hold Suspicious Processes", #selector(toggleHold))
+        holdItem.state = hold.enabled ? .on : .off
+        holdItem.toolTip = "Freeze your own processes the moment they do something suspicious, and ask you."
+        menu.addItem(holdItem)
         menu.addItem(.separator())
-        menu.addItem(detectionMenu())
-        menu.addItem(collectorMenu())
-        menu.addItem(historyMenu())
-        menu.addItem(.separator())
+        menu.addItem(item("Settings…", #selector(showSettings), key: ","))
         menu.addItem(item("Quit Hostwatch", #selector(quit), key: "q"))
+    }
+
+    // MARK: App menu bar
+
+    /// Shown while a Hostwatch window makes the app regular.
+    func makeMainMenu() -> NSMenu {
+        let main = NSMenu()
+        func submenu(_ title: String, _ items: [NSMenuItem]) {
+            let holder = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            let menu = NSMenu(title: title)
+            items.forEach(menu.addItem)
+            holder.submenu = menu
+            main.addItem(holder)
+        }
+        func std(_ title: String, _ action: Selector, _ key: String = "",
+                 _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
+            let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            mi.keyEquivalentModifierMask = mods
+            return mi
+        }
+        func tagged(_ mi: NSMenuItem, _ value: Any) -> NSMenuItem { mi.representedObject = value; return mi }
+
+        let hideOthers = std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option])
+        submenu("Hostwatch", [
+            std("About Hostwatch", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            .separator(),
+            item("Settings…", #selector(showSettings), key: ","),
+            .separator(),
+            std("Hide Hostwatch", #selector(NSApplication.hide(_:)), "h"),
+            hideOthers,
+            std("Show All", #selector(NSApplication.unhideAllApplications(_:))),
+            .separator(),
+            std("Quit Hostwatch", #selector(NSApplication.terminate(_:)), "q"),
+        ])
+        submenu("Edit", [
+            std("Undo", Selector(("undo:")), "z"),
+            std("Redo", Selector(("redo:")), "z", [.command, .shift]),
+            .separator(),
+            std("Cut", #selector(NSText.cut(_:)), "x"),
+            std("Copy", #selector(NSText.copy(_:)), "c"),
+            std("Paste", #selector(NSText.paste(_:)), "v"),
+            std("Select All", #selector(NSText.selectAll(_:)), "a"),
+            .separator(),
+            std("Find", #selector(NSResponder.performTextFinderAction(_:)), "f").withTag(Int(NSTextFinder.Action.showFindInterface.rawValue)),
+        ])
+
+        let tabs = ["Events", "Patterns", "Stories", "Domains", "Rules"].enumerated().map { i, title in
+            tagged(item(title, #selector(showTab(_:)), key: "\(i + 1)"), i)
+        }
+        let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
+        let filters = NSMenu()
+        for f in SignatureFilter.allCases { filters.addItem(tagged(item(f.title, #selector(setFilter(_:))), f.rawValue)) }
+        showFilter.submenu = filters
+        let kinds = EventKind.allCases.map { tagged(item($0.title, #selector(toggleKindItem(_:))), $0.rawValue) }
+        submenu("View", tabs + [.separator(), showFilter, .separator()] + kinds + [
+            .separator(),
+            item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command]),
+            std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
+        ])
+
+        let marks = SignatureStatus.allCases.map {
+            tagged(item("Mark \($0.title)", #selector(markSelection(_:))), $0.rawValue)
+        }
+        submenu("Activity", [
+            item("Pause Live Stream", #selector(togglePause)),
+            item("Clear Events", #selector(clearEvents), key: "k"),
+            .separator(),
+            item("Ask AI About Selection…", #selector(askAboutSelection), key: "\r"),
+        ] + marks + [
+            item("Exclude Selection…", #selector(excludeSelection)),
+            .separator(),
+            item("Start Collector", #selector(toggleCollector)),
+        ])
+        let windowMenu = NSMenu(title: "Window")
+        [std("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
+         std("Zoom", #selector(NSWindow.performZoom(_:))),
+         std("Close", #selector(NSWindow.performClose(_:)), "w"),
+         .separator(),
+         item("Activity Window", #selector(openWindowed), key: "0"),
+         item("Held Processes", #selector(showHeld)),
+         .separator(),
+         std("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)))].forEach(windowMenu.addItem)
+        let windowHolder = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
+        windowHolder.submenu = windowMenu
+        main.addItem(windowHolder)
+        NSApp.windowsMenu = windowMenu
+        let helpMenu = NSMenu(title: "Help")
+        [item("Hostwatch Help", #selector(openHelp)),
+         .separator(),
+         item("Use with Claude Code…", #selector(showAISettings)),
+         item("Collector Log", #selector(showCollectorLog)),
+         item("Full Disk Access Settings…", #selector(openFDA))].forEach(helpMenu.addItem)
+        let helpHolder = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
+        helpHolder.submenu = helpMenu
+        main.addItem(helpHolder)
+        NSApp.helpMenu = helpMenu
+        return main
+    }
+
+    /// Checkmarks, titles and enabled state for menu items, at the moment a menu opens.
+    func validateMenuItem(_ mi: NSMenuItem) -> Bool {
+        switch mi.action {
+        case #selector(showTab(_:)):
+            mi.state = activityWindow?.isVisible == true && model.windowTab == mi.representedObject as? Int ? .on : .off
+        case #selector(setFilter(_:)):
+            mi.state = model.signatureFilter.rawValue == mi.representedObject as? String ? .on : .off
+        case #selector(toggleKindItem(_:)):
+            mi.state = model.visibleKinds.contains { $0.rawValue == mi.representedObject as? String } ? .on : .off
+        case #selector(toggleOverlay):
+            mi.state = model.overlayEnabled ? .on : .off
+        case #selector(toggleHold):
+            mi.state = hold.enabled ? .on : .off
+        case #selector(togglePause):
+            mi.title = model.paused ? "Resume Live Stream" : "Pause Live Stream"
+        case #selector(toggleCollector):
+            if mi.menu !== statusItem?.menu {
+                mi.title = collector.isRunning ? "Stop Collector" : "Start Collector…"
+            }
+            return collector.state != .starting && (collector.isRunning || !model.connected)
+        case #selector(showHeld):
+            return !hold.held.isEmpty
+        case #selector(askAboutSelection), #selector(markSelection(_:)), #selector(excludeSelection):
+            return !selectedEvents.isEmpty || (model.windowTab == 1 && !signatures.selection.isEmpty
+                                               && mi.action == #selector(markSelection(_:)))
+        default:
+            break
+        }
+        return true
+    }
+
+    /// Events selected in the Events tab (newest first).
+    private var selectedEvents: [ActivityEvent] {
+        guard activityWindow?.isKeyWindow == true, model.windowTab == 0, !model.eventSelection.isEmpty else { return [] }
+        return model.history.filter { model.eventSelection.contains($0.id) }
+    }
+
+    @objc private func showTab(_ sender: NSMenuItem) {
+        guard let tab = sender.representedObject as? Int else { return }
+        model.windowTab = tab
+        openActivityWindow(fullScreen: false)
+    }
+
+    @objc private func setFilter(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let f = SignatureFilter(rawValue: raw) else { return }
+        model.signatureFilter = f
+    }
+
+    @objc private func toggleKindItem(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let kind = EventKind(rawValue: raw) else { return }
+        model.toggle(kind)
+    }
+
+    @objc private func askAboutSelection() {
+        guard let first = selectedEvents.first else { return }
+        openAskAI(for: first)
+    }
+
+    @objc private func markSelection(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let status = SignatureStatus(rawValue: raw) else { return }
+        let keys = model.windowTab == 1 ? Array(signatures.selection) : selectedEvents.map(\.signatureKey)
+        signatures.set(status, keys: Array(Set(keys)))
+    }
+
+    /// Asks which exclusion to add for the selected event.
+    @objc private func excludeSelection() {
+        guard let e = selectedEvents.first else { return }
+        let alert = NSAlert()
+        alert.messageText = "Exclude \(e.name)?"
+        alert.informativeText = "Excluded events are hidden from the HUD and the event list. Edit them any time in "
+            + "Settings ▸ Exclusions."
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 360, height: 26), pullsDown: false)
+        for (title, pattern) in e.exclusionSuggestions {
+            popup.addItem(withTitle: title)
+            popup.lastItem?.representedObject = pattern
+        }
+        alert.accessoryView = popup
+        alert.addButton(withTitle: "Exclude")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let pattern = popup.selectedItem?.representedObject as? String else { return }
+        model.addExclusion(pattern)
+    }
+
+    @objc private func showSettings() { openSettings(nil) }
+    @objc private func showAISettings() { openSettings(.ai) }
+    @objc private func showCollectorLog() { collector.openLog() }
+
+    func openSettings(_ pane: SettingsPane?) { settings.show(pane) }
+
+    @objc private func showHeld() {
+        refreshHeldPanel()
+        heldPanel?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func openHelp() {
+        if let url = URL(string: "https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/docs/reference.md") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func symbol(_ name: String, color: NSColor? = nil) -> NSImage? {
@@ -392,222 +529,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return image?.withSymbolConfiguration(.init(paletteColors: [color]).applying(.init(scale: .small)))
     }
 
-    /// Event kinds plus the pattern-status filter (both apply to the HUD and the event list).
-    private func showMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
-        parent.image = symbol("line.3.horizontal.decrease.circle")
-        let sub = NSMenu()
-        sub.addItem(.sectionHeader(title: "Event Kinds"))
-        for kind in EventKind.allCases {
-            let mi = item(kind.title, #selector(toggleKind(_:)))
-            mi.representedObject = kind.rawValue
-            mi.state = model.visibleKinds.contains(kind) ? .on : .off
-            sub.addItem(mi)
-        }
-        sub.addItem(.sectionHeader(title: "By Pattern Status"))
-        for filter in SignatureFilter.allCases {
-            let mi = item(filter.title, #selector(setSignatureFilter(_:)))
-            mi.representedObject = filter.rawValue
-            mi.state = model.signatureFilter == filter ? .on : .off
-            sub.addItem(mi)
-        }
-        parent.submenu = sub
-        return parent
-    }
-
-    private func exclusionsMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Exclusions", action: nil, keyEquivalent: "")
-        parent.image = symbol("eye.slash")
-        let sub = NSMenu()
-        let events = Array(model.overlayEvents)
-        sub.addItem(.sectionHeader(title: "Hide From What's on the HUD"))
-        addExcludeSubmenu(to: sub, title: "Process", patterns: events.map(\.name))
-        addExcludeSubmenu(to: sub, title: "Host", patterns: events.compactMap { e in
-            e.exclusionSuggestions.first { $0.1.hasPrefix("net:") }?.1
-        })
-        addExcludeSubmenu(to: sub, title: "Folder", patterns: events.compactMap { e in
-            e.exclusionSuggestions.first { $0.1.hasPrefix("file:") }?.1
-        })
-        sub.addItem(.separator())
-        sub.addItem(item("Edit Exclusions…", #selector(openEditor), key: ","))
-        parent.submenu = sub
-        return parent
-    }
-
-    /// Background, tint, text size and size reset in one place.
-    private func appearanceMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
-        parent.image = symbol("paintbrush")
-        let sub = NSMenu()
-        sub.addItem(.sectionHeader(title: "Background"))
-        for style in OverlayBackground.allCases {
-            let mi = item(style.title, #selector(setBackgroundStyle(_:)))
-            mi.representedObject = style.rawValue
-            mi.state = model.overlayBackground == style ? .on : .off
-            sub.addItem(mi)
-        }
-        let tint = NSMenuItem(title: "Tint", action: nil, keyEquivalent: "")
-        let tints = NSMenu()
-        for percent in [15, 30, 45, 60, 75, 90] {
-            let mi = item("\(percent)%", #selector(setBackgroundOpacity(_:)))
-            mi.representedObject = NSNumber(value: Double(percent) / 100)
-            mi.state = abs(model.overlayOpacity - Double(percent) / 100) < 0.01 ? .on : .off
-            tints.addItem(mi)
-        }
-        tint.submenu = tints
-        tint.isEnabled = model.overlayBackground != .transparent
-        sub.addItem(tint)
-        sub.addItem(.sectionHeader(title: "Text Size"))
-        for (name, scale) in HUDModel.scaleOptions {
-            let mi = item(name, #selector(setScale(_:)))
-            mi.representedObject = NSNumber(value: Double(scale))
-            mi.state = abs(model.overlayScale - scale) < 0.01 ? .on : .off
-            sub.addItem(mi)
-        }
-        sub.addItem(.separator())
-        let hint = NSMenuItem(title: model.overlayClickThrough
-                              ? "To move or resize, turn off Click-Through"
-                              : "Drag the header to move, the ◣ corner to resize", action: nil, keyEquivalent: "")
-        hint.isEnabled = false
-        sub.addItem(hint)
-        sub.addItem(item("Reset Size & Position", #selector(resetOverlayFrame)))
-        parent.submenu = sub
-        return parent
-    }
-
-    /// Detection tuning that changes what counts as trusted or new.
-    private func detectionMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Detection", action: nil, keyEquivalent: "")
-        parent.image = symbol("shield.lefthalf.filled")
-        let sub = NSMenu()
-        let brew = item("Trust Homebrew-Installed Tools", #selector(toggleTrustHomebrew))
-        brew.state = SigningCache.shared.trustHomebrew ? .on : .off
-        brew.toolTip = "Treat tools in Homebrew's Cellar (with an install receipt) like a trusted developer. "
-            + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too."
-        sub.addItem(brew)
-        let holdItem = item("Hold Suspicious Processes", #selector(toggleHold))
-        holdItem.state = hold.enabled ? .on : .off
-        holdItem.toolTip = "Freeze your own processes the moment they do something suspicious (piped or encoded "
-            + "command, password or key read, login item, quarantine removal…) and ask you. Best effort: "
-            + "very quick commands can finish first."
-        sub.addItem(holdItem)
-        if hold.enabled {
-            let timeoutMenu = NSMenu()
-            for action in HoldTimeoutAction.allCases {
-                let mi = item(action.title, #selector(setHoldTimeout(_:)))
-                mi.representedObject = action.rawValue
-                mi.state = hold.timeoutAction == action ? .on : .off
-                timeoutMenu.addItem(mi)
-            }
-            let timeoutItem = NSMenuItem(title: "If No Answer in \(Int(hold.timeout)) s", action: nil, keyEquivalent: "")
-            timeoutItem.indentationLevel = 1
-            timeoutItem.submenu = timeoutMenu
-            sub.addItem(timeoutItem)
-        }
-
-        // Which AI classifies new patterns and answers Ask.
-        sub.addItem(.sectionHeader(title: "AI Engine"))
-        let status = classifier.localStatus
-        for engine in AIEngine.allCases {
-            let mi = item(engine.title, #selector(setAIEngine(_:)))
-            mi.representedObject = engine.rawValue
-            mi.state = classifier.engine == engine ? .on : .off
-            mi.toolTip = engine.help
-            sub.addItem(mi)
-        }
-        let statusItem = NSMenuItem(title: status.label, action: nil, keyEquivalent: "")
-        statusItem.image = symbol(status.isReady ? "checkmark.circle" : "exclamationmark.circle",
-                                  color: status.isReady ? .systemGreen : .systemOrange)
-        statusItem.isEnabled = false
-        sub.addItem(statusItem)
-        let mcp = item("Use with Claude Code…", #selector(showMCPSetup))
-        mcp.toolTip = "Let Claude Code investigate this Mac's recorded activity through Hostwatch's read-only MCP server."
-        sub.addItem(mcp)
-        sub.addItem(.separator())
-        let learning = item(domains.isLearning ? "End Domain Learning Now" : "Domain Learning Finished",
-                            #selector(endDomainLearning))
-        learning.isEnabled = domains.isLearning
-        sub.addItem(learning)
-        parent.submenu = sub
-        return parent
-    }
-
-    @objc private func toggleTrustHomebrew() {
-        SigningCache.shared.trustHomebrew.toggle()
-        signatures.reassess()
-    }
-
-    @objc private func endDomainLearning() { domains.endLearning() }
     /// The one command that registers Hostwatch's read-only MCP server with Claude Code.
     static var mcpCommand: String {
         let exe = Bundle.main.executablePath ?? "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
         return "claude mcp add --scope user hostwatch -- \"\(exe)\" --mcp"
-    }
-
-    @objc private func showMCPSetup() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Investigate with Claude Code"
-        alert.informativeText = """
-        Hostwatch includes a read-only MCP server. Add it to Claude Code once, then ask things like \
-        "what talked to new domains last night?" or "walk me through story #1".
-
-        \(Self.mcpCommand)
-
-        Claude only sees what you ask about; secrets are masked. Nothing can be changed through it. \
-        If you move Hostwatch.app, run the command again.
-        """
-        alert.addButton(withTitle: "Copy Command")
-        alert.addButton(withTitle: "Close")
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(Self.mcpCommand, forType: .string)
-        }
-    }
-
-    @objc private func setAIEngine(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let engine = AIEngine(rawValue: raw) else { return }
-        classifier.engine = engine
-    }
-
-    private func collectorMenu() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Collector", action: nil, keyEquivalent: "")
-        parent.image = symbol("antenna.radiowaves.left.and.right")
-        let sub = NSMenu()
-        let status = NSMenuItem(title: collector.statusText, action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        sub.addItem(status)
-        sub.addItem(.separator())
-        if collector.isRunning {
-            sub.addItem(item("Stop Collector", #selector(toggleCollector)))
-        } else {
-            let start = item(model.connected ? "Running Externally" : "Start Collector…", #selector(toggleCollector))
-            start.isEnabled = !model.connected && collector.state != .starting
-            sub.addItem(start)
-        }
-        let atLaunch = item("Start at Launch", #selector(toggleStartAtLaunch))
-        atLaunch.state = collector.startAtLaunch ? .on : .off
-        sub.addItem(atLaunch)
-        sub.addItem(.separator())
-        sub.addItem(item("Show Log", #selector(showLog)))
-        sub.addItem(item("Open Full Disk Access Settings", #selector(openFDA)))
-        parent.submenu = sub
-        return parent
-    }
-
-    private func addExcludeSubmenu(to menu: NSMenu, title: String, patterns: [String]) {
-        var seen = Set<String>()
-        let unique = patterns.filter { !$0.isEmpty && seen.insert($0).inserted }.prefix(15)
-        let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        let sub = NSMenu()
-        for pattern in unique {
-            let mi = item(pattern, #selector(excludePattern(_:)))
-            mi.representedObject = pattern
-            sub.addItem(mi)
-        }
-        parent.submenu = sub
-        parent.isEnabled = !unique.isEmpty
-        menu.addItem(parent)
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "",
@@ -623,11 +548,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleOverlay() { model.overlayEnabled.toggle() }
 
-    @objc private func setScale(_ sender: NSMenuItem) {
-        guard let v = (sender.representedObject as? NSNumber)?.doubleValue else { return }
-        model.overlayScale = CGFloat(v)
-    }
-
     @objc private func resetOverlayFrame() {
         model.overlayScale = 1.0
         model.overlayWidth = 360
@@ -638,34 +558,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                               width: size.width, height: size.height), display: true)
     }
 
-    @objc private func setBackgroundStyle(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let style = OverlayBackground(rawValue: raw) else { return }
-        model.overlayBackground = style
-    }
-
-    @objc private func setBackgroundOpacity(_ sender: NSMenuItem) {
-        guard let value = (sender.representedObject as? NSNumber)?.doubleValue else { return }
-        model.overlayOpacity = value
-    }
-
-    @objc private func setSignatureFilter(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let f = SignatureFilter(rawValue: raw) else { return }
-        model.signatureFilter = f
-    }
-
     @objc private func openPatterns() {
         model.windowTab = 1
         openActivityWindow(fullScreen: false)
     }
 
-    @objc private func toggleClickThrough() { model.overlayClickThrough.toggle() }
     @objc private func togglePause() { model.paused.toggle() }
     @objc private func clearEvents() { model.clear() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func openFullScreen() { openActivityWindow(fullScreen: true) }
     @objc private func openWindowed() { openActivityWindow(fullScreen: false) }
-    @objc private func toggleStartAtLaunch() { collector.startAtLaunch.toggle() }
-    @objc private func showLog() { collector.openLog() }
     @objc private func openFDA() { Collector.openFullDiskAccessSettings() }
 
     @objc private func toggleCollector() {
@@ -710,38 +612,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
     }
 
-    @objc private func toggleKind(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let kind = EventKind(rawValue: raw) else { return }
-        model.toggle(kind)
-    }
-
-    @objc private func excludePattern(_ sender: NSMenuItem) {
-        guard let pattern = sender.representedObject as? String else { return }
-        model.addExclusion(pattern)
-    }
-
     // MARK: Windows
-
-    @objc private func openEditor() {
-        if editorWindow == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 560, height: 480),
-                styleMask: [.titled, .closable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "Hostwatch Exclusions"
-            window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: ExclusionsEditor(model: model, draft: editorDraft) { [weak window] in
-                window?.close()
-            })
-            window.center()
-            editorWindow = window
-        }
-        editorDraft.text = model.exclusionText
-        NSApp.activate(ignoringOtherApps: true)
-        editorWindow?.makeKeyAndOrderFront(nil)
-    }
 
     /// One window per question; evidence is collected as soon as it opens.
     /// A whole story: Claude sees the chain first, then the latest step in detail.
@@ -911,47 +782,14 @@ enum Entry {
         MainActor.assumeIsolated {
             let app = NSApplication.shared
             app.delegate = appDelegate
-            app.mainMenu = makeMainMenu()
+            app.mainMenu = appDelegate.makeMainMenu()
             app.run()
         }
     }
 
     @MainActor private static let appDelegate = AppDelegate()
+}
 
-    /// Shown while the activity window makes the app regular; the Edit menu keeps ⌘C/⌘V/⌘A working.
-    @MainActor private static func makeMainMenu() -> NSMenu {
-        let main = NSMenu()
-        func submenu(_ title: String, _ items: [NSMenuItem]) {
-            let holder = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            let menu = NSMenu(title: title)
-            items.forEach(menu.addItem)
-            holder.submenu = menu
-            main.addItem(holder)
-        }
-        func item(_ title: String, _ action: Selector, _ key: String, _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
-            let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
-            mi.keyEquivalentModifierMask = mods
-            return mi
-        }
-        submenu("Hostwatch", [
-            item("Hide Hostwatch", #selector(NSApplication.hide(_:)), "h"),
-            .separator(),
-            item("Quit Hostwatch", #selector(NSApplication.terminate(_:)), "q"),
-        ])
-        submenu("Edit", [
-            item("Undo", Selector(("undo:")), "z"),
-            item("Redo", Selector(("redo:")), "z", [.command, .shift]),
-            .separator(),
-            item("Cut", #selector(NSText.cut(_:)), "x"),
-            item("Copy", #selector(NSText.copy(_:)), "c"),
-            item("Paste", #selector(NSText.paste(_:)), "v"),
-            item("Select All", #selector(NSText.selectAll(_:)), "a"),
-        ])
-        submenu("Window", [
-            item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
-            item("Close", #selector(NSWindow.performClose(_:)), "w"),
-            item("Toggle Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
-        ])
-        return main
-    }
+private extension NSMenuItem {
+    func withTag(_ tag: Int) -> NSMenuItem { self.tag = tag; return self }
 }
