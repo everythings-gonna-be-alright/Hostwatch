@@ -17,7 +17,7 @@ Controlled from the menu bar icon (〰). The menu is grouped:
   leaves full screen. Right-click a row to exclude, copy or reveal it in Finder.
 - **Status line** next: Live / Paused / Collector off, plus open stories and high-risk patterns.
   If the collector isn't running, **Start Collector…** appears right below it.
-- **Stories**, **Patterns** (⇧⌘P) and **Domains**, with badges for open stories, unreviewed patterns
+- **Stories**, **Patterns** and **Domains**, with badges for open stories, unreviewed patterns
   and new domains.
 - **Live Stream**: Pause/Resume, Clear, **Show ▸** (event kinds, and filtering by pattern status;
   both apply to the HUD and the event list). Kind toggles here and in the window toolbar only
@@ -129,7 +129,7 @@ migrated and can be deleted.
   Claude or the baseline, *Only Important* (flagged + new high-risk) or *Only Suspicious & Dangerous*.
   Events whose pattern is seen for the first time are tagged **NEW**. Flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
 - **Events and Patterns tables**: native columns. Events show Time · Kind · Status · Process · PID ·
-  PPID · Detail; Patterns (⇧⌘P) show Status (🔥 = high-risk) · Kind · Process · Pattern · Signer · Reason ·
+  PPID · Detail; Patterns show Status (🔥 = high-risk) · Kind · Process · Pattern · Signer · Reason ·
   Count · First Seen · Last Seen. Click a column header to sort, and again to reverse; each table
   remembers its sort. Columns can be resized and reordered. Double-click a row to ask Claude. Patterns
   use the Show filter, can be searched and multi-selected. Right-click to mark one or many patterns, or **Mark All … From This Process**
