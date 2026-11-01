@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 – learn, investigate, secure
 
 - **Rules learned from your decisions** (Rules tab): Claude proposes general rules from the patterns you
   marked. Hostwatch refuses any that contradict your decisions or are too broad, and applies only
