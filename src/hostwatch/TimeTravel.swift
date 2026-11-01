@@ -477,7 +477,7 @@ struct TimelineBar: View {
     // MARK: Controls
 
     /// Transport icons get room inside their circles; play is a little larger than the steps.
-    private func transportIcon(_ name: String, size: CGFloat = 11, frame: CGFloat = 20) -> some View {
+    private func transportIcon(_ name: String, size: CGFloat = 10, frame: CGFloat = 15) -> some View {
         Image(systemName: name)
             .font(.system(size: size, weight: .semibold))
             .frame(width: frame, height: frame)
@@ -489,7 +489,7 @@ struct TimelineBar: View {
                 Button { travel.step(-1) } label: { transportIcon("backward.fill") }
                     .help("Earlier (⌘[)")
                 Button { travel.togglePlay() } label: {
-                    transportIcon(travel.playing ? "pause.fill" : "play.fill", size: 13, frame: 24)
+                    transportIcon(travel.playing ? "pause.fill" : "play.fill", size: 12, frame: 18)
                 }
                 .help(travel.playing ? "Pause" : "Play history forward")
                 .disabled(travel.range == nil)
