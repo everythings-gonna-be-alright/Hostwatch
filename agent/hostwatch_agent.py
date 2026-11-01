@@ -62,6 +62,58 @@ SHUTDOWN_TOKEN = None        # secret a client must present to stop the agent
 SELF_PID = os.getpid()
 IGNORED_PIDS = {SELF_PID}
 
+# Hostwatch's own activity is not reported: the app that started us (verified by pid), any other run
+# of the very same executable (e.g. the MCP server Claude Code starts), and their children. Only the
+# exact executable of the verified owner counts, and pids leave the set when they exit, so this is
+# no hiding place for other programs.
+OWN_EXE = ""
+OUR_TREE = set()
+OUR_TREE_LOCK = threading.Lock()
+
+
+def is_ours_pid(pid):
+    if pid in IGNORED_PIDS:
+        return True
+    with OUR_TREE_LOCK:
+        return pid in OUR_TREE
+
+
+def note_exec(pid, ppid, path):
+    """Called for every exec: True if it belongs to Hostwatch (and remembers it)."""
+    with OUR_TREE_LOCK:
+        ours = ppid in OUR_TREE or ppid in IGNORED_PIDS or (bool(OWN_EXE) and path == OWN_EXE)
+        if ours:
+            OUR_TREE.add(pid)
+        else:
+            OUR_TREE.discard(pid)          # a reused pid now running something else
+        return ours
+
+
+def note_exit(pid):
+    with OUR_TREE_LOCK:
+        OUR_TREE.discard(pid)
+
+
+def adopt_own_processes(owner_pid):
+    """At start: the owner app, our launcher, and Hostwatch processes already running."""
+    global OWN_EXE
+    OWN_EXE = pid_path(owner_pid) if owner_pid else ""
+    with OUR_TREE_LOCK:
+        if owner_pid:
+            OUR_TREE.add(owner_pid)
+        OUR_TREE.add(os.getppid())         # Hostwatch --collector-launcher
+    if not OWN_EXE or _LIBPROC is None:
+        return
+    count = _LIBPROC.proc_listallpids(None, 0)
+    pids = (ctypes.c_int * (count + 64))()
+    count = _LIBPROC.proc_listallpids(pids, ctypes.sizeof(pids))
+    buf = ctypes.create_string_buffer(4096)
+    for pid in pids[:max(count, 0)]:
+        if pid > 0 and _LIBPROC.proc_pidpath(pid, buf, ctypes.c_uint32(4096)) > 0:
+            if buf.value.decode("utf-8", "replace") == OWN_EXE:
+                with OUR_TREE_LOCK:
+                    OUR_TREE.add(pid)
+
 # pid -> executable path, learned from ES events, used to label net events.
 PID_PATHS = OrderedDict()
 PID_PATHS_LOCK = threading.Lock()
@@ -383,7 +435,7 @@ def _pid(proc):
 
 
 def _is_ours(proc):
-    return _pid(proc) in IGNORED_PIDS or int((proc or {}).get("ppid") or 0) == SELF_PID
+    return is_ours_pid(_pid(proc)) or int((proc or {}).get("ppid") or 0) == SELF_PID
 
 
 _SECRET_PATTERNS = [
@@ -444,7 +496,10 @@ SEEN_CONNS = LockedRecentSet(ttl=600.0)
 def normalize(raw):
     event = raw.get("event") or {}
     caller = raw.get("process") or {}
-    if _is_ours(caller):
+    if "exit" in event:
+        note_exit(_pid(caller))
+        return None
+    if _is_ours(caller) and "exec" not in event:
         return None
 
     if "exec" in event:
@@ -455,6 +510,8 @@ def normalize(raw):
         pid = _pid(target)
         ppid = int(target.get("ppid") or caller.get("ppid") or 0)
         remember_pid(pid, path, ppid)
+        if note_exec(pid, ppid, path) or _pid(caller) in IGNORED_PIDS:
+            return None
         args = format_args((event.get("exec") or {}).get("args"))
         remember_args(pid, args)
         return {
@@ -488,7 +545,8 @@ def normalize(raw):
 
 
 def run_eslogger(kinds):
-    events = ["exec"] + (["open"] if "file" in kinds else [])
+    # "exit" only keeps the set of Hostwatch's own pids exact; it is never published.
+    events = ["exec", "exit"] + (["open"] if "file" in kinds else [])
     # New session: eslogger suppresses events from its own process group,
     # which would otherwise hide the user's Terminal session.
     proc = subprocess.Popen(
@@ -573,7 +631,7 @@ def parse_syn(line, meta):
 
 def publish_connection(pid, remote, proto, name_hint="", budget=0.3):
     """Publishes a net event unless this (pid, remote) was already reported."""
-    if pid in IGNORED_PIDS or SEEN_CONNS.seen((pid, remote)):
+    if is_ours_pid(pid) or SEEN_CONNS.seen((pid, remote)):
         return
     mark_net_pid(pid)
     exe = pid_path(pid)
@@ -798,7 +856,7 @@ def run_nettop_backstop(settle=1.5):
         now = time.monotonic()
         if pid not in known and rx + tx > 0:
             known.add(pid)
-            if now - started > 3 and pid not in IGNORED_PIDS:   # first samples = baseline
+            if now - started > 3 and not is_ours_pid(pid):   # first samples = baseline
                 pending[pid] = (now, name, rx, tx)
         # Anything lsof or packet capture did not report within `settle` seconds gets inferred.
         for p, (seen, pname, prx, ptx) in list(pending.items()):
@@ -865,7 +923,7 @@ def poll_network(interval):
             continue
         if previous is not None:
             new = [k for k in current.keys() - previous.keys()
-                   if k[0] not in IGNORED_PIDS and not SEEN_CONNS.seen((k[0], k[3]))]
+                   if not is_ours_pid(k[0]) and not SEEN_CONNS.seen((k[0], k[3]))]
             hosts = resolve_hosts([_strip_host(k[3]) for k in new]) if new else {}
             for key in new:
                 pid, proto, _local, remote = key
@@ -1010,6 +1068,7 @@ def main():
         return 1
     threading.Thread(target=accept_clients, args=(server, args.owner_pid, client_uid), daemon=True).start()
 
+    adopt_own_processes(args.owner_pid)        # before events flow: Hostwatch's own processes
     proc = run_eslogger(kinds)
     SHUTDOWN_HOOKS.append(proc.terminate)
     if args.owner_pid:

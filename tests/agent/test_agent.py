@@ -182,3 +182,56 @@ class TopProcesses(unittest.TestCase):
         mine = [v for (pid, _), v in snap.items() if pid == os.getpid()]
         self.assertEqual(len(mine), 1)
         self.assertGreater(mine[0][1], 0)                      # memory footprint
+
+
+class OwnActivity(unittest.TestCase):
+    APP = "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
+
+    def setUp(self):
+        agent.OWN_EXE = self.APP
+        with agent.OUR_TREE_LOCK:
+            agent.OUR_TREE.clear()
+            agent.OUR_TREE.add(500)                        # the verified owner app
+
+    def tearDown(self):
+        agent.OWN_EXE = ""
+        with agent.OUR_TREE_LOCK:
+            agent.OUR_TREE.clear()
+
+    def exec_event(self, pid, ppid, path, caller_pid=None):
+        return {"event": {"exec": {"target": {"audit_token": {"pid": pid}, "ppid": ppid,
+                                              "executable": {"path": path}}, "args": [path]}},
+                "process": {"audit_token": {"pid": caller_pid or pid}, "ppid": ppid,
+                            "executable": {"path": "/bin/sh"}}}
+
+    def open_event(self, pid, path="/tmp/x"):
+        return {"event": {"open": {"file": {"path": path}, "fflag": 2}},
+                "process": {"audit_token": {"pid": pid}, "ppid": 1, "executable": {"path": "/x"}}}
+
+    def exit_event(self, pid):
+        return {"event": {"exit": {"stat": 0}}, "process": {"audit_token": {"pid": pid}, "ppid": 1,
+                                                            "executable": {"path": "/x"}}}
+
+    def test_app_and_its_children_are_hidden(self):
+        self.assertIsNone(agent.normalize(self.open_event(500, "/tmp/metrics-a")))     # the app's own writes
+        self.assertIsNone(agent.normalize(self.exec_event(501, 500, "/usr/bin/codesign")))
+        self.assertIsNone(agent.normalize(self.open_event(501, "/tmp/metrics-b")))     # its child too
+        self.assertTrue(agent.is_ours_pid(501))
+
+    def test_same_executable_elsewhere_is_hidden_others_are_not(self):
+        # Claude Code (pid 700) starts `Hostwatch --mcp`: same executable, so it's ours.
+        self.assertIsNone(agent.normalize(self.exec_event(710, 700, self.APP)))
+        # A look-alike in another place is reported.
+        ev = agent.normalize(self.exec_event(720, 700, "/tmp/Hostwatch.app/Contents/MacOS/Hostwatch"))
+        self.assertIsNotNone(ev)
+        self.assertIsNotNone(agent.normalize(self.open_event(720, "/tmp/evil")))
+
+    def test_reused_pid_is_reported_again(self):
+        self.assertIsNone(agent.normalize(self.exec_event(501, 500, "/usr/bin/codesign")))
+        self.assertIsNone(agent.normalize(self.exit_event(501)))                       # exit: never published
+        self.assertFalse(agent.is_ours_pid(501))
+        self.assertIsNotNone(agent.normalize(self.open_event(501, "/tmp/after-reuse")))
+        # Reused by an unrelated exec even without a seen exit.
+        agent.normalize(self.exec_event(502, 500, "/usr/bin/true"))
+        self.assertIsNotNone(agent.normalize(self.exec_event(502, 1, "/usr/bin/curl")))
+        self.assertFalse(agent.is_ours_pid(502))
