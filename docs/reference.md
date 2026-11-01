@@ -187,6 +187,25 @@ all everyday. Attacks are *chains*. Hostwatch tags suspicious **stages** and add
   `security` and reading `~/.gnupg`. Synthetic attack chains fire as Dangerous.
   Replay any history: `Hostwatch --story-replay <history.jsonl>`.
 
+## Hold suspicious processes (opt-in)
+
+*Detection ▸ Hold Suspicious Processes* (off by default). When an event adds a strong story stage, Hostwatch
+sends its process `SIGSTOP` and shows a floating panel with Allow, Always Allow (marks the pattern Safe),
+Kill and Ask AI. The stages are a piped or encoded command, a credential read, a login item, quarantine
+removal, running a just-dropped file, or a swapped binary. A program that is a new high-risk pattern
+is held too.
+
+- **Only yours.** The app runs as you, so root and other users' processes can't be held. Patterns marked
+  Safe, Hostwatch itself, launchd, system UI (`/System/Library/CoreServices`, `/System/Applications`) and
+  terminals or editors are never held. At most 5 holds at once. The pid's path is checked before
+  every signal, so an exited, reused pid is left alone.
+- **No answer in 60 s:** let it continue (default) or kill it (*If No Answer in 60 s*).
+- **Fails open.** Each hold starts a detached watchdog (`sleep 65; kill -CONT pid`), so a process
+  can't stay frozen if Hostwatch quits or crashes. Quitting or turning the hold off resumes everything.
+- **Best effort.** Events arrive after the fact, so a quick `curl` can finish before it is stopped.
+  Slower steps (installers, scripts, long downloads) are caught. Blocking before execution would need
+  Endpoint Security AUTH events or a Network Extension filter.
+
 ## New domains: first contact gets attention
 
 Hostwatch keeps an inventory of every **registrable domain** programs connect to
