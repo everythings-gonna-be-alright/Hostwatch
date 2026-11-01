@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 – no code injection
 
 - **Hardened runtime:** Hostwatch is now signed with Apple's hardened runtime (free, also with ad-hoc
   signing). macOS ignores `DYLD_INSERT_LIBRARIES` and similar variables for it and loads only Apple-signed
