@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Security hardening from a design review:
+
+- **No AI marks a high-risk pattern Safe** anymore, including Claude (before, only the on-device model was
+  guarded): crafted file names or hostnames could talk a model into it. It stays New for you to decide.
+- **Only the verified app's own process tree is hidden.** Other runs of the Hostwatch program (e.g. the MCP
+  server) are reported, so malware can't hide by starting the Hostwatch binary with injected code.
+- **tcpdump drops root** (`-Z nobody`) right after opening the capture device, so packets from the network
+  are never decoded as root.
+
 ## 0.5.0 – resources and compact history
 
 - **The collector is now Swift, built into the app** (`Hostwatch --collector`): no Python and no Command

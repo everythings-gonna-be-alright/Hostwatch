@@ -64,8 +64,8 @@ block anything, unless you turn on the opt-in hold that pauses suspicious proces
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
 - **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,
-  or on-device first with Claude for the rest (default). It classifies new patterns; high-risk patterns
-  are never marked safe on-device.
+  or on-device first with Claude for the rest (default). It classifies new patterns; no AI ever marks a
+  high-risk pattern safe (that stays your decision).
 - **Ask AI.** Double-click anything for a verdict and an explanation, from Claude or the on-device model.
   The evidence includes the code signature, parent chain, command line and connections.
 - **Learns from your decisions.** Claude proposes general rules from the patterns you marked. Hostwatch

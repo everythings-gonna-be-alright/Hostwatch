@@ -309,7 +309,7 @@ private struct AIPane: View {
             } header: {
                 Text("Classifying new patterns and Ask AI")
             } footer: {
-                Footnote(classifier.engine.help + " High-risk patterns are never marked Safe on-device.")
+                Footnote(classifier.engine.help + " No AI ever marks a high-risk pattern Safe: that stays your decision.")
             }
             Section {
                 Toggle("Allow Claude Code to read Hostwatch data (MCP)", isOn: Binding(

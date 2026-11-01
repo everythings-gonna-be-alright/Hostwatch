@@ -212,12 +212,12 @@ final class Agent: @unchecked Sendable {
     private var shutdownHooks: [() -> Void] = []
     var shutdownToken: String?
 
-    // Hostwatch's own activity is not reported: the verified owner app, other runs of its exact
-    // executable (e.g. the MCP server), our helpers, and children. Exited pids leave the set.
+    // Hostwatch's own activity is not reported: the verified owner app (by pid), our helpers, and
+    // their children. Other runs of the same program (e.g. the MCP server) are reported like any
+    // program, so a copy started with injected code can't hide. Exited pids leave the set.
     private let ownLock = NSLock()
     private var ignoredPids: Set<Int> = []
     private var ourTree: Set<Int> = []
-    var ownExe = ""
 
     private let pidLock = NSLock()
     private var pidPaths = BoundedMap<Int, String>(limit: 8192)
@@ -289,7 +289,7 @@ final class Agent: @unchecked Sendable {
     /// For every exec: true if it belongs to Hostwatch (and remembers it).
     func noteExec(pid: Int, ppid: Int, path: String) -> Bool {
         ownLock.lock(); defer { ownLock.unlock() }
-        let ours = ourTree.contains(ppid) || ignoredPids.contains(ppid) || (!ownExe.isEmpty && path == ownExe)
+        let ours = ourTree.contains(ppid) || ignoredPids.contains(ppid)
         if ours { ourTree.insert(pid) } else { ourTree.remove(pid) }     // a reused pid runs something else
         return ours
     }
@@ -297,13 +297,10 @@ final class Agent: @unchecked Sendable {
     func noteExit(_ pid: Int) { ownLock.lock(); ourTree.remove(pid); ownLock.unlock() }
     func addToOurTree(_ pid: Int) { ownLock.lock(); ourTree.insert(pid); ownLock.unlock() }
 
-    /// At start: the owner app, our launcher, and Hostwatch processes already running.
+    /// At start: the verified owner app and our launcher.
     func adoptOwnProcesses(ownerPid: Int) {
-        ownExe = ownerPid > 0 ? pidPath(ownerPid) : ""
         if ownerPid > 0 { addToOurTree(ownerPid) }
         addToOurTree(Int(getppid()))                         // Hostwatch --collector-launcher
-        guard !ownExe.isEmpty else { return }
-        for pid in ProcessList.allPids() where ProcessList.path(pid) == ownExe { addToOurTree(pid) }
     }
 
     // MARK: Pid facts

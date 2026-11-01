@@ -687,9 +687,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             analysis.onVerdict = { [weak self, weak analysis] verdict, summary in
                 guard let self else { return }
                 let onDevice = analysis?.engine == .onDevice
-                // Same guard as triage: the on-device model never marks a high-risk pattern Safe.
-                if onDevice, verdict == .safe, self.signatures.entry(key)?.risk == .high { return }
-                // A single verdict classifies the event's pattern unless you already decided it.
+                // A single verdict classifies the event's pattern unless you already decided it
+                // (never Safe for a high-risk pattern: see SignatureStore.suggest).
                 self.signatures.suggest(SignatureStatus(verdict: verdict), key: key,
                                         source: onDevice ? "on-device" : "claude", note: summary)
             }

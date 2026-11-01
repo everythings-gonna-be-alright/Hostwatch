@@ -707,8 +707,11 @@ final class SignatureStore: ObservableObject {
     }
 
     /// Applies an automatic verdict only where nobody (you or a rule) has decided yet.
+    /// An AI verdict (Claude or on-device). It never marks a high-risk pattern Safe: event text
+    /// (paths, names, hosts) can be crafted to talk a model into it, so that stays your decision.
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
         guard status != .unclassified, self.status(forKey: key) == .unclassified else { return }
+        if status == .safe, entries[key]?.risk == .high { return }
         set(status, keys: [key], source: source, note: note)
     }
 
