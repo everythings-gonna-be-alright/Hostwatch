@@ -77,6 +77,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 struct StoryStep: Codable, Identifiable {
     var id = UUID()
     var date: Date
+    /// When this step's process started (exec event or kernel); tells process instances apart.
+    var processStart: Date?
     var stage: StoryStage
     var note: String              // one-line explanation
     // Event snapshot, for display and Ask Claude.
@@ -160,9 +162,18 @@ final class StoryEngine: ObservableObject {
     @Published private(set) var stories: [Story] = []
     @Published private(set) var revision = 0
 
-    private struct Proc { var ppid: Int; var path: String; var seen: Date }
+    private struct Proc { var ppid: Int; var path: String; var seen: Date; var start: Date? }
     private var procs: [Int: Proc] = [:]
-    private var working: [Int: Story] = [:]                  // root pid -> story (fired or not)
+    private var working: [UUID: Story] = [:]                 // story id -> story (fired or not)
+    /// Recent steps and the story each belongs to: what new steps can link to.
+    private var linkable: [(step: StoryStep, story: UUID)] = []
+
+    // Causal-link windows (see `related`).
+    static let sameProcessWindow: TimeInterval = 120
+    static let processStartWindow: TimeInterval = 10 * 60
+    static let lineageWindow: TimeInterval = 10 * 60
+    static let hostLineageWindow: TimeInterval = 30
+    static let scriptWindow: TimeInterval = 3 * 60
     private var files: [String: (date: Date, step: StoryStep)] = [:]  // recent writes in drop zones
     private var unquarantines: [StoryStep] = []              // recent xattr -d quarantine runs
     private var ignored: Set<String>
@@ -198,6 +209,9 @@ final class StoryEngine: ObservableObject {
         stories.filter { !$0.dismissed && Date().timeIntervalSince($0.lastSeen) < seconds }
     }
 
+    /// Every open chain, fired or not (tests and replay).
+    var openChains: [Story] { Array(working.values) }
+
     // MARK: Ingest
 
     /// Adds the event to its story; returns the stages it added (with notes), for the process hold.
@@ -205,7 +219,7 @@ final class StoryEngine: ObservableObject {
     func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date()) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0 {
-            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date)
+            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
         }
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
@@ -222,31 +236,49 @@ final class StoryEngine: ObservableObject {
         let linkedQuarantine = linkedUnquarantine(for: e)
         if linked != nil { found.removeAll { $0.0 == .runFromDrop } }   // the linked step says it better
 
-        let root = rootOf(e.pid)
-        var story = working[root.pid] ?? Story(rootPid: root.pid, originName: root.originName,
-                                               originPath: root.originPath, origin: root.origin)
         let now = clock
-        story.steps.removeAll { now.timeIntervalSince($0.date) > window }
-        if story.steps.isEmpty { story.firstSeen = now; story.fired = false; story.dismissed = false }
+        let start = node(e.pid)?.start
+        let candidate = found.map { StoryStep(e, stage: $0.0, note: $0.1, date: now) }
 
-        for (stage, note) in found {
-            let step = StoryStep(e, stage: stage, note: note, date: now)
+        // Stories this event is causally linked to (see `related`), plus stories of linked files.
+        linkable.removeAll { now.timeIntervalSince($0.step.date) > Self.processStartWindow }
+        let ancestors = ancestry(of: e.pid)
+        var linkedStories = Set(linkable.filter { related($0.step, toPid: e.pid, start: start, ancestors: ancestors, at: now) }.map(\.story)).filter { working[$0] != nil }
+        for extra in [linked, linkedQuarantine].compactMap({ $0 }) {
+            if let owner = linkable.first(where: { $0.step.id == extra.id })?.story, working[owner] != nil {
+                linkedStories.insert(owner)
+            }
+        }
+        var story: Story
+        if linkedStories.isEmpty {
+            let root = rootOf(e.pid)
+            story = Story(rootPid: root.pid, originName: root.originName, originPath: root.originPath, origin: root.origin)
+            story.firstSeen = now
+        } else {
+            story = merge(Array(linkedStories))
+        }
+
+        for var step in candidate {
+            step.processStart = start
             // One directory walk or a burst of connections is one step, not sixty.
             let key = Self.dedupeKey(step)
             // Same tool run again (new pid each time) or same process touching the same place.
-            if story.steps.contains(where: { $0.stage == stage && Self.dedupeKey($0) == key
+            if story.steps.contains(where: { $0.stage == step.stage && Self.dedupeKey($0) == key
                                              && ($0.pid == step.pid || step.kind == .exec) }) {
                 continue
             }
-            if story.steps.filter({ $0.stage == stage }).count >= 8 { continue }
+            if story.steps.filter({ $0.stage == step.stage }).count >= 8 { continue }
             story.steps.append(step)
+            linkable.append((step, story.id))
         }
         // Running a file another tree wrote (or un-quarantined) pulls those steps into this story.
         if let linked, !story.steps.contains(where: { $0.id == linked.id }) {
             story.steps.append(linked)
-            story.steps.append(StoryStep(e, stage: .runFromDrop,
-                                         note: "ran a file \(linked.name) wrote \(Self.ago(linked.date, now: now))",
-                                         date: now))
+            var ran = StoryStep(e, stage: .runFromDrop,
+                                note: "ran a file \(linked.name) wrote \(Self.ago(linked.date, now: now))", date: now)
+            ran.processStart = start
+            story.steps.append(ran)
+            linkable.append((ran, story.id))
         }
         if let q = linkedQuarantine, !story.steps.contains(where: { $0.id == q.id }) {
             story.steps.append(q)
@@ -256,9 +288,88 @@ final class StoryEngine: ObservableObject {
         if story.steps.count > 60 { story.steps.removeFirst(story.steps.count - 60) }
         story.lastSeen = now
         evaluate(&story)
-        working[root.pid] = story
+        working[story.id] = story
         if let linked { found.append((.runFromDrop, "runs a file \(linked.name) just wrote")) }
         return found
+    }
+
+    // MARK: Causal links
+
+    /// Is the new event (process `pid`, started `start`, at `now`) caused by or part of the same
+    /// activity as `step`? Only concrete links count; sharing a long-lived ancestor does not.
+    private func related(_ step: StoryStep, toPid pid: Int, start: Date?, ancestors: [Int], at now: Date) -> Bool {
+        let age = now.timeIntervalSince(step.date)
+        guard age >= -1 else { return false }
+        // 1. Same process instance: close in time, or its own start (a dropped binary launching).
+        if step.pid == pid, sameInstance(step.processStart, start) {
+            if age <= Self.sameProcessWindow { return true }
+            if step.kind == .exec, age <= Self.processStartWindow { return true }
+            return false
+        }
+        // 2. Parent -> child: the step happened in an ancestor before this process was started.
+        if let i = ancestors.firstIndex(of: step.pid) {
+            guard let start, start.timeIntervalSince(step.date) >= -2 else { return false }
+            let host = isHost(step.pid, parent: i + 1 < ancestors.count ? ancestors[i + 1] : 0)
+            return age <= (host ? Self.hostLineageWindow : Self.lineageWindow)
+        }
+        // 3. Same script: both under the same short-lived parent (not an app or an interactive shell).
+        if age <= Self.scriptWindow {
+            let theirs = ancestry(of: step.pid)
+            if let common = ancestors.first(where: theirs.contains), common > 1 {
+                let parentOfCommon = node(common)?.ppid ?? 0
+                if !isHost(common, parent: parentOfCommon) { return true }
+            }
+        }
+        return false
+    }
+
+    /// Same process instance unless both start times are known and differ (pid reuse).
+    private func sameInstance(_ a: Date?, _ b: Date?) -> Bool {
+        guard let a, let b else { return true }
+        return abs(a.timeIntervalSince(b)) < 1
+    }
+
+    /// Ancestor pids, parent first (stops at launchd or an unknown process).
+    private func ancestry(of pid: Int) -> [Int] {
+        var out: [Int] = []
+        var current = pid
+        for _ in 0..<16 {
+            guard let p = node(current), p.ppid > 0, !out.contains(p.ppid) else { break }
+            out.append(p.ppid)
+            if p.ppid == 1 { break }
+            current = p.ppid
+        }
+        return out
+    }
+
+    /// Long-lived hosts whose descendants are independent of each other: launchd, a GUI app's main
+    /// binary, a session starter (login/sshd/tmux/terminal) or an interactive shell.
+    private func isHost(_ pid: Int, parent: Int) -> Bool {
+        guard pid > 1, let p = node(pid) else { return true }
+        if p.path.contains(".app/Contents/MacOS/") || Self.isSessionStarter(p.path) { return true }
+        if Self.isShell(p.path) {
+            let parentPath = node(parent)?.path ?? ""
+            return parentPath.isEmpty || Self.isSessionStarter(parentPath) || parentPath.contains(".app/Contents/MacOS/")
+        }
+        return false
+    }
+
+    /// Joins linked stories into the oldest one (each step, once).
+    private func merge(_ ids: [UUID]) -> Story {
+        let parts = ids.compactMap { working[$0] }.sorted { $0.firstSeen < $1.firstSeen }
+        guard var base = parts.first else {
+            let root = Root(pid: 0, originName: "?", originPath: "", origin: .background)
+            return Story(rootPid: root.pid, originName: root.originName, originPath: root.originPath, origin: root.origin)
+        }
+        for other in parts.dropFirst() {
+            for step in other.steps where !base.steps.contains(where: { $0.id == step.id }) { base.steps.append(step) }
+            base.firstSeen = min(base.firstSeen, other.firstSeen)
+            base.fired = base.fired || other.fired
+            working[other.id] = nil
+            stories.removeAll { $0.id == other.id }
+            for i in linkable.indices where linkable[i].story == other.id { linkable[i].story = base.id }
+        }
+        return base
     }
 
     private static func dedupeKey(_ s: StoryStep) -> String {
@@ -462,7 +573,8 @@ final class StoryEngine: ObservableObject {
         guard pid > 0, proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         var buf = [CChar](repeating: 0, count: 4096)
         let n = proc_pidpath(Int32(pid), &buf, UInt32(buf.count))
-        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cString: buf) : "", seen: Date())
+        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cString: buf) : "", seen: Date(),
+                     start: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
         procs[pid] = p
         return p
     }
@@ -521,7 +633,8 @@ final class StoryEngine: ObservableObject {
         ignored.insert(s.signature)
         UserDefaults.standard.set(Array(ignored), forKey: "ignoredStories")
         stories.removeAll { $0.id == id }
-        working = working.filter { $0.value.id != id }
+        working[id] = nil
+        linkable.removeAll { $0.story == id }
         dirty = true; revision += 1
     }
 
@@ -540,7 +653,7 @@ final class StoryEngine: ObservableObject {
     private func update(_ id: UUID, _ change: (inout Story) -> Void) {
         guard let i = stories.firstIndex(where: { $0.id == id }) else { return }
         change(&stories[i])
-        if let key = working.first(where: { $0.value.id == id })?.key { change(&working[key]!) }
+        if working[id] != nil { change(&working[id]!) }
         dirty = true; revision += 1
     }
 
@@ -549,6 +662,7 @@ final class StoryEngine: ObservableObject {
     private func maintain() {
         let now = Date()
         working = working.filter { now.timeIntervalSince($0.value.lastSeen) < window }
+        linkable.removeAll { working[$0.story] == nil }
         files = files.filter { now.timeIntervalSince($0.value.date) < fileMemory }
         if procs.count > 20_000 { procs = procs.filter { now.timeIntervalSince($0.value.seen) < 3600 } }
         if stories.count > 300 { stories.removeLast(stories.count - 300) }

