@@ -383,7 +383,7 @@ from the live stream to recorded history. Live collection carries on in the back
 - **The slice:** the list shows the window ending at the playhead (1 min, 5 min, 15 min or 1 hour), newest
   first, with the same Show filter, kind toggles, exclusions and search as live. A very busy slice shows
   its newest ~20,000 events and says so.
-- **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 10×, 60× or 600×; the date
+- **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 1× (real time), 10×, 60× or 600×; the date
   picker jumps anywhere. **Return to Live** (Esc) goes back.
 - **From a story:** *Show in Timeline* opens the slice around it.
 - **How it reads history:** lines are stored in time order, so the offset of any moment is a binary

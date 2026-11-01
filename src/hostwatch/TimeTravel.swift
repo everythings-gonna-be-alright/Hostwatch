@@ -224,7 +224,7 @@ final class TimeTravel: ObservableObject {
     @Published var hoverX: CGFloat?             // pointer over the scrubber (for the time label)
 
     static let spans: [(String, TimeInterval)] = [("1 min", 60), ("5 min", 300), ("15 min", 900), ("1 hour", 3600)]
-    static let speeds: [(String, Double)] = [("10×", 10), ("60×", 60), ("600×", 600)]
+    static let speeds: [(String, Double)] = [("1×", 1), ("10×", 10), ("60×", 60), ("600×", 600)]
     nonisolated static let buckets = 240
 
     private let history: HistoryRecorder

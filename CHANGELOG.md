@@ -4,7 +4,7 @@
 
 - **Time Travel** (toolbar button, *View ▸ Time Travel* ⌥⌘T): browse recorded history in the Events tab.
   A floating timeline shows activity over the whole recording with marks for stories and new domains;
-  drag the playhead, step with ⌘[ / ⌘], play at 10×–600×, pick a date or a 1 min–1 h window. Story cards
+  drag the playhead, step with ⌘[ / ⌘], play at 1×–600×, pick a date or a 1 min–1 h window. Story cards
   have **Show in Timeline**. Reads only the slice you look at, so large histories open instantly.
 - **Stories chain only related steps:** links by cause (same process, parent → child, same script, same
   file) and by shared evidence (the same untrusted program, a login item and the program it starts,
