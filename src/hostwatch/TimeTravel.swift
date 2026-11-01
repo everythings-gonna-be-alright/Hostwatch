@@ -489,7 +489,7 @@ struct TimelineBar: View {
                 Button { travel.step(-1) } label: { transportIcon("backward.fill") }
                     .help("Earlier (⌘[)")
                 Button { travel.togglePlay() } label: {
-                    transportIcon(travel.playing ? "pause.fill" : "play.fill", size: 12, frame: 18)
+                    transportIcon(travel.playing ? "pause.fill" : "play.fill", size: 13, frame: 21)
                 }
                 .help(travel.playing ? "Pause" : "Play history forward")
                 .disabled(travel.range == nil)
