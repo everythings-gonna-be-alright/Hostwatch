@@ -1024,6 +1024,11 @@ private struct StoryCard: View {
             HStack(spacing: 8) {
                 Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
                     .buttonStyle(.glassProminent)
+                Button { actions.showInTimeline(story.firstSeen) } label: {
+                    Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                }
+                .buttonStyle(.glass)
+                .help("Open Time Travel at this story, with everything else that happened around it")
                 if !story.dismissed {
                     Button("Dismiss") { stories.dismiss(story.id) }.buttonStyle(.glass)
                 }

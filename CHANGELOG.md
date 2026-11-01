@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **MCP access requires permission and a token.** `Hostwatch --mcp` refuses everything until you allow it in
+  *Settings ▸ AI*, which issues a random token for the Claude Code registration command (only its hash is
+  stored). *New Token…* or turning access off cuts off earlier registrations; sessions are logged. Existing
+  registrations without a token stop working: copy the new command from Settings.
+
+- **Check for Updates…** (*Hostwatch* menu, *Settings ▸ General*): asks GitHub for the latest release and
+  offers its page and notes. Automatic once a day (can be turned off); a new version also shows in the
+  menu bar icon menu. Nothing is downloaded or installed by itself.
+
+- **Time Travel** (toolbar button, *View ▸ Time Travel* ⌥⌘T): browse recorded history in the Events tab.
+  A floating timeline shows activity over the whole recording with marks for stories and new domains;
+  drag the playhead, step with ⌘[ / ⌘], play at 1×–600×, pick a date or a 1 min–1 h window. Story cards
+  have **Show in Timeline**. Reads only the slice you look at, so large histories open instantly.
+- **Stories chain only related steps:** links by cause (same process, parent → child, same script, same
+  file) and by shared evidence (the same untrusted program, a login item and the program it starts,
+  the same new domain or raw IP). Programs reading their own keychain items, AI coding agents' command
+  wrappers and trusted apps reading their own config no longer raise stories.
+
 - **Menus reorganized:** a short menu bar icon menu (status and quick actions), a full app menu bar
   (View, Activity, Window, Help, with ⌘1–⌘5 for tabs) and a **Settings window** (⌘,) with General, HUD,
   Detection, AI, Exclusions and History. The window's More menu became a Settings button. A banner

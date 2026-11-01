@@ -15,12 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let collector = Collector()
     private let history = HistoryRecorder()
     private let hold = ProcessHold()
+    private let updates = UpdateChecker()
+    private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains)
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
-        signatures: signatures, classifier: classifier, editorDraft: editorDraft,
+        signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -42,7 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         askStory: { [weak self] story in self?.openAskAI(for: story) },
         openStories: { [weak self] in self?.openStories() },
         openSettings: { [weak self] in self?.openSettings(nil) },
-        exclude: { [weak self] pattern in self?.model.addExclusion(pattern) }
+        exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
+        showInTimeline: { [weak self] date in self?.showInTimeline(date) }
     )
     private var askWindows: [NSWindow] = []
 
@@ -63,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
         _ = ruleBook                      // load approved rules and apply them before events arrive
@@ -291,6 +295,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
+        if let release = updates.available {
+            menu.addItem(item("\(release.name) Available…", #selector(showAvailableUpdate),
+                              symbol: "arrow.down.circle.fill"))
+        }
         if !collector.isRunning, !model.connected {
             let start = item("Start Collector…", #selector(toggleCollector), symbol: "play.circle")
             start.isEnabled = collector.state != .starting
@@ -348,6 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let hideOthers = std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option])
         submenu("Hostwatch", [
             std("About Hostwatch", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("Check for Updates…", #selector(checkForUpdates)),
             .separator(),
             item("Settings…", #selector(showSettings), key: ","),
             .separator(),
@@ -377,7 +386,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         for f in SignatureFilter.allCases { filters.addItem(tagged(item(f.title, #selector(setFilter(_:))), f.rawValue)) }
         showFilter.submenu = filters
         let kinds = EventKind.allCases.map { tagged(item($0.title, #selector(toggleKindItem(_:))), $0.rawValue) }
-        submenu("View", tabs + [.separator(), showFilter, .separator()] + kinds + [
+        submenu("View", tabs + [
+            .separator(),
+            item("Time Travel", #selector(toggleTimeTravel), key: "t", modifiers: [.command, .option]),
+            item("Earlier", #selector(timeTravelEarlier), key: "["),
+            item("Later", #selector(timeTravelLater), key: "]"),
+            .separator(), showFilter, .separator()] + kinds + [
             .separator(),
             item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command]),
             std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
@@ -435,6 +449,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             mi.state = model.overlayEnabled ? .on : .off
         case #selector(toggleHold):
             mi.state = hold.enabled ? .on : .off
+        case #selector(toggleTimeTravel):
+            mi.state = travel.active ? .on : .off
+        case #selector(timeTravelEarlier), #selector(timeTravelLater):
+            return travel.active
+        case #selector(clearEvents):
+            return !travel.active
         case #selector(togglePause):
             mi.title = model.paused ? "Resume Live Stream" : "Pause Live Stream"
         case #selector(toggleCollector):
@@ -444,6 +464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return collector.state != .starting && (collector.isRunning || !model.connected)
         case #selector(showHeld):
             return !hold.held.isEmpty
+        case #selector(checkForUpdates):
+            return !updates.checking
         case #selector(askAboutSelection), #selector(markSelection(_:)), #selector(excludeSelection):
             return !selectedEvents.isEmpty || (model.windowTab == 1 && !signatures.selection.isEmpty
                                                && mi.action == #selector(markSelection(_:)))
@@ -506,6 +528,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.addExclusion(pattern)
     }
 
+    @objc private func toggleTimeTravel() {
+        if travel.active { travel.exit(); return }
+        model.windowTab = 0
+        openActivityWindow(fullScreen: false)
+        travel.enter()
+    }
+
+    @objc private func timeTravelEarlier() { travel.step(-1) }
+    @objc private func timeTravelLater() { travel.step(1) }
+
+    /// Opens the Events tab in time travel, with `date` inside the shown slice.
+    private func showInTimeline(_ date: Date) {
+        model.windowTab = 0
+        openActivityWindow(fullScreen: false)
+        travel.enter(at: date.addingTimeInterval(min(travel.span / 2, 60)))
+    }
+
+    @objc private func checkForUpdates() { updates.checkAndReport() }
+
+    @objc private func showAvailableUpdate() {
+        if let release = updates.available { updates.presentAvailable(release) }
+    }
+
     @objc private func showSettings() { openSettings(nil) }
     @objc private func showAISettings() { openSettings(.ai) }
     @objc private func showCollectorLog() { collector.openLog() }
@@ -518,7 +563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func openHelp() {
-        if let url = URL(string: "https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/docs/reference.md") {
+        if let url = URL(string: "https://github.com/\(UpdateChecker.repository)/blob/main/docs/reference.md") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -527,12 +572,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         guard let color else { return image }
         return image?.withSymbolConfiguration(.init(paletteColors: [color]).applying(.init(scale: .small)))
-    }
-
-    /// The one command that registers Hostwatch's read-only MCP server with Claude Code.
-    static var mcpCommand: String {
-        let exe = Bundle.main.executablePath ?? "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
-        return "claude mcp add --scope user hostwatch -- \"\(exe)\" --mcp"
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "",
@@ -697,7 +736,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
         let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, collector: collector, history: history,
-                                                                   signatures: signatures, classifier: classifier, actions: actions))
+                                                                   signatures: signatures, classifier: classifier, travel: travel, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
         // preferred size (e.g. the small empty Stories view), which reset the window on tab switch.
@@ -773,6 +812,9 @@ enum Entry {
         }
         if let i = args.firstIndex(of: "--story-replay"), i + 1 < args.count {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
+        }
+        if let i = args.firstIndex(of: "--time-travel-probe") {
+            runTimeTravelProbe(i + 1 < args.count ? args[i + 1] : nil)
         }
         if let i = args.firstIndex(of: collectorLauncherFlag) {
             runCollectorLauncher(Array(args[(i + 1)...]))

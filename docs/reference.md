@@ -323,8 +323,21 @@ them, changing nothing.
 ## MCP server (`Hostwatch --mcp`)
 
 A read-only Model Context Protocol server over stdio (JSON-RPC, protocol versions 2025-06-18,
-2025-03-26, 2024-11-05) for Claude Code: `claude mcp add --scope user hostwatch -- <path to
-Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`. *Settings ▸ AI* (or *Help ▸ Use with Claude Code…*) shows and copies it.
+2025-03-26, 2024-11-05) for Claude Code. There's no network listener: Claude Code starts the process and talks over stdin/stdout.
+
+- **Access** (*Settings ▸ AI ▸ Use with Claude Code*, or *Help ▸ Use with Claude Code…*) is off by default.
+  Turning it on creates a random token (`hwmcp_` + 64 hex) and shows the command to run once:
+  `claude mcp add --scope user hostwatch -e HOSTWATCH_MCP_TOKEN=<token> -- <path to Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`
+  (it first removes an older `hostwatch` registration). The token is shown once: Hostwatch keeps only its
+  SHA-256 in `mcp-token.sha256` (mode 600) and compares in constant time.
+- **Refusals:** with access off, or a missing or outdated token, the server answers every request with an
+  error (`-32001`) saying how to fix it, and serves no data. **New Token…** invalidates earlier
+  registrations; turning access off invalidates all of them.
+- **Access log:** each session start is recorded (time, allowed/refused, the program that started it) in
+  `mcp-access.log`; the last five show in Settings.
+- **Limits of a token:** it keeps out MCP clients you didn't set up, and makes access revocable and visible.
+  A program already running as your user could still read Hostwatch's files directly, as it can any of
+  your files.
 
 | Tool | What it returns |
 |------|-----------------|
@@ -370,6 +383,36 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
 - `claude` is looked up in `~/.local/bin`, `~/.claude/local`, Homebrew and `/usr/local/bin`, then your
   login shell. Set `CLAUDE_PATH` to override.
 - Evidence you send goes to Anthropic. A typical question takes about 10 s and costs about $0.02–0.05.
+
+## Time Travel
+
+*Time Travel* in the activity window's toolbar (or *View ▸ Time Travel*, ⌥⌘T) switches the Events tab
+from the live stream to recorded history. Live collection carries on in the background.
+
+- **Timeline** (floating, at the bottom): bars show how busy the Mac was across the whole recording
+  (square-root scale, so one burst doesn't flatten the rest; gaps are when nothing was recorded). Red
+  and orange dots mark stories, purple dots new domains. Hover for the time, drag to move; clicking
+  near a dot lands on it.
+- **The slice:** the list shows the window ending at the playhead (1 min, 5 min, 15 min or 1 hour), newest
+  first, with the same Show filter, kind toggles, exclusions and search as live. A very busy slice shows
+  its newest ~20,000 events and says so.
+- **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 1× (real time), 10×, 60× or 600×; the date
+  picker jumps anywhere. **Return to Live** (Esc) goes back.
+- **From a story:** *Show in Timeline* opens the slice around it.
+- **How it reads history:** lines are stored in time order, so the offset of any moment is a binary
+  search away and bar heights are byte counts between offsets. Nothing is loaded except the slice
+  you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
+  `Hostwatch --time-travel-probe [dir]` prints these timings.
+
+## Updates
+
+*Hostwatch ▸ Check for Updates…* asks `api.github.com/repos/everythings-gonna-be-alright/Hostwatch/releases/latest`
+for the newest published release (drafts and pre-releases are ignored) and compares its version numerically
+with this app's (`0.10.0` is newer than `0.9.2`). If it's newer, an alert shows the version, date and notes
+with **Open Release Page**; otherwise it says you're up to date, or why it couldn't check (offline, GitHub
+rate limit). With *Check for updates automatically* (Settings ▸ General, on by default) the same check runs
+once a day, silently: a newer release appears at the top of the menu bar icon menu and in Settings. The
+request is anonymous (a `Hostwatch/<version>` user agent); nothing is downloaded or installed by itself.
 
 ## Activity history
 

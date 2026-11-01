@@ -466,9 +466,14 @@ final class HUDModel: ObservableObject {
         return out
     }
 
-    var searchResults: [ActivityEvent] {
+    var searchResults: [ActivityEvent] { filtered(history) }
+
+    /// The Show filter, kind toggles, exclusions and search, applied to any list (live or history).
+    func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false) -> [ActivityEvent] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        let visible = history.filter { visibleKinds.contains($0.kind) && passesSignatureFilter($0) }
+        let visible = events.filter {
+            visibleKinds.contains($0.kind) && passesSignatureFilter($0) && !(applyExclusions && rules.excludes($0))
+        }
         guard !q.isEmpty else { return visible }
         return visible.filter {
             $0.name.lowercased().contains(q) || $0.proc.lowercased().contains(q)

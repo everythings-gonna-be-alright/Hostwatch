@@ -23,6 +23,8 @@ final class MCPServer {
     let data: MCPDataSource
     let version: String
     private let now: () -> Date
+    /// Set when access is refused (off, or no valid token): every request gets this as an error.
+    var refusal: String?
 
     init(data: MCPDataSource = .live, version: String? = nil, now: @escaping () -> Date = Date.init) {
         self.data = data
@@ -34,6 +36,10 @@ final class MCPServer {
     /// Reads requests from stdin until EOF; one JSON-RPC message per line.
     func run() -> Never {
         SigningCache.shared.live = false          // inspect only: no background work, no writes
+        let verdict = MCPAccess.check(token: ProcessInfo.processInfo.environment[MCPAccess.environmentKey])
+        MCPAccess.log(verdict)
+        refusal = verdict.refusal
+        if let refusal { FileHandle.standardError.write(Data("hostwatch: \(refusal)\n".utf8)) }
         while let line = readLine(strippingNewline: true) {
             guard let reply = handle(line) else { continue }
             FileHandle.standardOutput.write(Data((reply + "\n").utf8))
@@ -54,6 +60,9 @@ final class MCPServer {
         let method = message["method"] as? String ?? ""
         let params = message["params"] as? [String: Any] ?? [:]
         guard let id else { return nil }          // notification (e.g. notifications/initialized)
+        if let refusal {
+            return encode(["jsonrpc": "2.0", "id": id, "error": ["code": -32001, "message": refusal]])
+        }
 
         let result: [String: Any]
         switch method {
