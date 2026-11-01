@@ -546,12 +546,14 @@ struct ActivityWindowView: View {
     @ViewBuilder
     private var eventsList: some View {
         let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
-        let rows = events
-            .map { e -> EventItem in
-                let status = signatures.status(for: e)
-                return EventItem(event: e, status: status, statusRank: signatures.rank(status))
-            }
-            .sorted(using: model.eventOrder)
+        let items = events.map { e -> EventItem in
+            let status = signatures.status(for: e)
+            return EventItem(event: e, status: status, statusRank: signatures.rank(status))
+        }
+        // The list is already newest first: only sort for another column or direction.
+        let newestFirst = model.eventOrder.count == 1 && model.eventOrder[0].keyPath == \EventItem.seq
+            && model.eventOrder[0].order == .reverse
+        let rows = newestFirst ? items : items.sorted(using: model.eventOrder)
         return VStack(spacing: 0) {
             Table(rows, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
