@@ -13,6 +13,7 @@ struct SettingsContext {
     let signatures: SignatureStore
     let classifier: PatternClassifier
     let editorDraft: EditorDraft
+    let updates: UpdateChecker
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
     let resetOverlayFrame: () -> Void
@@ -67,7 +68,8 @@ final class SettingsWindowController: NSWindowController {
         for pane in SettingsPane.allCases {
             let view: AnyView
             switch pane {
-            case .general: view = AnyView(GeneralPane(collector: c.collector, ui: state, toggleCollector: c.toggleCollector))
+            case .general: view = AnyView(GeneralPane(collector: c.collector, updates: c.updates, ui: state,
+                                                      toggleCollector: c.toggleCollector))
             case .hud: view = AnyView(HUDPane(model: c.model, reset: c.resetOverlayFrame))
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, ui: state))
@@ -135,6 +137,7 @@ private struct Footnote: View {
 
 private struct GeneralPane: View {
     @ObservedObject var collector: Collector
+    @ObservedObject var updates: UpdateChecker
     @ObservedObject var ui: SettingsState
     let toggleCollector: () -> Void
     private var fullDiskAccess: Bool { ui.fullDiskAccess }
@@ -166,6 +169,24 @@ private struct GeneralPane: View {
             } footer: {
                 Footnote("The collector watches processes and files only when Hostwatch has Full Disk Access. "
                          + "After a rebuild, remove Hostwatch from the list and add it again.")
+            }
+            Section {
+                LabeledContent("Version \(updates.currentVersion)") {
+                    HStack {
+                        Text(updates.statusText).foregroundStyle(.secondary).lineLimit(1)
+                        if let release = updates.available {
+                            Button("Open Release Page") { NSWorkspace.shared.open(release.url) }
+                        } else {
+                            Button("Check Now") { updates.checkAndReport() }.disabled(updates.checking)
+                        }
+                    }
+                }
+                Toggle("Check for updates automatically", isOn: $updates.automatic)
+            } header: {
+                Text("Updates")
+            } footer: {
+                Footnote("Once a day Hostwatch asks GitHub (api.github.com) for the latest release; nothing "
+                         + "about this Mac is sent, and nothing is downloaded or installed by itself.")
             }
         }
     }

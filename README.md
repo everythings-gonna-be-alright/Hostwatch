@@ -177,6 +177,9 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 - **Claude only when chosen.** Evidence goes to Claude when you ask with Claude selected (you can review
   and edit it first) or when the engine includes Claude for classification (pattern summaries).
   Obvious secrets are masked either way.
+- **Update checks.** Once a day (and on *Check for Updates…*) Hostwatch asks GitHub's API for the latest
+  release. Nothing about your Mac is sent, and nothing is downloaded or installed by itself. Turn it off in
+  *Settings ▸ General*.
 - **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
   the collector, but other secrets passed as arguments can end up in history.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Check for Updates…** (*Hostwatch* menu, *Settings ▸ General*): asks GitHub for the latest release and
+  offers its page and notes. Automatic once a day (can be turned off); a new version also shows in the
+  menu bar icon menu. Nothing is downloaded or installed by itself.
+
 - **Time Travel** (toolbar button, *View ▸ Time Travel* ⌥⌘T): browse recorded history in the Events tab.
   A floating timeline shows activity over the whole recording with marks for stories and new domains;
   drag the playhead, step with ⌘[ / ⌘], play at 1×–600×, pick a date or a 1 min–1 h window. Story cards

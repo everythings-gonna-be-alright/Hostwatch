@@ -391,6 +391,16 @@ from the live stream to recorded history. Live collection carries on in the back
   you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
   `Hostwatch --time-travel-probe [dir]` prints these timings.
 
+## Updates
+
+*Hostwatch ▸ Check for Updates…* asks `api.github.com/repos/everythings-gonna-be-alright/Hostwatch/releases/latest`
+for the newest published release (drafts and pre-releases are ignored) and compares its version numerically
+with this app's (`0.10.0` is newer than `0.9.2`). If it's newer, an alert shows the version, date and notes
+with **Open Release Page**; otherwise it says you're up to date, or why it couldn't check (offline, GitHub
+rate limit). With *Check for updates automatically* (Settings ▸ General, on by default) the same check runs
+once a day, silently: a newer release appears at the top of the menu bar icon menu and in Settings. The
+request is anonymous (a `Hostwatch/<version>` user agent); nothing is downloaded or installed by itself.
+
 ## Activity history
 
 All activity is written to disk as JSON Lines, one event per line, with a full `ts` timestamp:

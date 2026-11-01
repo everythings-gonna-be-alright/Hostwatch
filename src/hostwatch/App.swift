@@ -15,13 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let collector = Collector()
     private let history = HistoryRecorder()
     private let hold = ProcessHold()
+    private let updates = UpdateChecker()
     private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains)
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
-        signatures: signatures, classifier: classifier, editorDraft: editorDraft,
+        signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -65,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
         _ = ruleBook                      // load approved rules and apply them before events arrive
@@ -293,6 +295,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
+        if let release = updates.available {
+            menu.addItem(item("\(release.name) Available…", #selector(showAvailableUpdate),
+                              symbol: "arrow.down.circle.fill"))
+        }
         if !collector.isRunning, !model.connected {
             let start = item("Start Collector…", #selector(toggleCollector), symbol: "play.circle")
             start.isEnabled = collector.state != .starting
@@ -350,6 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let hideOthers = std("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option])
         submenu("Hostwatch", [
             std("About Hostwatch", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("Check for Updates…", #selector(checkForUpdates)),
             .separator(),
             item("Settings…", #selector(showSettings), key: ","),
             .separator(),
@@ -457,6 +464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return collector.state != .starting && (collector.isRunning || !model.connected)
         case #selector(showHeld):
             return !hold.held.isEmpty
+        case #selector(checkForUpdates):
+            return !updates.checking
         case #selector(askAboutSelection), #selector(markSelection(_:)), #selector(excludeSelection):
             return !selectedEvents.isEmpty || (model.windowTab == 1 && !signatures.selection.isEmpty
                                                && mi.action == #selector(markSelection(_:)))
@@ -536,6 +545,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         travel.enter(at: date.addingTimeInterval(min(travel.span / 2, 60)))
     }
 
+    @objc private func checkForUpdates() { updates.checkAndReport() }
+
+    @objc private func showAvailableUpdate() {
+        if let release = updates.available { updates.presentAvailable(release) }
+    }
+
     @objc private func showSettings() { openSettings(nil) }
     @objc private func showAISettings() { openSettings(.ai) }
     @objc private func showCollectorLog() { collector.openLog() }
@@ -548,7 +563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func openHelp() {
-        if let url = URL(string: "https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/docs/reference.md") {
+        if let url = URL(string: "https://github.com/\(UpdateChecker.repository)/blob/main/docs/reference.md") {
             NSWorkspace.shared.open(url)
         }
     }
