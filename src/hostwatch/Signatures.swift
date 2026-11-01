@@ -231,6 +231,8 @@ enum SignatureBuilder {
         "/Ghostty.app/", "/Warp.app/", "/Alacritty.app/", "/kitty.app/", "/WezTerm.app/", "/Zed.app/",
         "/Claude.app/", "/Sublime Text.app/", "/Android Studio.app/", "JetBrains", "/IntelliJ", "/PyCharm",
         "/GoLand", "/WebStorm", "/Nova.app/",
+        // AI coding agents run your commands for you, like a terminal: Claude Code (native, npm).
+        "/.local/share/claude/versions/", "/@anthropic-ai/claude-code/",
     ]
 
     private static func under(_ path: String, _ root: String) -> Bool {

@@ -237,6 +237,10 @@ final class StoryEngine: ObservableObject {
         clock = date
         if e.kind == .exec, e.pid > 0 {
             procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
+            // Replay: a parent that started before the recording is still known by its path.
+            if !liveLookups, e.ppid > 1, procs[e.ppid] == nil, !e.parent.isEmpty {
+                procs[e.ppid] = Proc(ppid: 0, path: e.parent, seen: date, start: nil)
+            }
         }
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
@@ -569,6 +573,14 @@ final class StoryEngine: ObservableObject {
         #"[A-Za-z0-9+/]{120,}={0,2}"#,
     ].map { try! NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
 
+    /// Claude Code runs each command as `zsh -c 'source …/shell-snapshots/… && eval '<command>''`.
+    /// Only the command inside is judged; the wrapper's own `eval` is not evidence.
+    static func unwrapAgentCommand(_ args: String) -> String {
+        guard args.contains("/shell-snapshots/snapshot-"),
+              let eval = args.range(of: "&& eval ", options: .backwards) else { return args }
+        return String(args[eval.upperBound...])
+    }
+
     private static func inZone(_ path: String, _ zones: [String]) -> Bool {
         zones.contains { path.contains($0) || path.hasPrefix(String($0.dropLast())) }
     }
@@ -607,7 +619,9 @@ final class StoryEngine: ObservableObject {
                 }
             }
             let range = NSRange(e.args.startIndex..., in: e.args)
-            if !e.args.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: e.args, range: range) != nil }) {
+            let command = Self.unwrapAgentCommand(e.args)
+            let commandRange = NSRange(command.startIndex..., in: command)
+            if !command.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: command, range: commandRange) != nil }) {
                 out.append((.encodedCommand, "suspicious command line"))
             }
             // Reading keychain secrets counts, unless a trusted, validly signed program reads its own
@@ -1060,11 +1074,21 @@ struct StoryBanner: View {
 
 // MARK: - Replay (developer tool)
 
+/// The value of the `"ts":"…"` field, searched from the end of the line.
+private func replayTimestamp(_ line: Data) -> String? {
+    guard let key = line.range(of: Data(#""ts":""#.utf8), options: .backwards),
+          let end = line[key.upperBound...].firstIndex(of: UInt8(ascii: "\""))
+    else { return nil }
+    return String(decoding: line[key.upperBound..<end], as: UTF8.self)
+}
+
 /// `Hostwatch --story-replay history.jsonl`: feeds recorded events through the story engine
 /// with their recorded timestamps and prints the stories it would raise.
 @MainActor
 func runStoryReplay(_ path: String) -> Never {
-    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { print("cannot read \(path)"); exit(1) }
+    // Streamed line by line: history files are hundreds of MB.
+    guard let file = fopen(path, "r") else { print("cannot read \(path)"); exit(1) }
+    defer { fclose(file) }
     SigningCache.shared.live = false
     SigningCache.shared.trustInstalledAppsInMemory()
     let engine = StoryEngine(persistent: false)
@@ -1079,11 +1103,16 @@ func runStoryReplay(_ path: String) -> Never {
     var rawIPs = Set<String>()
     var newDomains: [(String, String, String)] = []   // time, domain, program
     var n = 0
-    for line in text.split(separator: "\n") {
-        let data = Data(line.utf8)
+    var buffer: UnsafeMutablePointer<CChar>?
+    var capacity = 0
+    defer { free(buffer) }
+    while true {
+        let length = getline(&buffer, &capacity, file)
+        guard length > 0, let buffer else { break }
+        let data = Data(bytesNoCopy: buffer, count: length, deallocator: .none)
         guard var e = try? decoder.decode(ActivityEvent.self, from: data) else { continue }
-        let ts = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["ts"] as? String
-        let date = ts.flatMap { iso.date(from: $0) } ?? Date()
+        // The recorder writes "ts" last; read it without parsing the line a second time.
+        let date = replayTimestamp(data).flatMap { iso.date(from: $0) } ?? Date()
         if domains == nil { domains = DomainRegistry(replayLearningUntil: date.addingTimeInterval(learnMinutes * 60)) }
         if e.kind == .net {
             if let d = domains?.observe(e, at: date) {
