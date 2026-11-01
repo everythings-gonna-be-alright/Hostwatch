@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The collector is now Swift, built into the app** (`Hostwatch --collector`): no Python and no Command
+  Line Tools needed to run Hostwatch. Same design and sources (eslogger, tcpdump, lsof, nettop, libproc),
+  same socket security and the same history format; helpers no longer inherit open files.
+
 - **Collector CPU fix:** the `nettop` network backstop used about 1.4 CPU cores all the time (it polled
   its `/dev/null` stdin for key presses in a tight loop). It now gets an open pipe as stdin: about 1%.
 

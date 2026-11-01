@@ -826,6 +826,8 @@ enum Entry {
         if let i = args.firstIndex(of: "--time-travel-probe") {
             runTimeTravelProbe(i + 1 < args.count ? args[i + 1] : nil)
         }
+        // The collector itself (root, started by the launcher below): the flag comes first.
+        if args.count > 1, args[1] == collectorFlag { runCollectorAgent(Array(args.dropFirst(2))) }
         if let i = args.firstIndex(of: collectorLauncherFlag) {
             runCollectorLauncher(Array(args[(i + 1)...]))
         }

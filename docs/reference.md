@@ -56,8 +56,8 @@ the responsible process for eslogger, so Full Disk Access must be granted to **H
   Builds are ad-hoc signed by default, so **every rebuild needs the grant redone**: remove the old
   Hostwatch entry with − and add it again. To avoid this, build with a stable identity:
   `CODESIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./scripts/build-app.sh`.
-- `./scripts/run-agent.sh` still works for running the collector manually from Terminal. The app
-  detects it and does not start a second one.
+- `./scripts/run-agent.sh` runs the collector by hand from Terminal (`sudo Hostwatch --collector`).
+  The app detects it and does not start a second one.
 
 ## Patterns: learn normal, surface the strange
 
@@ -478,7 +478,8 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 
 ## How the collector works
 
-`agent/hostwatch_agent.py` (run as root) combines:
+The collector is built into the app (`Hostwatch --collector`, Swift; until 0.5 it was a Python
+script). The launcher starts it as root, and it combines:
 
 - `eslogger exec exit open` (Endpoint Security) → processes and file opens (`exit` is only used to
   keep the list of Hostwatch's own processes exact; it is never published).
@@ -544,7 +545,6 @@ entitlement) and a Network Extension for connections.
 
 - macOS 26 or later (Liquid Glass UI; `eslogger` is included)
 - Xcode 26 Command Line Tools (Swift 6.2+, macOS 26 SDK)
-- Python 3.9+ (Homebrew Python recommended)
 - Full Disk Access for Hostwatch.app (or Terminal, when using run-agent.sh)
 - Administrator password for the collector
 
@@ -552,7 +552,6 @@ Install tools if needed:
 
 ```bash
 xcode-select --install
-brew install python
 ```
 
 ## Build & run
@@ -576,9 +575,10 @@ Runs every automated test (about 10 s):
   folder; new-domain baseline and badges; beaconing maths and rules, raw-IP rules, opt-in Homebrew
   trust (on a real Homebrew binary when one is installed). Tests use in-memory engines and a scratch signing
   database, so they never touch your data.
-- **Collector** (`tests/agent`, Python `unittest`, no extra packages): DNS answers, pktap SYN and
-  `nettop` parsing with real lines captured on a Mac, destination inference, secret masking,
-  exclusions.
+- **Collector** (`tests/swift/AgentTests.swift`): DNS answers, pktap SYN and `nettop` parsing with real
+  lines captured on a Mac, destination inference, secret masking, exclusions, JSON output identical to
+  the former Python collector, busiest processes, Hostwatch's own activity, the socket's permissions and
+  peer checks, and that helpers get a pipe as stdin and no inherited files.
 
 **Local MRs are gated:** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and
 refuses the merge commit if anything fails. It is enabled with `git config core.hooksPath

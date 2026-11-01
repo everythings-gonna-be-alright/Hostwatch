@@ -2,8 +2,8 @@ import AppKit
 import Darwin
 import Foundation
 
-/// Starts and stops the root collector (agent/hostwatch_agent.py) bundled in
-/// the app's Resources. Elevation goes through the standard macOS admin prompt.
+/// Starts and stops the root collector (`Hostwatch --collector`, built into this binary).
+/// Elevation goes through the standard macOS admin prompt.
 @MainActor
 final class Collector: ObservableObject {
     enum State: Equatable {
@@ -57,23 +57,12 @@ final class Collector: ObservableObject {
 
     static let jobLabel = "local.hostwatch.collector"
 
-    static var agentScript: URL? {
-        Bundle.main.url(forResource: "hostwatch_agent", withExtension: "py")
-    }
-
-    private static var python: String {
-        ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/python3"
-    }
 
     // MARK: Start
 
     func start() {
         guard !isRunning, state != .starting else { return }
-        guard let script = Self.agentScript else {
-            state = .failed("hostwatch_agent.py is missing from the app bundle. Rebuild with scripts/build-app.sh.")
-            return
-        }
+        let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
         do {
             token = Self.randomToken()
             try writeToken(token)
@@ -93,8 +82,8 @@ final class Collector: ObservableObject {
         let plist: [String: Any] = [
             "Label": Self.jobLabel,
             "ProgramArguments": [
-                Bundle.main.executablePath ?? CommandLine.arguments[0], collectorLauncherFlag,
-                Self.python, "-I", script.path,
+                executable, collectorLauncherFlag,
+                executable, collectorFlag,
                 "--owner-pid", String(getpid()),
                 "--token-file", tokenURL.path,
                 "--socket", CollectorSocket.path,

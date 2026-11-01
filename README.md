@@ -95,16 +95,15 @@ block anything, unless you turn on the opt-in hold that pauses suspicious proces
  └─────────────────────────────────────────────────────────────┘
 ```
 
-The collector is a small Python script bundled in the app and started with your administrator
-password. It only observes; nothing is blocked or modified. Hostwatch's own activity is filtered out.
+The collector is part of the app binary (`Hostwatch --collector`), started as root with your
+administrator password. It only observes; nothing is blocked or modified. Hostwatch's own activity is filtered out.
 Everything stays on your Mac, except what you send to Claude (Ask AI, Classify, rule suggestions) and a
 daily anonymous update check on GitHub (both can be turned off; see Privacy).
 
 ## Requirements
 
 - macOS 26 or later
-- Xcode 26 or the Command Line Tools (`xcode-select --install`), Swift 6.2+
-- Python 3 (the system `python3` is fine)
+- To build from source: Xcode 26 or the Command Line Tools (`xcode-select --install`), Swift 6.2+
 - An administrator password, and Full Disk Access for the app
 - Optional: Apple Intelligence turned on (Apple Silicon), for private on-device triage
 - Optional: [Claude Code](https://claude.com/claude-code) (`claude` CLI) for Ask Claude and escalations
@@ -116,7 +115,7 @@ daily anonymous update check on GitHub (both can be turned off; see Privacy).
 Intel), check it against the `.sha256` file, unzip, and move `Hostwatch.app` to `/Applications`.
 The app is ad-hoc signed and **not notarized by Apple**, so macOS blocks the first launch. Allow it in
 **System Settings → Privacy & Security → "Hostwatch was blocked…" → Open Anyway**.
-The collector uses `/usr/bin/python3`, which needs the Command Line Tools (`xcode-select --install`).
+Nothing else to install: the collector is built into the app.
 
 **Or build from source:**
 
@@ -220,8 +219,8 @@ This is a working prototype, not a commercial security product.
 
 ```
 src/hostwatch/     the app (Swift, SwiftUI + AppKit)
-agent/             the collector (Python)
-tests/             Swift Testing (tests/swift) and unittest (tests/agent)
+src/hostwatch/Agent*.swift   the root collector (`Hostwatch --collector`)
+tests/swift/       Swift Testing (app, collector, MCP server)
 scripts/           build, test, icon, git hooks
 docs/reference.md  detailed rules, thresholds and behaviour
 CHANGELOG.md       what changed in each version
