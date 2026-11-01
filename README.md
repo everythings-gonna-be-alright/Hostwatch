@@ -55,6 +55,8 @@ block anything.
 - **Hold suspicious processes (opt-in).** Freezes your own process the moment it pipes a download
   into a shell, reads saved passwords, installs a login item or removes the download quarantine, and
   asks you: Allow, Always Allow or Kill. Off by default; see Limitations.
+- **Time travel.** Scrub back through recorded activity on a timeline marked with stories and new
+  domains, step or play it forward, and open any story at its moment with everything around it.
 - **Network signals.** Hostnames for every connection (from DNS answers), **first-seen domains**,
   **beaconing** (steady "calling home" intervals) and **raw-IP connections** on unusual ports.
 - **Your choice of AI.** Apple's **on-device** model (free, offline, nothing leaves the Mac), **Claude**,

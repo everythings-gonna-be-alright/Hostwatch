@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let collector = Collector()
     private let history = HistoryRecorder()
     private let hold = ProcessHold()
+    private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains)
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
@@ -42,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         askStory: { [weak self] story in self?.openAskAI(for: story) },
         openStories: { [weak self] in self?.openStories() },
         openSettings: { [weak self] in self?.openSettings(nil) },
-        exclude: { [weak self] pattern in self?.model.addExclusion(pattern) }
+        exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
+        showInTimeline: { [weak self] date in self?.showInTimeline(date) }
     )
     private var askWindows: [NSWindow] = []
 
@@ -377,7 +379,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         for f in SignatureFilter.allCases { filters.addItem(tagged(item(f.title, #selector(setFilter(_:))), f.rawValue)) }
         showFilter.submenu = filters
         let kinds = EventKind.allCases.map { tagged(item($0.title, #selector(toggleKindItem(_:))), $0.rawValue) }
-        submenu("View", tabs + [.separator(), showFilter, .separator()] + kinds + [
+        submenu("View", tabs + [
+            .separator(),
+            item("Time Travel", #selector(toggleTimeTravel), key: "t", modifiers: [.command, .option]),
+            item("Earlier", #selector(timeTravelEarlier), key: "["),
+            item("Later", #selector(timeTravelLater), key: "]"),
+            .separator(), showFilter, .separator()] + kinds + [
             .separator(),
             item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command]),
             std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
@@ -435,6 +442,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             mi.state = model.overlayEnabled ? .on : .off
         case #selector(toggleHold):
             mi.state = hold.enabled ? .on : .off
+        case #selector(toggleTimeTravel):
+            mi.state = travel.active ? .on : .off
+        case #selector(timeTravelEarlier), #selector(timeTravelLater):
+            return travel.active
+        case #selector(clearEvents):
+            return !travel.active
         case #selector(togglePause):
             mi.title = model.paused ? "Resume Live Stream" : "Pause Live Stream"
         case #selector(toggleCollector):
@@ -504,6 +517,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         guard alert.runModal() == .alertFirstButtonReturn,
               let pattern = popup.selectedItem?.representedObject as? String else { return }
         model.addExclusion(pattern)
+    }
+
+    @objc private func toggleTimeTravel() {
+        if travel.active { travel.exit(); return }
+        model.windowTab = 0
+        openActivityWindow(fullScreen: false)
+        travel.enter()
+    }
+
+    @objc private func timeTravelEarlier() { travel.step(-1) }
+    @objc private func timeTravelLater() { travel.step(1) }
+
+    /// Opens the Events tab in time travel, with `date` inside the shown slice.
+    private func showInTimeline(_ date: Date) {
+        model.windowTab = 0
+        openActivityWindow(fullScreen: false)
+        travel.enter(at: date.addingTimeInterval(min(travel.span / 2, 60)))
     }
 
     @objc private func showSettings() { openSettings(nil) }
@@ -697,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
         let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, collector: collector, history: history,
-                                                                   signatures: signatures, classifier: classifier, actions: actions))
+                                                                   signatures: signatures, classifier: classifier, travel: travel, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
         // preferred size (e.g. the small empty Stories view), which reset the window on tab switch.
@@ -773,6 +803,9 @@ enum Entry {
         }
         if let i = args.firstIndex(of: "--story-replay"), i + 1 < args.count {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
+        }
+        if let i = args.firstIndex(of: "--time-travel-probe") {
+            runTimeTravelProbe(i + 1 < args.count ? args[i + 1] : nil)
         }
         if let i = args.firstIndex(of: collectorLauncherFlag) {
             runCollectorLauncher(Array(args[(i + 1)...]))

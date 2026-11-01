@@ -371,6 +371,26 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
   login shell. Set `CLAUDE_PATH` to override.
 - Evidence you send goes to Anthropic. A typical question takes about 10 s and costs about $0.02–0.05.
 
+## Time Travel
+
+*Time Travel* in the activity window's toolbar (or *View ▸ Time Travel*, ⌥⌘T) switches the Events tab
+from the live stream to recorded history. Live collection carries on in the background.
+
+- **Timeline** (floating, at the bottom): bars show how busy the Mac was across the whole recording
+  (square-root scale, so one burst doesn't flatten the rest; gaps are when nothing was recorded). Red
+  and orange dots mark stories, purple dots new domains. Hover for the time, drag to move; clicking
+  near a dot lands on it.
+- **The slice:** the list shows the window ending at the playhead (1 min, 5 min, 15 min or 1 hour), newest
+  first, with the same Show filter, kind toggles, exclusions and search as live. A very busy slice shows
+  its newest ~20,000 events and says so.
+- **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 10×, 60× or 600×; the date
+  picker jumps anywhere. **Return to Live** (Esc) goes back.
+- **From a story:** *Show in Timeline* opens the slice around it.
+- **How it reads history:** lines are stored in time order, so the offset of any moment is a binary
+  search away and bar heights are byte counts between offsets. Nothing is loaded except the slice
+  you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
+  `Hostwatch --time-travel-probe [dir]` prints these timings.
+
 ## Activity history
 
 All activity is written to disk as JSON Lines, one event per line, with a full `ts` timestamp:

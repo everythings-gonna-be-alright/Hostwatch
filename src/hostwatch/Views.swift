@@ -12,6 +12,7 @@ struct HUDActions {
     var openStories: () -> Void = {}
     var openSettings: () -> Void = {}
     var exclude: (String) -> Void = { _ in }
+    var showInTimeline: (Date) -> Void = { _ in }
 }
 
 // MARK: - Overlay
@@ -406,12 +407,16 @@ struct ActivityWindowView: View {
     @ObservedObject var history: HistoryRecorder
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var classifier: PatternClassifier
+    @ObservedObject var travel: TimeTravel
     let actions: HUDActions
+
+    private var traveling: Bool { travel.active && model.windowTab == 0 }
 
     var body: some View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
+            if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
             case 0: eventsList
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
@@ -422,6 +427,10 @@ struct ActivityWindowView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 480)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
+        }
+        .animation(.smooth(duration: 0.25), value: traveling)
         // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
@@ -438,6 +447,9 @@ struct ActivityWindowView: View {
 
     private var subtitle: String {
         let state = model.paused ? "Paused" : model.connected ? "Live" : "Collector off"
+        if traveling {
+            return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+        }
         switch model.windowTab {
         case 0: return "\(state) · \(model.history.count) events"
         case 1: return "\(state) · \(signatures.total) patterns"
@@ -479,12 +491,20 @@ struct ActivityWindowView: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            Toggle(isOn: Binding(get: { travel.active }, set: { on in
+                if on { model.windowTab = 0; travel.enter() } else { travel.exit() }
+            })) {
+                Label("Time Travel", systemImage: "clock.arrow.circlepath")
+            }
+            .help("Travel through recorded activity (⌥⌘T)")
             Button { model.paused.toggle() } label: {
                 Label(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play.fill" : "pause.fill")
             }
             .help(model.paused ? "Resume the live stream" : "Pause the live stream")
+            .disabled(traveling)
             Button { model.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear the event list")
+                .disabled(traveling)
             Toggle(isOn: $model.overlayEnabled) {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")
             }
@@ -524,7 +544,7 @@ struct ActivityWindowView: View {
 
     @ViewBuilder
     private var eventsList: some View {
-        let events = model.searchResults
+        let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
         let rows = events
             .map { e -> EventItem in
                 let status = signatures.status(for: e)
@@ -595,9 +615,8 @@ struct ActivityWindowView: View {
                 Spacer()
                 Text("Double-click a row to ask AI · click a column to sort")
                 Text("·")
-                Text(rows.count == model.history.count
-                     ? "\(model.history.count) events"
-                     : "\(rows.count) of \(model.history.count) events")
+                let total = traveling ? travel.events.count : model.history.count
+                Text(rows.count == total ? "\(total) events" : "\(rows.count) of \(total) events")
                     .monospacedDigit()
             }
             .font(.system(size: 11))
