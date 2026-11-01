@@ -282,8 +282,10 @@ Routing (`TriageRouter`, unit-tested):
 | SUSPICIOUS / DANGEROUS | Claude, else flagged (*on-device*) | Claude, else flagged |
 | model unavailable | Claude, else left for you | Claude, else left for you |
 
-High-risk patterns are never marked Safe on-device: a small model, or text crafted by an attacker,
-cannot hide them. On-device verdicts never remove steps from Stories (only your own decisions do).
+No AI verdict ever marks a high-risk pattern Safe, from the on-device model or Claude, in triage, Classify
+New or Ask AI: event text (file paths, process names, hostnames) can be crafted to talk a model into it,
+so a high-risk pattern stays New until you decide. AI verdicts never remove steps from Stories either
+(only your own decisions do).
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
@@ -484,7 +486,8 @@ script). The launcher starts it as root, and it combines:
 - `eslogger exec exit open` (Endpoint Security) → processes and file opens (`exit` is only used to
   keep the list of Hostwatch's own processes exact; it is never published).
   Opens are deduplicated per (pid, path) for 2 minutes and capped at 40/s per client.
-- Packet capture (`tcpdump -i pktap,all -k NPD`, read-only) → every outgoing TCP connection, from
+- Packet capture (`tcpdump -i pktap,all -k NPD -Z nobody`, read-only; it drops root right after opening
+  the capture device, so packets are decoded without root) → every outgoing TCP connection, from
   its SYN packet, with the owning process. This catches connections too short for any polling,
   like `curl google.com`. Endpoint Security has no connect event.
 - `lsof -i` snapshot diff every second → UDP flows, incoming connections, and a fallback if packet
@@ -504,10 +507,10 @@ script). The launcher starts it as root, and it combines:
   still shows the IP, Claude gets both, and exclusions match hostnames: `net:*.google.com:*`.
 
 **Hostwatch's own activity is not reported** (live, in history or in stories): the app that started the
-collector (verified by pid), any other run of the exact same executable (such as the MCP server Claude
-Code starts), the collector's own helpers (eslogger, tcpdump, lsof, nettop) and the children of all of
-these. A look-alike binary elsewhere is reported as usual, and a pid leaves the list when its process
-exits, so a reused pid is watched again.
+collector (verified by pid), the collector's own helpers (eslogger, tcpdump, lsof, nettop) and the children
+of these. Other runs of the Hostwatch program, such as the MCP server Claude Code starts, are reported like
+any program: hiding "anything running the Hostwatch binary" would let malware hide by starting it with
+injected code. A pid leaves the list when its process exits, so a reused pid is watched again.
 
 Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --socket /var/run/hostwatch/collector.sock`.
 Started by hand, the collector accepts connections only from the user who ran `sudo`. For development,

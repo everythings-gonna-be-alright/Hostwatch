@@ -202,7 +202,6 @@ import Testing
 
     func agentWithOwner() -> Agent {
         let agent = Agent()
-        agent.ownExe = Self.app
         agent.addToOurTree(500)                              // the verified owner app
         return agent
     }
@@ -229,12 +228,14 @@ import Testing
         #expect(agent.isOurs(501))
     }
 
-    @Test func sameExecutableElsewhereIsHiddenOthersAreNot() {
+    @Test func otherRunsOfTheSameProgramAreReported() {
+        // `DYLD_INSERT_LIBRARIES=evil.dylib Hostwatch --mcp` must not become invisible: only the
+        // verified app's own process tree is hidden, never "anything running the Hostwatch binary".
         let agent = agentWithOwner()
-        #expect(agent.normalize(exec(710, 700, Self.app)) == nil)               // Claude Code starts `Hostwatch --mcp`
-        let lookalike = agent.normalize(exec(720, 700, "/tmp/Hostwatch.app/Contents/MacOS/Hostwatch"))
-        #expect(lookalike?.kind == "exec")
-        #expect(agent.normalize(open(720, "/tmp/evil"))?.kind == "file")
+        #expect(agent.normalize(exec(710, 700, Self.app))?.kind == "exec")
+        #expect(agent.normalize(open(710, "/tmp/evil"))?.kind == "file")
+        #expect(agent.normalize(exec(711, 710, "/bin/sh"))?.kind == "exec")   // and its children
+        #expect(!agent.isOurs(710) && !agent.isOurs(711))
     }
 
     @Test func reusedPidIsReportedAgain() {

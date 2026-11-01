@@ -122,4 +122,24 @@ import Testing
         #expect(p.contains("Decisions made by the user (1)") && p.contains("always ignore"))
         #expect(!p.contains("s3cret"))
     }
+
+    // MARK: AI verdicts
+
+    @Test func aiNeverMarksAHighRiskPatternSafe() {
+        let shell = exec("/bin/sh", pid: 4100, ppid: 5, parent: "/Applications/Slack.app/Contents/MacOS/Slack")
+        #expect(shell.signatureRisk == .high)
+        let key = seen(shell)
+        for source in ["claude", "on-device"] {
+            store.suggest(.safe, key: key, source: source, note: "looks routine")
+            #expect(store.status(forKey: key) == .unclassified)              // stays New for you
+        }
+        store.suggest(.suspicious, key: key, source: "claude", note: "app shell")
+        #expect(store.status(forKey: key) == .suspicious)                    // other verdicts still apply
+
+        let curl = exec("/usr/bin/curl", pid: 4101, ppid: 1, parent: "/bin/zsh")
+        #expect(curl.signatureRisk != .high)
+        let normal = seen(curl)
+        store.suggest(.safe, key: normal, source: "claude", note: nil)
+        #expect(store.status(forKey: normal) == .safe)                       // Safe is fine below high risk
+    }
 }

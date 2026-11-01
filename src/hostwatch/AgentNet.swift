@@ -256,7 +256,9 @@ extension Agent {
             let (args, filter, connects) = attempts[choice]
             let child: Spawned
             do {
-                child = try Spawned.start("/usr/sbin/tcpdump", ["-l", "-n", "-vv", "-s", "0"] + args + [filter])
+                // -Z nobody: tcpdump drops root right after opening the capture device, so packet
+                // decoding (DNS answers from anyone on the network) never runs as root.
+                child = try Spawned.start("/usr/sbin/tcpdump", ["-l", "-n", "-vv", "-s", "0", "-Z", "nobody"] + args + [filter])
             } catch {
                 Agent.logError("packet capture disabled: \(error)")
                 return
