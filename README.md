@@ -72,7 +72,7 @@ block anything.
  └──────────────────────────┬──────────────────────────────────┘
                             │ JSON lines on 127.0.0.1
  ┌──────────────────────────▼──────────────────────────────────┐
- │ Hostwatch.app (your user)                                    │
+ │ Hostwatch.app (your user)                                   │
  │ patterns + risk → code signing → stories → domains/beacons  │
  │ HUD · Activity window · Ask Claude · history on disk        │
  └─────────────────────────────────────────────────────────────┘
