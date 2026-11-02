@@ -234,4 +234,10 @@ import Testing
         #expect(abs(HUDSurface.floor(1) - 0.95) < 0.001)
         #expect(HUDSurface.floor(0.2) < HUDSurface.floor(0.3))
     }
+
+    @Test func transparencyFadesTheBackgroundButNeverHidesIt() {
+        #expect(HUDSurface.layerOpacity(0) == 1)
+        #expect(abs(HUDSurface.layerOpacity(1) - 0.1) < 0.001)
+        #expect(HUDSurface.layerOpacity(0.5) > HUDSurface.layerOpacity(0.8))
+    }
 }

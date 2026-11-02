@@ -401,6 +401,10 @@ final class HUDModel: ObservableObject {
     }
 
     /// Tint strength for the Blur and Dark backgrounds (0.1…1).
+    /// How see-through the HUD's background is (0 as designed … 1 nearly invisible); text stays as is.
+    @Published var overlayTransparency: Double = UserDefaults.standard.object(forKey: "overlayTransparency") as? Double ?? 0 {
+        didSet { UserDefaults.standard.set(overlayTransparency, forKey: "overlayTransparency") }
+    }
     @Published var overlayOpacity: Double {
         didSet { UserDefaults.standard.set(overlayOpacity, forKey: Keys.overlayOpacity) }
     }

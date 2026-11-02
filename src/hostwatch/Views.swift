@@ -87,7 +87,7 @@ struct HUDView: View {
         // does for text over vibrant backgrounds).
         .shadow(color: .black.opacity(transparent ? 0.95 : model.overlayBackground == .solid ? 0 : 0.45),
                 radius: transparent ? 1.2 : 0.8)
-        .modifier(HUDSurface(style: model.overlayBackground, tint: model.overlayOpacity,
+        .modifier(HUDSurface(style: model.overlayBackground, tint: model.overlayOpacity, transparency: model.overlayTransparency,
                              interactive: !model.overlayClickThrough, shape: hudShape))
         .overlay(alignment: .bottomLeading) {
             if !model.overlayClickThrough {
@@ -190,11 +190,13 @@ struct HUDView: View {
     }
 }
 
-/// HUD background. The HUD always uses white text, so each style keeps a dark floor under it
-/// (`contrast`, the Contrast setting). With Reduce Transparency on, glass becomes Solid.
+/// HUD background, drawn as its own layer under the content so Transparency fades only the
+/// background, never the text. Contrast sets how dark it is under the HUD's white text. With
+/// Reduce Transparency on, glass becomes Solid and Transparency is ignored.
 struct HUDSurface: ViewModifier {
     let style: OverlayBackground
     let tint: Double
+    var transparency: Double = 0
     let interactive: Bool
     let shape: RoundedRectangle
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -206,34 +208,47 @@ struct HUDSurface: ViewModifier {
         return v <= 0.45 ? v / 0.45 * 0.62 : 0.62 + (v - 0.45) / 0.55 * 0.33
     }
 
+    /// Transparency 0…1 → the background layer's opacity (never fully gone, so its edge stays visible).
+    static func layerOpacity(_ transparency: Double) -> Double { 1 - min(max(transparency, 0), 1) * 0.9 }
+
     private var effective: OverlayBackground {
         reduceTransparency && (style == .glass || style == .clear) ? .solid : style
     }
 
     func body(content: Content) -> some View {
-        switch effective {
-        case .glass:
-            // The default contrast gives a 62% floor: primary text stays near 5.6:1 on a white wallpaper.
-            content.glassEffect(.regular.tint(.black.opacity(Self.floor(tint))), in: shape)
-        case .clear:
-            content.glassEffect(.clear.tint(.black.opacity(Self.floor(tint) * 0.85)), in: shape)
-        case .solid:
-            content
-                .background {
-                    ZStack {
-                        Rectangle().fill(.thickMaterial)
-                        Color.black.opacity(0.25 + Self.floor(tint) * 0.75)
-                    }
-                }
-                .clipShape(shape)
-                .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.28 : 0.12), lineWidth: 0.5) }
-                .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-        case .transparent:
+        if effective == .transparent {
             // Fully clear pixels don't receive clicks, so keep a near-invisible fill while interactive.
             content
                 .background(Color.black.opacity(interactive ? 0.02 : 0))
                 .clipShape(shape)
                 .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.3 : 0), lineWidth: 1) }
+        } else {
+            content
+                .background { layer.opacity(reduceTransparency ? 1 : Self.layerOpacity(transparency)) }
+                .clipShape(shape)
+                .overlay {
+                    if effective == .solid || interactive {
+                        shape.strokeBorder(.white.opacity(interactive ? 0.28 : 0.12), lineWidth: 0.5)
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder private var layer: some View {
+        switch effective {
+        case .glass:
+            shape.fill(Color.black.opacity(0.001))
+                .glassEffect(.regular.tint(.black.opacity(Self.floor(tint))), in: shape)
+        case .clear:
+            // Clear glass darkens much faster with a tint: half as much keeps the scale even.
+            shape.fill(Color.black.opacity(0.001))
+                .glassEffect(.clear.tint(.black.opacity(Self.floor(tint) * 0.5)), in: shape)
+        case .solid, .transparent:
+            ZStack {
+                Rectangle().fill(.thickMaterial)
+                Color.black.opacity(0.25 + Self.floor(tint) * 0.75)
+            }
+            .clipShape(shape)
         }
     }
 }
@@ -242,6 +257,7 @@ struct HUDSurface: ViewModifier {
 struct HUDBackgroundTile: View {
     let style: OverlayBackground
     let tint: Double
+    var transparency: Double = 0
     let selected: Bool
 
     var body: some View {
@@ -257,7 +273,7 @@ struct HUDBackgroundTile: View {
                 }
                 .padding(8)
                 .shadow(color: .black.opacity(style == .transparent ? 0.9 : 0.3), radius: 0.8)
-                .modifier(HUDSurface(style: style, tint: tint, interactive: false,
+                .modifier(HUDSurface(style: style, tint: tint, transparency: transparency, interactive: false,
                                      shape: RoundedRectangle(cornerRadius: 8, style: .continuous)))
             }
             .frame(width: 92, height: 60)
