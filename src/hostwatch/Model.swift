@@ -266,15 +266,34 @@ extension ActivityEvent {
     }
 }
 
+/// HUD background: four clearly different looks (like System Settings ▸ Appearance).
 enum OverlayBackground: String, CaseIterable {
-    case glass, blur, dark, transparent
+    case glass, clear, solid, transparent
+
+    /// Earlier versions' "blur" (frosted) becomes Glass, "dark" becomes Solid.
+    init?(stored: String) {
+        switch stored {
+        case "blur": self = .glass
+        case "dark": self = .solid
+        default: self.init(rawValue: stored)
+        }
+    }
 
     var title: String {
         switch self {
-        case .glass: return "Liquid Glass"
-        case .blur: return "Blur"
-        case .dark: return "Dark"
-        case .transparent: return "Transparent"
+        case .glass: return "Glass"
+        case .clear: return "Clear Glass"
+        case .solid: return "Solid"
+        case .transparent: return "None"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .glass: return "Liquid Glass that adapts to what's behind it."
+        case .clear: return "More see-through Liquid Glass, for calm wallpapers."
+        case .solid: return "A dense dark surface: the easiest to read on busy screens."
+        case .transparent: return "Text only, with a shadow to keep it readable."
         }
     }
 }
@@ -466,7 +485,7 @@ final class HUDModel: ObservableObject {
         overlayClickThrough = defaults.object(forKey: Keys.clickThrough) as? Bool ?? false
         overlayEnabled = defaults.object(forKey: Keys.overlayEnabled) as? Bool ?? true
         overlayBackground = defaults.string(forKey: Keys.overlayBackground)
-            .flatMap(OverlayBackground.init(rawValue:)) ?? .glass
+            .flatMap(OverlayBackground.init(stored:)) ?? .glass
         // One-time switch to the Liquid Glass look for existing installs.
         if !defaults.bool(forKey: "designGlassAdopted") {
             defaults.set(true, forKey: "designGlassAdopted")

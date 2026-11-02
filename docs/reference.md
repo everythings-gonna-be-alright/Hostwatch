@@ -25,7 +25,7 @@ Each kind of control has one home:
   - *Window*: Activity Window (⌘0), Held Processes. *Help*: this reference, Use with Claude Code…,
     Collector Log, Full Disk Access Settings.
 - **Settings window (⌘,)**: *General* (collector, start at launch, log, Full Disk Access), *HUD*
-  (show, click-through, background, tint, text size, reset size and position), *Detection* (hold,
+  (show, click-through, background: Glass, Clear Glass, Solid or None with preview tiles, contrast, text size, reset size and position), *Detection* (hold,
   Homebrew trust, domain learning, ignored stories), *AI* (engine, on-device status, Claude Code
   command), *Exclusions* (the editor) and *History* (recording, size, location, clear).
 - **Right-click a row** (events, patterns, domains, and the HUD while click-through is off): Ask AI,

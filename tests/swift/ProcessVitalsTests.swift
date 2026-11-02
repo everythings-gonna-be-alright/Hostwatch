@@ -218,3 +218,13 @@ import Testing
             .appendingPathComponent("heavy-strip.png"))
     }
 }
+
+/// HUD backgrounds: four distinct looks; the two near-identical old ones map onto the new set.
+@Suite struct HUDBackgrounds {
+    @Test func oldChoicesCarryOver() {
+        #expect(OverlayBackground(stored: "blur") == .glass)
+        #expect(OverlayBackground(stored: "dark") == .solid)
+        #expect(OverlayBackground(stored: "transparent") == .transparent)
+        #expect(OverlayBackground.allCases.map(\.title) == ["Glass", "Clear Glass", "Solid", "None"])
+    }
+}
