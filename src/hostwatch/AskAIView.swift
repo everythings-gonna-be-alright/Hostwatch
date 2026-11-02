@@ -15,14 +15,14 @@ struct AskAIView: View {
         Group {
             if scrollable { ScrollView { content } } else { content }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { askBar }
+        .safeAreaInset(edge: .bottom, spacing: 0) { AIAskBar(analysis: analysis) }
         .frame(minWidth: 640, minHeight: 620)
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            verdictCard
+            AIVerdictCard(analysis: analysis)
             switch event.kind {
             case .exec: processCard(title: "Process", symbol: "gearshape.2")
             case .net: connectionCard; processCard(title: "Process", symbol: "gearshape.2")
@@ -30,7 +30,7 @@ struct AskAIView: View {
             }
             lineageCard
             activityCard
-            evidenceSection
+            AIEvidenceSection(analysis: analysis)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,88 +102,6 @@ struct AskAIView: View {
         let bad = id.untrustedCode || id.valid == false || id.missing
         return Chip(text: id.label, symbol: bad ? "exclamationmark.shield" : (id.apple ? "apple.logo" : "checkmark.seal"),
                     color: bad ? .orange : (analysis.facts?.trusted == true ? .green : .secondary))
-    }
-
-    // MARK: Verdict
-
-    @ViewBuilder
-    private var verdictCard: some View {
-        if analysis.answer.isEmpty && analysis.state != .asking && !isFailed {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles").foregroundStyle(.secondary)
-                Text(analysis.state == .gathering ? "Collecting evidence…"
-                     : "No verdict yet. Ask \(analysis.engine == .onDevice ? "the on-device model" : "Claude") (⌘↩) whether this is safe.")
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
-        } else {
-            let verdict = analysis.verdict ?? .unknown
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: verdictSymbol(verdict)).font(.title2).foregroundStyle(verdict.color)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(analysis.state == .asking && analysis.verdict == nil ? "Analysing…" : verdict.rawValue.capitalized)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(analysis.verdict == nil ? Color.primary : verdict.color)
-                        if let confidence {
-                            Text("Confidence: \(confidence)").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if analysis.state == .asking { ProgressView().controlSize(.small) }
-                    Text(analysis.engine == .onDevice ? "On-device" : "Claude")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if case .failed(let message) = analysis.state {
-                    Text(message).foregroundStyle(.red).textSelection(.enabled)
-                } else if !answerBody.isEmpty {
-                    Text(rendered(answerBody))
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(verdict.color.opacity(analysis.verdict == nil ? 0.05 : 0.10)))
-            .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
-                    .fill(analysis.verdict == nil ? Color.secondary.opacity(0.4) : verdict.color)
-                    .frame(width: 4)
-            }
-        }
-    }
-
-    private var isFailed: Bool { if case .failed = analysis.state { return true }; return false }
-
-    private func verdictSymbol(_ v: Verdict) -> String {
-        switch v {
-        case .safe: return "checkmark.shield.fill"
-        case .suspicious: return "exclamationmark.triangle.fill"
-        case .dangerous: return "xmark.octagon.fill"
-        case .unknown: return "sparkles"
-        }
-    }
-
-    /// "CONFIDENCE: high" from the answer.
-    private var confidence: String? {
-        analysis.answer.split(separator: "\n").first { $0.uppercased().hasPrefix("CONFIDENCE:") }
-            .map { $0.dropFirst("CONFIDENCE:".count).trimmingCharacters(in: .whitespaces).lowercased() }
-    }
-
-    /// The answer without the VERDICT/CONFIDENCE lines (shown as the badge above).
-    private var answerBody: String {
-        analysis.answer.split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { let u = $0.uppercased(); return !u.hasPrefix("VERDICT:") && !u.hasPrefix("CONFIDENCE:") }
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func rendered(_ markdown: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
     }
 
     // MARK: Detail cards
@@ -312,9 +230,110 @@ struct AskAIView: View {
         }
     }
 
-    // MARK: Evidence
+}
 
-    private var evidenceSection: some View {
+// MARK: - Shared AI pieces (event and domain windows)
+
+/// The AI verdict: a hint before asking, then verdict, confidence, AI risk score and the answer.
+struct AIVerdictCard: View {
+    @ObservedObject var analysis: AIAnalysis
+    
+
+    var body: some View { card }
+
+    @ViewBuilder
+    private var card: some View {
+        if analysis.answer.isEmpty && analysis.state != .asking && !isFailed {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                Text(analysis.state == .gathering ? "Collecting evidence…"
+                     : "No verdict yet. Ask \(analysis.engine == .onDevice ? "the on-device model" : "Claude") (⌘↩) whether this is safe.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+        } else {
+            let verdict = analysis.verdict ?? .unknown
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: verdictSymbol(verdict)).font(.title2).foregroundStyle(verdict.color)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(analysis.state == .asking && analysis.verdict == nil ? "Analysing…" : verdict.rawValue.capitalized)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(analysis.verdict == nil ? Color.primary : verdict.color)
+                        HStack(spacing: 8) {
+                            if let confidence {
+                                Text("Confidence: \(confidence)").font(.caption).foregroundStyle(.secondary)
+                            }
+                            if let risk = analysis.aiRisk {
+                                Text("AI risk \(risk)/100").font(.caption.weight(.semibold)).foregroundStyle(RiskScale.color(risk))
+                            }
+                        }
+                    }
+                    Spacer()
+                    if analysis.state == .asking { ProgressView().controlSize(.small) }
+                    Text(analysis.engine == .onDevice ? "On-device" : "Claude")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if case .failed(let message) = analysis.state {
+                    Text(message).foregroundStyle(.red).textSelection(.enabled)
+                } else if !answerBody.isEmpty {
+                    Text(rendered(answerBody))
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(verdict.color.opacity(analysis.verdict == nil ? 0.05 : 0.10)))
+            .overlay(alignment: .leading) {
+                UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
+                    .fill(analysis.verdict == nil ? Color.secondary.opacity(0.4) : verdict.color)
+                    .frame(width: 4)
+            }
+        }
+    }
+
+    private var isFailed: Bool { if case .failed = analysis.state { return true }; return false }
+
+    private func verdictSymbol(_ v: Verdict) -> String {
+        switch v {
+        case .safe: return "checkmark.shield.fill"
+        case .suspicious: return "exclamationmark.triangle.fill"
+        case .dangerous: return "xmark.octagon.fill"
+        case .unknown: return "sparkles"
+        }
+    }
+
+    /// "CONFIDENCE: high" from the answer.
+    private var confidence: String? {
+        analysis.answer.split(separator: "\n").first { $0.uppercased().hasPrefix("CONFIDENCE:") }
+            .map { $0.dropFirst("CONFIDENCE:".count).trimmingCharacters(in: .whitespaces).lowercased() }
+    }
+
+    /// The answer without the VERDICT/CONFIDENCE lines (shown as the badge above).
+    private var answerBody: String {
+        analysis.answer.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { let u = $0.uppercased(); return !u.hasPrefix("VERDICT:") && !u.hasPrefix("CONFIDENCE:") && !u.hasPrefix("RISK:") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rendered(_ markdown: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+    }
+
+}
+
+/// The evidence the AI gets: collapsed, editable, re-collectable.
+struct AIEvidenceSection: View {
+    @ObservedObject var analysis: AIAnalysis
+    
+
+    var body: some View {
         DisclosureGroup(isExpanded: $analysis.showEvidence) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(analysis.engine == .onDevice
@@ -344,9 +363,14 @@ struct AskAIView: View {
         }
     }
 
-    // MARK: Ask bar
+}
 
-    private var askBar: some View {
+/// The glass bar at the bottom: engine, local files, status, Copy Answer, Ask.
+struct AIAskBar: View {
+    @ObservedObject var analysis: AIAnalysis
+    
+
+    var body: some View {
         HStack(spacing: 10) {
             Picker("Engine", selection: $analysis.engine) {
                 Text("Claude").tag(AIEngine.claude)
@@ -402,10 +426,31 @@ struct AskAIView: View {
     }
 }
 
+/// 0-100 risk: colour and word.
+enum RiskScale {
+    static func color(_ score: Int) -> Color {
+        switch score {
+        case ..<25: return .green
+        case ..<50: return .yellow
+        case ..<75: return .orange
+        default: return .red
+        }
+    }
+
+    static func word(_ score: Int) -> String {
+        switch score {
+        case ..<25: return "Low"
+        case ..<50: return "Medium"
+        case ..<75: return "High"
+        default: return "Critical"
+        }
+    }
+}
+
 // MARK: - Building blocks
 
 /// A titled group of labelled rows (the macOS inspector look).
-private struct Card<Content: View>: View {
+struct Card<Content: View>: View {
     let title: String
     let symbol: String
     @ViewBuilder let content: Content
@@ -422,7 +467,7 @@ private struct Card<Content: View>: View {
 }
 
 /// "Label    value", the label column aligned.
-private struct Row<Value: View>: View {
+struct Row<Value: View>: View {
     let label: String
     @ViewBuilder let value: Value
 
@@ -441,7 +486,7 @@ private struct Row<Value: View>: View {
 }
 
 /// Monospaced, selectable text (paths, addresses, command lines).
-private struct Mono: View {
+struct Mono: View {
     let text: String
     var lines = 1
 
@@ -458,7 +503,7 @@ private struct Mono: View {
 }
 
 /// A path with Reveal in Finder and Copy.
-private struct PathValue: View {
+struct PathValue: View {
     let path: String
 
     var body: some View {
@@ -481,7 +526,7 @@ private struct PathValue: View {
     }
 }
 
-private struct Chip: View {
+struct Chip: View {
     let text: String
     let symbol: String
     let color: Color
@@ -515,7 +560,7 @@ private struct Crumb: View {
 }
 
 /// Lays children out left to right, wrapping to new lines (chips, the process chain).
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

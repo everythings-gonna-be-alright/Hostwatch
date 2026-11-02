@@ -208,6 +208,7 @@ final class AIAnalysis: ObservableObject {
     Reply in Markdown, concise, in this exact shape:
     VERDICT: SAFE | SUSPICIOUS | DANGEROUS | UNKNOWN
     CONFIDENCE: low | medium | high
+    RISK: <0-100, how dangerous: 0 harmless, 50 worth checking, 100 clearly malicious>
 
     **What it is:** one or two sentences.
 
@@ -216,6 +217,25 @@ final class AIAnalysis: ObservableObject {
     **What to do:** 1–4 concrete bullets (e.g. commands to check further, how to remove it), or "Nothing needed."
     """
 
+    /// The system prompt this analysis uses (events by default; domains have their own).
+    let instructions: String
+    /// Evidence for something other than an event (e.g. a domain); nil = the event's evidence.
+    private let evidenceSource: (@Sendable () -> String)?
+
+    /// The AI's 0-100 risk score ("RISK: 70"), once it answered.
+    var aiRisk: Int? { Self.risk(in: answer) }
+
+    /// "RISK: 70" (also "**RISK:** 70/100") -> 70.
+    nonisolated static func risk(in answer: String) -> Int? {
+        for line in answer.split(separator: "\n") {
+            let plain = line.replacingOccurrences(of: "*", with: "").trimmingCharacters(in: .whitespaces)
+            guard plain.uppercased().hasPrefix("RISK:") else { continue }
+            let digits = plain.dropFirst(5).trimmingCharacters(in: .whitespaces).prefix { $0.isNumber }
+            return Int(digits).map { min(100, max(0, $0)) }
+        }
+        return nil
+    }
+
     /// Other recent activity from the same process (newest first), for the window.
     var relatedEvents: [ActivityEvent] { related }
 
@@ -223,12 +243,31 @@ final class AIAnalysis: ObservableObject {
         self.event = event
         self.related = related
         self.preface = preface
+        self.instructions = Self.systemPrompt
+        self.evidenceSource = nil
+        gather()
+    }
+
+    /// An analysis of something else (a domain): its own evidence and instructions.
+    init(subject: ActivityEvent, instructions: String, evidence: @escaping @Sendable () -> String) {
+        self.event = subject
+        self.related = []
+        self.preface = ""
+        self.instructions = instructions
+        self.evidenceSource = evidence
         gather()
     }
 
     func gather() {
         state = .gathering
         let event = self.event, related = self.related, preface = self.preface
+        if let source = evidenceSource {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let text = EvidenceGatherer.redactSecrets(source())
+                DispatchQueue.main.async { self.context = text; self.state = .ready }
+            }
+            return
+        }
         DispatchQueue.global(qos: .userInitiated).async {
             let facts = EventFacts.gather(for: event)
             let evidence = EvidenceGatherer.gather(for: event, related: related)
@@ -267,7 +306,7 @@ final class AIAnalysis: ObservableObject {
             "--setting-sources", "",          // skip user hooks/plugins: fast and isolated
             "--strict-mcp-config",            // no MCP servers
             "--tools", allowFileTools ? "Read,Grep,Glob" : "",
-            "--system-prompt", Self.systemPrompt,
+            "--system-prompt", instructions,
         ]
         if allowFileTools { process.arguments! += ["--add-dir", "/"] }
         process.environment = ClaudeLocator.environment
@@ -313,7 +352,7 @@ final class AIAnalysis: ObservableObject {
         footer = ""
         state = .asking
         let prompt = AppleOnDeviceModel.askPrompt(evidence: context)
-        let instructions = Self.systemPrompt
+        let instructions = self.instructions
         let start = Date()
         let core = AppleOnDeviceModel.askPrompt(evidence: AppleOnDeviceModel.coreEvidence(context))
         localTask = Task { [weak self] in

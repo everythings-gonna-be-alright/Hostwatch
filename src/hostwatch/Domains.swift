@@ -256,6 +256,8 @@ struct DomainsView: View {
     @ObservedObject var domains: DomainRegistry
     @ObservedObject var state: DomainsViewState
     let search: String
+    /// Opens the domain's details window (risk score, programs, Ask AI).
+    var openDetails: (String) -> Void = { _ in }
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -362,6 +364,10 @@ struct DomainsView: View {
         .font(.system(size: 12, design: .monospaced))
         .contextMenu(forSelectionType: String.self) { ids in
             let list = Array(ids)
+            if list.count == 1, let domain = list.first {
+                Button("Details & Ask AI…") { openDetails(domain) }
+                Divider()
+            }
             Button("Mark \(list.count > 1 ? "\(list.count) Domains" : "Domain") Known") { domains.setKnown(list, true) }
             Button("Mark as Not Known") { domains.setKnown(list, false) }
             Divider()
@@ -370,6 +376,8 @@ struct DomainsView: View {
                 NSPasteboard.general.setString(list.joined(separator: "\n"), forType: .string)
             }
             Button("Forget (treat as new next time)") { domains.forget(list) }
+        } primaryAction: { ids in
+            if let domain = ids.first { openDetails(domain) }   // double-click
         }
     }
 }

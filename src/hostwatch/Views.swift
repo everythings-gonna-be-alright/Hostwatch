@@ -14,6 +14,7 @@ struct HUDActions {
     var exclude: (String) -> Void = { _ in }
     var showInTimeline: (Date) -> Void = { _ in }
     var openBaseline: () -> Void = {}
+    var openDomain: (String) -> Void = { _ in }
 }
 
 // MARK: - Overlay
@@ -486,7 +487,7 @@ struct ActivityWindowView: View {
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
-            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText)
+            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain)
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline) { app in
                 signatures.search = app
                 model.windowTab = 1
