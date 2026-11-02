@@ -8,12 +8,16 @@
   it's used), the domain's hostnames, addresses, first and last contact (with Time Travel), the programs with
   their signers, recent connections, and Ask AI (Claude or on-device) with its own risk score. Mark Known
   from the window. Event and pattern verdicts show the AI's risk score too.
-- **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** each trusted signer (Apple,
-  or a developer of your installed apps) becomes a rule in the Rules tab that keeps trusting its normal-risk
-  patterns, now and later. Never high-risk, unsigned, downloaded, temporary or sensitive; signed-but-untrusted
-  developers go to the on-device model; the rest waits for your review, grouped by app (Trust App, Show).
-  Pause, Delete, Undo Baseline and Build Now; your decisions win and stories ignore baseline trust. It
-  replaces the old "Trust Baseline…", which trusted everything, high-risk included.
+- **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** one narrow rule per trusted
+  app and its signer (*Slack · Slack Technologies*), one for macOS system services, and optionally one for
+  Homebrew tools, in the Rules tab. A rule keeps trusting the app's normal-risk patterns, now and later. Never
+  high-risk, unsigned, downloaded or temporary; sensitive places only for macOS services or apps you trusted.
+  Signed-but-untrusted developers go to the on-device model; the rest waits in **Needs your review**, one row
+  per app with its reasons: **Trust** (adds a rule marked *Trusted by you*), **Dismiss** (stays New, not listed
+  again), Mark Suspicious. Hostwatch's own activity is never listed. Pause, Delete and **Update Baseline**
+  (local, no AI; separate from *Suggest Rules from My Decisions*, which asks Claude). Your decisions win and
+  stories ignore baseline trust. It replaces the old "Trust Baseline…", which trusted everything.
+- **`sqlite3` is recognised as a living-off-the-land tool** (its name was cut at the digit before).
 - **Domain learning now lasts an hour** (was 12 hours), and a domain first reached by unsigned, quarantined or
   downloaded software during learning stays new.
 - **CPU, memory, network and disk in the HUD:** one compact line under its title (sparklines when there's

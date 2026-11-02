@@ -248,7 +248,7 @@ enum SignatureBuilder {
 
     static func isLolbin(_ path: String) -> Bool {
         var name = (path as NSString).lastPathComponent.lowercased()
-        if name.hasPrefix("python") || name.hasPrefix("pip") { return true }
+        if name.hasPrefix("python") || name.hasPrefix("pip") || lolbins.contains(name) { return true }   // sqlite3
         name = String(name.prefix(while: { !$0.isNumber && $0 != "." }))
         return lolbins.contains(name)
     }

@@ -313,7 +313,7 @@ The menu shows the model's state: ready, still downloading, Apple Intelligence o
 
 ## Rules learned from your decisions (Rules tab)
 
-**Suggest Rules with Claude** sends your decisions (patterns *you* marked; secrets masked), your existing
+**Suggest Rules from My Decisions** (in *Your rules*) sends your decisions (patterns *you* marked; secrets masked), your existing
 rules and the story chains you always ignore. Claude's own verdicts are deliberately not used, so rules
 don't amplify the AI. Claude returns up to 8 rules: `kind` (exec/net/file/any), `process` glob, `pattern`
 glob (`*`, `?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale. It
@@ -415,24 +415,35 @@ patterns seen so far (`BaselinePolicy`):
 
 - **Trusted** (Safe, source "baseline"): normal risk, the acting program (and for a launch the launched one)
   signed by Apple or by the developer of an installed app, valid signature, not quarantined, not in Downloads /
-  temp / Shared / a volume, and not touching a sensitive place (login items, credentials).
+  temp / Shared / a volume, and not touching a sensitive place (login items, credentials, mail, messages).
+  macOS system services (daemons and agents on the sealed system volume, not command-line tools like `cat`,
+  `sqlite3` or a shell) may touch sensitive places: indexing, sync and malware scanning is their job.
 - **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
 - **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
   places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
+- Hostwatch's own activity is never listed.
 
-**Baseline rules.** Every trusted signer becomes one rule in the **Rules tab**: *Apple*, *Slack Technologies
-(Team BQR82RBBHL)*, and so on, listing the apps it covers and how many patterns it trusts. A rule keeps
-trusting that signer's **future** normal-risk patterns (checked every 30 s, always through the same policy, so
-never high-risk, unsigned, downloaded or sensitive). After learning, a developer without a rule isn't added
-by itself: **Build Now** adds rules for the trusted developers among the New patterns.
+**Baseline rules** (Rules tab) are narrow: **one per app and its signer** (*Slack · Slack Technologies*; the
+app's helpers included, and the signer must match), one **macOS system** rule, and, if you trust Homebrew
+tools, one **Homebrew tools** rule. A rule keeps trusting that app's **future** normal-risk patterns (checked
+every 30 s, always through the same policy). After learning, a new app isn't added by itself:
+**Update Baseline** (local, code signatures only, no AI) sorts New patterns again and adds rules for trusted
+apps among them.
 
-- **Pause** a rule: its patterns go back to New and it stops applying (kept, so Build Now won't recreate it).
-  **Delete** does the same and removes it; **Undo Baseline** removes every baseline rule.
+- **Pause** a rule: its patterns go back to New and it stops applying (kept, so Update Baseline won't recreate
+  it). **Delete** does the same and removes it; *⋯ ▸ Remove All Baseline Rules* removes every baseline rule.
 - **Low weight:** your markings and learned rules win over baseline rules, and stories ignore baseline
   trust (they count only your decisions and learned rules), so a chain still alerts.
-- **Needs your review** is grouped by app in the same tab: *Trust App* marks an app's patterns Safe as your
-  decision, *Show* opens them in Patterns.
-- Existing installs don't start learning by themselves: **Build Now** (Rules tab or Settings ▸ Detection).
+- **Needs your review** has one row per app with all its reasons:
+  - **Trust** marks its patterns Safe (your decision). For a signed app it also adds a baseline rule marked
+    *Trusted by you*, which also covers that app's own sensitive places (never high-risk, unsigned or
+    downloaded). Unsigned or ad-hoc programs are trusted pattern by pattern, with no rule.
+  - **Dismiss** hides the row; its patterns stay New and aren't listed again.
+  - *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**.
+  - Homebrew builds are ad-hoc signed: **Trust Homebrew Tools** (same as Settings ▸ Detection) trusts programs
+    with a Homebrew install receipt.
+- Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
+- Baselines from the first version (one rule per developer) are undone once and sorted again.
 
 ## After a restart
 

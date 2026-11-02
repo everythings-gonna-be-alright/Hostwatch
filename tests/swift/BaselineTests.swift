@@ -19,7 +19,7 @@ import Testing
 
     /// Fake signing facts: Apple binaries and Slack are trusted; "signed" is signed but not trusted.
     func identify(_ path: String) -> (identity: CodeIdentity?, trusted: Bool) {
-        if path.hasPrefix("/usr/bin/") || path.hasPrefix("/bin/") {
+        if path.hasPrefix("/usr/") || path.hasPrefix("/bin/") || path.hasPrefix("/System/") {
             return (CodeIdentity(signed: true, apple: true), true)
         }
         if path == slack { return (CodeIdentity(signed: true, teamID: "BQR82RBBHL", organization: "Slack Technologies"), true) }
@@ -32,11 +32,50 @@ import Testing
 
     // MARK: Policy
 
-    @Test func ordinarySignedActivityIsTrusted() {
-        #expect(BaselinePolicy.decide(entry(proc: slack), identify: identify)
-                == .trust(app: "Slack", signer: "Slack Technologies", key: "team:BQR82RBBHL"))
+    let slackKey = "app:/Applications/Slack.app|team:BQR82RBBHL"
+
+    func key(_ d: BaselineDecision) -> String? {
+        if case .trust(let k) = d { return k.id }
+        return nil
+    }
+
+    @Test func ordinaryActivityIsTrustedPerApp() {
+        let d = BaselinePolicy.decide(entry(proc: slack), identify: identify)
+        #expect(d == .trust(BaselineKey(id: slackKey, name: "Slack", signer: "Slack Technologies")))
         let ls = entry(.exec, pattern: "/bin/ls", proc: "/bin/zsh", target: "/bin/ls", parent: "/bin/zsh")
-        #expect(BaselinePolicy.decide(ls, identify: identify) == .trust(app: "ls", signer: "Apple", key: "apple"))
+        #expect(key(BaselinePolicy.decide(ls, identify: identify)) == "system")       // one rule for macOS itself
+    }
+
+    @Test func systemServicesMayTouchSensitivePlacesButToolsMayNot() {
+        let mds = entry(.file, pattern: "r ~/Library/Keychains/*  [keychain]", proc: "/System/Library/Frameworks/CoreServices.framework/mds",
+                        target: "/k.db")
+        #expect(key(BaselinePolicy.decide(mds, identify: identify)) == "system")
+        let cat = entry(.file, pattern: "r ~/.ssh/*  [ssh keys]", proc: "/bin/cat", target: "/id_rsa")
+        #expect(BaselinePolicy.decide(cat, identify: identify) == .review(app: "cat", reason: "reads ssh keys"))
+        let sqlite = entry(.file, pattern: "r ~/Library/Messages/*  [messages]", proc: "/usr/libexec/sqlite3", target: "/c.db")
+        guard case .review = BaselinePolicy.decide(sqlite, identify: identify) else { Issue.record("lolbin"); return }
+    }
+
+    @Test func appsYouTrustedMayTouchTheirSensitivePlaces() {
+        let e = entry(.file, pattern: "r ~/Library/Keychains/*  [keychain]", proc: slack, target: "/k.db")
+        guard case .review = BaselinePolicy.decide(e, identify: identify) else { Issue.record("automatic"); return }
+        #expect(key(BaselinePolicy.decide(e, identify: identify, allowSensitive: true)) == slackKey)
+        let high = entry(risk: .high, proc: slack)
+        guard case .review = BaselinePolicy.decide(high, identify: identify, allowSensitive: true) else { Issue.record("high"); return }
+    }
+
+    @Test func hostwatchItselfIsNeverListed() {
+        let own = Bundle.main.bundlePath + "/Contents/MacOS/Hostwatch"
+        #expect(BaselinePolicy.decide(entry(proc: own), identify: identify) == .ignore)
+    }
+
+    @Test func homebrewToolsAreGroupedAndTrustedOnlyWhenYouSaySo() {
+        let git = "/opt/homebrew/Cellar/git/2.50.0/bin/git"
+        let adhoc: BaselinePolicy.Identify = { _ in (CodeIdentity(signed: true, adhoc: true), false) }
+        #expect(BaselinePolicy.decide(entry(proc: git), identify: adhoc)
+                == .review(app: "git", reason: "Homebrew tool (ad-hoc signed by Homebrew)", homebrew: true))
+        let trusted: BaselinePolicy.Identify = { _ in (CodeIdentity(signed: true, adhoc: true), true) }
+        #expect(key(BaselinePolicy.decide(entry(proc: git), identify: trusted)) == "homebrew")
     }
 
     @Test(arguments: ["high", "sensitive", "downloads", "temp", "adhoc", "quarantined", "missing", "untrustedParent"])
@@ -65,6 +104,16 @@ import Testing
     @Test func appNamesGroupHelpersUnderTheirApp() {
         #expect(BaselinePolicy.appName("/Applications/Cursor.app/Contents/Frameworks/Cursor Helper.app/Contents/MacOS/Cursor Helper") == "Cursor")
         #expect(BaselinePolicy.appName("/usr/bin/curl") == "curl")
+        #expect(BaselinePolicy.appRoot("/Applications/Cursor.app/Contents/MacOS/Cursor") == "/Applications/Cursor.app")
+    }
+
+    @Test func reviewHasOneRowPerAppWithAllItsReasons() {
+        var report = BaselineReport()
+        report.add(.review(app: "file", reason: "reads keychains"), key: "a")
+        report.add(.review(app: "file", reason: "reads mail"), key: "b")
+        report.add(.review(app: "file", reason: "reads keychains"), key: "c")
+        #expect(report.review.count == 1 && report.review[0].reasons == ["reads keychains", "reads mail"])
+        #expect(report.reviewCount == 3)
     }
 
     // MARK: Waves
@@ -111,22 +160,74 @@ import Testing
         #expect(learner.trustedCount == 1 && report.reviewCount == 1)
         #expect(report.review.first?.app == "Installer")
         #expect(!store.markedSafeByYou(slackNet))                               // stories still alert on it
-        #expect(learner.rules.map(\.id) == ["team:BQR82RBBHL"])                 // one rule per signer
-        #expect(learner.rules.first?.name == "Slack Technologies" && learner.rules.first?.apps == ["Slack"])
+        #expect(learner.rules.map(\.id) == [slackKey])                         // one rule per app
+        #expect(learner.rules.first?.name == "Slack" && learner.rules.first?.signer == "Slack Technologies")
 
         learner.undo()
         #expect(store.status(for: slackNet) == .unclassified)
         #expect(learner.trustedCount == 0 && learner.rules.isEmpty)
     }
 
-    @Test func trustingAnAppFromTheReportIsYourDecision() async throws {
+    @Test func trustingAnAppMakesARuleYouCanSee() async throws {
         let (learner, store, _) = try makeLearner()
-        let e = net("/Applications/signed/Tool", pid: 12, to: "5.6.7.8:443")
+        let keychain = file(slack, pid: 12, "r", home + "/Library/Keychains/login.keychain-db")
+        store.observe(keychain)
+        await learner.runWave()
+        let group = try #require(learner.report?.review.first { $0.app == "Slack" })
+        await learner.trustApp(group)
+        #expect(store.status(for: keychain) == .safe && store.entry(keychain.signatureKey)?.source == "you")
+        let rule = try #require(learner.rules.first { $0.id == slackKey })
+        #expect(rule.approvedByYou && learner.patternCount(rule) == 1)
+        #expect(learner.report?.review.isEmpty == true)
+
+        let later = file(slack, pid: 12, "r", home + "/Library/Cookies/Cookies.binarycookies")   // its own sensitive reads
+        store.observe(later)
+        await learner.applyRules()
+        if store.entry(later.signatureKey)?.risk != .high { #expect(store.status(for: later) == .safe) }
+    }
+
+    @Test func unsignedAppsAreTrustedPatternByPatternWithoutARule() async throws {
+        let (learner, store, _) = try makeLearner()
+        let e = net(dropper, pid: 13, to: "5.6.7.8:443")
         store.observe(e)
         await learner.runWave()
-        let group = try #require(learner.report?.onDevice.first)                // no model in tests: stays New
-        learner.trust(group)
-        #expect(store.status(for: e) == .safe && store.entry(e.signatureKey)?.source == "you")
+        let group = try #require(learner.report?.review.first)
+        await learner.trustApp(group)
+        #expect(store.status(for: e) == .safe && learner.rules.isEmpty)
+    }
+
+    @Test func dismissedStaysNewAndIsNotListedAgain() async throws {
+        let (learner, store, _) = try makeLearner()
+        let e = net(dropper, pid: 14, to: "5.6.7.8:443")
+        store.observe(e)
+        await learner.runWave()
+        learner.dismiss(try #require(learner.report?.review.first))
+        #expect(learner.report?.review.isEmpty == true && store.status(for: e) == .unclassified)
+        await learner.buildNow()
+        #expect(learner.report?.review.isEmpty == true)
+    }
+
+    @Test func markSuspiciousFromTheReview() async throws {
+        let (learner, store, _) = try makeLearner()
+        let e = net(dropper, pid: 15, to: "5.6.7.8:443")
+        store.observe(e)
+        await learner.runWave()
+        learner.markSuspicious(try #require(learner.report?.review.first))
+        #expect(store.status(for: e) == .suspicious && learner.report?.review.isEmpty == true)
+    }
+
+    @Test func theFirstVersionsRulesAreUndone() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-base-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        let e = net(slack, pid: 16, to: "3.68.170.153:443")
+        store.observe(e)
+        store.set(.safe, keys: [e.signatureKey], source: "baseline", note: "Baseline: Slack Technologies")
+        let defaults = UserDefaults(suiteName: "hw-base-\(UUID().uuidString)")!
+        defaults.set(Data("[]".utf8), forKey: "baselineRules")
+        _ = BaselineLearner(store: store, classifier: nil, defaults: defaults, freshInstall: false)
+        #expect(store.status(for: e) == .unclassified && defaults.object(forKey: "baselineRules") == nil)
     }
 
     // MARK: Domains
@@ -152,7 +253,7 @@ import Testing
         #expect(risky.signatureRisk == .high)
         #expect(store.status(for: later) == .unclassified && later.signatureRisk != .high)   // new, normal risk
         await learner.applyRules()
-        #expect(store.status(for: later) == .safe && store.entry(later.signatureKey)?.note == "Baseline: Slack Technologies")
+        #expect(store.status(for: later) == .safe && store.entry(later.signatureKey)?.note == "Baseline: Slack (Slack Technologies)")
         #expect(store.status(for: risky) == .unclassified)                      // never high risk
     }
 
@@ -164,8 +265,8 @@ import Testing
         store.observe(zoomNet)
         await learner.applyRules()
         #expect(store.status(for: zoomNet) == .unclassified)
-        await learner.buildNow()                                                // Build Now adds it
-        #expect(store.status(for: zoomNet) == .safe && learner.rules.contains { $0.id == "team:BJ4HAAB9B3" })
+        await learner.buildNow()                                                // Update Baseline adds it
+        #expect(store.status(for: zoomNet) == .safe && learner.rules.contains { $0.name == "zoom.us" })
     }
 
     @Test func pauseResumeAndDeleteOneRule() async throws {
@@ -175,7 +276,7 @@ import Testing
         store.observe(slackNet)
         store.observe(zoomNet)
         await learner.buildNow()
-        let slackRule = try #require(learner.rules.first { $0.id == "team:BQR82RBBHL" })
+        let slackRule = try #require(learner.rules.first { $0.id == slackKey })
 
         learner.setPaused(slackRule, true)
         #expect(store.status(for: slackNet) == .unclassified && store.status(for: zoomNet) == .safe)

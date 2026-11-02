@@ -13,31 +13,11 @@ struct RulesView: View {
     var body: some View {
         let _ = signatures.revision
         VStack(spacing: 0) {
-            header
-            Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 22) {
                     baselineSection
-                    if let review = baseline.report?.review, !review.isEmpty {
-                        section("Needs your review (\(review.reduce(0) { $0 + $1.keys.count }))") {
-                            Text("Seen while learning, but not trusted automatically: unsigned, downloaded, temporary, "
-                                 + "high-risk or touching sensitive places. Trust an app only if you know it.")
-                                .font(.system(size: 12)).foregroundStyle(.secondary)
-                            ForEach(review) { g in ReviewRow(group: g, baseline: baseline, showPatterns: showPatterns) }
-                        }
-                    }
-                    if !book.proposals.isEmpty {
-                        section("Proposals") {
-                            ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
-                        }
-                    }
-                    section("Your rules (\(book.activeCount) active)") {
-                        if book.rules.isEmpty {
-                            Text("No rules yet. Mark a few patterns Safe or Suspicious yourself, then ask Claude to suggest rules.")
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(book.rules) { RuleRow(rule: $0, book: book, matches: matches($0)) }
-                    }
+                    if let review = baseline.report?.review, !review.isEmpty { reviewSection(review) }
+                    yourRulesSection
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,8 +25,7 @@ struct RulesView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             HStack {
-                Text(book.message.isEmpty ? "Rules apply after you approve them; your own markings always win." : book.message)
-                    .lineLimit(1)
+                Text(footer).lineLimit(1)
                 Spacer()
                 Text("\(book.yourDecisions.count) of your decisions to learn from").monospacedDigit()
             }
@@ -57,62 +36,121 @@ struct RulesView: View {
         }
     }
 
+    private var footer: String {
+        if !baseline.message.isEmpty { return baseline.message }
+        if !book.message.isEmpty { return book.message }
+        return "Your own markings always win over any rule."
+    }
+
+    // MARK: Baseline
+
     private var baselineSection: some View {
-        section("Baseline (\(baseline.rules.filter { !$0.paused }.count) rules)") {
+        section("Baseline", subtitle: "From code signatures, on this Mac, no AI") {
             HStack(spacing: 10) {
                 Image(systemName: baseline.phase == .done ? "checkmark.shield" : "hourglass")
                     .foregroundStyle(baseline.phase == .done ? .green : .secondary)
                 Text(baseline.statusText).font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
-                Button("Undo Baseline", role: .destructive) { baseline.undo() }
-                    .buttonStyle(.glass)
-                    .disabled(baseline.rules.isEmpty)
-                    .help("Remove every baseline rule and put what they trusted back to New")
                 Button { Task { await baseline.buildNow() } } label: {
-                    Label(baseline.running ? "Sorting…" : "Build Now", systemImage: "arrow.clockwise")
+                    Label(baseline.running ? "Updating…" : "Update Baseline", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.glass)
                 .disabled(baseline.running)
-                .help("Sort New patterns now and add rules for the trusted developers among them")
+                .help("Sort New patterns again by code signature and add rules for trusted apps. Local, no AI.")
+                Menu {
+                    Button("Remove All Baseline Rules", role: .destructive) { baseline.undo() }
+                } label: { Image(systemName: "ellipsis") }
+                    .menuStyle(.button).buttonStyle(.glass).fixedSize()
+                    .disabled(baseline.rules.isEmpty)
+                    .help("Remove every baseline rule; what they trusted goes back to New")
             }
             .controlSize(.small)
-            Text("Made automatically from code signatures in the first hour (waves at 5, 15 and 60 minutes): normal-risk "
-                 + "activity of Apple and your installed apps' developers stays Safe, now and later. Never high-risk, "
-                 + "unsigned or downloaded code; your own decisions win, and stories still see everything.")
+            Text("One rule per app (its developer's signature must match), plus one for macOS itself. A rule trusts the app's "
+                 + "normal-risk activity, now and later. Never high-risk, unsigned or downloaded code; credentials, login "
+                 + "items and other sensitive places stay for you unless you trusted the app yourself.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(baseline.rules) { rule in
-                BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showPatterns: showPatterns)
+            if !baseline.rules.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
+                        if i > 0 { Divider() }
+                        BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showPatterns: showPatterns)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.06)))
             }
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            Text("Automatic decisions: the baseline from code signatures, and rules learned from your decisions (Claude proposes, Hostwatch checks, you approve).")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            if book.running {
-                ProgressView().controlSize(.small)
-                Button("Cancel") { book.cancel() }.buttonStyle(.glass)
-            } else {
-                Button { book.suggest() } label: { Label("Suggest Rules with Claude", systemImage: "sparkles") }
-                    .buttonStyle(.glassProminent)
-                    .disabled(classifier.engine == .onDevice || book.yourDecisions.count < 2)
-                    .help(classifier.engine == .onDevice
-                          ? "Needs Claude: rule learning is beyond the on-device model (Settings ▸ AI)."
-                          : "Sends your decisions (patterns you marked, secrets masked) to Claude for rule proposals.")
+    private func reviewSection(_ review: [BaselineReport.Group]) -> some View {
+        let count = review.reduce(0) { $0 + $1.keys.count }
+        let brew = review.filter(\.homebrew)
+        return section("Needs your review", subtitle: "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
+            Text("Not trusted automatically. Trust an app you know (a rule is added for it), mark it Suspicious, "
+                 + "or Dismiss to hide it here; dismissed patterns stay New.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if !brew.isEmpty, !SigningCache.shared.trustHomebrew {
+                HStack(spacing: 10) {
+                    Image(systemName: "mug").foregroundStyle(.brown)
+                    Text("\(brew.count) Homebrew tool\(brew.count == 1 ? "" : "s") (\(brew.map(\.app).prefix(4).joined(separator: ", "))"
+                         + "\(brew.count > 4 ? "…" : "")). Homebrew signs what it builds ad-hoc, so they can't be checked by developer.")
+                        .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Trust Homebrew Tools") { Task { await baseline.trustHomebrew() } }
+                        .buttonStyle(.glass)
+                        .help("Trust programs installed by Homebrew (with its install receipt). Also in Settings ▸ Detection.")
+                }
+                .controlSize(.small)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.brown.opacity(0.08)))
             }
+            VStack(spacing: 0) {
+                ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
+                    if i > 0 { Divider() }
+                    ReviewRow(group: g, baseline: baseline, showPatterns: showPatterns)
+                }
+            }
+            .padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.05)))
         }
-        .controlSize(.small)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+    // MARK: Your rules
+
+    private var yourRulesSection: some View {
+        section("Your rules", subtitle: "\(book.activeCount) active · learned from your decisions") {
+            HStack(spacing: 10) {
+                Text("Claude proposes rules from the patterns you marked yourself; Hostwatch checks each one; you approve.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                if book.running {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel") { book.cancel() }.buttonStyle(.glass)
+                } else {
+                    Button { book.suggest() } label: { Label("Suggest Rules from My Decisions", systemImage: "sparkles") }
+                        .buttonStyle(.glass)
+                        .disabled(classifier.engine == .onDevice || book.yourDecisions.count < 2)
+                        .help(classifier.engine == .onDevice
+                              ? "Needs Claude: rule learning is beyond the on-device model (Settings ▸ AI)."
+                              : "Sends your decisions (patterns you marked, secrets masked) to Claude for rule proposals.")
+                }
+            }
+            .controlSize(.small)
+            ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
+            if book.rules.isEmpty && book.proposals.isEmpty {
+                Text("No rules yet. Mark a few patterns Safe or Suspicious yourself, then ask for suggestions.")
+                    .font(.system(size: 12)).foregroundStyle(.tertiary)
+            }
+            ForEach(book.rules) { RuleRow(rule: $0, book: book, matches: matches($0)) }
+        }
+    }
+
+    private func section<Content: View>(_ title: String, subtitle: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.system(size: 13, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 15, weight: .semibold))
+                Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+            }
             content()
         }
     }
@@ -201,34 +239,37 @@ private struct BaselineRuleRow: View {
     let showPatterns: (String) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text("Baseline")
-                .font(.system(size: 10, weight: .semibold))
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .foregroundStyle(.green)
-                .background(Capsule().fill(Color.green.opacity(0.14)))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(rule.name).fontWeight(.semibold)
-                Text("\(rule.signerText) · normal risk → Safe").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                if !rule.apps.isEmpty {
-                    Text(rule.apps.joined(separator: ", ")).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: rule.id == "system" ? "apple.logo" : rule.id == "homebrew" ? "mug" : "app.badge.checkmark")
+                .frame(width: 18)
+                .foregroundStyle(rule.paused ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.green))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(rule.name).fontWeight(.semibold)
+                    if rule.approvedByYou {
+                        Text("Trusted by you")
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .foregroundStyle(.blue)
+                            .background(Capsule().fill(Color.blue.opacity(0.14)))
+                    }
                 }
-                if rule.paused {
-                    Label("Paused: its patterns are New again", systemImage: "pause.circle").foregroundStyle(.orange).font(.system(size: 11))
-                } else {
-                    Label("Trusts \(count) pattern\(count == 1 ? "" : "s")", systemImage: "checkmark.seal")
-                        .foregroundStyle(.green).font(.system(size: 11))
-                }
+                Text(rule.paused ? "\(rule.signer) · paused, its patterns are New again"
+                                 : "\(rule.signer) · trusts \(count) pattern\(count == 1 ? "" : "s")")
+                    .font(.system(size: 11)).foregroundStyle(rule.paused ? .orange : .secondary)
             }
             Spacer()
-            Button("Show") { showPatterns(rule.apps.first ?? rule.name) }.buttonStyle(.glass)
+            if rule.id != "system" {
+                Button("Show") { showPatterns(rule.name) }.buttonStyle(.glass)
+            }
             Button(rule.paused ? "Resume" : "Pause") { baseline.setPaused(rule, !rule.paused) }.buttonStyle(.glass)
             Button(role: .destructive) { baseline.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
-                .help("Delete this rule; its patterns become New. Build Now may create it again: pause it to keep it off.")
+                .help("Delete this rule; its patterns become New. Update Baseline may create it again: pause it to keep it off.")
         }
         .controlSize(.small)
         .font(.system(size: 12))
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .opacity(rule.paused ? 0.7 : 1)
     }
 }
 
@@ -239,19 +280,36 @@ private struct ReviewRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(group.app).fontWeight(.semibold)
-                Text(group.detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
-                Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(.orange)
+            Image(systemName: group.homebrew ? "mug" : "questionmark.app")
+                .frame(width: 18)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(group.app).fontWeight(.semibold)
+                    Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                }
+                ForEach(group.reasons.prefix(4), id: \.self) { reason in
+                    Text("· " + reason).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if group.reasons.count > 4 {
+                    Text("· and \(group.reasons.count - 4) more").font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
             }
             Spacer()
-            Button("Show") { showPatterns(group.app) }.buttonStyle(.glass)
-            Button("Trust App") { baseline.trust(group) }.buttonStyle(.glass)
-                .help("Mark these patterns Safe (your decision)")
+            Button("Trust") { Task { await baseline.trustApp(group) } }.buttonStyle(.glass)
+                .help("Your decision: mark these Safe; a signed app also gets a baseline rule (Trusted by you)")
+            Button("Dismiss") { baseline.dismiss(group) }.buttonStyle(.glass)
+                .help("Hide it here; its patterns stay New")
+            Menu {
+                Button("Show in Patterns") { showPatterns(group.app) }
+                Button("Mark Suspicious") { baseline.markSuspicious(group) }
+            } label: { Image(systemName: "ellipsis") }
+                .menuStyle(.button).buttonStyle(.glass).fixedSize()
+                .help("Show in Patterns, or Mark Suspicious")
         }
         .controlSize(.small)
         .font(.system(size: 12))
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }

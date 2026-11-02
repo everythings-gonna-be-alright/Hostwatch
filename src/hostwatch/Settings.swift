@@ -275,7 +275,7 @@ private struct DetectionPane: View {
                     HStack {
                         Text(baseline.statusText).foregroundStyle(.secondary).lineLimit(1)
                         Button("Show in Rules", action: openBaseline)
-                        Button(baseline.running ? "Sorting…" : "Build Now") { Task { await baseline.buildNow() } }
+                        Button(baseline.running ? "Updating…" : "Update Baseline") { Task { await baseline.buildNow() } }
                             .disabled(baseline.running)
                     }
                 }
