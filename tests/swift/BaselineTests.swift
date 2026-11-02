@@ -7,6 +7,7 @@ import Testing
 @MainActor @Suite(.serialized) struct Baseline {
     let slack = "/Applications/Slack.app/Contents/MacOS/Slack"
     let dropper = FileManager.default.homeDirectoryForCurrentUser.path + "/Downloads/Installer"
+    let zoom = "/Applications/zoom.us.app/Contents/MacOS/zoom.us"
 
     func entry(_ kind: EventKind = .net, risk: PatternRisk = .normal, pattern: String = "TCP internet:443",
                proc: String, target: String = "1.2.3.4:443", parent: String = "") -> SignatureEntry {
@@ -22,6 +23,7 @@ import Testing
             return (CodeIdentity(signed: true, apple: true), true)
         }
         if path == slack { return (CodeIdentity(signed: true, teamID: "BQR82RBBHL", organization: "Slack Technologies"), true) }
+        if path == zoom { return (CodeIdentity(signed: true, teamID: "BJ4HAAB9B3", organization: "Zoom"), true) }
         if path.contains("/signed/") { return (CodeIdentity(signed: true, teamID: "ABCDE12345", organization: "Someone"), false) }
         if path.contains("/quarantined/") { return (CodeIdentity(signed: true, teamID: "Q", organization: "Q", quarantined: true), true) }
         if path.contains("/adhoc/") { return (CodeIdentity(signed: true, adhoc: true), false) }
@@ -31,9 +33,10 @@ import Testing
     // MARK: Policy
 
     @Test func ordinarySignedActivityIsTrusted() {
-        #expect(BaselinePolicy.decide(entry(proc: slack), identify: identify) == .trust(app: "Slack", signer: "Slack Technologies"))
+        #expect(BaselinePolicy.decide(entry(proc: slack), identify: identify)
+                == .trust(app: "Slack", signer: "Slack Technologies", key: "team:BQR82RBBHL"))
         let ls = entry(.exec, pattern: "/bin/ls", proc: "/bin/zsh", target: "/bin/ls", parent: "/bin/zsh")
-        #expect(BaselinePolicy.decide(ls, identify: identify) == .trust(app: "ls", signer: "Apple"))
+        #expect(BaselinePolicy.decide(ls, identify: identify) == .trust(app: "ls", signer: "Apple", key: "apple"))
     }
 
     @Test(arguments: ["high", "sensitive", "downloads", "temp", "adhoc", "quarantined", "missing", "untrustedParent"])
@@ -105,13 +108,15 @@ import Testing
         #expect(store.entry(slackNet.signatureKey)?.source == "baseline")
         #expect(store.status(for: dropperNet) == .unclassified)                 // left for you
         let report = try #require(learner.report)
-        #expect(report.trustedCount == 1 && report.reviewCount == 1)
+        #expect(learner.trustedCount == 1 && report.reviewCount == 1)
         #expect(report.review.first?.app == "Installer")
         #expect(!store.markedSafeByYou(slackNet))                               // stories still alert on it
+        #expect(learner.rules.map(\.id) == ["team:BQR82RBBHL"])                 // one rule per signer
+        #expect(learner.rules.first?.name == "Slack Technologies" && learner.rules.first?.apps == ["Slack"])
 
         learner.undo()
         #expect(store.status(for: slackNet) == .unclassified)
-        #expect(learner.report?.trustedCount == 0)
+        #expect(learner.trustedCount == 0 && learner.rules.isEmpty)
     }
 
     @Test func trustingAnAppFromTheReportIsYourDecision() async throws {
@@ -130,5 +135,68 @@ import Testing
         let domains = DomainRegistry(replayLearningUntil: Date().addingTimeInterval(3600))
         #expect(domains.observe(net(slack, pid: 20, to: "3.68.170.153:443", host: "app.slack.com")) == nil)   // usual
         #expect(domains.observe(net(dropper, pid: 21, to: "45.1.1.1:443", host: "c2.evil-cdn.xyz")) == "evil-cdn.xyz")
+    }
+
+    // MARK: Baseline rules keep working
+
+    @Test func rulesTrustFutureNormalPatternsButNeverHighRisk() async throws {
+        let (learner, store, _) = try makeLearner()
+        store.observe(net(slack, pid: 30, to: "3.68.170.153:443", host: "app.slack.com"))
+        await learner.buildNow()                                                // learning done, Slack rule made
+        #expect(learner.phase == .done)
+
+        let later = net(slack, pid: 30, to: "52.1.1.1:5222", host: "chat.slack.com")   // a new behaviour
+        let risky = exec("/bin/sh", pid: 31, ppid: 30, parent: slack)          // app spawning a shell: high risk
+        store.observe(later)
+        store.observe(risky)
+        #expect(risky.signatureRisk == .high)
+        #expect(store.status(for: later) == .unclassified && later.signatureRisk != .high)   // new, normal risk
+        await learner.applyRules()
+        #expect(store.status(for: later) == .safe && store.entry(later.signatureKey)?.note == "Baseline: Slack Technologies")
+        #expect(store.status(for: risky) == .unclassified)                      // never high risk
+    }
+
+    @Test func newDevelopersAfterLearningWaitForYou() async throws {
+        let (learner, store, _) = try makeLearner()
+        store.observe(net(slack, pid: 40, to: "3.68.170.153:443", host: "app.slack.com"))
+        await learner.buildNow()
+        let zoomNet = net(zoom, pid: 41, to: "170.114.52.2:443", host: "zoom.us")   // trusted developer, no rule yet
+        store.observe(zoomNet)
+        await learner.applyRules()
+        #expect(store.status(for: zoomNet) == .unclassified)
+        await learner.buildNow()                                                // Build Now adds it
+        #expect(store.status(for: zoomNet) == .safe && learner.rules.contains { $0.id == "team:BJ4HAAB9B3" })
+    }
+
+    @Test func pauseResumeAndDeleteOneRule() async throws {
+        let (learner, store, _) = try makeLearner()
+        let slackNet = net(slack, pid: 50, to: "3.68.170.153:443", host: "app.slack.com")
+        let zoomNet = net(zoom, pid: 51, to: "170.114.52.2:443", host: "zoom.us")
+        store.observe(slackNet)
+        store.observe(zoomNet)
+        await learner.buildNow()
+        let slackRule = try #require(learner.rules.first { $0.id == "team:BQR82RBBHL" })
+
+        learner.setPaused(slackRule, true)
+        #expect(store.status(for: slackNet) == .unclassified && store.status(for: zoomNet) == .safe)
+        await learner.buildNow()                                                // a paused rule isn't recreated or applied
+        #expect(store.status(for: slackNet) == .unclassified)
+
+        learner.setPaused(slackRule, false)
+        await learner.applyRules()
+        #expect(store.status(for: slackNet) == .safe)
+
+        learner.delete(slackRule)
+        #expect(store.status(for: slackNet) == .unclassified && !learner.rules.contains { $0.id == slackRule.id })
+        #expect(store.status(for: zoomNet) == .safe)                            // other rules untouched
+    }
+
+    @Test func yourDecisionsWin() async throws {
+        let (learner, store, _) = try makeLearner()
+        let slackNet = net(slack, pid: 60, to: "3.68.170.153:443", host: "app.slack.com")
+        store.observe(slackNet)
+        store.set(.suspicious, keys: [slackNet.signatureKey])                   // you decided first
+        await learner.buildNow()
+        #expect(store.status(for: slackNet) == .suspicious)
     }
 }

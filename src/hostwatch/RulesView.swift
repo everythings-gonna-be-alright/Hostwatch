@@ -1,10 +1,14 @@
 import SwiftUI
 
-/// Rules tab: proposals from Claude (checked locally) and the rules you approved.
+/// Rules tab: automatic decisions in one place. The baseline (rules per signer, learned in the first
+/// hour, and what needs your review), then Claude's proposals, then the rules you approved.
 struct RulesView: View {
     @ObservedObject var book: RuleBook
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var classifier: PatternClassifier
+    @ObservedObject var baseline: BaselineLearner
+    /// Opens Patterns filtered to an app.
+    var showPatterns: (String) -> Void = { _ in }
 
     var body: some View {
         let _ = signatures.revision
@@ -13,6 +17,15 @@ struct RulesView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    baselineSection
+                    if let review = baseline.report?.review, !review.isEmpty {
+                        section("Needs your review (\(review.reduce(0) { $0 + $1.keys.count }))") {
+                            Text("Seen while learning, but not trusted automatically: unsigned, downloaded, temporary, "
+                                 + "high-risk or touching sensitive places. Trust an app only if you know it.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                            ForEach(review) { g in ReviewRow(group: g, baseline: baseline, showPatterns: showPatterns) }
+                        }
+                    }
                     if !book.proposals.isEmpty {
                         section("Proposals") {
                             ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
@@ -44,9 +57,38 @@ struct RulesView: View {
         }
     }
 
+    private var baselineSection: some View {
+        section("Baseline (\(baseline.rules.filter { !$0.paused }.count) rules)") {
+            HStack(spacing: 10) {
+                Image(systemName: baseline.phase == .done ? "checkmark.shield" : "hourglass")
+                    .foregroundStyle(baseline.phase == .done ? .green : .secondary)
+                Text(baseline.statusText).font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                Button("Undo Baseline", role: .destructive) { baseline.undo() }
+                    .buttonStyle(.glass)
+                    .disabled(baseline.rules.isEmpty)
+                    .help("Remove every baseline rule and put what they trusted back to New")
+                Button { Task { await baseline.buildNow() } } label: {
+                    Label(baseline.running ? "Sorting…" : "Build Now", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.glass)
+                .disabled(baseline.running)
+                .help("Sort New patterns now and add rules for the trusted developers among them")
+            }
+            .controlSize(.small)
+            Text("Made automatically from code signatures in the first hour (waves at 5, 15 and 60 minutes): normal-risk "
+                 + "activity of Apple and your installed apps' developers stays Safe, now and later. Never high-risk, "
+                 + "unsigned or downloaded code; your own decisions win, and stories still see everything.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(baseline.rules) { rule in
+                BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showPatterns: showPatterns)
+            }
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Rules learned from your decisions: Claude proposes, Hostwatch checks each one against everything you decided, you approve.")
+            Text("Automatic decisions: the baseline from code signatures, and rules learned from your decisions (Claude proposes, Hostwatch checks, you approve).")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -145,6 +187,68 @@ private struct RuleRow: View {
             Spacer()
             Button(rule.isActive ? "Pause" : "Resume") { book.pause(rule, rule.isActive) }.buttonStyle(.glass)
             Button(role: .destructive) { book.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
+        }
+        .controlSize(.small)
+        .font(.system(size: 12))
+        .padding(.vertical, 4)
+    }
+}
+
+private struct BaselineRuleRow: View {
+    let rule: BaselineRule
+    let count: Int
+    let baseline: BaselineLearner
+    let showPatterns: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("Baseline")
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .foregroundStyle(.green)
+                .background(Capsule().fill(Color.green.opacity(0.14)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(rule.name).fontWeight(.semibold)
+                Text("\(rule.signerText) · normal risk → Safe").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                if !rule.apps.isEmpty {
+                    Text(rule.apps.joined(separator: ", ")).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if rule.paused {
+                    Label("Paused: its patterns are New again", systemImage: "pause.circle").foregroundStyle(.orange).font(.system(size: 11))
+                } else {
+                    Label("Trusts \(count) pattern\(count == 1 ? "" : "s")", systemImage: "checkmark.seal")
+                        .foregroundStyle(.green).font(.system(size: 11))
+                }
+            }
+            Spacer()
+            Button("Show") { showPatterns(rule.apps.first ?? rule.name) }.buttonStyle(.glass)
+            Button(rule.paused ? "Resume" : "Pause") { baseline.setPaused(rule, !rule.paused) }.buttonStyle(.glass)
+            Button(role: .destructive) { baseline.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
+                .help("Delete this rule; its patterns become New. Build Now may create it again: pause it to keep it off.")
+        }
+        .controlSize(.small)
+        .font(.system(size: 12))
+        .padding(.vertical, 4)
+    }
+}
+
+private struct ReviewRow: View {
+    let group: BaselineReport.Group
+    let baseline: BaselineLearner
+    let showPatterns: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(group.app).fontWeight(.semibold)
+                Text(group.detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(.orange)
+            }
+            Spacer()
+            Button("Show") { showPatterns(group.app) }.buttonStyle(.glass)
+            Button("Trust App") { baseline.trust(group) }.buttonStyle(.glass)
+                .help("Mark these patterns Safe (your decision)")
         }
         .controlSize(.small)
         .font(.system(size: 12))

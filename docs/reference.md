@@ -401,18 +401,26 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
 On the first launch Hostwatch learns in **three waves, at 5, 15 and 60 minutes**. Each wave sorts the New
 patterns seen so far (`BaselinePolicy`):
 
-- **Trusted automatically** (Safe, source "baseline"): normal risk, the acting program (and for a launch the
-  launched one) signed by Apple or by the developer of an installed app, valid signature, not quarantined,
-  not in Downloads / temp / Shared / a volume, and not touching a sensitive place (login items, credentials).
+- **Trusted** (Safe, source "baseline"): normal risk, the acting program (and for a launch the launched one)
+  signed by Apple or by the developer of an installed app, valid signature, not quarantined, not in Downloads /
+  temp / Shared / a volume, and not touching a sensitive place (login items, credentials).
 - **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
 - **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
   places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
 
-The **Baseline** window (Patterns ▸ *Baseline…*, Settings ▸ Detection, or the menu bar icon after the last
-wave) groups the results **by app**: *Trust App* marks an app's patterns Safe as your decision, *Show* opens
-them in Patterns, *Undo Baseline* puts everything it trusted back to New. Stories ignore baseline trust
-(they count only your own decisions and rules), so a chain still alerts. Existing installs don't start by
-themselves: *Build Now* in Settings ▸ Detection runs the sorting on the patterns collected so far.
+**Baseline rules.** Every trusted signer becomes one rule in the **Rules tab**: *Apple*, *Slack Technologies
+(Team BQR82RBBHL)*, and so on, listing the apps it covers and how many patterns it trusts. A rule keeps
+trusting that signer's **future** normal-risk patterns (checked every 30 s, always through the same policy, so
+never high-risk, unsigned, downloaded or sensitive). After learning, a developer without a rule isn't added
+by itself: **Build Now** adds rules for the trusted developers among the New patterns.
+
+- **Pause** a rule: its patterns go back to New and it stops applying (kept, so Build Now won't recreate it).
+  **Delete** does the same and removes it; **Undo Baseline** removes every baseline rule.
+- **Low weight:** your markings and learned rules win over baseline rules, and stories ignore baseline
+  trust (they count only your decisions and learned rules), so a chain still alerts.
+- **Needs your review** is grouped by app in the same tab: *Trust App* marks an app's patterns Safe as your
+  decision, *Show* opens them in Patterns.
+- Existing installs don't start learning by themselves: **Build Now** (Rules tab or Settings ▸ Detection).
 
 ## After a restart
 

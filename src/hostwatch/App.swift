@@ -54,7 +54,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
     private lazy var baseline = BaselineLearner(store: signatures, classifier: classifier,
                                                 freshInstall: signatures.total == 0)
-    private var baselineWindow: NSWindow?
 
     /// Opening the app again (Finder, Dock, Spotlight) shows the activity window.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -592,25 +591,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func showBaselineReport() { openBaselineReport() }
 
-    /// What the baseline trusted and what needs review, grouped by app.
+    /// The baseline lives in the Rules tab.
     private func openBaselineReport() {
-        if baselineWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 640),
-                                  styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                                  backing: .buffered, defer: false)
-            window.title = "Baseline"
-            window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: BaselineReportView(learner: baseline) { [weak self] app in
-                guard let self else { return }
-                self.signatures.search = app
-                self.model.windowTab = 1
-                self.openActivityWindow(fullScreen: false)
-            })
-            window.center()
-            baselineWindow = window
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        baselineWindow?.makeKeyAndOrderFront(nil)
+        model.windowTab = 4
+        openActivityWindow(fullScreen: false)
     }
 
     @objc private func showSettings() { openSettings(nil) }
@@ -799,7 +783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's

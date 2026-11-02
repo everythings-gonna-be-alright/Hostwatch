@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- **First-run baseline in three waves (5, 15, 60 minutes):** New patterns from Apple and your installed apps'
-  developers (normal risk, valid signature, not downloaded or temporary, nothing sensitive) are trusted
-  automatically; signed-but-untrusted ones go to the on-device model; anything that could be malware stays
-  New. The Baseline window groups results by app (Trust App, Show, Undo Baseline); *Build Now* for existing
-  installs. It replaces the old "Trust Baseline…", which trusted everything, high-risk included.
+- **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** each trusted signer (Apple,
+  or a developer of your installed apps) becomes a rule in the Rules tab that keeps trusting its normal-risk
+  patterns, now and later. Never high-risk, unsigned, downloaded, temporary or sensitive; signed-but-untrusted
+  developers go to the on-device model; the rest waits for your review, grouped by app (Trust App, Show).
+  Pause, Delete, Undo Baseline and Build Now; your decisions win and stories ignore baseline trust. It
+  replaces the old "Trust Baseline…", which trusted everything, high-risk included.
 - **Domain learning now lasts an hour** (was 12 hours), and a domain first reached by unsigned, quarantined or
   downloaded software during learning stays new.
 - **CPU, memory, network and disk in the HUD:** one compact line under its title (sparklines when there's

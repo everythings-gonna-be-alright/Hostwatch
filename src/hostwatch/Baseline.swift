@@ -6,7 +6,7 @@ import SwiftUI
 
 /// What the baseline does with one New pattern.
 enum BaselineDecision: Equatable {
-    case trust(app: String, signer: String)     // marked Safe automatically
+    case trust(app: String, signer: String, key: String)   // signed by Apple or a trusted developer
     case onDevice(app: String)                  // signed, developer not yet trusted: the on-device model decides
     case review(app: String, reason: String)    // stays New: your decision
 }
@@ -28,6 +28,7 @@ enum BaselinePolicy {
         // The program that acts, and for a launch the program launched: both must be trusted.
         let actor = e.kind == .exec ? e.exampleParent : e.exampleProc
         var signer = ""
+        var key: String?
         var allTrusted = true
         for path in Set([subject, actor]).filter({ !$0.isEmpty }) {
             if dropZones.contains(where: path.contains) || tempPrefixes.contains(where: path.hasPrefix) {
@@ -39,9 +40,16 @@ enum BaselinePolicy {
             if id.untrustedCode { return .review(app: app, reason: "\(appName(path)): \(id.label.lowercased())") }
             if id.quarantined { return .review(app: app, reason: "\(appName(path)): downloaded (quarantined)") }
             if !trusted { allTrusted = false }
-            if path == subject { signer = id.label }
+            if path == subject { signer = id.label; key = signerKey(id) }
         }
-        return allTrusted ? .trust(app: app, signer: signer.isEmpty ? "trusted" : signer) : .onDevice(app: app)
+        guard allTrusted, let key else { return .onDevice(app: app) }
+        return .trust(app: app, signer: signer.isEmpty ? "trusted" : signer, key: key)
+    }
+
+    /// Who a baseline rule is about: Apple, or one developer (Team ID).
+    static func signerKey(_ id: CodeIdentity) -> String? {
+        if id.apple { return "apple" }
+        return id.teamID.map { "team:" + $0 }
     }
 
     /// "Cursor" for anything inside Cursor.app (helpers included); otherwise the file name.
@@ -63,11 +71,9 @@ struct BaselineReport: Codable, Equatable {
         var id: String { app + "|" + detail }
     }
     var date = Date()
-    var trusted: [Group] = []
     var onDevice: [Group] = []
     var review: [Group] = []
 
-    var trustedCount: Int { trusted.reduce(0) { $0 + $1.keys.count } }
     var onDeviceCount: Int { onDevice.reduce(0) { $0 + $1.keys.count } }
     var reviewCount: Int { review.reduce(0) { $0 + $1.keys.count } }
 
@@ -80,7 +86,7 @@ struct BaselineReport: Codable, Equatable {
             }
         }
         switch decision {
-        case .trust(let app, let signer): put(&trusted, app, signer)
+        case .trust: break                       // shown as baseline rules
         case .onDevice(let app): put(&onDevice, app, "signed, developer not yet trusted")
         case .review(let app, let reason): put(&review, app, reason)
         }
@@ -93,24 +99,46 @@ struct BaselineReport: Codable, Equatable {
     }
 }
 
+// MARK: - Baseline rules
+
+/// "Patterns of software signed by X are ordinary": made by the learning waves, one per signer
+/// (Apple, or one developer's Team ID). It keeps applying to future normal-risk patterns, always
+/// through `BaselinePolicy` (never high risk, unsigned, downloaded or sensitive). Low weight: your
+/// markings and learned rules win, and stories ignore it.
+struct BaselineRule: Codable, Identifiable, Equatable {
+    var id: String              // "apple" or "team:BQR82RBBHL"
+    var name: String            // "Apple", "Slack Technologies"
+    var apps: [String] = []     // apps seen with this signer (up to 8)
+    var paused = false
+    var created = Date()
+
+    var signerText: String { id == "apple" ? "Signed by Apple" : "Team \(id.dropFirst(5))" }
+    /// The note on patterns this rule trusted (also how they're found again).
+    var note: String { "Baseline: \(name)" }
+}
+
 // MARK: - Learner
 
-/// Learns this Mac's normal behaviour in waves after the first launch (5, 15 and 60 minutes):
-/// each wave sorts the New patterns seen so far with `BaselinePolicy`.
+/// Learns this Mac's normal behaviour in waves after the first launch (5, 15 and 60 minutes). Each
+/// wave sorts New patterns with `BaselinePolicy` and turns trusted signers into baseline rules, which
+/// then keep trusting their future normal-risk patterns.
 @MainActor
 final class BaselineLearner: ObservableObject {
     static let waves: [TimeInterval] = [5 * 60, 15 * 60, 60 * 60]
+    static let applyInterval: TimeInterval = 30
 
     enum Phase: Equatable { case idle, learning(wave: Int, at: Date), done }
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var report: BaselineReport?
+    @Published private(set) var rules: [BaselineRule] = []
     @Published private(set) var running = false
 
     private let store: SignatureStore
     private let classifier: PatternClassifier?
     private let defaults: UserDefaults
     private var timer: Timer?
+    private var applyTimer: Timer?
     var identify: BaselinePolicy.Identify = { path in
         guard let id = SigningCache.shared.identity(path) else { return (nil, false) }
         return (id, SigningCache.shared.trusts(path, id))
@@ -124,6 +152,9 @@ final class BaselineLearner: ObservableObject {
         if let data = defaults.data(forKey: "baselineReport") {
             report = try? JSONDecoder().decode(BaselineReport.self, from: data)
         }
+        if let data = defaults.data(forKey: "baselineRules") {
+            rules = (try? JSONDecoder().decode([BaselineRule].self, from: data)) ?? []
+        }
         if freshInstall, defaults.object(forKey: "baselineStartedAt") == nil {
             defaults.set(Date(), forKey: "baselineStartedAt")
             defaults.set(0, forKey: "baselineWavesDone")
@@ -134,16 +165,33 @@ final class BaselineLearner: ObservableObject {
     private var startedAt: Date? { defaults.object(forKey: "baselineStartedAt") as? Date }
     private var wavesDone: Int { defaults.integer(forKey: "baselineWavesDone") }
 
+    /// Patterns the baseline trusts right now.
+    var trustedCount: Int { store.allEntries.filter { $0.source == "baseline" }.count }
+
+    func patternCount(_ rule: BaselineRule) -> Int {
+        store.allEntries.filter { $0.source == "baseline" && $0.note == rule.note }.count
+    }
+
     private func updatePhase() {
-        guard let startedAt else { phase = report == nil ? .idle : .done; return }
+        guard let startedAt else { phase = (report == nil && rules.isEmpty) ? .idle : .done; return }
         if wavesDone >= Self.waves.count { phase = .done; return }
         phase = .learning(wave: wavesDone + 1, at: startedAt.addingTimeInterval(Self.waves[wavesDone]))
     }
 
-    /// Runs waves that are due and schedules the next one.
+    private func save() {
+        if let report, let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: "baselineReport") }
+        if let data = try? JSONEncoder().encode(rules) { defaults.set(data, forKey: "baselineRules") }
+    }
+
+    /// Runs waves that are due, and keeps baseline rules applying to new patterns.
     func schedule() {
         timer?.invalidate()
         timer = nil
+        if applyTimer == nil {
+            applyTimer = Timer.scheduledTimer(withTimeInterval: Self.applyInterval, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { guard let self else { return }; Task { await self.applyRules() } }
+            }
+        }
         guard case .learning(_, let at) = phase else { return }
         let delay = max(1, at.timeIntervalSince(now()))
         timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
@@ -154,41 +202,71 @@ final class BaselineLearner: ObservableObject {
         }
     }
 
-    /// One wave now (also "Build Baseline Now"). Returns when patterns are sorted (the on-device
-    /// part continues in the classifier).
+    private func decide(_ entries: [SignatureEntry]) async -> [(SignatureEntry, BaselineDecision)] {
+        let identify = self.identify
+        return await Task.detached(priority: .utility) {
+            entries.map { ($0, BaselinePolicy.decide($0, identify: identify)) }
+        }.value
+    }
+
+    private var newPatterns: [SignatureEntry] {
+        store.allEntries.filter { $0.status == .unclassified && $0.source == nil }
+    }
+
+    private func trust(_ keys: [String], by rule: BaselineRule) {
+        store.set(.safe, keys: keys, source: "baseline", note: rule.note)
+    }
+
+    /// One learning wave now (also "Build Now"): sorts New patterns and makes rules for trusted signers.
     func runWave() async {
         guard !running else { return }
         running = true
         defer { running = false }
-        let candidates = store.allEntries.filter { $0.status == .unclassified && $0.source == nil }
-        let identify = self.identify
-        let decisions: [(String, BaselineDecision)] = await Task.detached(priority: .utility) {
-            candidates.map { ($0.id, BaselinePolicy.decide($0, identify: identify)) }
-        }.value
+        let decisions = await decide(newPatterns)
         var report = self.report ?? BaselineReport()
         report.date = now()
-        var trustKeys: [String: [String]] = [:]   // note -> keys
+        var byRule: [String: [String]] = [:]
         var onDeviceKeys: [String] = []
-        for (key, decision) in decisions {
-            report.add(decision, key: key)
+        for (entry, decision) in decisions {
+            report.add(decision, key: entry.id)
             switch decision {
-            case .trust(_, let signer): trustKeys["Baseline: signed by \(signer)", default: []].append(key)
-            case .onDevice: onDeviceKeys.append(key)
+            case .trust(let app, let signer, let key):
+                if let i = rules.firstIndex(where: { $0.id == key }) {
+                    if !rules[i].apps.contains(app), rules[i].apps.count < 8 { rules[i].apps.append(app) }
+                } else {
+                    rules.append(BaselineRule(id: key, name: key == "apple" ? "Apple" : signer, apps: [app], created: now()))
+                }
+                if rules.first(where: { $0.id == key })?.paused == false { byRule[key, default: []].append(entry.id) }
+            case .onDevice: onDeviceKeys.append(entry.id)
             case .review: break
             }
         }
-        for (note, keys) in trustKeys { store.set(.safe, keys: keys, source: "baseline", note: note) }
+        for (key, keys) in byRule { if let rule = rules.first(where: { $0.id == key }) { trust(keys, by: rule) } }
         if !onDeviceKeys.isEmpty { classifier?.triageOnDevice(keys: onDeviceKeys) }
         report.prune { [store] key in store.status(forKey: key) == .unclassified }
         self.report = report
-        if let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: "baselineReport") }
-        if startedAt != nil, wavesDone < Self.waves.count {
-            defaults.set(wavesDone + 1, forKey: "baselineWavesDone")
-        }
+        rules.sort { $0.id == "apple" ? true : $1.id == "apple" ? false : $0.name < $1.name }
+        if startedAt != nil, wavesDone < Self.waves.count { defaults.set(wavesDone + 1, forKey: "baselineWavesDone") }
+        save()
         updatePhase()
     }
 
-    /// "Build Baseline Now": for existing installs, or to finish learning early.
+    /// Between waves and after learning: existing, active rules trust new patterns of their signers.
+    /// No new rules here (new developers wait for you or Build Now).
+    func applyRules() async {
+        guard !running, rules.contains(where: { !$0.paused }) else { return }
+        let candidates = newPatterns
+        guard !candidates.isEmpty else { return }
+        var byRule: [String: [String]] = [:]
+        for (entry, decision) in await decide(candidates) {
+            if case .trust(_, _, let key) = decision, rules.contains(where: { $0.id == key && !$0.paused }) {
+                byRule[key, default: []].append(entry.id)
+            }
+        }
+        for (key, keys) in byRule { if let rule = rules.first(where: { $0.id == key }) { trust(keys, by: rule) } }
+    }
+
+    /// "Build Now": for existing installs, or to finish learning early.
     func buildNow() async {
         if startedAt == nil { defaults.set(now(), forKey: "baselineStartedAt") }
         defaults.set(Self.waves.count - 1, forKey: "baselineWavesDone")   // this run is the last wave
@@ -196,19 +274,39 @@ final class BaselineLearner: ObservableObject {
         await runWave()
     }
 
-    /// Puts everything the baseline trusted back to New.
+    private func revert(_ rule: BaselineRule) {
+        let keys = store.allEntries.filter { $0.source == "baseline" && $0.note == rule.note }.map(\.id)
+        store.set(.unclassified, keys: keys)
+    }
+
+    /// Paused: its patterns go back to New and it stops applying (kept, so Build Now won't recreate it).
+    func setPaused(_ rule: BaselineRule, _ paused: Bool) {
+        guard let i = rules.firstIndex(where: { $0.id == rule.id }) else { return }
+        rules[i].paused = paused
+        if paused { revert(rules[i]) }
+        save()
+        if !paused { Task { await applyRules() } }
+    }
+
+    func delete(_ rule: BaselineRule) {
+        revert(rule)
+        rules.removeAll { $0.id == rule.id }
+        save()
+    }
+
+    /// Every baseline rule removed and everything it trusted back to New.
     func undo() {
         let keys = store.allEntries.filter { $0.source == "baseline" }.map(\.id)
         store.set(.unclassified, keys: keys)
-        report?.trusted = []
-        if let report, let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: "baselineReport") }
+        rules = []
+        save()
     }
 
     /// Trust all patterns of one app that need review (your decision).
     func trust(_ group: BaselineReport.Group) {
-        store.set(.safe, keys: group.keys, source: "you", note: "Trusted from the baseline report")
+        store.set(.safe, keys: group.keys, source: "you", note: "Trusted from the baseline review")
         report?.prune { [store] key in store.status(forKey: key) == .unclassified }
-        if let report, let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: "baselineReport") }
+        save()
     }
 
     var statusText: String {
@@ -217,102 +315,8 @@ final class BaselineLearner: ObservableObject {
         case .learning(let wave, let at):
             return "Learning · wave \(wave) of \(Self.waves.count) at \(at.formatted(date: .omitted, time: .shortened))"
         case .done:
-            guard let report else { return "Done" }
-            return "Trusted \(report.trustedCount) patterns · \(report.reviewCount) need review"
+            let review = report?.reviewCount ?? 0
+            return "\(rules.filter { !$0.paused }.count) rules trust \(trustedCount) patterns · \(review) need review"
         }
-    }
-}
-
-// MARK: - Report window
-
-struct BaselineReportView: View {
-    @ObservedObject var learner: BaselineLearner
-    let showPatterns: (String) -> Void
-
-    var body: some View {
-        let report = learner.report ?? BaselineReport()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "checkmark.shield")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(.green)
-                        .frame(width: 52, height: 52)
-                        .glassEffect(.regular.tint(Color.green.opacity(0.2)), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("This Mac's baseline").font(.title2.weight(.semibold))
-                        Text("Trusted \(report.trustedCount) patterns automatically (Apple and developers of your installed apps). "
-                             + "\(report.onDeviceCount) checked on this Mac. \(report.reviewCount) need your review.")
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(learner.statusText).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if !report.review.isEmpty {
-                    section("Needs your review", symbol: "exclamationmark.triangle", tint: .orange) {
-                        ForEach(report.review) { g in
-                            groupRow(g, tint: .orange) {
-                                Button("Show") { showPatterns(g.app) }.buttonStyle(.glass)
-                                Button("Trust App") { learner.trust(g) }.buttonStyle(.glass)
-                                    .help("Mark these \(g.keys.count) patterns Safe (your decision)")
-                            }
-                        }
-                    }
-                }
-                if !report.trusted.isEmpty {
-                    section("Trusted automatically", symbol: "checkmark.seal", tint: .green) {
-                        ForEach(report.trusted.sorted { $0.keys.count > $1.keys.count }) { g in
-                            groupRow(g, tint: .green) { Button("Show") { showPatterns(g.app) }.buttonStyle(.glass) }
-                        }
-                    }
-                }
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack {
-                Text("Stories still alert on chains, whatever the baseline trusted.").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button("Undo Baseline", role: .destructive) { learner.undo() }
-                    .buttonStyle(.glass)
-                    .disabled(report.trustedCount == 0)
-                    .help("Put every pattern the baseline trusted back to New")
-                Button { Task { await learner.buildNow() } } label: {
-                    Label(learner.running ? "Sorting…" : "Build Again Now", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.glassProminent)
-                .disabled(learner.running)
-            }
-            .controlSize(.large)
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .padding(.horizontal, 12).padding(.bottom, 10)
-        }
-        .frame(minWidth: 620, minHeight: 520)
-    }
-
-    private func section<Content: View>(_ title: String, symbol: String, tint: Color,
-                                        @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: symbol).font(.headline).foregroundStyle(tint)
-            VStack(spacing: 0) { content() }
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.secondary.opacity(0.07)))
-        }
-    }
-
-    private func groupRow<Actions: View>(_ g: BaselineReport.Group, tint: Color,
-                                         @ViewBuilder actions: () -> Actions) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(g.app).fontWeight(.semibold)
-                Text(g.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            }
-            Spacer()
-            Text("\(g.keys.count)").font(.callout.monospacedDigit()).foregroundStyle(tint)
-                .help("\(g.keys.count) patterns")
-            actions().controlSize(.small)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 9)
     }
 }
