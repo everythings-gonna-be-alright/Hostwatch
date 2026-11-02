@@ -208,6 +208,22 @@ import Testing
         #expect(store.status(for: e) == .unclassified && learner.rules.isEmpty)
     }
 
+    @Test func showInPatternsOpensExactlyThosePatterns() async throws {
+        let (learner, store, _) = try makeLearner()
+        let py312 = net("/opt/homebrew/bin/python3.12", pid: 18, to: "5.6.7.8:443")
+        let py3 = net("/opt/homebrew/bin/python3", pid: 19, to: "5.6.7.8:8443")
+        store.observe(py312)
+        store.observe(py3)
+        await learner.runWave()
+        let group = try #require(learner.report?.review.first { $0.app == "python3.12" })
+        store.search = "python3"                                                // a text search matches both
+        #expect(store.patternItems(filter: .all).count == 2)
+        store.search = ""
+        store.scope = .init(title: group.app, keys: Set(group.keys))
+        #expect(store.patternItems(filter: .flagged).map(\.entry.id) == [py312.signatureKey])
+        #expect(learner.entries(group).map(\.id) == [py312.signatureKey])
+    }
+
     @Test func dismissedStaysNewAndIsNotListedAgain() async throws {
         let (learner, store, _) = try makeLearner()
         let e = net(dropper, pid: 14, to: "5.6.7.8:443")

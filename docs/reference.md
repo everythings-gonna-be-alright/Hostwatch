@@ -441,7 +441,8 @@ apps among them.
   - Interpreters and shells (python, node, ruby, sh, osascript…) have no Trust: they run any script they're
     given, so trusting them would trust a virus's script too.
   - **Dismiss** hides the row; its patterns stay New and aren't listed again.
-  - *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**.
+  - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
+    opens exactly those patterns (a removable chip replaces the Show filter). A rule's **Show** does the same.
   - Homebrew builds are ad-hoc signed: **Trust Homebrew Tools** (same as Settings ▸ Detection) trusts programs
     with a Homebrew install receipt.
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).

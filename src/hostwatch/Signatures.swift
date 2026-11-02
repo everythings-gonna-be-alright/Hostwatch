@@ -521,6 +521,9 @@ final class SignatureStore: ObservableObject {
     @Published private(set) var revision = 0
     @Published var selection = Set<String>()
     @Published var search = ""
+    /// Exactly these patterns (from the baseline review), shown as a removable chip in Patterns.
+    struct Scope: Equatable { var title: String; var keys: Set<String> }
+    @Published var scope: Scope?
     /// Patterns table sort (click a column header); remembered across launches.
     @Published var patternOrder: [KeyPathComparator<PatternItem>] {
         didSet { SortMemory.save(patternOrder, key: "patternTableSort", columns: PatternItem.sortColumns) }
@@ -746,12 +749,14 @@ final class SignatureStore: ObservableObject {
     /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
     func patternItems(filter: SignatureFilter) -> [PatternItem] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let scope = self.scope
         return entries.values
+            .filter { e in scope.map { $0.keys.contains(e.id) } ?? true }
             .filter { q.isEmpty || $0.process.lowercased().contains(q) || $0.pattern.lowercased().contains(q)
                 || $0.exampleName.lowercased().contains(q) }
             .compactMap { e -> PatternItem? in
                 let status = status(forKey: e.id)
-                guard filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
+                guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
                 let note = note(forKey: e.id)
                 return PatternItem(entry: e, status: status, statusRank: rank(status),
                                    source: note.source, note: note.note)

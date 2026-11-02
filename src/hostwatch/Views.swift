@@ -488,10 +488,17 @@ struct ActivityWindowView: View {
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain)
-            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline) { app in
-                signatures.search = app
-                model.windowTab = 1
-            }
+            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline,
+                               showPatterns: { app in
+                                   signatures.scope = nil
+                                   signatures.search = app
+                                   model.windowTab = 1
+                               },
+                               showKeys: { title, keys in
+                                   signatures.search = ""
+                                   signatures.scope = .init(title: title, keys: Set(keys))
+                                   model.windowTab = 1
+                               })
             }
         }
         .frame(minWidth: 900, minHeight: 480)

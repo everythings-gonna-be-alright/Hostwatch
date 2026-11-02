@@ -238,9 +238,11 @@ final class BaselineLearner: ObservableObject {
     /// Patterns the baseline rules trust right now.
     var trustedCount: Int { store.allEntries.filter { $0.source == "baseline" }.count }
 
-    func patternCount(_ rule: BaselineRule) -> Int {
-        store.allEntries.filter { $0.note == rule.note && ($0.source == "baseline" || $0.source == "you") }.count
+    func keys(_ rule: BaselineRule) -> [String] {
+        store.allEntries.filter { $0.note == rule.note && ($0.source == "baseline" || $0.source == "you") }.map(\.id)
     }
+
+    func patternCount(_ rule: BaselineRule) -> Int { keys(rule).count }
 
     private func updatePhase() {
         guard let startedAt else { phase = (report == nil && rules.isEmpty) ? .idle : .done; return }
@@ -420,6 +422,12 @@ final class BaselineLearner: ObservableObject {
         report?.prune { [store] key in store.status(forKey: key) == .unclassified }
         save()
         await applyApproved()
+    }
+
+    /// The group's patterns, high risk first.
+    func entries(_ group: BaselineReport.Group) -> [SignatureEntry] {
+        group.keys.compactMap { store.entry($0) }
+            .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
     }
 
     /// Interpreters and shells (python, node, sh, osascript…) run whatever code they're given, so trusting

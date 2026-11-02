@@ -145,7 +145,21 @@ struct PatternsView: View {
 
     private func toolbar(count: Int) -> some View {
         HStack(spacing: 10) {
-            ShowFilterPicker(filter: $filter)
+            if let scope = signatures.scope {
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(.tint)
+                    Text("\(scope.title) · \(scope.keys.count) pattern\(scope.keys.count == 1 ? "" : "s")").lineLimit(1)
+                    Button { signatures.scope = nil } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .help("Show all patterns")
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 9).padding(.vertical, 3)
+                .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                .fixedSize()
+            } else {
+                ShowFilterPicker(filter: $filter)
+            }
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {

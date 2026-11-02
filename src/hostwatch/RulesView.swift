@@ -9,6 +9,8 @@ struct RulesView: View {
     @ObservedObject var baseline: BaselineLearner
     /// Opens Patterns filtered to an app.
     var showPatterns: (String) -> Void = { _ in }
+    /// Opens Patterns showing exactly these patterns.
+    var showKeys: (String, [String]) -> Void = { _, _ in }
 
     var body: some View {
         let _ = signatures.revision
@@ -73,7 +75,7 @@ struct RulesView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
                         if i > 0 { Divider() }
-                        BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showPatterns: showPatterns)
+                        BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showKeys: showKeys)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -107,7 +109,7 @@ struct RulesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
                     if i > 0 { Divider() }
-                    ReviewRow(group: g, baseline: baseline, showPatterns: showPatterns)
+                    ReviewRow(group: g, baseline: baseline, showKeys: showKeys)
                 }
             }
             .padding(.horizontal, 12)
@@ -236,7 +238,7 @@ private struct BaselineRuleRow: View {
     let rule: BaselineRule
     let count: Int
     let baseline: BaselineLearner
-    let showPatterns: (String) -> Void
+    let showKeys: (String, [String]) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -259,9 +261,9 @@ private struct BaselineRuleRow: View {
                     .font(.system(size: 11)).foregroundStyle(rule.paused ? .orange : .secondary)
             }
             Spacer()
-            if rule.id != "system" {
-                Button("Show") { showPatterns(rule.name) }.buttonStyle(.glass)
-            }
+            Button("Show") { showKeys(rule.name, baseline.keys(rule)) }.buttonStyle(.glass)
+                .disabled(count == 0)
+                .help("Open exactly the patterns this rule trusts in Patterns")
             Button(rule.paused ? "Resume" : "Pause") { baseline.setPaused(rule, !rule.paused) }.buttonStyle(.glass)
             Button(role: .destructive) { baseline.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
                 .help("Delete this rule; its patterns become New. Update Baseline may create it again: pause it to keep it off.")
@@ -273,10 +275,13 @@ private struct BaselineRuleRow: View {
     }
 }
 
+private final class ExpandState: ObservableObject { @Published var open = false }
+
 private struct ReviewRow: View {
     let group: BaselineReport.Group
     let baseline: BaselineLearner
-    let showPatterns: (String) -> Void
+    let showKeys: (String, [String]) -> Void
+    @StateObject private var expand = ExpandState()
     private var anyCode: Bool { baseline.runsAnyCode(group) }
 
     var body: some View {
@@ -287,14 +292,34 @@ private struct ReviewRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(group.app).fontWeight(.semibold)
-                    Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")").monospacedDigit()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .rotationEffect(.degrees(expand.open ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .help(expand.open ? "Hide the patterns" : "Show the patterns here")
                 }
                 ForEach(group.reasons.prefix(4), id: \.self) { reason in
                     Text("· " + reason).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if group.reasons.count > 4 {
                     Text("· and \(group.reasons.count - 4) more").font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                if expand.open {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(baseline.entries(group)) { e in ReviewPatternLine(entry: e) }
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.secondary.opacity(0.07)))
+                    .padding(.vertical, 3)
                 }
                 if anyCode {
                     Label("Runs any script it's given: trusting it would trust a virus's script too. Dismiss keeps it New.",
@@ -310,7 +335,7 @@ private struct ReviewRow: View {
             Button("Dismiss") { baseline.dismiss(group) }.buttonStyle(.glass)
                 .help("Hide it here; its patterns stay New")
             Menu {
-                Button("Show in Patterns") { showPatterns(group.app) }
+                Button("Show in Patterns") { showKeys(group.app, group.keys) }
                 Button("Mark Suspicious") { baseline.markSuspicious(group) }
             } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.button).buttonStyle(.glass).fixedSize()
@@ -319,5 +344,30 @@ private struct ReviewRow: View {
         .controlSize(.small)
         .font(.system(size: 12))
         .padding(.vertical, 8)
+    }
+}
+
+/// One pattern in an expanded review row: what kind, who, what, and how risky.
+private struct ReviewPatternLine: View {
+    let entry: SignatureEntry
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: entry.kind == .exec ? "terminal" : entry.kind == .net ? "network" : "doc")
+                .font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.pattern).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).lineLimit(2)
+                Text("\((entry.process as NSString).lastPathComponent) · seen \(entry.count)× · last \(entry.lastSeen.formatted(.relative(presentation: .named)))"
+                     + (entry.note.map { " · \($0)" } ?? ""))
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if entry.risk == .high {
+                Text("High risk").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Capsule().fill(Color.orange.opacity(0.14)))
+            }
+        }
+        .help(entry.process)
     }
 }
