@@ -780,9 +780,9 @@ struct ActivityWindowView: View {
                 }
                 .width(min: 88, ideal: 100, max: 136)
                 TableColumn("Process", value: \.name) { item in
-                    Text(item.event.name).fontWeight(.semibold).help(item.event.proc)
+                    Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
                 }
-                .width(min: 90, ideal: 170)
+                .width(min: 60, ideal: 110)
                 TableColumn("PID", value: \.pid) { item in
                     Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -794,7 +794,12 @@ struct ActivityWindowView: View {
                 TableColumn("Detail", value: \.detail) { item in
                     HStack(spacing: 6) {
                         if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
-                        Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                        if item.event.kind == .file {
+                            FileModeIcon(mode: item.event.extra)
+                            Text(item.event.target).truncationMode(.middle).help(item.event.target)
+                        } else {
+                            Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                        }
                     }
                 }
                 .width(min: 200, ideal: 520)
@@ -902,5 +907,22 @@ struct ExclusionsEditor: View {
         }
         .padding(14)
         .frame(minWidth: 480, minHeight: 380)
+    }
+}
+
+/// Read or write as an icon instead of "r" / "w": an eye for reading, a pencil for writing, both for both.
+struct FileModeIcon: View {
+    let mode: String
+
+    private var writes: Bool { mode.contains("w") }
+    private var reads: Bool { mode.contains("r") || !writes }
+
+    var body: some View {
+        Image(systemName: reads && writes ? "square.and.pencil" : writes ? "pencil" : "eye")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(writes ? Color.orange : Color.secondary)
+            .frame(width: 14)
+            .help(reads && writes ? "Read and write" : writes ? "Write" : "Read")
+            .accessibilityLabel(reads && writes ? "Read and write" : writes ? "Write" : "Read")
     }
 }
