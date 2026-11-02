@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The main window opens when Hostwatch starts** (the Full Disk Access setup, when needed, comes in front of it).
+
 - **Heavy processes in Time Travel, with a native design:** a tinted banner with app icons, a CPU gauge,
   tags and a ⋯ menu (collapsible to one line); badges are tinted tags. The heavy list is recorded with the
   metrics every 5 s, so Time Travel shows the same banner and badges at the playhead.

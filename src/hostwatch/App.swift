@@ -118,6 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // First run: domains already in recorded history are the baseline for "new domain".
         domains.seedBaseline(fromHistory: history.directory)
 
+        // The main window opens with the app (the setup window, if needed, comes in front of it).
+        openActivityWindow(fullScreen: false)
+
         // Start the bundled collector unless one (e.g. run-agent.sh) is already serving.
         if collector.startAtLaunch {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
