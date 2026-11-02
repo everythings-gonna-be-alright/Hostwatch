@@ -221,14 +221,14 @@ struct HUDSurface: ViewModifier {
             content
                 .background(Color.black.opacity(interactive ? 0.02 : 0))
                 .clipShape(shape)
-                .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.3 : 0), lineWidth: 1) }
         } else {
             content
                 .background { layer.opacity(reduceTransparency ? 1 : Self.layerOpacity(transparency)) }
                 .clipShape(shape)
                 .overlay {
-                    if effective == .solid || interactive {
-                        shape.strokeBorder(.white.opacity(interactive ? 0.28 : 0.12), lineWidth: 0.5)
+                    // Glass only: a faint edge while the HUD can be moved and resized. No border on Solid or None.
+                    if interactive, effective == .glass || effective == .clear {
+                        shape.strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
                     }
                 }
         }
