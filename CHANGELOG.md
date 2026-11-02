@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **First-run baseline in three waves (5, 15, 60 minutes):** New patterns from Apple and your installed apps'
+  developers (normal risk, valid signature, not downloaded or temporary, nothing sensitive) are trusted
+  automatically; signed-but-untrusted ones go to the on-device model; anything that could be malware stays
+  New. The Baseline window groups results by app (Trust App, Show, Undo Baseline); *Build Now* for existing
+  installs. It replaces the old "Trust Baseline…", which trusted everything, high-risk included.
+- **Domain learning now lasts an hour** (was 12 hours), and a domain first reached by unsigned, quarantined or
+  downloaded software during learning stays new.
 - **CPU, memory, network and disk in the HUD:** one compact line under its title (sparklines when there's
   room, memory coloured by memory pressure). Settings ▸ HUD can hide it.
 - **The event list isn't empty after a restart:** it starts with the newest recorded events (up to 5,000,

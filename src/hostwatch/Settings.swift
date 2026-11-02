@@ -14,6 +14,8 @@ struct SettingsContext {
     let classifier: PatternClassifier
     let editorDraft: EditorDraft
     let updates: UpdateChecker
+    let baseline: BaselineLearner
+    let openBaseline: () -> Void
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
     let resetOverlayFrame: () -> Void
@@ -76,7 +78,8 @@ final class SettingsWindowController: NSWindowController {
                                                       toggleCollector: c.toggleCollector))
             case .hud: view = AnyView(HUDPane(model: c.model, reset: c.resetOverlayFrame))
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
-                                                          signatures: c.signatures, ui: state))
+                                                          signatures: c.signatures, baseline: c.baseline,
+                                                          openBaseline: c.openBaseline, ui: state))
             case .ai: view = AnyView(AIPane(classifier: c.classifier, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
@@ -234,6 +237,8 @@ private struct DetectionPane: View {
     @ObservedObject var domains: DomainRegistry
     @ObservedObject var stories: StoryEngine
     let signatures: SignatureStore
+    @ObservedObject var baseline: BaselineLearner
+    let openBaseline: () -> Void
     @ObservedObject var ui: SettingsState
 
     var body: some View {
@@ -266,6 +271,14 @@ private struct DetectionPane: View {
                          + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too.")
             }
             Section {
+                LabeledContent("Patterns") {
+                    HStack {
+                        Text(baseline.statusText).foregroundStyle(.secondary).lineLimit(1)
+                        Button("Report…", action: openBaseline)
+                        Button(baseline.running ? "Sorting…" : "Build Now") { Task { await baseline.buildNow() } }
+                            .disabled(baseline.running)
+                    }
+                }
                 LabeledContent("Domain learning") {
                     HStack {
                         Text(domains.isLearning
@@ -284,7 +297,9 @@ private struct DetectionPane: View {
             } header: {
                 Text("Baselines")
             } footer: {
-                Footnote("While learning, domains are recorded as usual instead of new. "
+                Footnote("Patterns: three waves (5, 15, 60 min) after the first launch trust ordinary signed activity "
+                         + "and leave anything unsigned, downloaded or high-risk for you. Domains: while learning, "
+                         + "what trusted software reaches becomes usual instead of new. "
                          + "Ignored stories are chains you chose to never be alerted about again.")
             }
         }

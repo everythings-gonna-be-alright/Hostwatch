@@ -55,7 +55,7 @@ final class DomainRegistry: ObservableObject {
         if let saved = defaults.object(forKey: "domainLearningUntil") as? Date {
             learningUntil = saved
         } else {
-            learningUntil = Date().addingTimeInterval(12 * 3600)   // first run: learn for 12 hours
+            learningUntil = Date().addingTimeInterval(60 * 60)     // first run: learn for an hour (3 waves)
             defaults.set(learningUntil, forKey: "domainLearningUntil")
         }
         load()
@@ -119,6 +119,15 @@ final class DomainRegistry: ObservableObject {
         }
     }
 
+    /// Unsigned, ad-hoc or quarantined code, or a program run from Downloads, Shared or a mounted volume.
+    /// (Temporary folders are left out: updaters and developer builds live there all day.)
+    static func untrustedProgram(_ path: String) -> Bool {
+        guard !path.isEmpty else { return false }
+        if ["/Downloads/", "/Users/Shared/", "/Volumes/"].contains(where: path.contains) { return true }
+        guard let id = SigningCache.shared.cached(path) else { return false }
+        return id.untrustedCode || id.quarantined
+    }
+
     func observe(_ e: ActivityEvent, at now: Date = Date()) -> String? {
         guard let (domain, host) = Self.trackedDomain(e) else { return nil }
         let program = displayProcessName(e.proc.isEmpty ? e.name : e.proc)
@@ -132,7 +141,9 @@ final class DomainRegistry: ObservableObject {
             scheduleRevision()
             return !r.baseline && !r.known && now.timeIntervalSince(r.firstSeen) < badgeWindow ? domain : nil
         }
-        let learning = now < learningUntil
+        // While learning, a domain becomes "usual" only if a trustworthy program reached it: one first
+        // contacted by unsigned code or a program from Downloads/temp stays new.
+        let learning = now < learningUntil && !Self.untrustedProgram(e.proc)
         records[domain] = DomainRecord(domain: domain, firstSeen: now, lastSeen: now, count: 1,
                                        programs: [program], hosts: [host], baseline: learning)
         dirty = true
