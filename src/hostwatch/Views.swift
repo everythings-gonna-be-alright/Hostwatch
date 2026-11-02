@@ -778,7 +778,7 @@ struct ActivityWindowView: View {
                         }
                     }
                 }
-                .width(min: 88, ideal: 100, max: 136)
+                .width(min: 70, ideal: 84, max: 136)
                 TableColumn("Process", value: \.name) { item in
                     Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
                 }
@@ -797,6 +797,10 @@ struct ActivityWindowView: View {
                         if item.event.kind == .file {
                             FileModeIcon(mode: item.event.extra)
                             Text(item.event.target).truncationMode(.middle).help(item.event.target)
+                        } else if item.event.kind == .net, !item.event.extra.isEmpty {
+                            ProtocolTag(proto: item.event.extra)
+                            Text(item.event.fullDetail.dropFirst(item.event.extra.count).trimmingCharacters(in: .whitespaces))
+                                .truncationMode(.middle).help(item.event.target)
                         } else {
                             Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
                         }
@@ -924,5 +928,22 @@ struct FileModeIcon: View {
             .frame(width: 14)
             .help(reads && writes ? "Read and write" : writes ? "Write" : "Read")
             .accessibilityLabel(reads && writes ? "Read and write" : writes ? "Write" : "Read")
+    }
+}
+
+/// TCP or UDP as a small tag instead of a word in the text.
+struct ProtocolTag: View {
+    let proto: String
+
+    var body: some View {
+        let udp = proto.uppercased().hasPrefix("UDP")
+        Text(proto.uppercased())
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .foregroundStyle(udp ? Color.teal : Color.blue)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Capsule().fill((udp ? Color.teal : Color.blue).opacity(0.14)))
+            .overlay(Capsule().strokeBorder((udp ? Color.teal : Color.blue).opacity(0.35), lineWidth: 0.5))
+            .help(udp ? "UDP: connectionless (DNS, QUIC, streaming…)" : "TCP connection")
+            .accessibilityLabel(proto)
     }
 }
