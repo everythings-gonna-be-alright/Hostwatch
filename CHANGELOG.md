@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Connections that close too fast show their address:** the collector's nettop backstop now reads each
+  process's connections, so an inferred event names the real IP and port (and a hostname when known) instead
+  of `TCP ?:?`. IPv6 connection lines are no longer mistaken for processes.
+
 - **"First seen" isn't a second "New":** the yellow NEW tag next to the New status became a ✦ sparkle in
   Events and FIRST in the HUD (the first time a pattern was ever seen); "New" now only means undecided.
 

@@ -73,6 +73,17 @@ import Testing
 
     // MARK: nettop
 
+    @Test func nettopConnectionLines() throws {
+        let v4 = try #require(AgentParse.nettopFlow("17:04:48.3,tcp4 192.168.1.5:64046<->17.57.146.20:5223,en0,Established,7311,6130,0,0,0,"))
+        #expect(v4.remote == "17.57.146.20:5223" && v4.bytes == 13441)
+        let v6 = try #require(AgentParse.nettopFlow("17:04:48.3,tcp6 fe80::1c88%en0.62889<->2a00:1450:4001::65.443,en0,Established,10,20,0,0,0,"))
+        #expect(v6.remote == "[2a00:1450:4001::65]:443")
+        #expect(AgentParse.nettopFlow("17:04:48.3,tcp4 *:62889<->*:*,,Listen,,,,,,") == nil)     // listening: no remote
+        #expect(AgentParse.nettopFlow("05:28:30.5,curl.44636,,,10053,343,0,0,0,,") == nil)      // a process line
+        // An IPv6 connection line ends in ".<port>": it must not be read as a process with that pid.
+        #expect(AgentParse.nettopLine("17:04:48.3,tcp6 fe80::1%en0.62889<->fe80::2%en0.51554,en0,Established,10,20,0,0,0,") == nil)
+    }
+
     @Test func nettopLines() throws {
         let a = try #require(AgentParse.nettopLine("05:28:30.557179,curl.44636,,,10053,343,0,0,0,,,,,,,,,,,,"))
         #expect(a.name == "curl" && a.pid == 44636 && a.rx == 10053 && a.tx == 343)
