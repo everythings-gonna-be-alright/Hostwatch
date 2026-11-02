@@ -465,6 +465,7 @@ struct ActivityWindowView: View {
     @ObservedObject var domains: DomainRegistry
     let domainsState: DomainsViewState
     @ObservedObject var rules: RuleBook
+    @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
     @ObservedObject var history: HistoryRecorder
     @ObservedObject var signatures: SignatureStore
@@ -486,7 +487,10 @@ struct ActivityWindowView: View {
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText)
-            default: RulesView(book: rules, signatures: signatures, classifier: classifier)
+            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline) { app in
+                signatures.search = app
+                model.windowTab = 1
+            }
             }
         }
         .frame(minWidth: 900, minHeight: 480)
