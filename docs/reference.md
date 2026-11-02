@@ -329,7 +329,9 @@ that order of authority. The Rules tab shows it in three views (its toolbar labe
   as patterns change; interpreters, shells and Hostwatch itself aren't listed.
 - **Rules:** baseline rules (code signatures, no AI: **Update Baseline**) and learned rules (**Suggest Rules…**).
 - **Decided:** who decided what, by app: *Decided by AI*, *Decided by you*, *Learned rules*, *Baseline rules*,
-  each with **Show** (exactly those patterns) and, for AI and your decisions, **Undo** (back to New).
+  each with **Undo** (back to New) for AI and your decisions.
+- Every row (needs-you apps, baseline and learned rules, decided groups) has *N patterns ›*: click it to list
+  those patterns in place (high risk first; up to 40, with *Open in Patterns* for all of them).
 
 ## Rules learned from your decisions
 
@@ -465,7 +467,7 @@ apps among them.
     and stories keep watching them.
   - **Dismiss** hides the row; its patterns stay New and aren't listed again.
   - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
-    opens exactly those patterns (a removable chip replaces the Show filter). A rule's **Show** does the same.
+    opens exactly those patterns (a removable chip replaces the Show filter).
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 

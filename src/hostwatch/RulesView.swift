@@ -154,7 +154,7 @@ struct RulesView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
                         if i > 0 { Divider() }
-                        BaselineRuleRow(rule: rule, count: baseline.patternCount(rule), baseline: baseline, showKeys: showKeys)
+                        BaselineRuleRow(rule: rule, baseline: baseline, signatures: signatures, showKeys: showKeys)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -187,7 +187,7 @@ struct RulesView: View {
                 Text("No learned rules yet. Mark a few patterns Safe or Suspicious yourself, then ask for suggestions.")
                     .font(.system(size: 12)).foregroundStyle(.tertiary)
             }
-            ForEach(book.rules) { RuleRow(rule: $0, book: book, matches: matches($0)) }
+            ForEach(book.rules) { RuleRow(rule: $0, book: book, signatures: signatures, keys: matchingKeys($0), showKeys: showKeys) }
         }
     }
 
@@ -201,8 +201,8 @@ struct RulesView: View {
         }
     }
 
-    private func matches(_ rule: LearnedRule) -> Int {
-        signatures.allEntries.filter { $0.source == "rule" && $0.note == rule.name && rule.matches($0) }.count
+    private func matchingKeys(_ rule: LearnedRule) -> [String] {
+        signatures.allEntries.filter { $0.source == "rule" && $0.note == rule.name && rule.matches($0) }.map(\.id)
     }
 }
 
@@ -253,7 +253,11 @@ private struct ProposalCard: View {
 private struct RuleRow: View {
     let rule: LearnedRule
     let book: RuleBook
-    let matches: Int
+    let signatures: SignatureStore
+    let keys: [String]
+    let showKeys: (String, [String]) -> Void
+    @StateObject private var expand = ExpandState()
+    private var matches: Int { keys.count }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -264,8 +268,14 @@ private struct RuleRow: View {
                 if let why = rule.pausedReason {
                     Label("Paused: \(why)", systemImage: "pause.circle").foregroundStyle(.orange).font(.system(size: 11))
                 } else {
-                    Label("Check passes · classifies \(matches) pattern\(matches == 1 ? "" : "s")", systemImage: "checkmark.seal")
-                        .foregroundStyle(.green).font(.system(size: 11))
+                    HStack(spacing: 6) {
+                        Label("Check passes", systemImage: "checkmark.seal").foregroundStyle(.green)
+                        PatternsToggle(count: matches, expand: expand)
+                    }
+                    .font(.system(size: 11))
+                }
+                if expand.open {
+                    InlinePatterns(keys: keys, signatures: signatures) { showKeys(rule.name, keys) }
                 }
             }
             Spacer()
@@ -280,14 +290,18 @@ private struct RuleRow: View {
 
 private struct BaselineRuleRow: View {
     let rule: BaselineRule
-    let count: Int
     let baseline: BaselineLearner
+    let signatures: SignatureStore
     let showKeys: (String, [String]) -> Void
+    @StateObject private var expand = ExpandState()
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        let keys = baseline.keys(rule)
+        let count = keys.count
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: rule.id == "system" ? "apple.logo" : "app.badge.checkmark")
                 .frame(width: 18)
+                .padding(.top, 1)
                 .foregroundStyle(rule.paused ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.green))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -300,14 +314,21 @@ private struct BaselineRuleRow: View {
                             .background(Capsule().fill(Color.blue.opacity(0.14)))
                     }
                 }
-                Text(rule.paused ? "\(rule.signer) · paused, its patterns are New again"
-                                 : "\(rule.signer) · trusts \(count) pattern\(count == 1 ? "" : "s")")
-                    .font(.system(size: 11)).foregroundStyle(rule.paused ? .orange : .secondary)
+                if rule.paused {
+                    Text("\(rule.signer) · paused, its patterns are New again")
+                        .font(.system(size: 11)).foregroundStyle(.orange)
+                } else {
+                    HStack(spacing: 6) {
+                        Text("\(rule.signer) · trusts").foregroundStyle(.secondary)
+                        PatternsToggle(count: count, expand: expand)
+                    }
+                    .font(.system(size: 11))
+                }
+                if expand.open {
+                    InlinePatterns(keys: keys, signatures: signatures) { showKeys(rule.name, keys) }
+                }
             }
             Spacer()
-            Button("Show") { showKeys(rule.name, baseline.keys(rule)) }.buttonStyle(.glass)
-                .disabled(count == 0)
-                .help("Open exactly the patterns this rule trusts in Patterns")
             Button(rule.paused ? "Resume" : "Pause") { baseline.setPaused(rule, !rule.paused) }.buttonStyle(.glass)
             Button(role: .destructive) { baseline.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
                 .help("Delete this rule; its patterns become New. Update Baseline may create it again: pause it to keep it off.")
@@ -320,6 +341,62 @@ private struct BaselineRuleRow: View {
 }
 
 private final class ExpandState: ObservableObject { @Published var open = false }
+
+/// "12 patterns ›": shows or hides the row's patterns in place.
+private struct PatternsToggle: View {
+    let count: Int
+    @ObservedObject var expand: ExpandState
+
+    var body: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
+        } label: {
+            HStack(spacing: 3) {
+                Text("\(count) pattern\(count == 1 ? "" : "s")").monospacedDigit()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(expand.open ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11)).foregroundStyle(.secondary)
+        .disabled(count == 0)
+        .help(expand.open ? "Hide the patterns" : "Show the patterns here")
+    }
+}
+
+/// A row's patterns, listed in place (high risk first, then most recent).
+private struct InlinePatterns: View {
+    let entries: [SignatureEntry]
+    let openAll: () -> Void
+    static let limit = 40
+
+    init(keys: [String], signatures: SignatureStore, openAll: @escaping () -> Void) {
+        entries = keys.compactMap { signatures.entry($0) }
+            .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
+        self.openAll = openAll
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(entries.prefix(Self.limit)) { ReviewPatternLine(entry: $0) }
+            HStack(spacing: 6) {
+                if entries.count > Self.limit {
+                    Text("and \(entries.count - Self.limit) more").foregroundStyle(.tertiary)
+                }
+                Button("Open in Patterns", action: openAll)
+                    .buttonStyle(.link)
+            }
+            .font(.system(size: 11))
+            .padding(.top, 2)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.secondary.opacity(0.07)))
+        .padding(.vertical, 3)
+    }
+}
 
 private struct ReviewRow: View {
     let group: BaselineReport.Group
@@ -351,20 +428,7 @@ private struct ReviewRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(group.app).fontWeight(.semibold)
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text("\(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s")").monospacedDigit()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
-                                .rotationEffect(.degrees(expand.open ? 90 : 0))
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .help(expand.open ? "Hide the patterns" : "Show the patterns here")
+                    PatternsToggle(count: group.keys.count, expand: expand)
                 }
                 ForEach(group.reasons.prefix(4), id: \.self) { reason in
                     Text("· " + reason).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
@@ -382,12 +446,7 @@ private struct ReviewRow: View {
                     .font(.system(size: 11)).lineLimit(1)
                 }
                 if expand.open {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(baseline.entries(group)) { e in ReviewPatternLine(entry: e) }
-                    }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.secondary.opacity(0.07)))
-                    .padding(.vertical, 3)
+                    InlinePatterns(keys: group.keys, signatures: signatures) { showKeys(group.app, group.keys) }
                 }
             }
             Spacer()
@@ -509,7 +568,7 @@ private struct DecidedView: View {
                         VStack(spacing: 0) {
                             ForEach(Array(list.prefix(who == .baseline ? 12 : 50).enumerated()), id: \.element.id) { i, g in
                                 if i > 0 { Divider() }
-                                row(g, who: who)
+                                DecidedRow(group: g, who: who, signatures: signatures, showKeys: showKeys)
                             }
                             if list.count > (who == .baseline ? 12 : 50) {
                                 Text("and \(list.count - (who == .baseline ? 12 : 50)) more apps: see Patterns, Decided By column")
@@ -524,24 +583,6 @@ private struct DecidedView: View {
         }
     }
 
-    private func row(_ g: Group, who: Who) -> some View {
-        HStack(spacing: 10) {
-            Text(g.app).fontWeight(.semibold)
-            Text([SignatureStatus.dangerous, .suspicious, .safe].compactMap { s in
-                g.statuses[s].map { "\($0) \(s.title.lowercased())" } }.joined(separator: " · "))
-                .font(.system(size: 11)).foregroundStyle(.secondary)
-            Spacer()
-            Button("Show") { showKeys("\(g.app) · \(who.rawValue.lowercased())", g.keys) }.buttonStyle(.glass)
-            if who == .ai || who == .you {
-                Button("Undo") { signatures.set(.unclassified, keys: g.keys) }.buttonStyle(.glass)
-                    .help("Put these \(g.keys.count) patterns back to New (they appear in Needs You)")
-            }
-        }
-        .controlSize(.small)
-        .font(.system(size: 12))
-        .padding(.vertical, 6)
-    }
-
     private func grouped() -> [Who: [Group]] {
         var out: [Who: [String: Group]] = [:]
         for e in signatures.allEntries {
@@ -554,5 +595,40 @@ private struct DecidedView: View {
             out[who, default: [:]][app] = g
         }
         return out.mapValues { $0.values.sorted { $0.keys.count != $1.keys.count ? $0.keys.count > $1.keys.count : $0.app < $1.app } }
+    }
+}
+
+private struct DecidedRow: View {
+    let group: DecidedView.Group
+    let who: DecidedView.Who
+    let signatures: SignatureStore
+    let showKeys: (String, [String]) -> Void
+    @StateObject private var expand = ExpandState()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(group.app).fontWeight(.semibold)
+                    Text([SignatureStatus.dangerous, .suspicious, .safe].compactMap { s in
+                        group.statuses[s].map { "\($0) \(s.title.lowercased())" } }.joined(separator: " · "))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    PatternsToggle(count: group.keys.count, expand: expand)
+                }
+                if expand.open {
+                    InlinePatterns(keys: group.keys, signatures: signatures) {
+                        showKeys("\(group.app) · \(who.rawValue.lowercased())", group.keys)
+                    }
+                }
+            }
+            Spacer()
+            if who == .ai || who == .you {
+                Button("Undo") { signatures.set(.unclassified, keys: group.keys) }.buttonStyle(.glass)
+                    .help("Put these \(group.keys.count) patterns back to New (they appear in Needs You)")
+            }
+        }
+        .controlSize(.small)
+        .font(.system(size: 12))
+        .padding(.vertical, 6)
     }
 }
