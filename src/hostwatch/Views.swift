@@ -85,7 +85,7 @@ struct HUDView: View {
         // On a transparent background a tight dark shadow keeps text readable on any wallpaper.
         // Legibility shadow: strong on a transparent background, subtle on materials (like macOS
         // does for text over vibrant backgrounds).
-        .shadow(color: .black.opacity(transparent ? 0.95 : model.overlayBackground == .dark ? 0 : 0.45),
+        .shadow(color: .black.opacity(transparent ? 0.95 : model.overlayBackground == .solid ? 0 : 0.45),
                 radius: transparent ? 1.2 : 0.8)
         .modifier(HUDSurface(style: model.overlayBackground, tint: model.overlayOpacity,
                              interactive: !model.overlayClickThrough, shape: hudShape))
@@ -190,31 +190,37 @@ struct HUDView: View {
     }
 }
 
-/// HUD background. Liquid Glass is tinted dark by the Opacity setting so white text stays
-/// readable over any wallpaper; the other styles are the classic ones.
+/// HUD background. The HUD always uses white text, so each style keeps a dark floor under it
+/// (`contrast`, the Contrast setting). With Reduce Transparency on, glass becomes Solid.
 struct HUDSurface: ViewModifier {
     let style: OverlayBackground
     let tint: Double
     let interactive: Bool
     let shape: RoundedRectangle
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var effective: OverlayBackground {
+        reduceTransparency && (style == .glass || style == .clear) ? .solid : style
+    }
 
     func body(content: Content) -> some View {
-        switch style {
+        switch effective {
         case .glass:
+            // 0.35 + setting: the default (45%) gives 62%, so primary text stays near 5.6:1 on white.
+            content.glassEffect(.regular.tint(.black.opacity(0.35 + tint * 0.6)), in: shape)
+        case .clear:
+            content.glassEffect(.clear.tint(.black.opacity(0.25 + tint * 0.55)), in: shape)
+        case .solid:
             content
-                // A dark floor under white text: 0.35 + setting, so the default (45%) gives 62%.
-                // Over a white wallpaper that keeps primary text near 5.6:1 and secondary near 4.4:1.
-                .glassEffect(.regular.tint(.black.opacity(0.35 + tint * 0.6)), in: shape)
-        case .blur:
-            content
-                .background { ZStack { Rectangle().fill(.ultraThinMaterial); Color.black.opacity(tint) } }
+                .background {
+                    ZStack {
+                        Rectangle().fill(.thickMaterial)
+                        Color.black.opacity(0.55 + tint * 0.4)
+                    }
+                }
                 .clipShape(shape)
-                .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.35 : 0.15), lineWidth: 1) }
-        case .dark:
-            content
-                .background(Color.black.opacity(tint))
-                .clipShape(shape)
-                .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.35 : 0.15), lineWidth: 1) }
+                .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.28 : 0.12), lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         case .transparent:
             // Fully clear pixels don't receive clicks, so keep a near-invisible fill while interactive.
             content
@@ -222,6 +228,43 @@ struct HUDSurface: ViewModifier {
                 .clipShape(shape)
                 .overlay { shape.strokeBorder(.white.opacity(interactive ? 0.3 : 0), lineWidth: 1) }
         }
+    }
+}
+
+/// A small preview of a HUD background over a wallpaper-like gradient (Settings ▸ HUD).
+struct HUDBackgroundTile: View {
+    let style: OverlayBackground
+    let tint: Double
+    let selected: Bool
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                LinearGradient(colors: [Color(red: 0.98, green: 0.62, blue: 0.36), Color(red: 0.35, green: 0.45, blue: 0.95),
+                                        Color(red: 0.95, green: 0.95, blue: 0.97)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach([0.9, 0.65, 0.8, 0.5], id: \.self) { w in
+                        Capsule().fill(.white.opacity(0.9)).frame(width: 44 * w, height: 3)
+                    }
+                }
+                .padding(8)
+                .shadow(color: .black.opacity(style == .transparent ? 0.9 : 0.3), radius: 0.8)
+                .modifier(HUDSurface(style: style, tint: tint, interactive: false,
+                                     shape: RoundedRectangle(cornerRadius: 8, style: .continuous)))
+            }
+            .frame(width: 92, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: selected ? 3 : 0.5)
+            }
+            Text(style.title).font(.caption).foregroundStyle(selected ? .primary : .secondary)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(style.title)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

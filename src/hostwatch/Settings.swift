@@ -292,19 +292,38 @@ private struct HUDPane: View {
                 Footnote("Toggle from anywhere with ⌃⌥⌘H. Turn off click-through to move it by its header, "
                          + "resize it from the ◣ corner, double-click rows and right-click to exclude.")
             }
-            Section("Appearance") {
-                Picker("Background", selection: $model.overlayBackground) {
-                    ForEach(OverlayBackground.allCases, id: \.self) { Text($0.title).tag($0) }
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Background")
+                    HStack(spacing: 14) {
+                        ForEach(OverlayBackground.allCases, id: \.self) { style in
+                            HUDBackgroundTile(style: style, tint: model.overlayOpacity, selected: model.overlayBackground == style)
+                                .onTapGesture { withAnimation(.snappy) { model.overlayBackground = style } }
+                        }
+                    }
+                    Text(model.overlayBackground.detail).font(.callout).foregroundStyle(.secondary)
                 }
-                LabeledContent("Tint") {
-                    Slider(value: $model.overlayOpacity, in: 0.15...0.9)
-                        .frame(width: 220)
+                .padding(.vertical, 4)
+                LabeledContent("Contrast") {
+                    Slider(value: $model.overlayOpacity, in: 0.15...0.9) {
+                        EmptyView()
+                    } minimumValueLabel: {
+                        Text("Lighter").font(.caption).foregroundStyle(.secondary)
+                    } maximumValueLabel: {
+                        Text("Darker").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(width: 260)
                 }
                 .disabled(model.overlayBackground == .transparent)
+                .help("How dark the background is under the HUD's white text")
                 Picker("Text size", selection: $model.overlayScale) {
                     ForEach(HUDModel.scaleOptions, id: \.1) { Text($0.0).tag($0.1) }
                 }
                 LabeledContent("Size and position") { Button("Reset", action: reset) }
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Footnote("With Reduce Transparency on (System Settings ▸ Accessibility ▸ Display), glass shows as Solid.")
             }
         }
     }
