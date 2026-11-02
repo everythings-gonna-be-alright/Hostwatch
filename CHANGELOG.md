@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 – decisions you can see
+
+The Rules tab shows what needs you, what decides automatically, and who decided what; AI suggests and you
+decide; patterns are specific; secrets are masked everywhere; stories open event by event; heavy
+processes stand out, live and in Time Travel.
 
 - **The main window opens when Hostwatch starts** (the Full Disk Access setup, when needed, comes in front of it).
 
