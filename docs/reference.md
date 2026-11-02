@@ -494,8 +494,13 @@ already running when it started aren't followed, or Xcode and browsers would be 
 - The launch row gets a live badge (`🔥 380% CPU · 2.1 GB · 12 min`, or a memory chip when memory is the
   reason) and a flame in Status; the HUD shows `🔥 380%`. When the process exits, the badge turns grey
   (`ended 1 min ago · peak 240% · 900 MB`) for 10 minutes.
-- A strip above the list names the heavy ones with a CPU bar, memory, running time and *untrusted program*
-  when it is: **Show Only These** filters Events to them; **Ask AI** and **Reveal in Finder** per process.
+- A banner above the list names the heavy ones: app icon, name (with an *Untrusted* tag when it is), the
+  program that started it, a CPU gauge (400% fills it), memory and running time; ✦ asks AI and ⋯ has Show in
+  Finder and Copy Path. **Only These** filters Events to them; the chevron collapses it to one line (the
+  busiest names), so it never hides that something is there.
+- **Time Travel uses the same design:** the heavy list is recorded with each 5-second metrics sample (usually
+  0–3 entries), so at the playhead the banner reads *Running heavy at 14:32:05* and the launch rows carry the
+  same badges as they did live (the running time is computed for that moment).
 - **Detection:** a heavy process that is unsigned, ad-hoc, quarantined or from a download/temp folder adds the
   story stage *Heavy untrusted process* (3 points, strong): the cryptominer pattern.
 - **How:** every 5 s the collector's existing sampler (libproc `proc_pid_rusage`, already used for the busiest

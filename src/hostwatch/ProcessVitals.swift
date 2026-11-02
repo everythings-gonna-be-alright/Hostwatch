@@ -93,7 +93,7 @@ final class ProcessVitals: ObservableObject {
         }
     }
 
-    static func sameProcess(_ a: Double, _ b: Double) -> Bool { a == 0 || b == 0 || abs(a - b) < 1.5 }
+    nonisolated static func sameProcess(_ a: Double, _ b: Double) -> Bool { a == 0 || b == 0 || abs(a - b) < 1.5 }
 
     /// The collector's list (every 5 s): follow the ones we saw start.
     func receive(_ samples: [ProcessVitalSample]) {
@@ -194,107 +194,250 @@ final class ProcessVitals: ObservableObject {
     }
 }
 
+// MARK: - One shape for live and Time Travel
+
+/// A heavy process at one moment: what the strip and the badges show, live or at the playhead. Recorded in
+/// the metrics history every 5 s (usually 0–3 entries), so Time Travel shows exactly what live showed.
+struct HeavyProcess: Codable, Sendable, Equatable, Identifiable {
+    var pid: Int
+    var start: Double            // s since 1970 (0: unknown)
+    var name: String
+    var path: String
+    var parent: String
+    var cpu: Double              // % of one core, averaged over 30 s
+    var mem: Int64
+    var cpuHeavy: Bool
+    var memHeavy: Bool
+    var untrusted: Bool
+
+    var id: String { "\(pid)-\(start)" }
+
+    /// A launch event for Ask AI when the real one isn't at hand (Time Travel).
+    var launchEvent: ActivityEvent {
+        var e = ActivityEvent(kind: .exec, time: "", pid: pid, ppid: 0, name: name, proc: path, target: path,
+                              extra: "", parent: parent)
+        e.pstart = start
+        return e
+    }
+}
+
+extension ProcessVitals {
+    /// Heavy right now, in the shape the views and the history use.
+    var snapshot: [HeavyProcess] {
+        let t = now()
+        return heavyNow.map { tr in
+            let cpu = cpuAverage(tr, at: t)
+            return HeavyProcess(pid: tr.launch.pid, start: tr.launch.start, name: tr.launch.name, path: tr.launch.path,
+                                parent: tr.launch.parent, cpu: (cpu * 10).rounded() / 10, mem: tr.memNow,
+                                cpuHeavy: cpu >= cpuLimit, memHeavy: tr.memNow >= memLimit, untrusted: isUntrusted(tr.launch.path))
+        }
+    }
+
+    /// The live context for the Events list.
+    var liveContext: HeavyContext {
+        HeavyContext(entries: snapshot, at: now(), live: true,
+                     events: { [weak self] pid in self?.tracked[pid]?.launch.event },
+                     ended: { [weak self] e in
+                         if case .ended? = self?.badge(for: e) { return self?.badge(for: e) }
+                         return nil
+                     })
+    }
+}
+
+/// What the strip and the badges show: live, or at the Time Travel playhead.
+struct HeavyContext {
+    var entries: [HeavyProcess]
+    var at: Date
+    var live: Bool
+    /// The launch event for a pid, when known (for Ask AI).
+    var events: (Int) -> ActivityEvent? = { _ in nil }
+    /// Live only: "ended · peak" for heavy processes that exited in the last 10 minutes.
+    var ended: (ActivityEvent) -> ProcessVitals.Badge? = { _ in nil }
+
+    static let empty = HeavyContext(entries: [], at: Date(), live: true)
+
+    func entry(for e: ActivityEvent) -> HeavyProcess? {
+        guard e.kind == .exec else { return nil }
+        return entries.first { $0.pid == e.pid && ProcessVitals.sameProcess($0.start, e.pstart) }
+    }
+
+    func badge(for e: ActivityEvent) -> ProcessVitals.Badge? {
+        if let h = entry(for: e) {
+            return .heavy(cpu: h.cpu, mem: h.mem, running: running(h), cpuHeavy: h.cpuHeavy, memHeavy: h.memHeavy)
+        }
+        return live ? ended(e) : nil
+    }
+
+    func running(_ h: HeavyProcess) -> TimeInterval { h.start > 0 ? at.timeIntervalSince1970 - h.start : 0 }
+
+    var pids: Set<Int> { Set(entries.map(\.pid)) }
+}
+
 // MARK: - Views
 
-/// "🔥 380% · 2.1 GB · 12 min" on the launch row of a heavy process; grey "ended · peak 380%" after.
+/// A tag on the launch row: "🔥 380% · 2.1 GB · 12 min" while heavy, "ended · peak 240%" after (tinted,
+/// like a Finder tag, not a solid pill).
 struct VitalBadgeView: View {
     let badge: ProcessVitals.Badge
     var compact = false
 
     var body: some View {
         switch badge {
-        case .heavy(let cpu, let mem, let running, let cpuHeavy, let memHeavy):
-            HStack(spacing: 4) {
-                Image(systemName: cpuHeavy ? "flame.fill" : "memorychip.fill")
+        case .heavy(let cpu, let mem, let running, let cpuHeavy, _):
+            Label {
                 Text(compact ? (cpuHeavy ? "\(Int(cpu))%" : ProcessVitals.memory(mem))
-                             : "\(Int(cpu))% CPU · \(ProcessVitals.memory(mem)) · \(ProcessVitals.duration(running))")
+                     : [cpuHeavy ? "\(Int(cpu))% CPU" : nil, ProcessVitals.memory(mem),
+                        running > 0 ? ProcessVitals.duration(running) : nil].compactMap { $0 }.joined(separator: " · "))
                     .monospacedDigit()
+            } icon: {
+                Image(systemName: cpuHeavy ? "flame.fill" : "memorychip.fill").symbolRenderingMode(.hierarchical)
             }
-            .font(.system(size: compact ? 10 : 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6).padding(.vertical, 1)
-            .background(Capsule().fill(cpuHeavy || memHeavy ? Color.orange : Color.secondary))
-            .help("Still running and using a lot: \(Int(cpu))% of one CPU core on average over 30 s, "
-                  + "\(ProcessVitals.memory(mem)) of memory, running for \(ProcessVitals.duration(running))")
-        case .ended(let peakCPU, let peakMem, let ago):
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle")
-                Text(compact ? "ended" : "ended \(ProcessVitals.duration(ago)) ago · peak \(Int(peakCPU))% · \(ProcessVitals.memory(peakMem))")
-                    .monospacedDigit()
-            }
+            .labelStyle(.titleAndIcon)
             .font(.system(size: compact ? 10 : 11, weight: .medium))
+            .foregroundStyle(Color.orange)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(Color.orange.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.5))
+            .accessibilityLabel("Running heavy: \(Int(cpu)) percent CPU, \(ProcessVitals.memory(mem)) memory")
+            .help("Still running and using a lot: \(Int(cpu))% of one CPU core on average over 30 s, "
+                  + "\(ProcessVitals.memory(mem)) of memory" + (running > 0 ? ", running for \(ProcessVitals.duration(running))" : ""))
+        case .ended(let peakCPU, let peakMem, let ago):
+            Label {
+                Text(compact ? "ended" : "Ended \(ProcessVitals.duration(ago)) ago · peak \(Int(peakCPU))% · \(ProcessVitals.memory(peakMem))")
+                    .monospacedDigit()
+            } icon: {
+                Image(systemName: "checkmark.circle")
+            }
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: compact ? 10 : 11))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 6).padding(.vertical, 1)
-            .background(Capsule().strokeBorder(Color.secondary.opacity(0.4)))
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(Color.secondary.opacity(0.10)))
         }
     }
 }
 
-/// Above the events: the processes you (or something) started that are still running heavy.
+/// Collapsed or expanded, shared by live and Time Travel.
+final class HeavyStripState: ObservableObject {
+    @Published var collapsed = false
+}
+
+/// Above the events: processes started while watching that run heavy, live or at the playhead. A tinted
+/// banner with one row per process (app icon, CPU gauge, memory, running time) and a ⋯ menu.
 struct HeavyStrip: View {
-    @ObservedObject var vitals: ProcessVitals
+    let context: HeavyContext
+    @ObservedObject var state: HeavyStripState
     let onlyThese: Bool
     let toggleOnlyThese: () -> Void
     let actions: HUDActions
 
     var body: some View {
-        let _ = vitals.revision
-        let heavy = vitals.heavyNow
-        if !heavy.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Image(systemName: "flame.fill").foregroundStyle(.orange)
-                    Text("\(heavy.count) process\(heavy.count == 1 ? "" : "es") started while watching \(heavy.count == 1 ? "is" : "are") still running heavy")
-                        .font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    Button(onlyThese ? "Show All Events" : "Show Only These", action: toggleOnlyThese)
-                        .buttonStyle(.glass).controlSize(.small)
+        let heavy = context.entries.sorted { $0.cpu > $1.cpu }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(context.live ? "Still running heavy" : "Running heavy at \(context.at.formatted(date: .omitted, time: .standard))")
+                        .font(.headline)
+                    Text("\(heavy.count) process\(heavy.count == 1 ? "" : "es") started while Hostwatch was watching")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
-                ForEach(heavy.prefix(4), id: \.launch.pid) { tr in
-                    HeavyRow(tr: tr, vitals: vitals, actions: actions)
+                if state.collapsed {
+                    // One line: the busiest names, so collapsing never hides that something is there.
+                    Text(heavy.prefix(3).map { "\($0.name) \($0.cpuHeavy ? "\(Int($0.cpu))%" : ProcessVitals.memory($0.mem))" }
+                        .joined(separator: "  ·  "))
+                        .font(.callout.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                 }
-                if heavy.count > 4 {
-                    Text("and \(heavy.count - 4) more").font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Toggle(isOn: Binding(get: { onlyThese }, set: { _ in toggleOnlyThese() })) {
+                    Label("Only These", systemImage: "line.3.horizontal.decrease")
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.glass)
+                .help(onlyThese ? "Show all events again" : "Show only these processes' events")
+                Button {
+                    withAnimation(.snappy) { state.collapsed.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down").rotationEffect(.degrees(state.collapsed ? -90 : 0))
+                }
+                .buttonStyle(.glass)
+                .help(state.collapsed ? "Show details" : "Collapse")
+            }
+            .controlSize(.small)
+            if !state.collapsed {
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                    ForEach(heavy.prefix(5)) { h in HeavyRow(h: h, context: context, actions: actions) }
+                }
+                if heavy.count > 5 {
+                    Text("and \(heavy.count - 5) more").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.orange.opacity(0.08))
         }
+        .padding(14)
+        // Content, not a control: a tinted grouped background (Liquid Glass is for the control layer).
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.orange.opacity(0.07)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 0.5))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }
 
 private struct HeavyRow: View {
-    let tr: ProcessVitals.Tracked
-    let vitals: ProcessVitals
+    let h: HeavyProcess
+    let context: HeavyContext
     let actions: HUDActions
 
+    private var event: ActivityEvent { context.events(h.pid) ?? h.launchEvent }
+
     var body: some View {
-        let t = vitals.now()
-        let cpu = vitals.cpuAverage(tr, at: t)
-        HStack(spacing: 10) {
-            Text(tr.launch.name).font(.system(size: 12, weight: .semibold)).frame(minWidth: 90, alignment: .leading)
-            Text("pid " + String(tr.launch.pid)).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
-            // CPU bar: one full core = a quarter of the bar, so 400% fills it.
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.15))
-                    Capsule().fill(Color.orange).frame(width: g.size.width * min(1, cpu / 400))
+        GridRow(alignment: .center) {
+            HStack(spacing: 8) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: h.path))
+                    .resizable().frame(width: 20, height: 20)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Text(h.name).font(.body.weight(.semibold))
+                        if h.untrusted {
+                            Text("Untrusted").font(.caption2.weight(.semibold)).foregroundStyle(.red)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.red.opacity(0.12)))
+                                .help("Unsigned, ad-hoc, quarantined or from a download/temp folder")
+                        }
+                    }
+                    Text("pid " + String(h.pid) + (h.parent.isEmpty ? "" : " · from " + (h.parent as NSString).lastPathComponent))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 80, height: 6)
-            Text("\(Int(cpu))% CPU · \(ProcessVitals.memory(tr.memNow)) · \(ProcessVitals.duration(vitals.running(tr, at: t)))")
-                .font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
-            if vitals.isUntrusted(tr.launch.path) {
-                Text("untrusted program").font(.system(size: 10, weight: .semibold)).foregroundStyle(.red)
+            // One full core is a quarter of the gauge: 400% fills it.
+            Gauge(value: min(h.cpu, 400), in: 0...400) { EmptyView() }
+                .gaugeStyle(.accessoryLinearCapacity)
+                .tint(h.cpuHeavy ? Color.orange : Color.secondary)
+                .frame(width: 90)
+                .help("\(Int(h.cpu))% of one CPU core (400% fills the bar)")
+            Text("\(Int(h.cpu))%").font(.callout.monospacedDigit()).foregroundStyle(h.cpuHeavy ? .primary : .secondary)
+                .gridColumnAlignment(.trailing)
+            Label(ProcessVitals.memory(h.mem), systemImage: "memorychip")
+                .font(.callout.monospacedDigit()).foregroundStyle(h.memHeavy ? .primary : .secondary)
+            Text(context.running(h) > 0 ? ProcessVitals.duration(context.running(h)) : "")
+                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Button { actions.askAI(event) } label: { Image(systemName: "sparkles") }
+                    .buttonStyle(.borderless)
+                    .help("Ask AI about \(h.name)")
+                Menu {
+                    Button("Ask AI About \(h.name)…") { actions.askAI(event) }
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: h.path)]) }
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(h.path, forType: .string)
+                    }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .menuStyle(.button).buttonStyle(.borderless).menuIndicator(.hidden).fixedSize()
             }
-            Spacer()
-            Button("Ask AI") { actions.askAI(tr.launch.event) }.buttonStyle(.glass).controlSize(.mini)
-            Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: tr.launch.path)]) } label: {
-                Image(systemName: "folder")
-            }
-            .buttonStyle(.glass).controlSize(.mini).help("Reveal \(tr.launch.path) in Finder")
+            .gridColumnAlignment(.trailing)
         }
-        .help("Started by \((tr.launch.parent as NSString).lastPathComponent): \(tr.launch.event.args.isEmpty ? tr.launch.path : tr.launch.event.args)")
     }
 }

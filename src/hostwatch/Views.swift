@@ -476,6 +476,7 @@ struct ActivityWindowView: View {
     let domainsState: DomainsViewState
     let rulesTab: RulesTabState
     @ObservedObject var vitals: ProcessVitals
+    @ObservedObject var heavyStrip: HeavyStripState
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -492,19 +493,7 @@ struct ActivityWindowView: View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
-            if model.windowTab == 0 && !traveling && (!vitals.heavyNow.isEmpty || model.onlyPids != nil) {
-                HeavyStrip(vitals: vitals, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
-                    model.onlyPids = model.onlyPids == nil ? vitals.heavyPids : nil
-                }, actions: actions)
-                if vitals.heavyNow.isEmpty, model.onlyPids != nil {
-                    HStack {
-                        Text("Those processes are no longer heavy.").font(.system(size: 12)).foregroundStyle(.secondary)
-                        Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.link)
-                    }
-                    .padding(8)
-                }
-                Divider()
-            }
+            if model.windowTab == 0 { heavySection }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
             case 0: eventsList
@@ -643,6 +632,34 @@ struct ActivityWindowView: View {
     }
 
     @ViewBuilder
+    /// Heavy processes, live or at the Time Travel playhead (recorded every 5 s): one design for both.
+    private var heavy: HeavyContext {
+        let _ = vitals.revision
+        if traveling {
+            return HeavyContext(entries: travel.sampleAtPlayhead?.heavy ?? [], at: travel.playhead, live: false,
+                                events: { pid in travel.events.first { $0.kind == .exec && $0.pid == pid } })
+        }
+        return vitals.liveContext
+    }
+
+    @ViewBuilder private var heavySection: some View {
+        let context = heavy
+        if !context.entries.isEmpty {
+            HeavyStrip(context: context, state: heavyStrip, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
+                model.onlyPids = model.onlyPids == nil ? context.pids : nil
+            }, actions: actions)
+        } else if model.onlyPids != nil {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle").foregroundStyle(.secondary)
+                Text(traveling ? "Nothing ran heavy at this moment." : "Those processes are no longer heavy.")
+                    .foregroundStyle(.secondary)
+                Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.link)
+            }
+            .font(.callout)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+        }
+    }
+
     private var eventsList: some View {
         let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
         let items = events.map { e -> EventItem in
@@ -669,7 +686,7 @@ struct ActivityWindowView: View {
                 TableColumn("Status", value: \.statusRank) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
-                        if case .heavy = vitals.badge(for: item.event) {
+                        if case .heavy = heavy.badge(for: item.event) {
                             Image(systemName: "flame.fill").foregroundStyle(.orange)
                                 .help("Still running and using a lot of CPU or memory")
                         } else if !item.event.beacon.isEmpty {
@@ -701,7 +718,7 @@ struct ActivityWindowView: View {
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Detail", value: \.detail) { item in
                     HStack(spacing: 6) {
-                        if let badge = vitals.badge(for: item.event) { VitalBadgeView(badge: badge) }
+                        if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
                         Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
                     }
                 }

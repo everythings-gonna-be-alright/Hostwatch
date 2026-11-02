@@ -150,45 +150,61 @@ import Testing
     }
 }
 
+/// Live and Time Travel share one shape (`HeavyProcess`), recorded with each metrics sample.
+@MainActor @Suite struct HeavyInTimeTravel {
+    static let xmrig = HeavyProcess(pid: 4411, start: 1_799_999_000, name: "xmrig", path: "\(home)/Downloads/xmrig",
+                                    parent: "/bin/zsh", cpu: 380, mem: 2_100_000_000, cpuHeavy: true, memHeavy: true, untrusted: true)
+
+    @Test func recordedWithTheMetricsSample() throws {
+        var sample = MetricSample(t: 1_800_000_000, cpu: 40, mem: 0.5, pressure: 1, netIn: 0, netOut: 0)
+        sample.heavy = [Self.xmrig]
+        let data = try JSONEncoder().encode(sample)
+        #expect(String(decoding: data, as: UTF8.self).contains("\"h\":[{"))
+        #expect(try JSONDecoder().decode(MetricSample.self, from: data).heavy == [Self.xmrig])
+    }
+
+    @Test func badgesAtThePlayheadMatchTheExactProcess() {
+        let context = HeavyContext(entries: [Self.xmrig], at: Date(timeIntervalSince1970: 1_800_000_000), live: false)
+        var launch = exec("\(home)/Downloads/xmrig", pid: 4411, ppid: 1, parent: "/bin/zsh")
+        launch.pstart = 1_799_999_000
+        guard case .heavy(380, 2_100_000_000, 1000, true, true)? = context.badge(for: launch) else {
+            Issue.record("no badge: \(String(describing: context.badge(for: launch)))"); return
+        }
+        launch.pstart = 1_700_000_000                                              // same pid, another process
+        #expect(context.badge(for: launch) == nil)
+    }
+}
+
 /// HOSTWATCH_RENDER=<dir> writes heavy-strip.png there (to look at the layout).
 @MainActor @Suite struct HeavyStripRender {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"] != nil))
     func render() throws {
-        let v = ProcessVitals(defaults: scratchDefaults("hw-vitals"))
-        v.isAlive = { _ in true }
-        v.isUntrusted = { $0.contains("Downloads") }
-        let t0 = Date()
-        var events: [ActivityEvent] = []
-        for (pid, path, cpu, mem) in [(4411, "\(home)/Downloads/xmrig", 380.0, Int64(2_100_000_000)),
-                                      (9120, "/opt/homebrew/bin/node", 12.0, Int64(1_400_000_000))] {
-            var e = exec(path, pid: pid, ppid: 1, parent: "/bin/zsh", args: (path as NSString).lastPathComponent)
-            e.pstart = t0.timeIntervalSince1970 - 720
-            v.now = { t0 }
-            v.noteLaunch(e)
-            events.append(e)
-            _ = cpu; _ = mem
-        }
-        for i in 0..<8 {
-            let t = t0.addingTimeInterval(Double(i) * 5)
-            v.now = { t }
-            v.receive([ProcessVitalSample(pid: 4411, start: t0.timeIntervalSince1970 - 720, name: "xmrig", path: "", cpu: 380, mem: 2_100_000_000),
-                       ProcessVitalSample(pid: 9120, start: t0.timeIntervalSince1970 - 720, name: "node", path: "", cpu: 12, mem: 1_400_000_000)])
-        }
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        let node = HeavyProcess(pid: 9120, start: 1_799_997_540, name: "node", path: "/opt/homebrew/bin/node", parent: "/bin/zsh",
+                                cpu: 12, mem: 1_400_000_000, cpuHeavy: false, memHeavy: true, untrusted: false)
+        let context = HeavyContext(entries: [HeavyInTimeTravel.xmrig, node], at: t, live: true)
+        let actions = HUDActions(openFullScreen: {}, openExclusions: {}, toggleCollector: {}, quit: {}, askAI: { _ in })
+        var e1 = exec("\(home)/Downloads/xmrig", pid: 4411, ppid: 1, parent: "/bin/zsh", args: "./xmrig -o pool:443")
+        e1.pstart = 1_799_999_000
+        var e2 = exec("/opt/homebrew/bin/node", pid: 9120, ppid: 1, parent: "/bin/zsh", args: "node server.js")
+        e2.pstart = 1_799_997_540
+        let collapsed = HeavyStripState(); collapsed.collapsed = true
         let view = VStack(alignment: .leading, spacing: 8) {
-            HeavyStrip(vitals: v, onlyThese: false, toggleOnlyThese: {},
-                       actions: HUDActions(openFullScreen: {}, openExclusions: {}, toggleCollector: {}, quit: {}, askAI: { _ in }))
-            ForEach(events, id: \.pid) { e in
+            HeavyStrip(context: context, state: HeavyStripState(), onlyThese: false, toggleOnlyThese: {}, actions: actions)
+            HeavyStrip(context: HeavyContext(entries: [HeavyInTimeTravel.xmrig], at: t, live: false), state: collapsed,
+                       onlyThese: true, toggleOnlyThese: {}, actions: actions)
+            ForEach([e1, e2], id: \.pid) { e in
                 HStack(spacing: 8) {
-                    Text(e.time).foregroundStyle(.secondary)
+                    Text("12:01:07").foregroundStyle(.secondary)
                     Image(systemName: "flame.fill").foregroundStyle(.orange)
                     Text(e.name).fontWeight(.semibold).frame(width: 70, alignment: .leading)
-                    if let b = v.badge(for: e) { VitalBadgeView(badge: b) }
+                    if let b = context.badge(for: e) { VitalBadgeView(badge: b) }
                     Text(e.args).foregroundStyle(.secondary)
                 }
                 .font(.system(size: 12, design: .monospaced))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
             }
-            VitalBadgeView(badge: .ended(peakCPU: 240, peakMem: 900_000_000, ago: 95)).padding(.horizontal, 12)
+            VitalBadgeView(badge: .ended(peakCPU: 240, peakMem: 900_000_000, ago: 95)).padding(.horizontal, 16)
         }
         .padding(.bottom, 10)
         .frame(width: 900)

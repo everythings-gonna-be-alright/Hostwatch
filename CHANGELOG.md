@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Heavy processes in Time Travel, with a native design:** a tinted banner with app icons, a CPU gauge,
+  tags and a ⋯ menu (collapsible to one line); badges are tinted tags. The heavy list is recorded with the
+  metrics every 5 s, so Time Travel shows the same banner and badges at the playhead.
 - **Heavy processes stand out in Events:** a process Hostwatch saw start that keeps using a lot of CPU (30 s
   average) or memory gets a live 🔥 badge on its launch row, a flame in the HUD, and a strip above the list
   (CPU bar, memory, running time, Show Only These, Ask AI); it turns grey with its peak when it ends. Unsigned
