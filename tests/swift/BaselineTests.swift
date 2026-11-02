@@ -124,7 +124,7 @@ import Testing
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-base-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let store = SignatureStore(directory: dir)
-        let defaults = UserDefaults(suiteName: "hw-base-\(UUID().uuidString)")!
+        let defaults = scratchDefaults("hw-base")
         let learner = BaselineLearner(store: store, classifier: nil, defaults: defaults, freshInstall: fresh)
         learner.identify = { self.identify($0) }
         return (learner, store, defaults)
@@ -254,7 +254,7 @@ import Testing
         let e = net(slack, pid: 16, to: "3.68.170.153:443")
         store.observe(e)
         store.set(.safe, keys: [e.signatureKey], source: "baseline", note: "Baseline: Slack Technologies")
-        let defaults = UserDefaults(suiteName: "hw-base-\(UUID().uuidString)")!
+        let defaults = scratchDefaults("hw-base")
         defaults.set(Data("[]".utf8), forKey: "baselineRules")
         _ = BaselineLearner(store: store, classifier: nil, defaults: defaults, freshInstall: false)
         #expect(store.status(for: e) == .unclassified && defaults.object(forKey: "baselineRules") == nil)
