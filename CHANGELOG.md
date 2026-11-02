@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-- **Narrow patterns for interpreters and shells:** `python3 → TCP pythonhosted.org:443` instead of
-  `internet:443`, `bash → r ~/Documents/work/*` or `r ~/todo.txt` instead of `~/Documents/**` or `~/*`.
+- **No wide patterns, for any program:** a file pattern names its folder at least 2 levels below home (3
+  elsewhere), or the file itself: `r ~/Documents/work/*`, `r ~/todo.txt` instead of `r ~/Documents/**` or
+  `r ~/*`. No learned Safe rule or whole-program Safe may cover an area. Interpreters and shells also get
+  the destination's domain instead of `internet:443`. Wide patterns that weren't your decision are dropped.
+- **Collector socket without a process-wide umask** (it raced other threads creating folders).
 
 - **Secrets masked everywhere:** one stronger rule set (headers, cookies, `--password`, `FOO_TOKEN=`, URL
   credentials, `curl -u`, `security -w`, `sshpass`, `mysql -p`, token formats, JWTs, private keys) masks command

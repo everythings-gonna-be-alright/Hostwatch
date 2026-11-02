@@ -170,26 +170,36 @@ enum AgentSocket {
         }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw Failure(description: "socket: \(String(cString: strerror(errno)))") }
+        // Bound inside a private 0700 folder, narrowed to 0600, then moved into place: nobody can reach it
+        // while it's wider, and without changing the process-wide umask (which would race other threads).
+        let staging = (path as NSString).deletingLastPathComponent + "/.bind-\(getpid())-\(fd)"
+        rmdir(staging)
+        guard mkdir(staging, 0o700) == 0 else {
+            let e = String(cString: strerror(errno)); close(fd); throw Failure(description: "staging folder: \(e)")
+        }
+        defer { rmdir(staging) }
+        let temp = staging + "/s"
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
-        let bytes = Array(path.utf8)
+        let bytes = Array(temp.utf8)
         guard bytes.count < MemoryLayout.size(ofValue: addr.sun_path) else {
-            close(fd); throw Failure(description: "socket path too long: \(path)")
+            close(fd); throw Failure(description: "socket path too long: \(temp)")
         }
         withUnsafeMutableBytes(of: &addr.sun_path) { raw in
             raw.copyBytes(from: bytes)
             raw[bytes.count] = 0
         }
-        let old = umask(0o177)                               // created as 0600, never briefly wider
         let bound = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
-        umask(old)
         guard bound == 0 else {
             let e = String(cString: strerror(errno)); close(fd); throw Failure(description: "bind: \(e)")
         }
-        if let clientUID, clientUID != geteuid() { chown(path, clientUID, gid_t.max) }
-        chmod(path, 0o600)
+        chmod(temp, 0o600)
+        if let clientUID, clientUID != geteuid() { chown(temp, clientUID, gid_t.max) }
+        guard rename(temp, path) == 0 else {
+            let e = String(cString: strerror(errno)); unlink(temp); close(fd); throw Failure(description: "rename: \(e)")
+        }
         guard listen(fd, 8) == 0 else { close(fd); throw Failure(description: "listen failed") }
         return fd
     }

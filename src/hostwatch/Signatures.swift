@@ -277,6 +277,45 @@ enum SignatureBuilder {
 
     // MARK: Path patterns
 
+    // MARK: Specific patterns (the general rule)
+
+    /// Folders a file pattern needs before it may use a wildcard: 2 below home ("~/Documents/work/*"),
+    /// 3 elsewhere ("/Users/Shared/tools/*"). Never "r ~/*", "r ~/Documents/*", "r /*", "r /tmp/*" or "r /Users/**".
+    static func minWildcardDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 2 : 3 }
+    /// Deeper than this, an app's pattern ends in "/**" (so node_modules isn't a pattern per folder).
+    static func maxFolderDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 4 : 5 }
+
+    /// Folders below "~" or "/": "~/Documents/work" → 2, "/usr/bin" → 2, "~" → 0.
+    static func depth(_ dir: String) -> Int {
+        dir.split(separator: "/", omittingEmptySubsequences: true).filter { $0 != "~" }.count
+    }
+
+    /// The general rule for file patterns: specific enough that deciding one never covers a whole area.
+    /// A file in a shallow folder is its own pattern ("~/todo.txt", "~/Documents/a.pdf", "/tmp/x.log");
+    /// otherwise its folder ("~/Documents/work/*"); for apps, very deep trees end in "/**" (4 folders below
+    /// home, 5 elsewhere). Interpreters and shells (`deep: false`) always get the exact folder.
+    static func specificPath(_ path: String, deep: Bool) -> String {
+        let file = normalize(path)
+        let folder = normalize((path as NSString).deletingLastPathComponent)
+        let d = depth(folder)
+        if d < minWildcardDepth(folder) { return file }
+        let max = maxFolderDepth(folder)
+        if !deep || d <= max { return folder + "/*" }
+        let parts = folder.split(separator: "/", omittingEmptySubsequences: true)
+        return (folder.hasPrefix("/") ? "/" : "") + parts.prefix(folder.hasPrefix("~") ? max + 1 : max).joined(separator: "/") + "/**"
+    }
+
+    /// A file pattern (or a rule's file glob) that covers a whole area: a wildcard too few folders down
+    /// ("r ~/*", "r ~/Documents/*", "r /Users/**", "r *"). Labelled sensitive places ("[ssh keys]") and an
+    /// app's own data folder are specific by construction.
+    static func isTooWide(filePattern: String) -> Bool {
+        if filePattern.hasSuffix("]") { return false }
+        let path = filePattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? filePattern
+        guard let star = path.firstIndex(where: { $0 == "*" || $0 == "?" }) else { return false }
+        let prefix = String(path[..<star])
+        return depth(prefix) < minWildcardDepth(prefix)
+    }
+
     /// Keeps up to `depth` folders below the zone root, then "/**".
     static func collapse(_ dir: String) -> String {
         if dir.isEmpty || dir == "/" { return "/*" }
@@ -359,13 +398,7 @@ enum SignatureBuilder {
             return ("\(mode) \(normalize(own))/**  [own data]", .routine, "app's own data folder")
         }
 
-        // Interpreters and shells run any script: their patterns name the exact folder, not a whole area
-        // like ~/Documents/**, so deciding one never covers everything they might touch.
-        // In a shallow folder (~, ~/Documents, /, /Users, /Users/Shared…) even "the folder" is wide: the file itself.
-        let folder = normalize((path as NSString).deletingLastPathComponent)
-        let depth = folder.split(separator: "/").count          // "~" 1, "~/Documents" 2, "/Users/Shared" 2
-        let pattern = !isLolbin(actor) ? "\(mode) \(collapse(folder))"
-            : depth <= 2 ? "\(mode) \(normalize(path))" : "\(mode) \(folder)/*"
+        let pattern = "\(mode) \(specificPath(path, deep: !isLolbin(actor)))"
         if writes {
             if routineWriteRoots.contains(where: { under(norm, $0) }) {
                 return (pattern, .routine, "scratch/cache write")
@@ -789,7 +822,9 @@ final class SignatureStore: ObservableObject {
     }
 
     /// "Everything python does is Safe" would trust any script: not allowed for interpreters and shells.
-    static func canTrustWholeProcess(_ process: String) -> Bool { !SignatureBuilder.isLolbin(process) }
+    /// "Everything this program does is Safe" is the widest pattern there is: never for any program
+    /// (Suspicious or Dangerous for a whole program is fine: that only flags more).
+    static func canTrustWholeProcess(_ process: String) -> Bool { false }
 
     /// Puts an entry back as it was (tests, and loading entries made by older versions).
     func restore(_ e: SignatureEntry) {
@@ -801,13 +836,15 @@ final class SignatureStore: ObservableObject {
     /// rules, and Safe set by AI or the baseline (your own per-pattern decisions stay).
     private func dropInterpreterTrust() {
         var changed = false
-        // Wide interpreter patterns from earlier versions (python → internet:443, zsh → r /*, bash → r /Users/**)
-        // that weren't your decision: dropped, they come back narrow (domain, folder, file) when seen again.
+        // Wide patterns from earlier versions (r ~/Documents/**, zsh → r /*, python → internet:443) that weren't
+        // your decision: dropped, they come back specific (file, folder, domain) when seen again.
         // Kept only when you (or a rule you approved) decided them.
-        for (key, e) in entries where !["you", "rule"].contains(e.source ?? "") && SignatureBuilder.runsAnyCode(e) {
-            let folder = e.pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
-            let wide = e.kind == .net ? (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
-                : e.kind == .file ? (folder.hasSuffix("/**") || folder.hasSuffix("/*") && folder.split(separator: "/").count <= 3)
+        // Any program: file patterns that cover a whole area (the general rule, `isTooWide`).
+        for (key, e) in entries where !["you", "rule"].contains(e.source ?? "") {
+            let interpreter = SignatureBuilder.runsAnyCode(e)
+            let wide = e.kind == .file ? SignatureBuilder.isTooWide(filePattern: e.pattern)
+                    || interpreter && e.pattern.hasSuffix("/**")
+                : e.kind == .net ? interpreter && (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
                 : false
             if wide { entries[key] = nil; changed = true }
         }

@@ -68,14 +68,21 @@ signature are grouped into one **pattern**:
 |------|-----------|---------|
 | process | parent program → executable | `Microsoft Excel → /usr/bin/osascript` |
 | connection | process → proto, host bucket, port | `Slack → TCP internet:443`, `curl → TCP 45.33.*.*:8081` |
-| file | process → mode, zone | `rg → r ~/Documents/**`, `agent → r ~/.ssh/*  [SSH keys]` |
+| file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]` |
 
 Normalization: home → `~`, `$TMPDIR`, UUIDs, hex IDs and version numbers → placeholders (also in
 executable names that are only a version, e.g. `claude/versions/#.#.#`).
 
-**Files collapse into coarse zones.** What matters is *where* a process reaches, not every folder
-it walks: `/System/**`, `/usr/**`, `/Applications/**`, `$TMPDIR/**`, `~/Library/Containers/**`,
-`~/Documents/**`, `~/.cache/**` and so on. Full detail is kept only where it matters:
+**The general rule: no pattern covers a whole area** (`SignatureBuilder.specificPath`, for every program).
+A wildcard needs at least 2 folders below home (`~/Documents/work/*`) or 3 elsewhere
+(`/Users/Shared/tools/*`); a file in a shallower folder is its own pattern (`r ~/todo.txt`,
+`r ~/Documents/a.pdf`, `r /tmp/x.log`, `r /usr/bin/ls`). Patterns name the file's folder; for apps, trees
+deeper than 4 folders below home (5 elsewhere) end in `/**` there (`~/Projects/app/node_modules/a/**`), while
+interpreters and shells always get the exact folder. So `r *`, `r ~/*`, `r ~/Documents/**`, `r /*`,
+`r /tmp/*` or `r /Users/**` never exist, can't be a learned Safe rule, and "Mark All … From This Process ▸ Safe"
+is gone (Suspicious or Dangerous for a whole program still work). Undecided or automatic wide patterns from
+earlier versions are dropped at launch; ones you decided stay. On a real day of history: 1,219 → 2,803
+patterns, mostly routine (auto Safe); patterns to decide 150 → 227. Labelled places stay as before:
 - **sensitive places**, for any access: SSH/GPG keys, cloud and registry credentials, keychains,
   TCC, cookies, Safari/Mail/Messages data, browser credential stores, local accounts, sudoers.
   These are tagged `[label]`.
@@ -147,11 +154,9 @@ migrated and can be deleted.
 - No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
   or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
   verdict also becomes a suggestion for that event's pattern.
-- **Interpreters and shells get narrow patterns** (python, bash, node, curl, osascript…): network patterns
-  name the destination's domain (`TCP pythonhosted.org:443`) or address, never `internet`; file patterns name
-  the exact folder (`r ~/Documents/work/report/*`), or the exact file in a shallow folder (`r ~/todo.txt`,
-  `r /Users/Shared/run.sh`), never `~/Documents/**` or `~/*`. Undecided wide ones from earlier versions are
-  dropped at launch and come back narrow.
+- **Interpreters and shells** (python, bash, node, curl, osascript…): network patterns name the destination's
+  domain (`TCP pythonhosted.org:443`) or address, never `internet`; file patterns follow the general rule
+  (above) with the exact folder even in deep trees.
 - **Interpreters can't be trusted wholesale:** *Mark All … From This Process ▸ Safe* is disabled for them, a
   learned Safe rule that covers them broadly is refused, and the baseline never trusts them (macOS's own
   `/bin/bash` or `/usr/bin/python3` included). Blanket trust from earlier versions (whole-process Safe, or Safe by

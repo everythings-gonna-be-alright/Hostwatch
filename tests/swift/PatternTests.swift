@@ -11,12 +11,21 @@ import Testing
         #expect(a.signatureRisk == .routine)
     }
 
-    @Test func homeFoldersCollapseToOneZone() {
+    /// The general rule: no pattern covers a whole area like ~/Documents/** or ~/*.
+    @Test func patternsAreSpecific() {
         let rg = "/opt/homebrew/bin/rg"
-        let a = file(rg, pid: 2, "r", "\(home)/Documents/git/my-project/src/main.go")
-        let b = file(rg, pid: 2, "r", "\(home)/Documents/notes.txt")
-        #expect(a.signaturePattern == "r ~/Documents/**")
-        #expect(a.signatureKey == b.signatureKey)
+        #expect(file(rg, pid: 2, "r", "\(home)/Documents/git/my-project/src/main.go").signaturePattern == "r ~/Documents/git/my-project/src/*")
+        #expect(file(rg, pid: 2, "r", "\(home)/Documents/notes.txt").signaturePattern == "r ~/Documents/notes.txt")
+        #expect(file(rg, pid: 2, "r", "\(home)/todo.txt").signaturePattern == "r ~/todo.txt")
+        #expect(file(rg, pid: 2, "r", "\(home)/Projects/app/node_modules/a/b/c/index.js").signaturePattern
+                == "r ~/Projects/app/node_modules/a/**")                          // deep trees end in /**
+        #expect(file(rg, pid: 2, "r", "/Users/Shared/run.sh").signaturePattern == "r /Users/Shared/run.sh")
+        for pattern in ["r ~/*", "r ~/Documents/*", "r ~/Documents/**", "r /*", "r /Users/**", "r /tmp/*", "r *", "w /Users/Shared/*"] {
+            #expect(SignatureBuilder.isTooWide(filePattern: pattern), "\(pattern)")
+        }
+        for pattern in ["r ~/Documents/work/*", "r /Users/Shared/tools/*", "r ~/.ssh/*  [ssh keys]", "r ~/todo.txt"] {
+            #expect(!SignatureBuilder.isTooWide(filePattern: pattern), "\(pattern)")
+        }
     }
 
     @Test func versionNamedExecutablesAreOneProcess() {
@@ -123,7 +132,7 @@ import Testing
         let other = file("/opt/homebrew/bin/python3", pid: 14, "r", "\(home)/Documents/notes.txt")
         #expect(other.signatureKey != py.signatureKey)
         let app = file("/Applications/Tool.app/Contents/MacOS/Tool", pid: 15, "r", "\(home)/Documents/work/report/data.csv")
-        #expect(app.signaturePattern.hasSuffix("/**"))                            // apps keep their zone
+        #expect(app.signaturePattern == "r ~/Documents/work/report/*")             // the same general rule for apps
         #expect(file("/opt/homebrew/bin/python3", pid: 18, "r", "\(home)/todo.txt").signaturePattern == "r ~/todo.txt")
         #expect(other.signaturePattern == "r ~/Documents/notes.txt")
         #expect(file("/bin/bash", pid: 19, "r", "/Users/Shared/run.sh").signaturePattern == "r /Users/Shared/run.sh")

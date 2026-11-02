@@ -84,6 +84,10 @@ struct RuleEvaluation: Equatable {
                 if e.risk == .high { r.newHighRisk += 1 }
             }
         }
+        if rule.action == .safe, rule.kind != .net, rule.kind != .exec,
+           rule.pattern == "*" || SignatureBuilder.isTooWide(filePattern: rule.pattern) {
+            r.problems.append("too wide: a Safe rule must name a specific folder, not \"\(rule.pattern)\"")
+        }
         if rule.action == .safe,
            entries.contains(where: { rule.matches($0) && SignatureBuilder.runsAnyCode($0) }),
            Glob.literalCount(rule.process) < 4 || Glob.literalCount(rule.pattern) < 4 {
