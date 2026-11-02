@@ -617,6 +617,10 @@ struct ActivityWindowView: View {
                     .help("Show history files in Finder")
                 Text("·")
                 let total = traveling ? travel.events.count : model.history.count
+                if !traveling, model.restoredCount > 0 {
+                    Text("\(model.restoredCount) from before the restart ·")
+                        .help("Loaded from recorded history at launch, so the list isn't empty. Time Travel shows all of it.")
+                }
                 Text(rows.count == total ? "\(total) events" : "\(rows.count) of \(total) events")
                     .monospacedDigit()
             }

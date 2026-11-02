@@ -663,6 +663,34 @@ final class HUDModel: ObservableObject {
         }
     }
 
+    /// After a restart: the newest recorded events (up to the list's limit) fill the list, so it isn't
+    /// empty. Display only: detection handled them in the previous session. They sort below live events.
+    func restoreRecent(from directory: URL, completion: (() -> Void)? = nil) {
+        let limit = historyLimit, rules = self.rules
+        Task {
+            let restored = await Task.detached(priority: .utility) { () -> [ActivityEvent] in
+                let archive = HistoryArchive(directory: directory)
+                let segments = archive.segments()
+                guard let last = segments.map(\.end).max() else { return [] }
+                // Newest first; ~600 bytes per event keeps the read small even for busy history.
+                let events = archive.events(segments, from: .distantPast, to: last.addingTimeInterval(1),
+                                            maxBytes: Int64(limit) * 600).events
+                return Array(events.filter { !rules.excludes($0) }.prefix(limit))
+            }.value
+            guard !restored.isEmpty else { completion?(); return }
+            var older = restored
+            for i in older.indices { older[i].seq = -(i + 1) }        // below every live event
+            var updated = history
+            updated.append(contentsOf: older.prefix(max(0, limit - updated.count)))
+            history = updated
+            restoredCount = min(restored.count, limit)
+            completion?()
+        }
+    }
+
+    /// How many events were restored from history at launch (0 = none).
+    @Published private(set) var restoredCount = 0
+
     /// Hands buffered events to the list, counters and HUD in one update.
     func flushUI() {
         flushScheduled = false

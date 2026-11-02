@@ -394,6 +394,12 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
   login shell. Set `CLAUDE_PATH` to override.
 - Evidence you send goes to Anthropic. A typical question takes about 10 s and costs about $0.02–0.05.
 
+## After a restart
+
+The event list starts with the newest recorded events from history (up to its 5,000-event limit), so it isn't
+empty; the footer shows how many came from before the restart. They are display only (detection already saw
+them) and sort below every new event. Time Travel shows the rest.
+
 ## Time Travel
 
 *Time Travel* in the activity window's toolbar (or *View ▸ Time Travel*, ⌥⌘T) switches the Events tab
