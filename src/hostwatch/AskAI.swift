@@ -173,6 +173,13 @@ final class AIAnalysis: ObservableObject {
     @Published private(set) var verdict: Verdict?
     @Published private(set) var footer = ""
     @Published var allowFileTools = false
+    /// Structured facts for the window (the AI gets the text evidence).
+    @Published private(set) var facts: EventFacts?
+    /// The raw evidence section is collapsed until you open it.
+    @Published var showEvidence = false
+    /// The event's pattern, set by the app when it opens the window.
+    var patternStatus: SignatureStatus?
+    var patternRisk: PatternRisk?
     /// Who answers: Claude, or Apple's on-device model (private, smaller, evidence shortened).
     @Published var engine: AIEngine = AIEngine.load().askEngine
     private var localTask: Task<Void, Never>?
@@ -209,6 +216,9 @@ final class AIAnalysis: ObservableObject {
     **What to do:** 1–4 concrete bullets (e.g. commands to check further, how to remove it), or "Nothing needed."
     """
 
+    /// Other recent activity from the same process (newest first), for the window.
+    var relatedEvents: [ActivityEvent] { related }
+
     init(event: ActivityEvent, related: [ActivityEvent], preface: String = "") {
         self.event = event
         self.related = related
@@ -220,10 +230,12 @@ final class AIAnalysis: ObservableObject {
         state = .gathering
         let event = self.event, related = self.related, preface = self.preface
         DispatchQueue.global(qos: .userInitiated).async {
+            let facts = EventFacts.gather(for: event)
             let evidence = EvidenceGatherer.gather(for: event, related: related)
             let text = preface.isEmpty ? evidence
                 : EvidenceGatherer.redactSecrets(preface) + "\n\n## Latest step in detail\n" + evidence
             DispatchQueue.main.async {
+                self.facts = facts
                 self.context = text
                 self.state = .ready
             }
@@ -456,155 +468,77 @@ enum ClaudeLocator {
     }
 }
 
-// MARK: - Window content
+// MARK: - Facts for the window
 
-struct AskAIView: View {
-    @ObservedObject var analysis: AIAnalysis
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            Divider()
-            HStack {
-                Text("Evidence sent to Claude").font(.headline)
-                Spacer()
-                Button { analysis.gather() } label: { Label("Re-collect", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.glass)
-                    .disabled(analysis.state == .gathering || analysis.state == .asking)
-            }
-            Text(analysis.engine == .onDevice
-                 ? "Gathered locally and analysed on this Mac by Apple's on-device model; nothing is sent anywhere."
-                 : "Gathered locally. Review and edit it before sending to Claude; obvious secrets are masked automatically.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextEditor(text: $analysis.context)
-                .font(.system(size: 11, design: .monospaced))
-                .autocorrectionDisabled()
-                .frame(minHeight: 140, idealHeight: 200)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.08)))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.secondary.opacity(0.2)))
-                .disabled(analysis.state == .gathering || analysis.state == .asking)
-
-            HStack {
-                Picker("Engine", selection: $analysis.engine) {
-                    Text("Claude").tag(AIEngine.claude)
-                    Text("On-device").tag(AIEngine.onDevice)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help("Claude: strongest analysis, evidence is sent to Anthropic. On-device: Apple's private model, "
-                      + "smaller, evidence shortened to fit; nothing leaves the Mac.")
-                .disabled(analysis.state == .asking)
-                if analysis.engine == .claude {
-                    Toggle("Let Claude read local files", isOn: $analysis.allowFileTools)
-                        .help("Off: Claude only sees the evidence above. On: it may read files on this Mac, read-only.")
-                        .disabled(analysis.state == .asking)
-                }
-                Spacer()
-                if analysis.state == .asking {
-                    ProgressView().controlSize(.small)
-                    Button("Cancel") { analysis.cancel() }
-                        .buttonStyle(.glass)
-                } else {
-                    Button { analysis.ask() } label: {
-                        Label(analysis.answer.isEmpty ? (analysis.engine == .onDevice ? "Ask On-Device" : "Ask Claude")
-                              : "Ask Again", systemImage: "sparkles")
-                    }
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .buttonStyle(.glassProminent)
-                        .controlSize(.large)
-                        .disabled(analysis.state == .gathering)
-                }
-            }
-
-            Divider()
-            answerView
-            HStack {
-                Text(statusText).font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(analysis.answer, forType: .string)
-                } label: { Label("Copy Answer", systemImage: "doc.on.doc") }
-                .buttonStyle(.glass)
-                .disabled(analysis.answer.isEmpty)
-            }
-        }
-        .padding(18)
-        .frame(minWidth: 620, minHeight: 600)
+/// What the Ask window shows as labelled rows (gathered with the evidence, off the main thread).
+struct EventFacts: Sendable {
+    struct Ancestor: Identifiable, Sendable {
+        let pid: Int
+        let path: String
+        var id: Int { pid }
+        var name: String { (path as NSString).lastPathComponent }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: analysis.event.kind.symbol)
-                .font(.title2)
-                .foregroundStyle(analysis.event.kind.color)
-                .frame(width: 40, height: 40)
-                .glassEffect(.regular.tint(analysis.event.kind.color.opacity(0.25)),
-                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(analysis.event.name)  ·  PID \(analysis.event.pid)").font(.headline)
-                Text(analysis.event.fullDetail)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-            Spacer()
-            if let verdict = analysis.verdict {
-                Text(verdict.rawValue)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .foregroundStyle(verdict.color)
-                    .glassEffect(.regular.tint(verdict.color.opacity(0.3)), in: Capsule())
-            }
-        }
-    }
+    var running = false
+    var user = ""
+    var started = ""
+    var commandLine = ""
+    var executable = ""
+    var lineage: [Ancestor] = []           // oldest first, ending with the direct parent
+    var signing: CodeIdentity?
+    var trusted = false
+    var fileExists = false
+    var fileSize: Int64?
+    var fileModified: Date?
+    var fileQuarantined = false
 
-    private var answerView: some View {
-        ScrollView {
-            Group {
-                if analysis.answer.isEmpty {
-                    Text(placeholder).foregroundStyle(.secondary)
-                } else {
-                    Text(rendered(analysis.answer))
-                }
-            }
-            .font(.system(size: 13))
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+    static func gather(for event: ActivityEvent) -> EventFacts {
+        var f = EventFacts()
+        let pid = String(event.pid)
+        let eventExe = event.kind == .exec ? event.target : event.proc
+        let row = LocalCommand.run("/bin/ps", ["-o", "user=,lstart=", "-p", pid])
+        // Live facts only if the pid still runs the same program (it may have exited and been reused).
+        let liveExe = ProcessList.path(event.pid)
+        let resolve = { (p: String) in URL(fileURLWithPath: p).resolvingSymlinksInPath().path }
+        if !row.isEmpty, eventExe.isEmpty || liveExe.isEmpty || resolve(liveExe) == resolve(eventExe) {
+            f.running = true
+            let parts = row.split(separator: " ", maxSplits: 1).map(String.init)
+            f.user = parts.first ?? ""
+            f.started = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+            f.commandLine = EvidenceGatherer.redactSecrets(LocalCommand.run("/bin/ps", ["-o", "command=", "-p", pid]))
         }
-        .frame(minHeight: 180)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.08)))
-    }
+        // An exec event recorded its own command line: that's the one that ran.
+        if event.kind == .exec, !event.args.isEmpty { f.commandLine = event.args }
+        if f.commandLine.isEmpty { f.commandLine = event.args }
 
-    private var placeholder: String {
-        switch analysis.state {
-        case .gathering: return "Collecting evidence…"
-        case .asking: return "Waiting for Claude…"
-        case .failed(let message): return message
-        default: return "Choose Claude or On-device, then press Ask (⌘↩) to get a verdict."
+        var chain: [Ancestor] = []
+        var current = event.ppid
+        for _ in 0..<10 where current > 1 {
+            let line = LocalCommand.run("/bin/ps", ["-o", "ppid=,comm=", "-p", String(current)])
+            guard !line.isEmpty else { break }
+            let fields = line.split(separator: " ", maxSplits: 1).map(String.init)
+            chain.append(Ancestor(pid: current, path: fields.count > 1 ? fields[1].trimmingCharacters(in: .whitespaces) : "?"))
+            guard let next = Int(fields.first ?? ""), next != current else { break }
+            current = next
         }
-    }
+        if chain.isEmpty, !event.parent.isEmpty { chain = [Ancestor(pid: event.ppid, path: event.parent)] }
+        f.lineage = chain.reversed()
 
-    private var statusText: String {
-        switch analysis.state {
-        case .gathering: return "Collecting evidence…"
-        case .ready: return analysis.footer.isEmpty ? "Ready" : analysis.footer
-        case .asking: return "Claude is analysing (headless claude -p)…"
-        case .done: return "Done · " + analysis.footer
-        case .failed(let message): return "Failed: " + message.prefix(160)
+        f.executable = eventExe
+        // Sign-check the real file (Homebrew's bin/ entries are symlinks into the Cellar).
+        let signed = eventExe.isEmpty ? "" : resolve(eventExe)
+        if !signed.isEmpty, let id = SigningCache.shared.identity(signed) {
+            f.signing = id
+            f.trusted = SigningCache.shared.trusts(signed, id)
         }
-    }
-
-    private func rendered(_ markdown: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+        if event.kind == .file {
+            let attrs = try? FileManager.default.attributesOfItem(atPath: event.target)
+            f.fileExists = attrs != nil
+            f.fileSize = (attrs?[.size] as? NSNumber)?.int64Value
+            f.fileModified = attrs?[.modificationDate] as? Date
+            let q = LocalCommand.run("/usr/bin/xattr", ["-p", "com.apple.quarantine", event.target])
+            f.fileQuarantined = !q.isEmpty && !q.contains("No such xattr")
+        }
+        return f
     }
 }
