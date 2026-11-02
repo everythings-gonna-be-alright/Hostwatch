@@ -698,6 +698,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                            title: String? = nil, classifyPattern: Bool = true) {
         let related = related ?? model.history.filter { $0.pid == event.pid && $0.id != event.id }
         let analysis = AIAnalysis(event: event, related: related, preface: preface)
+        analysis.patternStatus = signatures.status(for: event)
+        analysis.patternRisk = signatures.entry(event.signatureKey)?.risk ?? event.signatureRisk
         let key = event.signatureKey
         if classifyPattern {
             analysis.onVerdict = { [weak self, weak analysis] verdict, summary in
@@ -710,7 +712,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             }
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 820),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

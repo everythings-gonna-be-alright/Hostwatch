@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Redesigned Ask AI window:** a plain-English summary of what happened with status chips (pattern status,
+  signer, first time, high risk, new domain, beacon, raw IP), detail cards with labelled rows for the
+  connection (destination, protocol, traffic in readable sizes), file (access, size, modified, quarantine)
+  and process (executable with Reveal in Finder / Copy, signature and team, running since, command line),
+  the parent chain as breadcrumbs, recent activity of the process, and a verdict card with confidence. The
+  raw evidence for the AI is a collapsed, editable section; the Ask bar stays at the bottom.
+
 ## 0.5.2 – no code injection
 
 - **Hardened runtime:** Hostwatch is now signed with Apple's hardened runtime (free, also with ad-hoc
