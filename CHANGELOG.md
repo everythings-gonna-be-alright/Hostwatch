@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **On-device Ask no longer fails with "Detected content likely to be unsafe":** it uses Apple's
+  guardrail mode for analysing sensitive text, retries once with the core evidence if still refused, and
+  explains a refusal in plain words. A live test of the real model on security evidence is opt-in.
 - **Redesigned Ask AI window:** a plain-English summary of what happened with status chips (pattern status,
   signer, first time, high risk, new domain, beacon, raw IP), detail cards with labelled rows for the
   connection (destination, protocol, traffic in readable sizes), file (access, size, modified, quarantine)

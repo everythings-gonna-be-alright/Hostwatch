@@ -315,18 +315,28 @@ final class AIAnalysis: ObservableObject {
         let prompt = AppleOnDeviceModel.askPrompt(evidence: context)
         let instructions = Self.systemPrompt
         let start = Date()
+        let core = AppleOnDeviceModel.askPrompt(evidence: AppleOnDeviceModel.coreEvidence(context))
         localTask = Task { [weak self] in
             do {
-                let text = try await model.explain(prompt, instructions: instructions)
+                var shortened = false
+                let text: String
+                do {
+                    text = try await model.explain(prompt, instructions: instructions)
+                } catch where AppleOnDeviceModel.isRefusal(error) && core != prompt {
+                    // The safety filter refused the full evidence: one try with its core only.
+                    shortened = true
+                    text = try await model.explain(core, instructions: instructions)
+                }
                 guard let self, !Task.isCancelled else { return }
                 self.answer = text
                 self.updateVerdict()
                 self.footer = String(format: "on-device · %.1fs · nothing left this Mac", Date().timeIntervalSince(start))
+                    + (shortened ? " · core evidence only (the full text was refused by Apple's safety filter)" : "")
                 self.state = .done
                 if let verdict = self.verdict { self.onVerdict?(verdict, self.summaryLine) }
             } catch {
                 guard let self, !Task.isCancelled else { return }
-                self.state = .failed("On-device model: \(error.localizedDescription)")
+                self.state = .failed(AppleOnDeviceModel.describe(error))
             }
         }
     }

@@ -282,6 +282,14 @@ Routing (`TriageRouter`, unit-tested):
 | SUSPICIOUS / DANGEROUS | Claude, else flagged (*on-device*) | Claude, else flagged |
 | model unavailable | Claude, else left for you | Claude, else left for you |
 
+**Apple's safety filter.** The on-device model has built-in guardrails that can refuse text that looks
+like hacking or credential theft, which is what security evidence is. Ask AI uses Apple's
+`permissiveContentTransformations` mode, meant for analysing such text. If the model still refuses, Hostwatch
+retries once with the core evidence (event, process, parent chain, executable) and says so; if that is refused
+too, it explains why and suggests Claude. Background triage treats a refusal as "couldn't decide" (the pattern
+goes to Claude or stays New). `HOSTWATCH_LIVE_MODEL_TESTS=1 swift test --filter OnDeviceModel` runs the real
+model on security evidence (needs Apple Intelligence).
+
 No AI verdict ever marks a high-risk pattern Safe, from the on-device model or Claude, in triage, Classify
 New or Ask AI: event text (file paths, process names, hostnames) can be crafted to talk a model into it,
 so a high-risk pattern stays New until you decide. AI verdicts never remove steps from Stories either
