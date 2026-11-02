@@ -517,9 +517,10 @@ struct EventRow: View {
                     .foregroundStyle(Color(red: 0.85, green: 0.6, blue: 1.0))
                     .help("First contact with \(event.newDomain)")
             } else if event.isFirst {
-                Text("NEW")
+                Text("FIRST")
                     .font(.system(size: 8 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(.yellow)
+                    .help("First time this pattern was ever seen")
             }
             Text(event.time)
                 .font(.system(size: 9.5 * s, design: .monospaced).monospacedDigit())
@@ -774,7 +775,9 @@ struct ActivityWindowView: View {
                             Image(systemName: "globe.badge.chevron.backward").foregroundStyle(.purple)
                                 .help("NEW DOMAIN: first contact with \(item.event.newDomain)")
                         } else if item.event.isFirst {
-                            Text("NEW").font(.system(size: 9, weight: .heavy)).foregroundStyle(.yellow)
+                            Image(systemName: "sparkle").foregroundStyle(.yellow)
+                                .help("First time this pattern was ever seen")
+                                .accessibilityLabel("First seen")
                         }
                     }
                 }

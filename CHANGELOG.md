@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **"First seen" isn't a second "New":** the yellow NEW tag next to the New status became a ✦ sparkle in
+  Events and FIRST in the HUD (the first time a pattern was ever seen); "New" now only means undecided.
+
 ## 0.6.1 – a cleaner HUD and Events list
 
 - **Specific launch patterns for interpreters and tools** (perl, python, bash, ditto, curl, osascript…): the
