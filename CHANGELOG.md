@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-- **HUD appearance:** four clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid,
-  None) instead of Liquid Glass, Blur, Dark and Transparent (Blur and Dark looked alike: Blur becomes
-  Glass, Dark becomes Solid). *Tint* is now *Contrast* (Lighter … Darker), with a wider range: from pure glass to nearly opaque; a new *Transparency* slider fades the background
-  itself (never the text). Clear Glass no longer turns dark halfway. With Reduce Transparency on,
-  glass shows as Solid.
+- **HUD appearance:** three clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid)
+  instead of Liquid Glass, Blur, Dark and Transparent (Blur becomes Glass, Dark Solid, Transparent Clear
+  Glass); no border on Solid. *Tint* is now *Contrast* (Lighter … Darker), from pure glass to nearly
+  opaque. With Reduce Transparency on, glass shows as Solid.
+- **HUD resize like a window:** the left edge changes only the width, the bottom edge only the height, the
+  corner both; height changes in whole rows only after a full row of movement, so a sideways drag never
+  changes it.
 
 ## 0.6.0 – decisions you can see
 

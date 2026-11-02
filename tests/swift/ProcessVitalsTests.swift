@@ -224,8 +224,8 @@ import Testing
     @Test func oldChoicesCarryOver() {
         #expect(OverlayBackground(stored: "blur") == .glass)
         #expect(OverlayBackground(stored: "dark") == .solid)
-        #expect(OverlayBackground(stored: "transparent") == .transparent)
-        #expect(OverlayBackground.allCases.map(\.title) == ["Glass", "Clear Glass", "Solid", "None"])
+        #expect(OverlayBackground(stored: "transparent") == .clear)
+        #expect(OverlayBackground.allCases.map(\.title) == ["Glass", "Clear Glass", "Solid"])
     }
 
     @Test func contrastGoesFromPureGlassToNearlyOpaque() {
@@ -235,9 +235,4 @@ import Testing
         #expect(HUDSurface.floor(0.2) < HUDSurface.floor(0.3))
     }
 
-    @Test func transparencyFadesTheBackgroundButNeverHidesIt() {
-        #expect(HUDSurface.layerOpacity(0) == 1)
-        #expect(abs(HUDSurface.layerOpacity(1) - 0.1) < 0.001)
-        #expect(HUDSurface.layerOpacity(0.5) > HUDSurface.layerOpacity(0.8))
-    }
 }

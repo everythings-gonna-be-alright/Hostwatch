@@ -290,14 +290,15 @@ private struct HUDPane: View {
                 Toggle("Show CPU, memory, network and disk", isOn: $model.overlayShowResources)
             } footer: {
                 Footnote("Toggle from anywhere with ⌃⌥⌘H. Turn off click-through to move it by its header, "
-                         + "resize it from the ◣ corner, double-click rows and right-click to exclude.")
+                         + "resize it from the left edge (width), the bottom edge (height) or the ◣ corner (both), "
+                         + "double-click rows and right-click to exclude.")
             }
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Background")
                     HStack(spacing: 14) {
                         ForEach(OverlayBackground.allCases, id: \.self) { style in
-                            HUDBackgroundTile(style: style, tint: model.overlayOpacity, transparency: model.overlayTransparency,
+                            HUDBackgroundTile(style: style, tint: model.overlayOpacity,
                                               selected: model.overlayBackground == style)
                                 .onTapGesture { withAnimation(.snappy) { model.overlayBackground = style } }
                         }
@@ -305,18 +306,6 @@ private struct HUDPane: View {
                     Text(model.overlayBackground.detail).font(.callout).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
-                LabeledContent("Transparency") {
-                    Slider(value: $model.overlayTransparency, in: 0...1) {
-                        EmptyView()
-                    } minimumValueLabel: {
-                        Text("Opaque").font(.caption).foregroundStyle(.secondary)
-                    } maximumValueLabel: {
-                        Text("See-through").font(.caption).foregroundStyle(.secondary)
-                    }
-                    .frame(width: 260)
-                }
-                .disabled(model.overlayBackground == .transparent)
-                .help("How much of what's behind shows through the background (the text stays as it is)")
                 LabeledContent("Contrast") {
                     Slider(value: $model.overlayOpacity, in: 0...1) {
                         EmptyView()
@@ -327,9 +316,8 @@ private struct HUDPane: View {
                     }
                     .frame(width: 260)
                 }
-                .disabled(model.overlayBackground == .transparent)
                 .help("How dark the background is under the HUD's white text")
-                if model.overlayOpacity < 0.25, model.overlayBackground != .transparent {
+                if model.overlayOpacity < 0.25 {
                     Label("Low contrast: white text can be hard to read over bright windows.", systemImage: "eye")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -340,8 +328,8 @@ private struct HUDPane: View {
             } header: {
                 Text("Appearance")
             } footer: {
-                Footnote("Transparency fades the background, Contrast darkens it under the white text. With Reduce "
-                         + "Transparency on (System Settings ▸ Accessibility ▸ Display), glass shows as Solid and fully opaque.")
+                Footnote("Contrast darkens the background under the white text. With Reduce Transparency on "
+                         + "(System Settings ▸ Accessibility ▸ Display), glass shows as Solid.")
             }
         }
     }
