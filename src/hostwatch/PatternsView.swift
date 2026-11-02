@@ -175,9 +175,9 @@ struct PatternsView: View {
                     .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
                           + "then Claude for what it can't settle. Choose the engine in Settings ▸ AI.")
             }
-            Button("Trust Baseline…") { confirmBaseline() }
+            Button { actions.openBaseline() } label: { Label("Baseline…", systemImage: "checkmark.shield") }
                 .buttonStyle(.glass)
-                .help("Mark every unclassified pattern as safe: \"this is how my Mac normally behaves\".")
+                .help("What this Mac's baseline trusted automatically, and what needs your review")
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -229,18 +229,5 @@ struct PatternsView: View {
             NSPasteboard.general.setString("\(entry.process) → \(entry.pattern)", forType: .string)
         }
         Button("Delete Pattern") { signatures.delete(keys: keys) }
-    }
-
-    private func confirmBaseline() {
-        let alert = NSAlert()
-        alert.messageText = "Trust all \(signatures.count(.unclassified)) unclassified patterns?"
-        alert.informativeText = """
-        They will be marked Safe and hidden by "Hide Safe". Only do this when you believe the Mac \
-        is clean, because anything already running becomes part of the trusted baseline. You can undo \
-        it per pattern later.
-        """
-        alert.addButton(withTitle: "Trust as Baseline")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn { _ = signatures.trustBaseline() }
     }
 }

@@ -728,13 +728,6 @@ final class SignatureStore: ObservableObject {
         changedNow()
     }
 
-    /// Marks every unclassified pattern safe ("this machine's normal behaviour").
-    func trustBaseline() -> Int {
-        let keys = entries.values.filter { status(forKey: $0.id) == .unclassified }.map(\.id)
-        set(.safe, keys: keys, source: "baseline")
-        return keys.count
-    }
-
     func delete(keys: [String]) {
         for key in keys { entries[key] = nil }
         selection.subtract(keys)
@@ -981,6 +974,30 @@ final class PatternClassifier: ObservableObject {
     }
 
     /// On-device first pass when available, then Claude for the rest (each step optional).
+    /// Baseline: the on-device model only (never Claude) for these patterns; whatever it can't settle,
+    /// and anything high-risk, stays New for you.
+    func triageOnDevice(keys: [String]) {
+        let model = localModel
+        guard model.status().isReady else { return }
+        let batch = keys.compactMap { store.entry($0) }
+        let prompts = batch.map { e -> String in
+            let path = SignatureStore.subjectPath(e)
+            let id = SigningCache.shared.cached(path)
+            return AppleOnDeviceModel.prompt(for: e, signer: id,
+                                             trusted: id.map { SigningCache.shared.trusts(path, $0) } ?? false)
+        }
+        Task { [weak self] in
+            for (entry, prompt) in zip(batch, prompts) {
+                if Task.isCancelled { return }
+                let verdict = try? await model.triage(prompt)
+                guard let self else { return }
+                if case .settle(let status, let note) = TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: false) {
+                    self.store.suggest(status, key: entry.id, source: "on-device", note: note)
+                }
+            }
+        }
+    }
+
     private func classify(_ batch: [SignatureEntry]) {
         guard !running else { return }
         let claudeOn = engine.usesClaude && ClaudeLocator.path != nil

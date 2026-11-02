@@ -136,7 +136,7 @@ migrated and can be deleted.
   remembers its sort. Columns can be resized and reordered. Double-click a row to ask Claude. Patterns
   use the Show filter, can be searched and multi-selected. Right-click to mark one or many patterns, or **Mark All … From This Process**
   as a whole-process rule.
-- **Trust Baseline…**: marks every current unclassified pattern Safe. Only use it on a Mac you trust.
+- **Baseline…**: the first-run baseline report (see *Baseline: learning this Mac's normal behaviour*).
 - **Classify New with Claude**: sends 40 unclassified patterns (high-risk first, then most recent), with code-signing facts,
   in one headless `claude -p` call (about 8 s and $0.03). Claude returns a verdict and reason for each.
   **Auto-classify new** repeats this every 90 s for patterns older than a minute.
@@ -218,7 +218,9 @@ Saved in `~/Library/Application Support/Hostwatch/domains.json`.
 - **Not counted:** reverse-DNS provider names, IP-only connections, `.local`/`.arpa` names, and
   macOS system daemons (they talk to Apple constantly).
 - **Baseline:** on first launch, every domain in recorded history counts as known, and the next
-  **12 hours** are a learning period (Domains tab → *End Learning Now* to stop early).
+  **hour** is a learning period (Domains tab → *End Learning Now* to stop early). A domain first reached
+  during learning by unsigned, ad-hoc or quarantined code, or a program in Downloads / Shared / a volume,
+  is not learned: it stays new.
 - **New domain:** first contacted after the baseline. For **1 hour** its connections carry a
   purple **NEW DOMAIN** badge in the HUD and the Events list. They pass *Only Important*,
   *Only New* and *Hide Safe*, and add a **New domain** stage (weight 2) to Stories. Example:
@@ -393,6 +395,24 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
 - `claude` is looked up in `~/.local/bin`, `~/.claude/local`, Homebrew and `/usr/local/bin`, then your
   login shell. Set `CLAUDE_PATH` to override.
 - Evidence you send goes to Anthropic. A typical question takes about 10 s and costs about $0.02–0.05.
+
+## Baseline: learning this Mac's normal behaviour
+
+On the first launch Hostwatch learns in **three waves, at 5, 15 and 60 minutes**. Each wave sorts the New
+patterns seen so far (`BaselinePolicy`):
+
+- **Trusted automatically** (Safe, source "baseline"): normal risk, the acting program (and for a launch the
+  launched one) signed by Apple or by the developer of an installed app, valid signature, not quarantined,
+  not in Downloads / temp / Shared / a volume, and not touching a sensitive place (login items, credentials).
+- **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
+- **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
+  places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
+
+The **Baseline** window (Patterns ▸ *Baseline…*, Settings ▸ Detection, or the menu bar icon after the last
+wave) groups the results **by app**: *Trust App* marks an app's patterns Safe as your decision, *Show* opens
+them in Patterns, *Undo Baseline* puts everything it trusted back to New. Stories ignore baseline trust
+(they count only your own decisions and rules), so a chain still alerts. Existing installs don't start by
+themselves: *Build Now* in Settings ▸ Detection runs the sorting on the patterns collected so far.
 
 ## After a restart
 

@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
+        baseline: baseline, openBaseline: { [weak self] in self?.openBaselineReport() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -46,9 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         openStories: { [weak self] in self?.openStories() },
         openSettings: { [weak self] in self?.openSettings(nil) },
         exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
-        showInTimeline: { [weak self] date in self?.showInTimeline(date) }
+        showInTimeline: { [weak self] date in self?.showInTimeline(date) },
+        openBaseline: { [weak self] in self?.openBaselineReport() }
     )
     private var askWindows: [NSWindow] = []
+    /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
+    private lazy var baseline = BaselineLearner(store: signatures, classifier: classifier,
+                                                freshInstall: signatures.total == 0)
+    private var baselineWindow: NSWindow?
 
     /// Opening the app again (Finder, Dock, Spotlight) shows the activity window.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -67,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        baseline.schedule()               // first run: waves at 5, 15 and 60 minutes
         // Only draw events while the window or the HUD is actually on screen.
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
                                                object: nil, queue: .main) { [weak self] _ in
@@ -317,6 +324,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let held = item("\(hold.held.count) \(hold.held.count == 1 ? "process" : "processes") held — Review…",
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
+        }
+        if case .done = baseline.phase, let review = baseline.report?.reviewCount, review > 0 {
+            menu.addItem(item("Baseline: \(review) pattern\(review == 1 ? "" : "s") to review…",
+                              #selector(showBaselineReport), symbol: "checkmark.shield"))
+        } else if case .learning(let wave, _) = baseline.phase {
+            let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
+            learning.image = symbol("hourglass")
+            learning.isEnabled = false
+            menu.addItem(learning)
         }
         if let release = updates.available {
             menu.addItem(item("\(release.name) Available…", #selector(showAvailableUpdate),
@@ -572,6 +588,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func showAvailableUpdate() {
         if let release = updates.available { updates.presentAvailable(release) }
+    }
+
+    @objc private func showBaselineReport() { openBaselineReport() }
+
+    /// What the baseline trusted and what needs review, grouped by app.
+    private func openBaselineReport() {
+        if baselineWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 640),
+                                  styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                                  backing: .buffered, defer: false)
+            window.title = "Baseline"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: BaselineReportView(learner: baseline) { [weak self] app in
+                guard let self else { return }
+                self.signatures.search = app
+                self.model.windowTab = 1
+                self.openActivityWindow(fullScreen: false)
+            })
+            window.center()
+            baselineWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        baselineWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showSettings() { openSettings(nil) }

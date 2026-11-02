@@ -13,6 +13,7 @@ struct HUDActions {
     var openSettings: () -> Void = {}
     var exclude: (String) -> Void = { _ in }
     var showInTimeline: (Date) -> Void = { _ in }
+    var openBaseline: () -> Void = {}
 }
 
 // MARK: - Overlay
