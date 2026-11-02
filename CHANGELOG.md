@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- **Events:** a narrower Process column, and file reads and writes shown as icons (👁 read, ✎ write in orange, both) instead of `r` and `w`.
+- **Events:** narrower Status and Process columns; file reads and writes shown as icons (👁 read, ✎ write in
+  orange, both) instead of `r` and `w`, and TCP / UDP as small tags.
 
 - **HUD appearance:** three clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid)
   instead of Liquid Glass, Blur, Dark and Transparent (Blur becomes Glass, Dark Solid, Transparent Clear
