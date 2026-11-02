@@ -359,7 +359,13 @@ enum SignatureBuilder {
             return ("\(mode) \(normalize(own))/**  [own data]", .routine, "app's own data folder")
         }
 
-        let pattern = "\(mode) \(collapse(normalize((path as NSString).deletingLastPathComponent)))"
+        // Interpreters and shells run any script: their patterns name the exact folder, not a whole area
+        // like ~/Documents/**, so deciding one never covers everything they might touch.
+        // In a shallow folder (~, ~/Documents, /, /Users, /Users/Shared…) even "the folder" is wide: the file itself.
+        let folder = normalize((path as NSString).deletingLastPathComponent)
+        let depth = folder.split(separator: "/").count          // "~" 1, "~/Documents" 2, "/Users/Shared" 2
+        let pattern = !isLolbin(actor) ? "\(mode) \(collapse(folder))"
+            : depth <= 2 ? "\(mode) \(normalize(path))" : "\(mode) \(folder)/*"
         if writes {
             if routineWriteRoots.contains(where: { under(norm, $0) }) {
                 return (pattern, .routine, "scratch/cache write")
@@ -457,6 +463,10 @@ enum SignatureBuilder {
             var bucket = hostBucket(host)
             // Which cloud /16 a web request lands in says nothing; odd ports keep the /16.
             if !localBuckets.contains(bucket), webPorts.contains(port) { bucket = "internet" }
+            // Interpreters and shells: the destination itself (its domain, or the address), never "internet".
+            if isLolbin(rawActor), !localBuckets.contains(bucket) {
+                bucket = e.host.isEmpty ? host.lowercased() : (DomainRegistry.registrable(e.host) ?? e.host.lowercased())
+            }
             let pattern = "\(e.extra) \(bucket):\(portBucket(port))"
             var risk = PatternRisk.normal, reason = ""
             let actorName = (rawActor as NSString).lastPathComponent
@@ -785,6 +795,15 @@ final class SignatureStore: ObservableObject {
     /// rules, and Safe set by AI or the baseline (your own per-pattern decisions stay).
     private func dropInterpreterTrust() {
         var changed = false
+        // Wide interpreter patterns from earlier versions (python → internet:443, python → ~/Documents/**)
+        // that nobody decided: dropped, they come back narrow (domain, exact folder) when seen again.
+        for (key, e) in entries where e.status == .unclassified && e.source == nil && SignatureBuilder.runsAnyCode(e) {
+            let folder = e.pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
+            let wide = e.kind == .net ? (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
+                : e.kind == .file ? (folder.hasSuffix("/**") || folder.hasSuffix("/*") && folder.split(separator: "/").count <= 3)
+                : false
+            if wide { entries[key] = nil; changed = true }
+        }
         for (key, rule) in processRules where rule.status == .safe && !Self.canTrustWholeProcess(rule.process) {
             processRules[key] = nil; changed = true
         }

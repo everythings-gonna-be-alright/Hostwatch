@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Narrow patterns for interpreters and shells:** `python3 → TCP pythonhosted.org:443` instead of
+  `internet:443`, `bash → r ~/Documents/work/*` or `r ~/todo.txt` instead of `~/Documents/**` or `~/*`.
+
 - **Secrets masked everywhere:** one stronger rule set (headers, cookies, `--password`, `FOO_TOKEN=`, URL
   credentials, `curl -u`, `security -w`, `sshpass`, `mysql -p`, token formats, JWTs, private keys) masks command
   lines before they reach history, and every prompt right before it goes to any AI. Existing history is

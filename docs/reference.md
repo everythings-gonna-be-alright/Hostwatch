@@ -147,6 +147,11 @@ migrated and can be deleted.
 - No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
   or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
   verdict also becomes a suggestion for that event's pattern.
+- **Interpreters and shells get narrow patterns** (python, bash, node, curl, osascript…): network patterns
+  name the destination's domain (`TCP pythonhosted.org:443`) or address, never `internet`; file patterns name
+  the exact folder (`r ~/Documents/work/report/*`), or the exact file in a shallow folder (`r ~/todo.txt`,
+  `r /Users/Shared/run.sh`), never `~/Documents/**` or `~/*`. Undecided wide ones from earlier versions are
+  dropped at launch and come back narrow.
 - **Interpreters can't be trusted wholesale:** *Mark All … From This Process ▸ Safe* is disabled for them, a
   learned Safe rule that covers them broadly is refused, and the baseline never trusts them (macOS's own
   `/bin/bash` or `/usr/bin/python3` included). Blanket trust from earlier versions (whole-process Safe, or Safe by
