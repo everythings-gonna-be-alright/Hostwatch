@@ -107,6 +107,38 @@ struct AppleOnDeviceModel: LocalTriageModel {
                             reason: String(reason.prefix(160)))
     }
 
+    /// The core of the evidence (event, process, parent chain, executable): what's left for a second
+    /// try when the safety filter refuses the full text (connection lists and other activity vary most).
+    static func coreEvidence(_ evidence: String) -> String {
+        let keep = ["Event", "Process (ps)", "Parent chain", "Executable", "Opened file", "Latest step in detail"]
+        return evidence.components(separatedBy: "\n\n## ").enumerated().compactMap { i, part -> String? in
+            let title = (i == 0 ? String(part.dropFirst(3)) : part).split(separator: "\n").first.map(String.init) ?? ""
+            guard keep.contains(where: { title.hasPrefix($0) }) else { return nil }
+            return i == 0 ? part : "## " + part
+        }.joined(separator: "\n\n")
+    }
+
+    static func isRefusal(_ error: Error) -> Bool {
+        if case .guardrailViolation? = error as? LanguageModelSession.GenerationError { return true }
+        return false
+    }
+
+    /// A model error in words the user can act on.
+    static func describe(_ error: Error) -> String {
+        switch error as? LanguageModelSession.GenerationError {
+        case .guardrailViolation?:
+            return "Apple's on-device model declined this evidence: its safety filter flags security content "
+                + "(credentials, shell commands, malware terms). Ask Claude instead, or remove the flagged lines "
+                + "from the evidence and ask again."
+        case .exceededContextWindowSize?:
+            return "The evidence is too long for the on-device model. Shorten it, or ask Claude."
+        case .assetsUnavailable?:
+            return "The on-device model isn't ready (still downloading or Apple Intelligence is off)."
+        default:
+            return "On-device model: \(error.localizedDescription)"
+        }
+    }
+
     /// One pattern, compact, secrets masked.
     static func prompt(for e: SignatureEntry, signer: CodeIdentity?, trusted: Bool) -> String {
         let what: String
@@ -182,9 +214,13 @@ extension AppleOnDeviceModel {
         return "Is this activity dangerous? Evidence collected on the Mac:\n\n" + trimmed
     }
 
+    /// Security evidence (keychain reads, shell commands, malware words) trips Apple's default safety
+    /// guardrails. This mode is Apple's option for analysing such text; it applies to free-text answers.
+    static let analysisModel = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
+
     /// Free-text analysis in the same shape as Claude's answer (VERDICT line first).
     func explain(_ prompt: String, instructions: String) async throws -> String {
-        let session = LanguageModelSession(model: .default, instructions: instructions)
+        let session = LanguageModelSession(model: Self.analysisModel, instructions: instructions)
         let response = try await session.respond(to: prompt, options: GenerationOptions(samplingMode: .greedy,
                                                                                         maximumResponseTokens: 600))
         return response.content
