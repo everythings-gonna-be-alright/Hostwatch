@@ -778,11 +778,11 @@ struct ActivityWindowView: View {
                         }
                     }
                 }
-                .width(min: 70, ideal: 84, max: 136)
+                .width(min: 70, ideal: 84, max: 100)
                 TableColumn("Process", value: \.name) { item in
                     Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
                 }
-                .width(min: 60, ideal: 110)
+                .width(min: 60, ideal: 110, max: 150)
                 TableColumn("PID", value: \.pid) { item in
                     Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -806,7 +806,7 @@ struct ActivityWindowView: View {
                         }
                     }
                 }
-                .width(min: 200, ideal: 520)
+                .width(min: 200, ideal: 900)
             }
             .font(.system(size: 12, design: .monospaced))
             .contextMenu(forSelectionType: UUID.self) { ids in
