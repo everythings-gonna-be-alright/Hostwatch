@@ -69,13 +69,11 @@ import Testing
         #expect(BaselinePolicy.decide(entry(proc: own), identify: identify) == .ignore)
     }
 
-    @Test func homebrewToolsAreGroupedAndTrustedOnlyWhenYouSaySo() {
+    @Test func homebrewToolsWaitForYou() {
         let git = "/opt/homebrew/Cellar/git/2.50.0/bin/git"
         let adhoc: BaselinePolicy.Identify = { _ in (CodeIdentity(signed: true, adhoc: true), false) }
         #expect(BaselinePolicy.decide(entry(proc: git), identify: adhoc)
-                == .review(app: "git", reason: "Homebrew tool (ad-hoc signed by Homebrew)", homebrew: true))
-        let trusted: BaselinePolicy.Identify = { _ in (CodeIdentity(signed: true, adhoc: true), true) }
-        #expect(key(BaselinePolicy.decide(entry(proc: git), identify: trusted)) == "homebrew")
+                == .review(app: "git", reason: "Homebrew tool (ad-hoc signed)"))
     }
 
     @Test(arguments: ["high", "sensitive", "downloads", "temp", "adhoc", "quarantined", "missing", "untrustedParent"])

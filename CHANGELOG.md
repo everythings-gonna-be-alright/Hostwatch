@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Removed "Trust Homebrew-installed tools":** Homebrew tools are judged like your own builds; mark
+  their patterns yourself.
+
 - **Reset Hostwatch…** (Settings ▸ General): erase patterns and the baseline, settings, and/or event history
   and logs, then restart as on the first launch.
 - **Domain details with a risk score:** double-click a domain (or right-click ▸ *Details & Ask AI…*) for the
@@ -11,8 +14,7 @@
   their signers, recent connections, and Ask AI (Claude or on-device) with its own risk score. Mark Known
   from the window. Event and pattern verdicts show the AI's risk score too.
 - **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** one narrow rule per trusted
-  app and its signer (*Slack · Slack Technologies*), one for macOS system services, and optionally one for
-  Homebrew tools, in the Rules tab. A rule keeps trusting the app's normal-risk patterns, now and later. Never
+  app and its signer (*Slack · Slack Technologies*), and one for macOS system services, in the Rules tab. A rule keeps trusting the app's normal-risk patterns, now and later. Never
   high-risk, unsigned, downloaded or temporary; sensitive places only for macOS services or apps you trusted.
   Signed-but-untrusted developers go to the on-device model; the rest waits in **Needs your review**, one row
   per app with its reasons: **Trust** (adds a rule marked *Trusted by you*), **Dismiss** (stays New, not listed

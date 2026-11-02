@@ -258,11 +258,9 @@ Two more per-connection signals (like new domains, not part of pattern keys):
 - Both pass *Only Important*, *Only New* and *Hide Safe*. On ~2 hours of real history: 0 beacons and
   0 raw-IP alerts; the one periodic flow (Slack → slack.com every ~125 s) was correctly ignored.
 
-**Settings ▸ Detection ▸ Trust Homebrew-installed tools** (off by default): Homebrew ad-hoc-signs what it builds,
-so signing cannot vouch for `git`, `kubectl`, `fish`… With this on, a binary in Homebrew's `Cellar`
-that has its `INSTALL_RECEIPT.json` is treated like a trusted developer's (measured: normal patterns
-261 → 225). `/opt/homebrew` is writable by your user, so a binary planted there would be trusted too.
-*End Now* for domain learning is also there.
+Homebrew ad-hoc-signs what it builds, so signing can't vouch for `git`, `kubectl`, `fish`…: they're judged
+by the path rules like your own builds, and you decide their patterns. *End Now* for domain learning is in
+Settings ▸ Detection.
 
 ## AI engine and triage
 
@@ -424,8 +422,7 @@ patterns seen so far (`BaselinePolicy`):
 - Hostwatch's own activity, and interpreters and shells, are never listed (they stay New).
 
 **Baseline rules** (Rules tab) are narrow: **one per app and its signer** (*Slack · Slack Technologies*; the
-app's helpers included, and the signer must match), one **macOS system** rule, and, if you trust Homebrew
-tools, one **Homebrew tools** rule. A rule keeps trusting that app's **future** normal-risk patterns (checked
+app's helpers included, and the signer must match), and one **macOS system** rule. A rule keeps trusting that app's **future** normal-risk patterns (checked
 every 30 s, always through the same policy). After learning, a new app isn't added by itself:
 **Update Baseline** (local, code signatures only, no AI) sorts New patterns again and adds rules for trusted
 apps among them.
@@ -444,8 +441,6 @@ apps among them.
   - **Dismiss** hides the row; its patterns stay New and aren't listed again.
   - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
     opens exactly those patterns (a removable chip replaces the Show filter). A rule's **Show** does the same.
-  - Homebrew builds are ad-hoc signed: **Trust Homebrew Tools** (same as Settings ▸ Detection) trusts programs
-    with a Homebrew install receipt.
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 
@@ -657,8 +652,8 @@ Runs every automated test (about 10 s):
 - **Swift** (`tests/swift`, Swift Testing, `swift test`): pattern grouping and risk rules; Stories
   (attack chains must fire as Dangerous, everyday dev work and known false positives must stay
   quiet); code signing on real unsigned / ad-hoc / quarantined / replaced binaries made in a temp
-  folder; new-domain baseline and badges; beaconing maths and rules, raw-IP rules, opt-in Homebrew
-  trust (on a real Homebrew binary when one is installed). Tests use in-memory engines and a scratch signing
+  folder; new-domain baseline and badges; beaconing maths and rules, raw-IP rules, Homebrew tools
+  not trusted by signature (on a real Homebrew binary when one is installed). Tests use in-memory engines and a scratch signing
   database, so they never touch your data.
 - **Collector** (`tests/swift/AgentTests.swift`): DNS answers, pktap SYN and `nettop` parsing with real
   lines captured on a Mac, destination inference, secret masking, exclusions, JSON output identical to

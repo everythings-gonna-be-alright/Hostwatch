@@ -478,15 +478,14 @@ enum SignatureBuilder {
             // it only matters when it came from a download or temp folder.
             s.risk = .high; s.reason = "\(id.label.lowercased()) code from a download/temp folder"
         } else if s.risk == .normal, cache.trusts(subject, id), !s.pattern.hasSuffix("]") {
-            // Apple, a trusted developer or (opt-in) Homebrew doing non-sensitive things. A spawn
+            // Apple or a trusted developer doing non-sensitive things. A spawn
             // also needs a trusted (or system) parent, and never covers starting shells/LOLBins.
             var ok = true
             if e.kind == .exec {
                 ok = !isLolbin(e.target) && (isSealedSystem(e.parent)
                      || cache.identity(e.parent).map { cache.trusts(e.parent, $0) } == true)
             }
-            let who = id.untrustedCode ? "Homebrew-installed tool" : "trusted signer: \(id.label)"
-            if ok { s.risk = .routine; s.reason = who }
+            if ok { s.risk = .routine; s.reason = "trusted signer: \(id.label)" }
         }
         return s
     }

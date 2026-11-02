@@ -29,7 +29,6 @@ struct SettingsContext {
 @MainActor
 final class SettingsState: ObservableObject {
     @Published var fullDiskAccess = Collector.appearsToHaveFullDiskAccess
-    @Published var trustHomebrew = SigningCache.shared.trustHomebrew
     @Published var copied = false
     @Published var mcpEnabled = MCPAccess.isEnabled()
     /// The registration command with a fresh token: shown once (only its hash is kept).
@@ -327,18 +326,6 @@ private struct DetectionPane: View {
                          + "passwords, installs a login item or removes the download quarantine, and asks you. "
                          + "Best effort: very quick commands can finish first. If Hostwatch quits, held "
                          + "processes continue.")
-            }
-            Section {
-                Toggle("Trust Homebrew-installed tools", isOn: $ui.trustHomebrew)
-                    .onChange(of: ui.trustHomebrew) { _, on in
-                        SigningCache.shared.trustHomebrew = on
-                        signatures.reassess()
-                    }
-            } header: {
-                Text("Trust")
-            } footer: {
-                Footnote("Treats tools in Homebrew's Cellar (with an install receipt) like a trusted developer. "
-                         + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too.")
             }
             Section {
                 LabeledContent("Patterns") {

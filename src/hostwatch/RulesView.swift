@@ -86,26 +86,10 @@ struct RulesView: View {
 
     private func reviewSection(_ review: [BaselineReport.Group]) -> some View {
         let count = review.reduce(0) { $0 + $1.keys.count }
-        let brew = review.filter(\.homebrew)
         return section("Needs your review", subtitle: "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
             Text("Not trusted automatically. Trust an app you know (a rule is added for it), mark it Suspicious, "
                  + "or Dismiss to hide it here; dismissed patterns stay New.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if !brew.isEmpty, !SigningCache.shared.trustHomebrew {
-                HStack(spacing: 10) {
-                    Image(systemName: "mug").foregroundStyle(.brown)
-                    Text("\(brew.count) Homebrew tool\(brew.count == 1 ? "" : "s") (\(brew.map(\.app).prefix(4).joined(separator: ", "))"
-                         + "\(brew.count > 4 ? "…" : "")). Homebrew signs what it builds ad-hoc, so they can't be checked by developer.")
-                        .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button("Trust Homebrew Tools") { Task { await baseline.trustHomebrew() } }
-                        .buttonStyle(.glass)
-                        .help("Trust programs installed by Homebrew (with its install receipt). Also in Settings ▸ Detection.")
-                }
-                .controlSize(.small)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.brown.opacity(0.08)))
-            }
             VStack(spacing: 0) {
                 ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
                     if i > 0 { Divider() }
@@ -242,7 +226,7 @@ private struct BaselineRuleRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: rule.id == "system" ? "apple.logo" : rule.id == "homebrew" ? "mug" : "app.badge.checkmark")
+            Image(systemName: rule.id == "system" ? "apple.logo" : "app.badge.checkmark")
                 .frame(width: 18)
                 .foregroundStyle(rule.paused ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.green))
             VStack(alignment: .leading, spacing: 2) {
@@ -286,7 +270,7 @@ private struct ReviewRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: group.homebrew ? "mug" : "questionmark.app")
+            Image(systemName: "questionmark.app")
                 .frame(width: 18)
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {

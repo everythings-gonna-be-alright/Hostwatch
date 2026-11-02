@@ -15,7 +15,7 @@ struct BaselineKey: Equatable, Hashable {
 enum BaselineDecision: Equatable {
     case trust(BaselineKey)                     // ordinary activity of a trusted, signed app (or macOS itself)
     case onDevice(app: String)                  // signed, developer not yet trusted: the on-device model decides
-    case review(app: String, reason: String, homebrew: Bool = false)   // stays New: your decision
+    case review(app: String, reason: String)    // stays New: your decision
     case ignore                                 // not listed, stays New: Hostwatch itself, interpreters and shells
 }
 
@@ -67,21 +67,16 @@ enum BaselinePolicy {
             guard let id else { return .review(app: app, reason: "\(appName(path)): program not found") }
             if id.valid == false { return .review(app: app, reason: "\(appName(path)): invalid signature") }
             if id.untrustedCode && !trusted {
-                let brew = isHomebrew(path)
-                return .review(app: app, reason: brew ? "Homebrew tool (ad-hoc signed by Homebrew)"
-                                                     : "\(appName(path)): \(id.label.lowercased())", homebrew: brew)
+                return .review(app: app, reason: isHomebrew(path) ? "Homebrew tool (ad-hoc signed)"
+                                                                  : "\(appName(path)): \(id.label.lowercased())")
             }
             if id.quarantined { return .review(app: app, reason: "\(appName(path)): downloaded (quarantined)") }
             if !trusted { allTrusted = false }
             if path == subject { subjectID = id }
         }
         if system { return .trust(BaselineKey(id: "system", name: "macOS system", signer: "Apple (sealed system volume)")) }
-        guard allTrusted, let id = subjectID ?? paths.first.flatMap({ identify($0).identity }) else { return .onDevice(app: app) }
-        guard let signer = signerKey(id) else {
-            // Homebrew builds are ad-hoc signed; once you trust Homebrew tools they share one rule.
-            if paths.allSatisfy(isHomebrew) { return .trust(BaselineKey(id: "homebrew", name: "Homebrew tools", signer: "Homebrew (ad-hoc)")) }
-            return .onDevice(app: app)
-        }
+        guard allTrusted, let id = subjectID ?? paths.first.flatMap({ identify($0).identity }),
+              let signer = signerKey(id) else { return .onDevice(app: app) }
         let root = appRoot(subject.isEmpty ? (paths.first ?? "") : subject)
         return .trust(BaselineKey(id: "app:\(root)|\(signer)", name: appName(root), signer: id.label))
     }
@@ -130,7 +125,6 @@ struct BaselineReport: Codable, Equatable {
         var app: String
         var reasons: [String]
         var keys: [String]
-        var homebrew = false
         var id: String { app }
     }
     var date = Date()
@@ -144,19 +138,18 @@ struct BaselineReport: Codable, Equatable {
 
     mutating func add(_ decision: BaselineDecision, key: String) {
         guard !dismissed.contains(key) else { return }
-        func put(_ list: inout [Group], _ app: String, _ reason: String, _ homebrew: Bool) {
+        func put(_ list: inout [Group], _ app: String, _ reason: String) {
             if let i = list.firstIndex(where: { $0.app == app }) {
                 if !list[i].keys.contains(key) { list[i].keys.append(key) }
                 if !list[i].reasons.contains(reason) { list[i].reasons.append(reason) }
-                list[i].homebrew = list[i].homebrew || homebrew
             } else {
-                list.append(Group(app: app, reasons: [reason], keys: [key], homebrew: homebrew))
+                list.append(Group(app: app, reasons: [reason], keys: [key]))
             }
         }
         switch decision {
         case .trust, .ignore: break
-        case .onDevice(let app): put(&onDevice, app, "signed, developer not yet trusted", false)
-        case .review(let app, let reason, let homebrew): put(&review, app, reason, homebrew)
+        case .onDevice(let app): put(&onDevice, app, "signed, developer not yet trusted")
+        case .review(let app, let reason): put(&review, app, reason)
         }
     }
 
@@ -464,14 +457,6 @@ final class BaselineLearner: ObservableObject {
         report?.prune { [store] key in store.status(forKey: key) == .unclassified }
         message = "Dismissed \(group.app): its patterns stay New."
         save()
-    }
-
-    /// Homebrew signs what it builds ad-hoc: trust its Cellar tools (Settings ▸ Detection), then re-sort.
-    func trustHomebrew() async {
-        SigningCache.shared.trustHomebrew = true
-        store.reassess()
-        await runWave()
-        message = "Homebrew tools are trusted (Settings ▸ Detection); the baseline was updated."
     }
 
     var statusText: String {
