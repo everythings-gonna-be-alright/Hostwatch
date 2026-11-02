@@ -481,6 +481,17 @@ apps among them.
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 
+## Story window
+
+**Double-click a story** (or **Show Chain**) to see the whole chain, event by event, on a vertical timeline:
+- each step with its time, stage (coloured for strong stages), one sentence ("sh started curl", "curl connected
+  to evil.example:443", "sh wrote ~/Library/LaunchAgents/x.plist"), the command line or address, and why it counts;
+- indented by process lineage (a child runs below its parent), with a *Processes in this chain* tree and signers;
+- **All activity** adds everything those processes did from a minute before to two minutes after the story (from
+  history, or what's still in memory when history is off), dimmed between the suspicious steps;
+- double-click or right-click a step to ask AI about it, show it in the timeline, or copy it; *Ask AI About This
+  Story*, *Show in Timeline*, *Dismiss* and *Always Ignore This Chain* at the bottom.
+
 ## Reset Hostwatch
 
 **Settings ▸ General ▸ Reset Hostwatch…** starts over as on the first launch. Choose what to erase:

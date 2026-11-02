@@ -54,7 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
-        openDomain: { [weak self] domain in self?.openDomainDetails(domain) }
+        openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
+        openStory: { [weak self] story in self?.openStoryDetails(story) }
     )
     private var askWindows: [NSWindow] = []
     /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
@@ -620,6 +621,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 details.analysis.cancel()
                 self?.askWindows.removeAll { $0 === note.object as? NSWindow }
             }
+        }
+        askWindows.append(window)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// The whole chain of a story, event by event (double-click a story).
+    private func openStoryDetails(_ story: Story) {
+        let details = StoryDetails(story: story, historyDirectory: history.directory, live: model.history)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Story: \(story.title)"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: StoryDetailView(
+            details: details, actions: actions,
+            dismiss: { [weak self, weak window] in self?.stories.dismiss(story.id); window?.close() },
+            ignore: { [weak self, weak window] in self?.stories.ignoreAlways(story.id); window?.close() }))
+        window.center()
+        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated { self?.askWindows.removeAll { $0 === note.object as? NSWindow } }
         }
         askWindows.append(window)
         NSApp.activate(ignoringOtherApps: true)

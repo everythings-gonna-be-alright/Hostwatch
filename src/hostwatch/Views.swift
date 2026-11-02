@@ -15,6 +15,7 @@ struct HUDActions {
     var showInTimeline: (Date) -> Void = { _ in }
     var openBaseline: () -> Void = {}
     var openDomain: (String) -> Void = { _ in }
+    var openStory: (Story) -> Void = { _ in }
 }
 
 // MARK: - Overlay

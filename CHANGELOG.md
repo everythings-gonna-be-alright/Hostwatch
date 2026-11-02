@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Story window:** double-click a story (or *Show Chain*) for the whole chain event by event: a vertical
+  timeline indented by process, each step in one sentence with its command line or address and why it counts,
+  *All activity* to add the processes' other events from history, and the process tree.
+
 - **No wide patterns, for any program:** a file pattern names its folder at least 2 levels below home (3
   elsewhere), or the file itself: `r ~/Documents/work/*`, `r ~/todo.txt` instead of `r ~/Documents/**` or
   `r ~/*`. No learned Safe rule or whole-program Safe may cover an area. Interpreters and shells also get
