@@ -103,11 +103,11 @@ struct PatternsView: View {
                         }
                     }
                 }
-                .width(min: 88, ideal: 108, max: 140)
+                .width(min: 64, ideal: 84, max: 140)
                 TableColumn("Decided By", value: \.decidedBy) { item in
                     DeciderLabel(text: item.decidedBy)
                 }
-                .width(min: 70, ideal: 130, max: 220)
+                .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Kind", value: \.kind) { item in
                     Image(systemName: item.entry.kind.symbol)
                         .foregroundStyle(item.entry.kind.color)
@@ -117,7 +117,7 @@ struct PatternsView: View {
                 TableColumn("Process", value: \.processName) { item in
                     Text(displayProcessName(item.entry.process)).fontWeight(.semibold).help(item.entry.process)
                 }
-                .width(min: 90, ideal: 170)
+                .width(min: 60, ideal: 110)
                 TableColumn("Pattern", value: \.pattern) { item in
                     Text(item.pattern).truncationMode(.middle).help(item.pattern)
                 }
@@ -139,7 +139,7 @@ struct PatternsView: View {
                 TableColumn("Reason", value: \.reason) { item in
                     Text(item.reason).foregroundStyle(.secondary).help(item.reason)
                 }
-                .width(min: 80, ideal: 220)
+                .width(min: 60, ideal: 140)
                 TableColumn("Count", value: \.count) { item in
                     Text("\(item.count)×").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
                 }
