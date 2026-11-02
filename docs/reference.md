@@ -136,7 +136,7 @@ migrated and can be deleted.
   (*View ▸ Show*). It applies to the HUD, Events and Patterns together: *All Activity*,
   *Hide Safe*, *Only New (not reviewed)*: unclassified plus Suspicious/Dangerous decided only by
   Claude or the baseline, *Only Important* (flagged + new high-risk) or *Only Suspicious & Dangerous*.
-  Events whose pattern is seen for the first time are tagged **NEW**. Flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
+  The event that first shows a pattern is tagged ✦ (Events) or **FIRST** (HUD); the *New* status means the pattern isn't decided yet. Flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
 - **Events and Patterns tables**: native columns. Events show Time · Kind · Status · Process · PID ·
   PPID · Detail; Patterns show Status (🔥 = high-risk) · Kind · Process · Pattern · Signer · Reason ·
   Count · First Seen · Last Seen. Click a column header to sort, and again to reverse; each table
