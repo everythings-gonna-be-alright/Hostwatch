@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 
@@ -30,16 +31,14 @@ enum BaselinePolicy {
 
     /// `allowSensitive`: for an app you trusted yourself, its own sensitive reads are fine too.
     static func decide(_ e: SignatureEntry, identify: Identify, allowSensitive: Bool = false) -> BaselineDecision {
-        let decision = sort(e, identify: identify, allowSensitive: allowSensitive)
-        // Interpreters and shells (python, node, bash, osascript…) run any script they're given, so there's
-        // nothing to approve: they stay New, visible in Patterns, and stories keep watching them.
-        if case .review = decision, runsAnyCode(e) { return .ignore }
-        return decision
+        // Interpreters and shells (python, node, bash, osascript…) run any script they're given: never
+        // trusted by a rule, macOS's own included, and nothing to approve. They stay New, visible in
+        // Patterns, and stories keep watching them.
+        if runsAnyCode(e) { return .ignore }
+        return sort(e, identify: identify, allowSensitive: allowSensitive)
     }
 
-    static func runsAnyCode(_ e: SignatureEntry) -> Bool {
-        SignatureBuilder.isLolbin(SignatureStore.subjectPath(e))
-    }
+    static func runsAnyCode(_ e: SignatureEntry) -> Bool { SignatureBuilder.runsAnyCode(e) }
 
     private static func sort(_ e: SignatureEntry, identify: Identify, allowSensitive: Bool) -> BaselineDecision {
         let subject = SignatureStore.subjectPath(e)
@@ -117,9 +116,10 @@ enum BaselinePolicy {
     }
 }
 
-// MARK: - Report
+// MARK: - Needs you
 
-/// What needs your review, one row per app (with all its reasons).
+/// New patterns that need your decision, one row per app (with all its reasons). Rebuilt live from the
+/// New patterns; interpreters, shells and Hostwatch itself aren't listed, and nor is what you dismissed.
 struct BaselineReport: Codable, Equatable {
     struct Group: Codable, Equatable, Identifiable {
         var app: String
@@ -127,41 +127,23 @@ struct BaselineReport: Codable, Equatable {
         var keys: [String]
         var id: String { app }
     }
-    var date = Date()
-    var onDevice: [Group] = []
     var review: [Group] = []
     /// Patterns you dismissed: they stay New but aren't listed again.
     var dismissed: Set<String> = []
 
-    var onDeviceCount: Int { onDevice.reduce(0) { $0 + $1.keys.count } }
     var reviewCount: Int { review.reduce(0) { $0 + $1.keys.count } }
 
-    mutating func add(_ decision: BaselineDecision, key: String) {
+    mutating func add(app: String, reason: String, key: String) {
         guard !dismissed.contains(key) else { return }
-        func put(_ list: inout [Group], _ app: String, _ reason: String) {
-            if let i = list.firstIndex(where: { $0.app == app }) {
-                if !list[i].keys.contains(key) { list[i].keys.append(key) }
-                if !list[i].reasons.contains(reason) { list[i].reasons.append(reason) }
-            } else {
-                list.append(Group(app: app, reasons: [reason], keys: [key]))
-            }
-        }
-        switch decision {
-        case .trust, .ignore: break
-        case .onDevice(let app): put(&onDevice, app, "signed, developer not yet trusted")
-        case .review(let app, let reason): put(&review, app, reason)
+        if let i = review.firstIndex(where: { $0.app == app }) {
+            if !review[i].keys.contains(key) { review[i].keys.append(key) }
+            if !review[i].reasons.contains(reason) { review[i].reasons.append(reason) }
+        } else {
+            review.append(Group(app: app, reasons: [reason], keys: [key]))
         }
     }
 
-    /// Drops keys that are no longer New, or that you dismissed.
-    mutating func prune(_ stillNew: (String) -> Bool) {
-        let dismissed = self.dismissed
-        func kept(_ list: [Group]) -> [Group] {
-            list.map { g in var g = g; g.keys = g.keys.filter { stillNew($0) && !dismissed.contains($0) }; return g }
-                .filter { !$0.keys.isEmpty }
-        }
-        review = kept(review)
-        onDevice = kept(onDevice)
+    mutating func sort() {
         review.sort { $0.keys.count != $1.keys.count ? $0.keys.count > $1.keys.count : $0.app < $1.app }
     }
 }
@@ -196,7 +178,8 @@ final class BaselineLearner: ObservableObject {
     enum Phase: Equatable { case idle, learning(wave: Int, at: Date), done }
 
     @Published private(set) var phase: Phase = .idle
-    @Published private(set) var report: BaselineReport?
+    /// What needs you (always current: rebuilt shortly after patterns change).
+    @Published private(set) var report: BaselineReport? = BaselineReport()
     @Published private(set) var rules: [BaselineRule] = []
     @Published private(set) var running = false
     @Published private(set) var message = ""
@@ -207,6 +190,8 @@ final class BaselineLearner: ObservableObject {
     private var timer: Timer?
     private var applyTimer: Timer?
     private var migrated = false
+    private var refreshScheduled = false
+    private var revisionWatch: AnyCancellable?
     var identify: BaselinePolicy.Identify = { path in
         guard let id = SigningCache.shared.identity(path) else { return (nil, false) }
         return (id, SigningCache.shared.trusts(path, id))
@@ -217,10 +202,13 @@ final class BaselineLearner: ObservableObject {
         self.store = store
         self.classifier = classifier
         self.defaults = defaults
-        if let data = defaults.data(forKey: "baselineReport2") {
-            report = try? JSONDecoder().decode(BaselineReport.self, from: data)
+        var dismissed = Set(defaults.stringArray(forKey: "baselineDismissed") ?? [])
+        if let data = defaults.data(forKey: "baselineReport2"),
+           let old = try? JSONDecoder().decode(BaselineReport.self, from: data) {
+            dismissed.formUnion(old.dismissed)
+            defaults.removeObject(forKey: "baselineReport2")
         }
-        report?.prune { key in store.entry(key).map { !BaselinePolicy.runsAnyCode($0) } ?? false }
+        report?.dismissed = dismissed
         if let data = defaults.data(forKey: "baselineRules2") {
             rules = (try? JSONDecoder().decode([BaselineRule].self, from: data)) ?? []
         }
@@ -236,6 +224,8 @@ final class BaselineLearner: ObservableObject {
             defaults.set(0, forKey: "baselineWavesDone")
         }
         updatePhase()
+        revisionWatch = store.$revision.dropFirst().sink { [weak self] _ in self?.scheduleRefresh() }
+        scheduleRefresh()
     }
 
     private var startedAt: Date? { defaults.object(forKey: "baselineStartedAt") as? Date }
@@ -251,13 +241,13 @@ final class BaselineLearner: ObservableObject {
     func patternCount(_ rule: BaselineRule) -> Int { keys(rule).count }
 
     private func updatePhase() {
-        guard let startedAt else { phase = (report == nil && rules.isEmpty) ? .idle : .done; return }
+        guard let startedAt else { phase = rules.isEmpty ? .idle : .done; return }
         if wavesDone >= Self.waves.count { phase = .done; return }
         phase = .learning(wave: wavesDone + 1, at: startedAt.addingTimeInterval(Self.waves[wavesDone]))
     }
 
     private func save() {
-        if let report, let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: "baselineReport2") }
+        defaults.set(Array(report?.dismissed ?? []).sorted(), forKey: "baselineDismissed")
         if let data = try? JSONEncoder().encode(rules) { defaults.set(data, forKey: "baselineRules2") }
     }
 
@@ -292,7 +282,41 @@ final class BaselineLearner: ObservableObject {
     }
 
     private var newPatterns: [SignatureEntry] {
-        store.allEntries.filter { $0.status == .unclassified && $0.source == nil }
+        store.allEntries.filter { $0.status == .unclassified && $0.source == nil && store.status(forKey: $0.id) == .unclassified }
+    }
+
+    private func scheduleRefresh() {
+        guard !refreshScheduled else { return }
+        refreshScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self else { return }
+            self.refreshScheduled = false
+            Task { await self.refreshReview() }
+        }
+    }
+
+    /// Rebuilds Needs You from every New pattern. Ones an active rule will trust on its next pass aren't listed.
+    func refreshReview() async {
+        var report = BaselineReport(dismissed: self.report?.dismissed ?? [])
+        for (entry, decision) in await decide(newPatterns) {
+            switch decision {
+            case .ignore: continue
+            case .trust(let key):
+                if let rule = rules.first(where: { $0.id == key.id }) {
+                    if !rule.paused { continue }
+                    report.add(app: key.name, reason: "its baseline rule is paused", key: entry.id)
+                } else {
+                    report.add(app: key.name, reason: "signed by \(key.signer) (trusted developer, no rule yet)", key: entry.id)
+                }
+            case .onDevice(let app):
+                let signer = identify(SignatureStore.subjectPath(entry)).identity?.label ?? "unknown developer"
+                report.add(app: app, reason: "signed by \(signer), a developer you haven't trusted", key: entry.id)
+            case .review(let app, let reason):
+                report.add(app: app, reason: reason, key: entry.id)
+            }
+        }
+        report.sort()
+        if report != self.report { self.report = report }
     }
 
     private func trust(_ keys: [String], by rule: BaselineRule) {
@@ -317,14 +341,9 @@ final class BaselineLearner: ObservableObject {
         running = true
         defer { running = false }
         let decisions = await decide(newPatterns)
-        var report = self.report ?? BaselineReport()
-        report.date = now()
-        report.review = []          // sorted again from every New pattern (dismissed ones stay hidden)
-        report.onDevice = []
         var byRule: [String: [String]] = [:]
         var onDeviceKeys: [String] = []
         for (entry, decision) in decisions {
-            report.add(decision, key: entry.id)
             switch decision {
             case .trust(let key):
                 if !ensureRule(key).paused { byRule[key.id, default: []].append(entry.id) }
@@ -333,13 +352,12 @@ final class BaselineLearner: ObservableObject {
             }
         }
         for (id, keys) in byRule { if let rule = rules.first(where: { $0.id == id }) { trust(keys, by: rule) } }
-        if !onDeviceKeys.isEmpty { classifier?.triageOnDevice(keys: onDeviceKeys) }
-        report.prune { [store] key in store.status(forKey: key) == .unclassified }
-        self.report = report
+        if !onDeviceKeys.isEmpty { classifier?.triageOnDevice(keys: onDeviceKeys) }   // suggestions for you
         if startedAt != nil, wavesDone < Self.waves.count { defaults.set(wavesDone + 1, forKey: "baselineWavesDone") }
         save()
         updatePhase()
         await applyApproved()
+        await refreshReview()
     }
 
     /// Between waves and after learning: active rules trust new patterns of their apps. No new rules here
@@ -371,7 +389,6 @@ final class BaselineLearner: ObservableObject {
             }
         }
         for (id, keys) in byRule { if let rule = rules.first(where: { $0.id == id }) { trust(keys, by: rule) } }
-        report?.prune { [store] key in store.status(forKey: key) == .unclassified }
         save()
     }
 
@@ -401,6 +418,7 @@ final class BaselineLearner: ObservableObject {
         revert(rule)
         rules.removeAll { $0.id == rule.id }
         save()
+        scheduleRefresh()
     }
 
     /// Every baseline rule removed and everything they trusted automatically back to New.
@@ -409,6 +427,7 @@ final class BaselineLearner: ObservableObject {
         store.set(.unclassified, keys: keys)
         rules = []
         save()
+        scheduleRefresh()
     }
 
     /// Trust (your decision): marks the app's listed patterns Safe and, for a signed app, makes a rule
@@ -427,9 +446,17 @@ final class BaselineLearner: ObservableObject {
         message = madeRule.map { "Added the rule \"\($0.name) (\($0.signer))\" to the baseline." }
             ?? "Trusted \(group.app)'s \(group.keys.count) pattern\(group.keys.count == 1 ? "" : "s"). No rule: "
             + "unsigned, ad-hoc or high-risk activity is trusted pattern by pattern."
-        report?.prune { [store] key in store.status(forKey: key) == .unclassified }
         save()
         await applyApproved()
+        await refreshReview()
+    }
+
+    /// Your decision: applies the AI's suggestions for this app's patterns.
+    func acceptSuggestions(_ group: BaselineReport.Group) async {
+        let n = store.acceptSuggestions(keys: group.keys)
+        message = n == 0 ? "No AI suggestions to accept for \(group.app)."
+            : "Accepted \(n) AI suggestion\(n == 1 ? "" : "s") for \(group.app)."
+        await refreshReview()
     }
 
     /// The group's patterns, high risk first.
@@ -446,7 +473,7 @@ final class BaselineLearner: ObservableObject {
 
     func markSuspicious(_ group: BaselineReport.Group) {
         store.set(.suspicious, keys: group.keys, source: "you", note: "Marked suspicious from the baseline review")
-        report?.prune { [store] key in store.status(forKey: key) == .unclassified }
+        report?.review.removeAll { $0.id == group.id }
         message = "Marked \(group.app) suspicious."
         save()
     }
@@ -454,7 +481,7 @@ final class BaselineLearner: ObservableObject {
     /// Hides the row: the patterns stay New (and still count everywhere else).
     func dismiss(_ group: BaselineReport.Group) {
         report?.dismissed.formUnion(group.keys)
-        report?.prune { [store] key in store.status(forKey: key) == .unclassified }
+        report?.review.removeAll { $0.id == group.id }
         message = "Dismissed \(group.app): its patterns stay New."
         save()
     }

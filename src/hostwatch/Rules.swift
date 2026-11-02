@@ -84,6 +84,11 @@ struct RuleEvaluation: Equatable {
                 if e.risk == .high { r.newHighRisk += 1 }
             }
         }
+        if rule.action == .safe,
+           entries.contains(where: { rule.matches($0) && SignatureBuilder.runsAnyCode($0) }),
+           Glob.literalCount(rule.process) < 4 || Glob.literalCount(rule.pattern) < 4 {
+            r.problems.append("trusts an interpreter or shell (python, bash, node…) broadly: it would trust any script")
+        }
         if !r.conflicting.isEmpty {
             r.problems.append("contradicts \(r.conflicting.count) of your decisions")
         }

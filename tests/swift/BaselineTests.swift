@@ -108,9 +108,9 @@ import Testing
 
     @Test func reviewHasOneRowPerAppWithAllItsReasons() {
         var report = BaselineReport()
-        report.add(.review(app: "file", reason: "reads keychains"), key: "a")
-        report.add(.review(app: "file", reason: "reads mail"), key: "b")
-        report.add(.review(app: "file", reason: "reads keychains"), key: "c")
+        report.add(app: "file", reason: "reads keychains", key: "a")
+        report.add(app: "file", reason: "reads mail", key: "b")
+        report.add(app: "file", reason: "reads keychains", key: "c")
         #expect(report.review.count == 1 && report.review[0].reasons == ["reads keychains", "reads mail"])
         #expect(report.reviewCount == 3)
     }
@@ -222,6 +222,28 @@ import Testing
         store.scope = .init(title: group.app, keys: Set(group.keys))
         #expect(store.patternItems(filter: .flagged).map(\.entry.id) == [py312.signatureKey])
         #expect(learner.entries(group).map(\.id) == [py312.signatureKey])
+    }
+
+    @Test func macOSInterpretersAreNotTrustedByTheSystemRule() {
+        let py = entry(proc: "/usr/bin/python3")
+        let bash = entry(.exec, pattern: "/bin/bash", proc: "/bin/bash", target: "/bin/bash", parent: "/bin/zsh")
+        #expect(BaselinePolicy.decide(py, identify: identify) == .ignore)
+        #expect(BaselinePolicy.decide(bash, identify: identify) == .ignore)
+    }
+
+    @Test func needsYouIsLiveAndSaysWhy() async throws {
+        let (learner, store, _) = try makeLearner()
+        store.observe(net(slack, pid: 70, to: "3.68.170.153:443", host: "app.slack.com"))
+        await learner.buildNow()
+        let zoomNet = net(zoom, pid: 71, to: "170.114.52.2:443", host: "zoom.us")       // after learning
+        store.observe(zoomNet)
+        await learner.refreshReview()
+        let group = try #require(learner.report?.review.first { $0.app == "zoom.us" })
+        #expect(group.reasons == ["signed by Zoom (trusted developer, no rule yet)"])
+        store.suggest(.safe, key: zoomNet.signatureKey, source: "on-device", note: "video calls")
+        await learner.acceptSuggestions(group)
+        #expect(store.status(for: zoomNet) == .safe && store.decidedBy(zoomNet.signatureKey) == "AI (on-device)")
+        #expect(learner.report?.review.isEmpty == true)
     }
 
     @Test func dismissedStaysNewAndIsNotListedAgain() async throws {

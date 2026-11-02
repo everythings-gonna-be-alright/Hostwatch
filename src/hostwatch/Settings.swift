@@ -82,7 +82,7 @@ final class SettingsWindowController: NSWindowController {
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline,
                                                           openBaseline: c.openBaseline, ui: state))
-            case .ai: view = AnyView(AIPane(classifier: c.classifier, ui: state))
+            case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
                                                       changeLocation: c.changeHistoryLocation, clear: c.clearHistory))
@@ -365,6 +365,7 @@ private struct DetectionPane: View {
 
 private struct AIPane: View {
     @ObservedObject var classifier: PatternClassifier
+    @ObservedObject var signatures: SignatureStore
     @ObservedObject var ui: SettingsState
 
     var body: some View {
@@ -382,7 +383,20 @@ private struct AIPane: View {
             } header: {
                 Text("Classifying new patterns and Ask AI")
             } footer: {
-                Footnote(classifier.engine.help + " No AI ever marks a high-risk pattern Safe: that stays your decision.")
+                Footnote(classifier.engine.help)
+            }
+            Section {
+                Toggle("Suggest for new patterns automatically", isOn: $classifier.autoClassify)
+                Toggle("Accept AI suggestions without asking", isOn: Binding(
+                    get: { signatures.autoAcceptAI },
+                    set: { signatures.autoAcceptAI = $0; ui.refresh += 1 }))
+            } header: {
+                Text("Suggestions")
+            } footer: {
+                Footnote("AI suggests a status for new patterns; you accept it in Rules ▸ Needs You. Every 90 s it "
+                         + "looks at up to 40 new patterns (seen for over a minute). Accepting by itself skips "
+                         + "high-risk patterns, and no AI ever trusts a high-risk pattern or an interpreter or shell "
+                         + "(python, bash, node…): those stay your decision.")
             }
             Section {
                 Toggle("Allow Claude Code to read Hostwatch data (MCP)", isOn: Binding(

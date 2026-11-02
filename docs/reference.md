@@ -136,12 +136,21 @@ migrated and can be deleted.
   remembers its sort. Columns can be resized and reordered. Double-click a row to ask Claude. Patterns
   use the Show filter, can be searched and multi-selected. Right-click to mark one or many patterns, or **Mark All … From This Process**
   as a whole-process rule.
-- **Baseline…**: the first-run baseline report (see *Baseline: learning this Mac's normal behaviour*).
-- **Classify New with Claude**: sends 40 unclassified patterns (high-risk first, then most recent), with code-signing facts,
-  in one headless `claude -p` call (about 8 s and $0.03). Claude returns a verdict and reason for each.
-  **Auto-classify new** repeats this every 90 s for patterns older than a minute.
-- Claude never overrides a decision you made. A single **Ask Claude** verdict also classifies that
-  event's pattern.
+- **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*,
+  *AI suggests Safe* (waiting for you), *Automatic (routine)* or *New*. **Needs You…** opens Rules ▸ Needs You.
+- **AI suggests, you decide.** *Ask AI for Suggestions* (Rules ▸ Needs You) sends up to 40 New patterns
+  (high-risk first, then most recent), with code-signing facts, to the on-device model and/or Claude (one
+  headless `claude -p` call, about 8 s and $0.03). Each verdict is stored as a **suggestion** on the pattern;
+  nothing changes until you **Accept** it. *Suggest for new patterns automatically* (Settings ▸ AI) repeats this
+  every 90 s for patterns older than a minute. *Accept AI suggestions without asking* applies them by
+  themselves, except for high-risk patterns.
+- No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
+  or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
+  verdict also becomes a suggestion for that event's pattern.
+- **Interpreters can't be trusted wholesale:** *Mark All … From This Process ▸ Safe* is disabled for them, a
+  learned Safe rule that covers them broadly is refused, and the baseline never trusts them (macOS's own
+  `/bin/bash` or `/usr/bin/python3` included). Blanket trust from earlier versions (whole-process Safe, or Safe by
+  AI or the baseline) is undone at launch; your own per-pattern decisions stay.
 
 Debug helper: `Hostwatch.app/Contents/MacOS/Hostwatch --signature-report <history.jsonl>` prints
 how a history file groups into patterns and risk levels (`REPORT_KIND=file|net|exec|routine|normal|high`,
@@ -266,7 +275,7 @@ Settings ▸ Detection.
 
 **Settings ▸ AI** picks which AI Hostwatch uses (with the on-device model's status):
 
-| Engine | Classify New / Auto-classify | Ask AI (event or story) |
+| Engine | AI suggestions for patterns | Ask AI (event or story) |
 |--------|------------------------------|-------------------------|
 | **Apple On-Device (private)** | on-device only; what it can't settle stays New | on-device model |
 | **Claude** | Claude only | Claude |
@@ -309,9 +318,22 @@ so a high-risk pattern stays New until you decide. AI verdicts never remove step
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
-## Rules learned from your decisions (Rules tab)
+## Rules tab: Needs You, Rules, Decided
 
-**Suggest Rules from My Decisions** (in *Your rules*) sends your decisions (patterns *you* marked; secrets masked), your existing
+Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted, in
+that order of authority. The Rules tab shows it in three views (its toolbar label counts what waits for you):
+
+- **Needs You:** New patterns, one row per app with its reasons (see the baseline section), the AI's
+  suggestions (*AI suggests: Safe ×3 · on-device AI*) with **Accept**, **Trust**, **Dismiss** and *⋯*
+  (Show in Patterns, Mark Suspicious), and Claude's rule proposals (**Approve** / **Reject**). Rebuilt live
+  as patterns change; interpreters, shells and Hostwatch itself aren't listed.
+- **Rules:** baseline rules (code signatures, no AI: **Update Baseline**) and learned rules (**Suggest Rules…**).
+- **Decided:** who decided what, by app: *Decided by AI*, *Decided by you*, *Learned rules*, *Baseline rules*,
+  each with **Show** (exactly those patterns) and, for AI and your decisions, **Undo** (back to New).
+
+## Rules learned from your decisions
+
+**Suggest Rules…** (Rules ▸ Rules ▸ Learned rules) sends your decisions (patterns *you* marked; secrets masked), your existing
 rules and the story chains you always ignore. Claude's own verdicts are deliberately not used, so rules
 don't amplify the AI. Claude returns up to 8 rules: `kind` (exec/net/file/any), `process` glob, `pattern`
 glob (`*`, `?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale. It
@@ -326,6 +348,7 @@ Every proposal is checked locally before you see it:
 | matches no pattern, or > 25% of all patterns (with ≥ 200 patterns) | **refused** |
 | based on none of your decisions | warning |
 | a Safe rule covering New high-risk patterns | warning (shows how many) |
+| a Safe rule covering an interpreter or shell broadly (program or pattern < 4 letters) | **refused** |
 
 **Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
 
@@ -416,10 +439,11 @@ patterns seen so far (`BaselinePolicy`):
   temp / Shared / a volume, and not touching a sensitive place (login items, credentials, mail, messages).
   macOS system services (daemons and agents on the sealed system volume, not command-line tools like `cat`,
   `sqlite3` or a shell) may touch sensitive places: indexing, sync and malware scanning is their job.
-- **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
-- **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
+- **On-device model** (never Claude): signed, but the developer isn't trusted yet. Its verdicts are
+  suggestions in Needs You; it never suggests Safe for high risk.
+- **Needs You** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
   places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
-- Hostwatch's own activity, and interpreters and shells, are never listed (they stay New).
+- Hostwatch's own activity, and interpreters and shells (macOS's own included), are never trusted or listed (they stay New).
 
 **Baseline rules** (Rules tab) are narrow: **one per app and its signer** (*Slack · Slack Technologies*; the
 app's helpers included, and the signer must match), and one **macOS system** rule. A rule keeps trusting that app's **future** normal-risk patterns (checked
@@ -431,7 +455,8 @@ apps among them.
   it). **Delete** does the same and removes it; *⋯ ▸ Remove All Baseline Rules* removes every baseline rule.
 - **Low weight:** your markings and learned rules win over baseline rules, and stories ignore baseline
   trust (they count only your decisions and learned rules), so a chain still alerts.
-- **Needs your review** has one row per app with all its reasons:
+- **Needs You** has one row per app with all its reasons (for example *signed by Zoom (trusted developer, no
+  rule yet)* for an app installed after learning):
   - **Trust** marks its patterns Safe (your decision). For a signed app it also adds a baseline rule marked
     *Trusted by you*, which also covers that app's own sensitive places (never high-risk, unsigned or
     downloaded). Unsigned or ad-hoc programs are trusted pattern by pattern, with no rule.

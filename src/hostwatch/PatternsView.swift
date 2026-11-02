@@ -70,6 +70,13 @@ struct PatternsView: View {
                     }
                 }
                 .width(min: 88, ideal: 108, max: 140)
+                TableColumn("Decided By", value: \.decidedBy) { item in
+                    Text(item.decidedBy)
+                        .foregroundStyle(item.decidedBy.hasPrefix("AI") ? AnyShapeStyle(.purple)
+                                         : item.decidedBy.hasPrefix("You") ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                        .help(item.decidedBy)
+                }
+                .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Kind", value: \.kind) { item in
                     Image(systemName: item.entry.kind.symbol)
                         .foregroundStyle(item.entry.kind.color)
@@ -172,26 +179,9 @@ struct PatternsView: View {
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
             Spacer()
-            Toggle("Auto-classify new", isOn: $classifier.autoClassify)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("Every 90 s, triage up to 40 new patterns (seen for over a minute): on-device first, then Claude.")
-            if classifier.running {
-                ProgressView().controlSize(.small)
-                Button("Cancel") { classifier.cancel() }
-                    .buttonStyle(.glass)
-            } else {
-                Button { classifier.classifyNow() } label: {
-                    Label("Classify New", systemImage: "sparkles")
-                }
-                .buttonStyle(.glassProminent)
-                    .disabled(signatures.count(.unclassified) == 0)
-                    .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
-                          + "then Claude for what it can't settle. Choose the engine in Settings ▸ AI.")
-            }
-            Button { actions.openBaseline() } label: { Label("Baseline…", systemImage: "checkmark.shield") }
+            Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
-                .help("What this Mac's baseline trusted automatically, and what needs your review")
+                .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -235,6 +225,7 @@ struct PatternsView: View {
                 Button(status == .unclassified ? "Clear Rule" : status.title) {
                     signatures.setProcessRule(status, kind: entry.kind, process: entry.process)
                 }
+                .disabled(status == .safe && !SignatureStore.canTrustWholeProcess(entry.process))
             }
         }
         Divider()

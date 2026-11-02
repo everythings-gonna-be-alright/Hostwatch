@@ -85,12 +85,24 @@ struct SignatureEntry: Codable, Identifiable {
     var exampleParent: String
     var exampleHost: String?
     var exampleHostSource: String?
+    /// What an AI (on-device or Claude) suggests for this New pattern; you accept it or decide yourself.
+    var suggestion: AISuggestion? = nil
 
     var exampleEvent: ActivityEvent {
         ActivityEvent(kind: kind, time: "", pid: examplePid, ppid: 0, name: exampleName,
                       proc: exampleProc, target: exampleTarget, extra: exampleExtra, parent: exampleParent,
                       host: exampleHost ?? "", hostSource: exampleHostSource ?? "")
     }
+}
+
+/// An AI verdict waiting for you: AI suggests, you decide (unless you let it accept by itself).
+struct AISuggestion: Codable, Equatable {
+    var status: SignatureStatus
+    var source: String          // "on-device" or "claude"
+    var note: String?
+    var date = Date()
+
+    var engineName: String { source == "claude" ? "Claude" : "on-device AI" }
 }
 
 // MARK: - Risk
@@ -245,6 +257,10 @@ enum SignatureBuilder {
         return rawPath.hasPrefix("/System/") || rawPath.hasPrefix("/usr/") && !rawPath.hasPrefix("/usr/local/")
             || rawPath.hasPrefix("/bin/") || rawPath.hasPrefix("/sbin/") || rawPath.hasPrefix("/Library/Apple/")
     }
+
+    /// The program a pattern is about (what runs, or what acts) is an interpreter or shell: it runs any
+    /// script it's given, so trusting it broadly would trust a virus's script too.
+    static func runsAnyCode(_ e: SignatureEntry) -> Bool { isLolbin(SignatureStore.subjectPath(e)) }
 
     static func isLolbin(_ path: String) -> Bool {
         var name = (path as NSString).lastPathComponent.lowercased()
@@ -547,6 +563,7 @@ final class SignatureStore: ObservableObject {
         // v2: zone-based patterns with risk; the old per-folder format is not migrated.
         fileURL = dir.appendingPathComponent("signatures-v2.json")
         load()
+        dropInterpreterTrust()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -708,16 +725,79 @@ final class SignatureStore: ObservableObject {
         if source == "you" { onDecisionsChanged?() }
     }
 
-    /// Applies an automatic verdict only where nobody (you or a rule) has decided yet.
-    /// An AI verdict (Claude or on-device). It never marks a high-risk pattern Safe: event text
-    /// (paths, names, hosts) can be crafted to talk a model into it, so that stays your decision.
+    /// Accept AI suggestions by itself (Settings ▸ AI), for patterns that aren't high risk. Off: AI only suggests.
+    var autoAcceptAI: Bool = UserDefaults.standard.bool(forKey: "autoAcceptAISuggestions") {
+        didSet { UserDefaults.standard.set(autoAcceptAI, forKey: "autoAcceptAISuggestions") }
+    }
+
+    /// An AI verdict (Claude or on-device), only where nobody (you or a rule) has decided yet. It is kept
+    /// as a suggestion for you, or applied when you let AI accept by itself. Never Safe for a high-risk
+    /// pattern: event text (paths, names, hosts) can be crafted to talk a model into it.
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
-        guard status != .unclassified, self.status(forKey: key) == .unclassified else { return }
-        if status == .safe, entries[key]?.risk == .high { return }
-        set(status, keys: [key], source: source, note: note)
+        guard status != .unclassified, self.status(forKey: key) == .unclassified, var e = entries[key] else { return }
+        if status == .safe, e.risk == .high || SignatureBuilder.runsAnyCode(e) { return }
+        if autoAcceptAI, e.risk != .high {
+            set(status, keys: [key], source: source, note: note)
+            return
+        }
+        e.suggestion = AISuggestion(status: status, source: source, note: note)
+        entries[key] = e
+        changedNow()
+    }
+
+    /// Your decision: applies the AI's suggestions for these patterns (where still New). Returns how many.
+    @discardableResult
+    func acceptSuggestions(keys: [String]) -> Int {
+        var n = 0
+        for key in keys {
+            guard status(forKey: key) == .unclassified, let e = entries[key], let s = e.suggestion,
+                  !(s.status == .safe && (e.risk == .high || SignatureBuilder.runsAnyCode(e))) else { continue }
+            set(s.status, keys: [key], source: s.source, note: s.note)
+            n += 1
+        }
+        return n
+    }
+
+    /// "You", "Rule: …", "Baseline: Slack", "AI (on-device)", "AI suggests Safe", or "New".
+    func decidedBy(_ key: String) -> String {
+        guard let e = entries[key] else { return "" }
+        let status = status(forKey: key)
+        if status == .unclassified {
+            if let s = e.suggestion { return "AI suggests \(s.status.title)" }
+            return "New"
+        }
+        if e.status == .unclassified { return "You (whole process)" }
+        switch e.source {
+        case "you": return e.note?.hasPrefix("Baseline: ") == true ? "You · " + (e.note?.dropFirst(10) ?? "") : "You"
+        case "rule": return "Rule: " + (e.note ?? "")
+        case "baseline": return e.note.map { $0.hasPrefix("Baseline: ") ? "Baseline: " + $0.dropFirst(10) : $0 } ?? "Baseline"
+        case "claude": return "AI (Claude)"
+        case "on-device": return "AI (on-device)"
+        case "auto": return "Automatic (routine)"
+        default: return e.source ?? ""
+        }
+    }
+
+    /// "Everything python does is Safe" would trust any script: not allowed for interpreters and shells.
+    static func canTrustWholeProcess(_ process: String) -> Bool { !SignatureBuilder.isLolbin(process) }
+
+    /// Interpreters and shells run any script, so blanket trust in them is undone: whole-process Safe
+    /// rules, and Safe set by AI or the baseline (your own per-pattern decisions stay).
+    private func dropInterpreterTrust() {
+        var changed = false
+        for (key, rule) in processRules where rule.status == .safe && !Self.canTrustWholeProcess(rule.process) {
+            processRules[key] = nil; changed = true
+        }
+        for (key, e) in entries where e.status == .safe && ["claude", "on-device", "baseline"].contains(e.source ?? "")
+            && SignatureBuilder.runsAnyCode(e) {
+            var e = e; e.status = .unclassified; e.source = nil; e.note = nil
+            entries[key] = e; changed = true
+        }
+        if changed { changedNow() }
     }
 
     func setProcessRule(_ status: SignatureStatus, kind: EventKind, process: String) {
+        if status == .safe, !Self.canTrustWholeProcess(process) { return }
         let key = SignatureBuilder.processRuleKey(kind: kind, process: process)
         if status == .unclassified {
             processRules[key] = nil
@@ -758,7 +838,7 @@ final class SignatureStore: ObservableObject {
                 guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
                 let note = note(forKey: e.id)
                 return PatternItem(entry: e, status: status, statusRank: rank(status),
-                                   source: note.source, note: note.note)
+                                   source: note.source, note: note.note, decidedBy: decidedBy(e.id))
             }
             .sorted(using: patternOrder)
     }

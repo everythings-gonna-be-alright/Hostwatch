@@ -1,25 +1,49 @@
 import SwiftUI
 
-/// Rules tab: automatic decisions in one place. The baseline (rules per signer, learned in the first
-/// hour, and what needs your review), then Claude's proposals, then the rules you approved.
+/// Rules tab, three views of one idea: every pattern is decided by you, a rule, the baseline (code
+/// signatures) or an AI suggestion you accepted. *Needs You* is what's still New, *Rules* is what decides
+/// automatically, *Decided* shows who decided what (AI apart from you).
+enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided }
+
+final class RulesTabState: ObservableObject {
+    @Published var segment: RulesSegment = .needsYou
+    var chosen = false
+}
+
 struct RulesView: View {
     @ObservedObject var book: RuleBook
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var baseline: BaselineLearner
+    @ObservedObject var tab: RulesTabState
     /// Opens Patterns filtered to an app.
     var showPatterns: (String) -> Void = { _ in }
     /// Opens Patterns showing exactly these patterns.
     var showKeys: (String, [String]) -> Void = { _, _ in }
 
+    private var review: [BaselineReport.Group] { baseline.report?.review ?? [] }
+    private var waiting: Int { review.count + book.proposals.count }
+
     var body: some View {
         let _ = signatures.revision
         VStack(spacing: 0) {
+            Picker("", selection: Binding(get: { tab.segment }, set: { tab.segment = $0; tab.chosen = true })) {
+                Text(waiting > 0 ? "Needs You  \(waiting)" : "Needs You").tag(RulesSegment.needsYou)
+                Text("Rules  \(baseline.rules.filter { !$0.paused }.count + book.activeCount)").tag(RulesSegment.rules)
+                Text("Decided").tag(RulesSegment.decided)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.vertical, 10)
+            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    baselineSection
-                    if let review = baseline.report?.review, !review.isEmpty { reviewSection(review) }
-                    yourRulesSection
+                    switch tab.segment {
+                    case .needsYou: needsYou
+                    case .rules: baselineSection; learnedSection
+                    case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -29,25 +53,80 @@ struct RulesView: View {
             HStack {
                 Text(footer).lineLimit(1)
                 Spacer()
-                Text("\(book.yourDecisions.count) of your decisions to learn from").monospacedDigit()
+                Text("\(book.yourDecisions.count) of your decisions").monospacedDigit()
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
+        .onAppear {
+            if !tab.chosen { tab.segment = waiting > 0 ? .needsYou : .rules }
+        }
     }
 
     private var footer: String {
         if !baseline.message.isEmpty { return baseline.message }
+        if !classifier.lastMessage.isEmpty { return classifier.lastMessage }
         if !book.message.isEmpty { return book.message }
-        return "Your own markings always win over any rule."
+        return "Your own decisions always win over any rule or AI."
     }
 
-    // MARK: Baseline
+    // MARK: Needs You
+
+    @ViewBuilder private var needsYou: some View {
+        let count = review.reduce(0) { $0 + $1.keys.count }
+        section("Needs You", subtitle: review.isEmpty ? "" : "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
+            HStack(spacing: 10) {
+                Text("New patterns, by app. Trust an app you know (a rule is added for it), accept the AI's "
+                     + "suggestion, or Dismiss to hide it here (its patterns stay New). Interpreters and shells "
+                     + "like python or bash aren't listed: they run any script, so they can't be trusted.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                if classifier.running {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel") { classifier.cancel() }.buttonStyle(.glass)
+                } else {
+                    Button { classifier.classifyNow() } label: { Label("Ask AI for Suggestions", systemImage: "sparkles") }
+                        .buttonStyle(.glass)
+                        .disabled(review.isEmpty)
+                        .help("AI suggests a status for up to \(classifier.batchSize) New patterns (\(classifier.engine.title)). "
+                              + "Nothing changes until you accept.")
+                }
+            }
+            .controlSize(.small)
+        }
+        if !book.proposals.isEmpty {
+            section("Rule proposals", subtitle: "from Claude, checked by Hostwatch") {
+                ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
+            }
+        }
+        if review.isEmpty && book.proposals.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle").font(.system(size: 34)).foregroundStyle(.green)
+                Text("Nothing needs you").font(.headline)
+                Text("\(signatures.allEntries.count - signatures.count(.unclassified)) patterns are decided. "
+                     + "New ones appear here.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        } else if !review.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
+                    if i > 0 { Divider() }
+                    ReviewRow(group: g, baseline: baseline, signatures: signatures, showKeys: showKeys)
+                }
+            }
+            .padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.05)))
+        }
+    }
+
+    // MARK: Rules
 
     private var baselineSection: some View {
-        section("Baseline", subtitle: "From code signatures, on this Mac, no AI") {
+        section("Baseline rules", subtitle: "from code signatures, on this Mac, no AI") {
             HStack(spacing: 10) {
                 Image(systemName: baseline.phase == .done ? "checkmark.shield" : "hourglass")
                     .foregroundStyle(baseline.phase == .done ? .green : .secondary)
@@ -67,9 +146,9 @@ struct RulesView: View {
                     .help("Remove every baseline rule; what they trusted goes back to New")
             }
             .controlSize(.small)
-            Text("One rule per app (its developer's signature must match), plus one for macOS itself. A rule trusts the app's "
-                 + "normal-risk activity, now and later. Never high-risk, unsigned or downloaded code; credentials, login "
-                 + "items and other sensitive places stay for you unless you trusted the app yourself.")
+            Text("One rule per app (its developer's signature must match), plus one for macOS services. A rule "
+                 + "trusts the app's normal-risk activity, now and later. Never high-risk, unsigned or downloaded "
+                 + "code, interpreters or shells; sensitive places only for apps you trusted yourself.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !baseline.rules.isEmpty {
                 VStack(spacing: 0) {
@@ -84,36 +163,18 @@ struct RulesView: View {
         }
     }
 
-    private func reviewSection(_ review: [BaselineReport.Group]) -> some View {
-        let count = review.reduce(0) { $0 + $1.keys.count }
-        return section("Needs your review", subtitle: "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
-            Text("Not trusted automatically. Trust an app you know (a rule is added for it), mark it Suspicious, "
-                 + "or Dismiss to hide it here; dismissed patterns stay New.")
-                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 0) {
-                ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
-                    if i > 0 { Divider() }
-                    ReviewRow(group: g, baseline: baseline, showKeys: showKeys)
-                }
-            }
-            .padding(.horizontal, 12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.05)))
-        }
-    }
-
-    // MARK: Your rules
-
-    private var yourRulesSection: some View {
-        section("Your rules", subtitle: "\(book.activeCount) active · learned from your decisions") {
+    private var learnedSection: some View {
+        section("Learned rules", subtitle: "\(book.activeCount) active · from your decisions") {
             HStack(spacing: 10) {
-                Text("Claude proposes rules from the patterns you marked yourself; Hostwatch checks each one; you approve.")
+                Text("Claude turns patterns you marked yourself into rules; Hostwatch checks each one (never a "
+                     + "blanket trust of python, bash or node); you approve it in Needs You.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if book.running {
                     ProgressView().controlSize(.small)
                     Button("Cancel") { book.cancel() }.buttonStyle(.glass)
                 } else {
-                    Button { book.suggest() } label: { Label("Suggest Rules from My Decisions", systemImage: "sparkles") }
+                    Button { book.suggest(); tab.segment = .needsYou } label: { Label("Suggest Rules…", systemImage: "sparkles") }
                         .buttonStyle(.glass)
                         .disabled(classifier.engine == .onDevice || book.yourDecisions.count < 2)
                         .help(classifier.engine == .onDevice
@@ -122,9 +183,8 @@ struct RulesView: View {
                 }
             }
             .controlSize(.small)
-            ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
-            if book.rules.isEmpty && book.proposals.isEmpty {
-                Text("No rules yet. Mark a few patterns Safe or Suspicious yourself, then ask for suggestions.")
+            if book.rules.isEmpty {
+                Text("No learned rules yet. Mark a few patterns Safe or Suspicious yourself, then ask for suggestions.")
                     .font(.system(size: 12)).foregroundStyle(.tertiary)
             }
             ForEach(book.rules) { RuleRow(rule: $0, book: book, matches: matches($0)) }
@@ -264,8 +324,23 @@ private final class ExpandState: ObservableObject { @Published var open = false 
 private struct ReviewRow: View {
     let group: BaselineReport.Group
     let baseline: BaselineLearner
+    let signatures: SignatureStore
     let showKeys: (String, [String]) -> Void
     @StateObject private var expand = ExpandState()
+
+    /// "Safe ×3, Suspicious ×1 · on-device AI", or nil when there's no suggestion.
+    private var suggestionText: String? {
+        let entries = baseline.entries(group)
+        let suggestions = entries.compactMap(\.suggestion)
+        guard !suggestions.isEmpty else { return nil }
+        let byStatus = Dictionary(grouping: suggestions, by: \.status)
+        let parts = [SignatureStatus.dangerous, .suspicious, .safe].compactMap { s in
+            byStatus[s].map { "\(s.title)\($0.count > 1 || entries.count > 1 ? " ×\($0.count)" : "")" }
+        }
+        let engines = Set(suggestions.map(\.engineName)).sorted().joined(separator: " and ")
+        let missing = entries.count - suggestions.count
+        return parts.joined(separator: ", ") + " · \(engines)" + (missing > 0 ? " · \(missing) without a suggestion" : "")
+    }
     private var anyCode: Bool { baseline.runsAnyCode(group) }
 
     var body: some View {
@@ -297,6 +372,10 @@ private struct ReviewRow: View {
                 if group.reasons.count > 4 {
                     Text("· and \(group.reasons.count - 4) more").font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
+                if let text = suggestionText {
+                    Label("AI suggests: " + text, systemImage: "sparkles")
+                        .font(.system(size: 11)).foregroundStyle(.purple).lineLimit(1)
+                }
                 if expand.open {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(baseline.entries(group)) { e in ReviewPatternLine(entry: e) }
@@ -307,6 +386,10 @@ private struct ReviewRow: View {
                 }
             }
             Spacer()
+            if suggestionText != nil {
+                Button("Accept") { Task { await baseline.acceptSuggestions(group) } }.buttonStyle(.glass)
+                    .help("Your decision: apply the AI's suggestions to these patterns")
+            }
             if !anyCode {
                 Button("Trust") { Task { await baseline.trustApp(group) } }.buttonStyle(.glass)
                     .help("Your decision: mark these Safe; a signed app also gets a baseline rule (Trusted by you)")
@@ -341,6 +424,10 @@ private struct ReviewPatternLine: View {
                     .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
+            if let sug = entry.suggestion {
+                Text("AI: \(sug.status.title)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.purple)
+                    .help(sug.note ?? sug.engineName)
+            }
             if entry.risk == .high {
                 Text("High risk").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
                     .padding(.horizontal, 5).padding(.vertical, 1)
@@ -348,5 +435,114 @@ private struct ReviewPatternLine: View {
             }
         }
         .help(entry.process)
+    }
+}
+
+/// Who decided what: you, AI, your rules, the baseline. Grouped by app; AI and your decisions can be undone.
+private struct DecidedView: View {
+    @ObservedObject var signatures: SignatureStore
+    let showKeys: (String, [String]) -> Void
+
+    struct Group: Identifiable {
+        let app: String
+        var keys: [String]
+        var statuses: [SignatureStatus: Int]
+        var id: String { app }
+    }
+
+    enum Who: String, CaseIterable {
+        case ai = "Decided by AI", you = "Decided by you", rules = "Learned rules", baseline = "Baseline rules"
+
+        var detail: String {
+            switch self {
+            case .ai: return "on-device AI or Claude, accepted by you or automatically (Settings ▸ AI)"
+            case .you: return "patterns you marked, and apps you trusted"
+            case .rules: return "rules learned from your decisions"
+            case .baseline: return "code signatures, no AI"
+            }
+        }
+        var symbol: String {
+            switch self { case .ai: return "sparkles"; case .you: return "person.fill"; case .rules: return "checklist"; case .baseline: return "checkmark.shield" }
+        }
+        var tint: Color {
+            switch self { case .ai: return .purple; case .you: return .blue; case .rules: return .teal; case .baseline: return .green }
+        }
+
+        static func of(_ e: SignatureEntry) -> Who? {
+            guard e.status != .unclassified else { return nil }
+            switch e.source {
+            case "claude", "on-device": return .ai
+            case "you": return .you
+            case "rule": return .rules
+            case "baseline": return .baseline
+            default: return nil   // "auto": routine activity, decided locally
+            }
+        }
+    }
+
+    var body: some View {
+        let _ = signatures.revision
+        let groups = grouped()
+        VStack(alignment: .leading, spacing: 22) {
+            ForEach(Who.allCases, id: \.self) { who in
+                let list = groups[who] ?? []
+                let total = list.reduce(0) { $0 + $1.keys.count }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Label(who.rawValue, systemImage: who.symbol).font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(who.tint)
+                        Text("\(total) pattern\(total == 1 ? "" : "s") · \(who.detail)").font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                    if list.isEmpty {
+                        Text("None.").font(.system(size: 12)).foregroundStyle(.tertiary)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(Array(list.prefix(who == .baseline ? 12 : 50).enumerated()), id: \.element.id) { i, g in
+                                if i > 0 { Divider() }
+                                row(g, who: who)
+                            }
+                            if list.count > (who == .baseline ? 12 : 50) {
+                                Text("and \(list.count - (who == .baseline ? 12 : 50)) more apps: see Patterns, Decided By column")
+                                    .font(.system(size: 11)).foregroundStyle(.tertiary).padding(.vertical, 6)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(who.tint.opacity(0.05)))
+                    }
+                }
+            }
+        }
+    }
+
+    private func row(_ g: Group, who: Who) -> some View {
+        HStack(spacing: 10) {
+            Text(g.app).fontWeight(.semibold)
+            Text([SignatureStatus.dangerous, .suspicious, .safe].compactMap { s in
+                g.statuses[s].map { "\($0) \(s.title.lowercased())" } }.joined(separator: " · "))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+            Spacer()
+            Button("Show") { showKeys("\(g.app) · \(who.rawValue.lowercased())", g.keys) }.buttonStyle(.glass)
+            if who == .ai || who == .you {
+                Button("Undo") { signatures.set(.unclassified, keys: g.keys) }.buttonStyle(.glass)
+                    .help("Put these \(g.keys.count) patterns back to New (they appear in Needs You)")
+            }
+        }
+        .controlSize(.small)
+        .font(.system(size: 12))
+        .padding(.vertical, 6)
+    }
+
+    private func grouped() -> [Who: [Group]] {
+        var out: [Who: [String: Group]] = [:]
+        for e in signatures.allEntries {
+            guard let who = Who.of(e) else { continue }
+            let path = SignatureStore.subjectPath(e)
+            let app = BaselinePolicy.appName(path.isEmpty ? e.process : path)
+            var g = out[who]?[app] ?? Group(app: app, keys: [], statuses: [:])
+            g.keys.append(e.id)
+            g.statuses[e.status, default: 0] += 1
+            out[who, default: [:]][app] = g
+        }
+        return out.mapValues { $0.values.sorted { $0.keys.count != $1.keys.count ? $0.keys.count > $1.keys.count : $0.app < $1.app } }
     }
 }

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let stories = StoryEngine()
     private let domains = DomainRegistry()
     private let domainsState = DomainsViewState()
+    private let rulesTab = RulesTabState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
     private lazy var ruleBook = RuleBook(store: signatures)
@@ -329,8 +330,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
-        if case .done = baseline.phase, let review = baseline.report?.reviewCount, review > 0 {
-            menu.addItem(item("Baseline: \(review) pattern\(review == 1 ? "" : "s") to review…",
+        if case .done = baseline.phase, let apps = baseline.report?.review.count, apps > 0 {
+            menu.addItem(item("\(apps) app\(apps == 1 ? "" : "s") need\(apps == 1 ? "s" : "") your decision…",
                               #selector(showBaselineReport), symbol: "checkmark.shield"))
         } else if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
@@ -626,6 +627,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     /// The baseline lives in the Rules tab.
     private func openBaselineReport() {
+        rulesTab.segment = .needsYou
+        rulesTab.chosen = true
         model.windowTab = 4
         openActivityWindow(fullScreen: false)
     }
@@ -816,7 +819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's

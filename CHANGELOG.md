@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **AI suggests, you decide:** AI verdicts on patterns (on-device or Claude) are suggestions you **Accept** in
+  Rules ▸ Needs You; *Accept AI suggestions without asking* (Settings ▸ AI, off) restores hands-off use,
+  except for high-risk patterns.
+- **Rules tab in three views:** *Needs You* (New patterns by app, AI suggestions, rule proposals; live),
+  *Rules* (baseline and learned) and *Decided* (who decided what: AI apart from you, with Undo). Patterns has a
+  **Decided By** column; *Classify New* became *Ask AI for Suggestions* in Needs You.
+- **No blanket trust in interpreters and shells** (python, bash, node, curl, osascript…): not by
+  whole-process Safe, learned rules, AI or the baseline (macOS's own included). Earlier blanket trust is undone.
+
 - **Removed "Trust Homebrew-installed tools":** Homebrew tools are judged like your own builds; mark
   their patterns yourself.
 

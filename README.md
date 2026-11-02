@@ -141,7 +141,8 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 - **The first hour is a learning period.** In three waves (5, 15 and 60 minutes) Hostwatch trusts ordinary
   activity of Apple and your installed apps' developers, and leaves anything unsigned, downloaded, temporary
   or high-risk for you. Each trusted developer becomes a baseline rule in the Rules tab (pause or delete any of
-  them), and what needs your review is listed there by app. Domains your trusted software uses become the
+  them), and what needs your decision is listed there by app (Rules ▸ Needs You), with AI suggestions you
+  accept or not. Domains your trusted software uses become the
   baseline too.
 - Choose **Open Hostwatch** (⌘O) from the menu bar icon. The window's tabs (⌘1–⌘5):
   - **Events:** the live stream, with CPU, memory, network and disk in the footer.

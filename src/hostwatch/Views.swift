@@ -465,6 +465,7 @@ struct ActivityWindowView: View {
     @ObservedObject var stories: StoryEngine
     @ObservedObject var domains: DomainRegistry
     let domainsState: DomainsViewState
+    let rulesTab: RulesTabState
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -488,7 +489,7 @@ struct ActivityWindowView: View {
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain)
-            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline,
+            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
                                showPatterns: { app in
                                    signatures.scope = nil
                                    signatures.search = app
@@ -544,7 +545,8 @@ struct ActivityWindowView: View {
                       systemImage: "point.3.connected.trianglepath.dotted").tag(2)
                 Label(domains.newCount > 0 ? "Domains (\(domains.newCount))" : "Domains",
                       systemImage: "globe").tag(3)
-                Label(rules.proposals.isEmpty ? "Rules" : "Rules (\(rules.proposals.count))",
+                let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
+                Label(waiting == 0 ? "Rules" : "Rules (\(waiting))",
                       systemImage: "checklist").tag(4)
             }
             .pickerStyle(.segmented)
@@ -718,6 +720,7 @@ struct ActivityWindowView: View {
                 Button(status == .unclassified ? "Clear Rule" : status.title) {
                     signatures.setProcessRule(status, kind: event.kind, process: event.signatureProcess)
                 }
+                .disabled(status == .safe && !SignatureStore.canTrustWholeProcess(event.signatureProcess))
             }
         }
         Menu("Exclude") {
