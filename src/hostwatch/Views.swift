@@ -199,6 +199,13 @@ struct HUDSurface: ViewModifier {
     let shape: RoundedRectangle
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
+    /// Contrast 0…1 → how dark the floor under the text is: 0 none (pure glass), the default 0.45
+    /// keeps the earlier look (62%), 1 nearly opaque.
+    static func floor(_ contrast: Double) -> Double {
+        let v = min(max(contrast, 0), 1)
+        return v <= 0.45 ? v / 0.45 * 0.62 : 0.62 + (v - 0.45) / 0.55 * 0.33
+    }
+
     private var effective: OverlayBackground {
         reduceTransparency && (style == .glass || style == .clear) ? .solid : style
     }
@@ -206,16 +213,16 @@ struct HUDSurface: ViewModifier {
     func body(content: Content) -> some View {
         switch effective {
         case .glass:
-            // 0.35 + setting: the default (45%) gives 62%, so primary text stays near 5.6:1 on white.
-            content.glassEffect(.regular.tint(.black.opacity(0.35 + tint * 0.6)), in: shape)
+            // The default contrast gives a 62% floor: primary text stays near 5.6:1 on a white wallpaper.
+            content.glassEffect(.regular.tint(.black.opacity(Self.floor(tint))), in: shape)
         case .clear:
-            content.glassEffect(.clear.tint(.black.opacity(0.25 + tint * 0.55)), in: shape)
+            content.glassEffect(.clear.tint(.black.opacity(Self.floor(tint) * 0.85)), in: shape)
         case .solid:
             content
                 .background {
                     ZStack {
                         Rectangle().fill(.thickMaterial)
-                        Color.black.opacity(0.55 + tint * 0.4)
+                        Color.black.opacity(0.25 + Self.floor(tint) * 0.75)
                     }
                 }
                 .clipShape(shape)

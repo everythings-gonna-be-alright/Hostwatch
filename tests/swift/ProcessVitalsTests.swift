@@ -227,4 +227,11 @@ import Testing
         #expect(OverlayBackground(stored: "transparent") == .transparent)
         #expect(OverlayBackground.allCases.map(\.title) == ["Glass", "Clear Glass", "Solid", "None"])
     }
+
+    @Test func contrastGoesFromPureGlassToNearlyOpaque() {
+        #expect(HUDSurface.floor(0) == 0)
+        #expect(abs(HUDSurface.floor(0.45) - 0.62) < 0.001)        // the default look is unchanged
+        #expect(abs(HUDSurface.floor(1) - 0.95) < 0.001)
+        #expect(HUDSurface.floor(0.2) < HUDSurface.floor(0.3))
+    }
 }

@@ -4,7 +4,7 @@
 
 - **HUD appearance:** four clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid,
   None) instead of Liquid Glass, Blur, Dark and Transparent (Blur and Dark looked alike: Blur becomes
-  Glass, Dark becomes Solid). *Tint* is now *Contrast* (Lighter … Darker). With Reduce Transparency on,
+  Glass, Dark becomes Solid). *Tint* is now *Contrast* (Lighter … Darker), with a wider range: from pure glass to nearly opaque. With Reduce Transparency on,
   glass shows as Solid.
 
 ## 0.6.0 – decisions you can see

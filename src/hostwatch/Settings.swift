@@ -305,7 +305,7 @@ private struct HUDPane: View {
                 }
                 .padding(.vertical, 4)
                 LabeledContent("Contrast") {
-                    Slider(value: $model.overlayOpacity, in: 0.15...0.9) {
+                    Slider(value: $model.overlayOpacity, in: 0...1) {
                         EmptyView()
                     } minimumValueLabel: {
                         Text("Lighter").font(.caption).foregroundStyle(.secondary)
@@ -316,6 +316,10 @@ private struct HUDPane: View {
                 }
                 .disabled(model.overlayBackground == .transparent)
                 .help("How dark the background is under the HUD's white text")
+                if model.overlayOpacity < 0.25, model.overlayBackground != .transparent {
+                    Label("Low contrast: white text can be hard to read over bright windows.", systemImage: "eye")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
                 Picker("Text size", selection: $model.overlayScale) {
                     ForEach(HUDModel.scaleOptions, id: \.1) { Text($0.0).tag($0.1) }
                 }
