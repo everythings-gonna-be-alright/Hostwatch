@@ -66,4 +66,11 @@ import Testing
         #expect(MetricsStore.day(ofHistory: "activity-20261101-071732-871.jsonl") == "20261101")
         #expect(MetricsStore.day(ofHistory: "nonsense") == nil)
     }
+
+    @Test func hudRatesAreShort() {
+        #expect(HUDResources.short(0) == "0" && HUDResources.short(820) == "820")
+        #expect(HUDResources.short(1_240) == "1.2K" && HUDResources.short(40_300) == "40K")
+        #expect(HUDResources.short(1_240_000) == "1.2M" && HUDResources.short(556_000_000) == "556M")
+        #expect(HUDResources.short(3_100_000_000) == "3.1G" && HUDResources.short(-5) == "0")
+    }
 }
