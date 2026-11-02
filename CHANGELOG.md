@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Friendlier Full Disk Access setup:** a window instead of an alert: what Hostwatch watches and that it stays
+  on the Mac, three numbered steps (Open System Settings, turn on Hostwatch with Show in Finder to drag it in,
+  come back), a live check that notices the grant by itself and turns the button into *Start Watching*, and
+  *Quit & Reopen* when macOS needs a fresh start.
+
 - **Story window:** double-click a story (or *Show Chain*) for the whole chain event by event: a vertical
   timeline indented by process, each step in one sentence with its command line or address and why it counts,
   *All activity* to add the processes' other events from history, and the process tree.

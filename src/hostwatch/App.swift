@@ -727,33 +727,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
+    private var accessWindow: NSWindow?
+
+    /// The Full Disk Access setup window (one at a time); it notices the grant by itself.
     private func showFullDiskAccessAlert(afterFailure: Bool) {
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Hostwatch needs Full Disk Access"
-        alert.informativeText = """
-        macOS only lets the collector (eslogger) watch processes and files when the app that \
-        starts it has Full Disk Access.
-
-        1. Click Open Settings.
-        2. Turn on Hostwatch. If it is not listed, click + and choose:
-           \(Bundle.main.bundlePath)
-        3. Quit and reopen Hostwatch.
-
-        After each rebuild, remove the old Hostwatch entry and add it again.
-        """
-        alert.alertStyle = afterFailure ? .warning : .informational
-        alert.addButton(withTitle: "Open Settings")
-        if !afterFailure { alert.addButton(withTitle: "Start Anyway") }
-        alert.addButton(withTitle: "Cancel")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            Collector.openFullDiskAccessSettings()
-        case .alertSecondButtonReturn where !afterFailure:
-            collector.start()
-        default:
-            break
+        if let accessWindow { accessWindow.makeKeyAndOrderFront(nil); return }
+        let setup = FullDiskAccessSetup(afterFailure: afterFailure)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
+                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.title = "Full Disk Access"
+        let close: () -> Void = { [weak window] in window?.close() }
+        window.contentView = NSHostingView(rootView: FullDiskAccessView(
+            setup: setup,
+            start: { [weak self] in close(); self?.collector.start() },
+            close: close,
+            startAnyway: afterFailure ? nil : { [weak self] in close(); self?.collector.start() }))
+        window.center()
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { setup.stop(); self?.accessWindow = nil }
         }
+        accessWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
     // MARK: Windows

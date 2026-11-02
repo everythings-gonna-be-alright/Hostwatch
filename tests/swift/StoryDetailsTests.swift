@@ -48,3 +48,21 @@ import Testing
         try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("story-window.png"))
     }
 }
+
+/// HOSTWATCH_RENDER=<dir> writes full-disk-access.png there (to look at the layout).
+@MainActor @Suite struct FullDiskAccessWindow {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"] != nil))
+    func render() throws {
+        let setup = FullDiskAccessSetup(afterFailure: false, previewGranted: false)
+        defer { setup.stop() }
+        let view = FullDiskAccessView(setup: setup, start: {}, close: {}, startAnyway: {})
+            .background(Color(nsColor: .windowBackgroundColor))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        let image = try #require(renderer.nsImage)
+        let tiff = try #require(image.tiffRepresentation)
+        let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
+        try png.write(to: URL(fileURLWithPath: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"]!)
+            .appendingPathComponent("full-disk-access.png"))
+    }
+}

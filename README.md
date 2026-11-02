@@ -129,7 +129,8 @@ open dist/Hostwatch.app
 Then, either way:
 
 1. Open **System Settings → Privacy & Security → Full Disk Access**, add `Hostwatch.app` and turn it on.
-   The app checks this and shows a guide if it's missing.
+   If it's missing, Hostwatch opens a short setup window that walks you through it and notices the
+   grant by itself.
 2. Hostwatch asks for your administrator password to start its collector.
 3. The 〰 icon appears in the menu bar, and the HUD starts showing activity.
 
