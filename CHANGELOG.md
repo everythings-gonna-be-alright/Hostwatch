@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Events:** a narrower Process column, and file reads and writes shown as icons (👁 read, ✎ write in orange, both) instead of `r` and `w`.
+
 - **HUD appearance:** three clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid)
   instead of Liquid Glass, Blur, Dark and Transparent (Blur becomes Glass, Dark Solid, Transparent Clear
   Glass); no border on Solid. *Tint* is now *Contrast* (Lighter … Darker), from pure glass to nearly
