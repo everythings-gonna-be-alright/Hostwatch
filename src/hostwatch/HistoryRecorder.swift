@@ -92,6 +92,23 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             self.openFiles(in: dir)
             self.connect()
         }
+        scrubOldSecretsOnce(in: dir)
+    }
+
+    /// History recorded before command lines were fully masked: mask it once, in the background. The
+    /// file being written is skipped here and masked when it's finished (`compressLater`).
+    private func scrubOldSecretsOnce(in dir: URL) {
+        let flag = "historySecretsScrubbed2"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        compressQueue.async {
+            let files = HistoryFiles.list(in: dir)
+            var total = 0
+            for file in files.dropLast() {   // the newest one is still being written
+                total += (try? HistoryFiles.scrubSecrets(file)) ?? 0
+            }
+            DispatchQueue.main.async { UserDefaults.standard.set(true, forKey: flag) }
+            if total > 0 { NSLog("Hostwatch: masked secrets in %d recorded command lines", total) }
+        }
     }
 
     func stop() {
@@ -154,6 +171,7 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     private func compressLater(_ plain: URL) {
         compressQueue.async { [weak self] in
             guard FileManager.default.fileExists(atPath: plain.path) else { return }
+            _ = try? HistoryFiles.scrubSecrets(.plain(plain))   // anything recorded before full masking
             do { try HistoryFiles.compress(plain) } catch { self?.report("Compressing \(plain.lastPathComponent) failed") }
             self?.queue.async { self?.enforceLimit() }
         }

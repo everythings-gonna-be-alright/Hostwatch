@@ -97,7 +97,7 @@ struct AppleOnDeviceModel: LocalTriageModel {
         guard let schema = Self.schema else { throw CocoaError(.featureUnsupported) }
         // A fresh session per pattern: no context carried between unrelated patterns.
         let session = LanguageModelSession(model: .default, instructions: Self.instructions)
-        let response = try await session.respond(to: prompt, schema: schema,
+        let response = try await session.respond(to: Secrets.mask(prompt), schema: schema,
                                                  options: GenerationOptions(samplingMode: .greedy))
         let word = try response.content.value(String.self, forProperty: "verdict")
         let confidence = try response.content.value(String.self, forProperty: "confidence")
@@ -221,7 +221,7 @@ extension AppleOnDeviceModel {
     /// Free-text analysis in the same shape as Claude's answer (VERDICT line first).
     func explain(_ prompt: String, instructions: String) async throws -> String {
         let session = LanguageModelSession(model: Self.analysisModel, instructions: instructions)
-        let response = try await session.respond(to: prompt, options: GenerationOptions(samplingMode: .greedy,
+        let response = try await session.respond(to: Secrets.mask(prompt), options: GenerationOptions(samplingMode: .greedy,
                                                                                         maximumResponseTokens: 600))
         return response.content
     }

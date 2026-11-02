@@ -1178,7 +1178,7 @@ final class PatternClassifier: ObservableObject {
         }
         self.process = process
         DispatchQueue.global().async {
-            stdin.fileHandleForWriting.write(Data(prompt.utf8))
+            stdin.fileHandleForWriting.write(Data(Secrets.mask(prompt).utf8))   // never send a secret
             try? stdin.fileHandleForWriting.close()
         }
     }

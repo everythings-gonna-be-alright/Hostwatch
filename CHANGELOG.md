@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Secrets masked everywhere:** one stronger rule set (headers, cookies, `--password`, `FOO_TOKEN=`, URL
+  credentials, `curl -u`, `security -w`, `sshpass`, `mysql -p`, token formats, JWTs, private keys) masks command
+  lines before they reach history, and every prompt right before it goes to any AI. Existing history is
+  masked once in the background, and each file again before it's compressed.
+
 - **AI suggests, you decide:** AI verdicts on patterns (on-device or Claude) are suggestions you **Accept** in
   Rules ▸ Needs You; *Accept AI suggestions without asking* (Settings ▸ AI, off) restores hands-off use,
   except for high-risk patterns.

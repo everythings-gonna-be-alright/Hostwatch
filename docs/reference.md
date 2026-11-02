@@ -717,9 +717,17 @@ cat ~/.zshrc >/dev/null              # 📄 file
     that nobody else can write (and not a link). Otherwise it refuses and the HUD says why, so a fake
     collector run by an ordinary user cannot feed it data.
 - New-process events carry the **command line**, which is forwarded to the app, shown, given to
-  Claude and **written to history**. The collector masks obvious secrets first (Authorization
-  headers, `password=`/`token=`-style values, URL credentials, common token prefixes), but other
-  secrets passed as arguments can still be recorded. Environment variables are never forwarded.
+  Claude and **written to history**. Secrets are masked first (`Secrets`, one rule set): Authorization
+  and API-key headers and cookies, `name=value` / `--name value` for password, token, secret, API/access/
+  private key, auth, session and signature (`GITHUB_TOKEN=`, `?token=`, `--password` too), URL credentials
+  (`user:pass@`, `token@`), `curl -u`, `security … -w`, `sshpass -p`, `mysql -p…`, known token formats
+  (`ghp_`, `github_pat_`, `glpat-`, `xox…`, `sk-`, `AKIA`/`ASIA`, `AIza`, `npm_`, `hf_`), JWTs and private
+  key blocks. History shows `***`; AI prompts `[REDACTED]`.
+- **Nothing unmasked goes to an AI:** every prompt (Ask AI, pattern suggestions, rule proposals, domain
+  details, on-device or Claude) is masked again right before it's sent, whatever built it. MCP output too.
+- **Older history is masked too:** once, in the background, finished history files are re-masked (compressed
+  ones rewritten with a new index), and every file is masked again before it's compressed. A secret in a
+  shape no rule knows can still slip through. Environment variables are never forwarded.
 - To find connections, the collector runs `tcpdump` (DNS answers and TCP SYN headers only, no
   payloads) and `nettop` as root, read-only. Nothing is captured to disk.
 - `eslogger` is a notify-only observer. It cannot deny execution.

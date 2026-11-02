@@ -198,8 +198,10 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 - **Update checks.** Once a day (and on *Check for Updates…*) Hostwatch asks GitHub's API for the latest
   release. Nothing about your Mac is sent, and nothing is downloaded or installed by itself. Turn it off in
   *Settings ▸ General*.
-- **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
-  the collector, but other secrets passed as arguments can end up in history.
+- **Command lines are recorded, with secrets masked.** Passwords, tokens and keys (headers, `--password`,
+  `FOO_TOKEN=`, URL credentials, `curl -u`, `security -w`, known token formats, JWTs, private keys) are masked
+  before they reach history, and every prompt is masked again right before it goes to any AI. A secret in a
+  shape no rule knows can still slip through.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).
 - **Detection first.** Hostwatch never deletes anything. It only pauses or kills a process if you turn on
   the opt-in hold, and only your own processes, with your answer.
