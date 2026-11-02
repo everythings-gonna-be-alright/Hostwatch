@@ -82,16 +82,27 @@ struct HUDView: View {
         // Interactive: fill the panel so the box shows its real size while resizing.
         .frame(maxHeight: model.overlayClickThrough ? nil : .infinity, alignment: .top)
         .foregroundStyle(.white)
-        // On a transparent background a tight dark shadow keeps text readable on any wallpaper.
-        // Legibility shadow: strong on a transparent background, subtle on materials (like macOS
-        // does for text over vibrant backgrounds).
-        .shadow(color: .black.opacity(transparent ? 0.95 : model.overlayBackground == .solid ? 0 : 0.45),
-                radius: transparent ? 1.2 : 0.8)
-        .modifier(HUDSurface(style: model.overlayBackground, tint: model.overlayOpacity, transparency: model.overlayTransparency,
+        // Legibility shadow: subtle on glass (like macOS does for text over vibrant backgrounds).
+        .shadow(color: .black.opacity(model.overlayBackground == .solid ? 0 : 0.45), radius: 0.8)
+        .modifier(HUDSurface(style: model.overlayBackground, tint: model.overlayOpacity,
                              interactive: !model.overlayClickThrough, shape: hudShape))
+        .overlay(alignment: .leading) {
+            // Left edge: width only (the HUD keeps its top-right corner).
+            if !model.overlayClickThrough {
+                ResizeGrip(size: 6, axis: .horizontal, onBegin: beginResize, onDrag: resize)
+                    .frame(width: 6).frame(maxHeight: .infinity).padding(.vertical, 22 * s)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // Bottom edge: height only.
+            if !model.overlayClickThrough {
+                ResizeGrip(size: 6, axis: .vertical, onBegin: beginResize, onDrag: resize)
+                    .frame(height: 6).frame(maxWidth: .infinity).padding(.horizontal, 22 * s)
+            }
+        }
         .overlay(alignment: .bottomLeading) {
             if !model.overlayClickThrough {
-                ResizeGrip(size: 16 * s, onBegin: beginResize, onDrag: resize)
+                ResizeGrip(size: 16 * s, axis: .both, onBegin: beginResize, onDrag: resize)
                     .frame(width: 16 * s, height: 16 * s)
                     .padding(3)
                     .help("Drag to resize")
@@ -119,13 +130,14 @@ struct HUDView: View {
     /// dx/dy: screen points the mouse moved left/down since the drag began (positive = grow).
     private func resize(dx: CGFloat, dy: CGFloat) {
         let width = min(max(resizeStart.width + dx, HUDModel.widthRange.lowerBound), HUDModel.widthRange.upperBound)
-        let rows = Int(((resizeStart.height + dy - model.overlayChrome(s)) / (rowHeight(s) + 1)).rounded())
+        // Whole rows only after a full row of movement, so a sideways drag never changes the height.
+        let startRows = (resizeStart.height - model.overlayChrome(s)) / (rowHeight(s) + 1)
+        let rows = Int(startRows.rounded()) + Int((dy / (rowHeight(s) + 1)).rounded(.towardZero))
         let clampedRows = min(max(rows, HUDModel.rowRange.lowerBound), HUDModel.rowRange.upperBound)
         if abs(width - model.overlayWidth) >= 1 { model.overlayWidth = width.rounded() }
         if clampedRows != model.overlayRows { model.overlayRows = clampedRows }
     }
 
-    private var transparent: Bool { model.overlayBackground == .transparent }
     private var hudShape: RoundedRectangle { RoundedRectangle(cornerRadius: 16 * s, style: .continuous) }
 
     private var emptyTitle: String {
@@ -190,13 +202,11 @@ struct HUDView: View {
     }
 }
 
-/// HUD background, drawn as its own layer under the content so Transparency fades only the
-/// background, never the text. Contrast sets how dark it is under the HUD's white text. With
-/// Reduce Transparency on, glass becomes Solid and Transparency is ignored.
+/// HUD background, drawn as its own layer under the content. Contrast sets how dark it is under the
+/// HUD's white text. With Reduce Transparency on, glass becomes Solid.
 struct HUDSurface: ViewModifier {
     let style: OverlayBackground
     let tint: Double
-    var transparency: Double = 0
     let interactive: Bool
     let shape: RoundedRectangle
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -208,30 +218,18 @@ struct HUDSurface: ViewModifier {
         return v <= 0.45 ? v / 0.45 * 0.62 : 0.62 + (v - 0.45) / 0.55 * 0.33
     }
 
-    /// Transparency 0…1 → the background layer's opacity (never fully gone, so its edge stays visible).
-    static func layerOpacity(_ transparency: Double) -> Double { 1 - min(max(transparency, 0), 1) * 0.9 }
-
-    private var effective: OverlayBackground {
-        reduceTransparency && (style == .glass || style == .clear) ? .solid : style
-    }
+    private var effective: OverlayBackground { reduceTransparency ? .solid : style }
 
     func body(content: Content) -> some View {
-        if effective == .transparent {
-            // Fully clear pixels don't receive clicks, so keep a near-invisible fill while interactive.
-            content
-                .background(Color.black.opacity(interactive ? 0.02 : 0))
-                .clipShape(shape)
-        } else {
-            content
-                .background { layer.opacity(reduceTransparency ? 1 : Self.layerOpacity(transparency)) }
-                .clipShape(shape)
-                .overlay {
-                    // Glass only: a faint edge while the HUD can be moved and resized. No border on Solid or None.
-                    if interactive, effective == .glass || effective == .clear {
-                        shape.strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
-                    }
+        content
+            .background { layer }
+            .clipShape(shape)
+            .overlay {
+                // Glass only: a faint edge while the HUD can be moved and resized. No border on Solid.
+                if interactive, effective != .solid {
+                    shape.strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
                 }
-        }
+            }
     }
 
     @ViewBuilder private var layer: some View {
@@ -243,7 +241,7 @@ struct HUDSurface: ViewModifier {
             // Clear glass darkens much faster with a tint: half as much keeps the scale even.
             shape.fill(Color.black.opacity(0.001))
                 .glassEffect(.clear.tint(.black.opacity(Self.floor(tint) * 0.5)), in: shape)
-        case .solid, .transparent:
+        case .solid:
             ZStack {
                 Rectangle().fill(.thickMaterial)
                 Color.black.opacity(0.25 + Self.floor(tint) * 0.75)
@@ -257,7 +255,6 @@ struct HUDSurface: ViewModifier {
 struct HUDBackgroundTile: View {
     let style: OverlayBackground
     let tint: Double
-    var transparency: Double = 0
     let selected: Bool
 
     var body: some View {
@@ -272,8 +269,8 @@ struct HUDBackgroundTile: View {
                     }
                 }
                 .padding(8)
-                .shadow(color: .black.opacity(style == .transparent ? 0.9 : 0.3), radius: 0.8)
-                .modifier(HUDSurface(style: style, tint: tint, transparency: transparency, interactive: false,
+                .shadow(color: .black.opacity(0.3), radius: 0.8)
+                .modifier(HUDSurface(style: style, tint: tint, interactive: false,
                                      shape: RoundedRectangle(cornerRadius: 8, style: .continuous)))
             }
             .frame(width: 92, height: 60)
@@ -322,19 +319,23 @@ struct WindowDragArea: NSViewRepresentable {
 /// (the panel is movable by background) and reads the mouse in screen coordinates, which stay
 /// stable while the window resizes under it.
 struct ResizeGrip: NSViewRepresentable {
+    enum Axis { case horizontal, vertical, both }
     let size: CGFloat
+    var axis: Axis = .both
     let onBegin: () -> Void
     let onDrag: (_ dx: CGFloat, _ dy: CGFloat) -> Void
 
     func makeNSView(context: Context) -> GripView { GripView() }
 
     func updateNSView(_ view: GripView, context: Context) {
+        view.axis = axis
         view.onBegin = onBegin
         view.onDrag = onDrag
         view.needsDisplay = true
     }
 
     final class GripView: NSView {
+        var axis: Axis = .both
         var onBegin: () -> Void = {}
         var onDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
         private var start: NSPoint?
@@ -343,8 +344,14 @@ struct ResizeGrip: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         private var cursor: NSCursor {
-            if #available(macOS 15.0, *) { return .frameResize(position: .bottomLeft, directions: .all) }
-            return .crosshair
+            if #available(macOS 15.0, *) {
+                switch axis {
+                case .horizontal: return .frameResize(position: .left, directions: .all)
+                case .vertical: return .frameResize(position: .bottom, directions: .all)
+                case .both: return .frameResize(position: .bottomLeft, directions: .all)
+                }
+            }
+            return axis == .horizontal ? .resizeLeftRight : axis == .vertical ? .resizeUpDown : .crosshair
         }
 
         override func updateTrackingAreas() {
@@ -365,13 +372,15 @@ struct ResizeGrip: NSViewRepresentable {
             guard let start else { return }
             let now = NSEvent.mouseLocation
             cursor.set()
-            onDrag(start.x - now.x, start.y - now.y)   // left/down = grow
+            // Left/down = grow; an edge moves only its own dimension.
+            onDrag(axis == .vertical ? 0 : start.x - now.x, axis == .horizontal ? 0 : start.y - now.y)
         }
 
         override func mouseUp(with event: NSEvent) { start = nil }
 
-        /// Three diagonal strokes in the bottom-left corner.
+        /// Three diagonal strokes in the bottom-left corner (edges are invisible).
         override func draw(_ dirtyRect: NSRect) {
+            guard axis == .both else { return }
             let path = NSBezierPath()
             let w = bounds.width
             for f in [0.35, 0.6, 0.85] as [CGFloat] {

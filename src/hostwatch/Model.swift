@@ -266,15 +266,16 @@ extension ActivityEvent {
     }
 }
 
-/// HUD background: four clearly different looks (like System Settings ▸ Appearance).
+/// HUD background: three clearly different looks (like System Settings ▸ Appearance).
 enum OverlayBackground: String, CaseIterable {
-    case glass, clear, solid, transparent
+    case glass, clear, solid
 
     /// Earlier versions' "blur" (frosted) becomes Glass, "dark" becomes Solid.
     init?(stored: String) {
         switch stored {
         case "blur": self = .glass
         case "dark": self = .solid
+        case "transparent": self = .clear              // None was removed: the most see-through left
         default: self.init(rawValue: stored)
         }
     }
@@ -284,7 +285,6 @@ enum OverlayBackground: String, CaseIterable {
         case .glass: return "Glass"
         case .clear: return "Clear Glass"
         case .solid: return "Solid"
-        case .transparent: return "None"
         }
     }
 
@@ -293,7 +293,6 @@ enum OverlayBackground: String, CaseIterable {
         case .glass: return "Liquid Glass that adapts to what's behind it."
         case .clear: return "More see-through Liquid Glass, for calm wallpapers."
         case .solid: return "A dense dark surface: the easiest to read on busy screens."
-        case .transparent: return "Text only, with a shadow to keep it readable."
         }
     }
 }
@@ -401,10 +400,6 @@ final class HUDModel: ObservableObject {
     }
 
     /// Tint strength for the Blur and Dark backgrounds (0.1…1).
-    /// How see-through the HUD's background is (0 as designed … 1 nearly invisible); text stays as is.
-    @Published var overlayTransparency: Double = UserDefaults.standard.object(forKey: "overlayTransparency") as? Double ?? 0 {
-        didSet { UserDefaults.standard.set(overlayTransparency, forKey: "overlayTransparency") }
-    }
     @Published var overlayOpacity: Double {
         didSet { UserDefaults.standard.set(overlayOpacity, forKey: Keys.overlayOpacity) }
     }
