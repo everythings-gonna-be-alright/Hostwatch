@@ -18,7 +18,7 @@ Each kind of control has one home:
   badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
   **Settings…** (⌘,) and Quit.
 - **App menu bar** (while a Hostwatch window is open):
-  - *View*: Events ⌘1 · Patterns ⌘2 · Stories ⌘3 · Domains ⌘4 · Rules ⌘5, the **Show** filter
+  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, the **Show** filter
     (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
   - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
     Dangerous, Exclude Selection…, Start/Stop Collector.

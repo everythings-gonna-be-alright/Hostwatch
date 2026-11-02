@@ -541,17 +541,17 @@ struct ActivityWindowView: View {
             Picker("View", selection: $model.windowTab) {
                 Label("Events", systemImage: "list.bullet.rectangle").tag(0)
                 Label("Patterns", systemImage: "square.stack.3d.up").tag(1)
+                let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
+                Label(waiting == 0 ? "Rules" : "Rules (\(waiting))",
+                      systemImage: "checklist").tag(4)
                 Label(stories.activeCount > 0 ? "Stories (\(stories.activeCount))" : "Stories",
                       systemImage: "point.3.connected.trianglepath.dotted").tag(2)
                 Label(domains.newCount > 0 ? "Domains (\(domains.newCount))" : "Domains",
                       systemImage: "globe").tag(3)
-                let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
-                Label(waiting == 0 ? "Rules" : "Rules (\(waiting))",
-                      systemImage: "checklist").tag(4)
             }
             .pickerStyle(.segmented)
             .labelStyle(.titleAndIcon)
-            .help("Events: the live stream · Patterns: learned fingerprints · Stories: correlated chains (⌘1–⌘5)")
+            .help("Events: the live stream · Patterns: learned fingerprints · Rules: what decides them · Stories: correlated chains · Domains (⌘1–⌘5)")
         }
         ToolbarItemGroup(placement: .principal) {
             ForEach(EventKind.allCases, id: \.self) { kind in

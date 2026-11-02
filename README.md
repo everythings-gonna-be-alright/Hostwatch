@@ -146,10 +146,10 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
   baseline too.
 - Choose **Open Hostwatch** (⌘O) from the menu bar icon. The window's tabs (⌘1–⌘5):
   - **Events:** the live stream, with CPU, memory, network and disk in the footer.
-  - **Patterns:** what has been learned.
+  - **Patterns:** what has been learned, and who decided each one.
+  - **Rules:** what needs your decision, the rules that decide automatically, and who decided what.
   - **Stories:** suspicious chains.
   - **Domains:** where your apps connect.
-  - **Rules:** rules learned from your decisions.
 - Set **Show** to *Only Important* to see only flagged patterns and new high-risk activity.
 - Click **Time Travel** in the toolbar (⌥⌘T) to go back to any recorded moment.
 - Right-click to mark patterns safe or suspicious, trust a developer, or exclude a process, host or folder.

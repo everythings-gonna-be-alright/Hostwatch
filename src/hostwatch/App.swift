@@ -422,8 +422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             std("Find", #selector(NSResponder.performTextFinderAction(_:)), "f").withTag(Int(NSTextFinder.Action.showFindInterface.rawValue)),
         ])
 
-        let tabs = ["Events", "Patterns", "Stories", "Domains", "Rules"].enumerated().map { i, title in
-            tagged(item(title, #selector(showTab(_:)), key: "\(i + 1)"), i)
+        // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
+        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
+            tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
         let filters = NSMenu()
