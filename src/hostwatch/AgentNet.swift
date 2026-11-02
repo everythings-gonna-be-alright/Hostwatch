@@ -105,13 +105,31 @@ enum AgentParse {
     /// "05:28:30.5,curl.44636,,,10053,343,…" -> ("curl", 44636, 10053, 343); nil for headers and flows.
     static func nettopLine(_ line: String) -> (name: String, pid: Int, rx: Int, tx: Int)? {
         let parts = line.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count >= 6, parts[0] != "time", parts[1].contains("."),
+        guard parts.count >= 6, parts[0] != "time", parts[1].contains("."), !parts[1].contains("<->"),
               let dot = parts[1].lastIndex(of: "."), !parts[1][parts[1].index(after: dot)...].contains(" "),
               let pid = Int(parts[1][parts[1].index(after: dot)...]) else { return nil }
         let rx = parts[4].isEmpty ? 0 : Int(parts[4])
         let tx = parts[5].isEmpty ? 0 : Int(parts[5])
         guard let rx, let tx else { return nil }
         return (String(parts[1][..<dot]), pid, rx, tx)
+    }
+
+    /// A connection line under a process in `nettop` (without -P):
+    /// "tcp4 192.168.1.5:64046<->17.57.146.20:5223,en0,Established,7311,6130,…" -> ("17.57.146.20:5223", 13441).
+    /// IPv6 ("tcp6 fe80::1%en0.62889<->2a00::1.443") becomes "[2a00::1]:443". Listening sockets have no remote.
+    static func nettopFlow(_ line: String) -> (remote: String, bytes: Int)? {
+        let parts = line.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 6, let arrow = parts[1].range(of: "<->") else { return nil }
+        let head = parts[1][..<arrow.lowerBound]
+        var remote = String(parts[1][arrow.upperBound...])
+        guard !remote.hasPrefix("*") else { return nil }
+        if head.hasPrefix("tcp6") || head.hasPrefix("udp6") {
+            guard let dot = remote.lastIndex(of: ".") else { return nil }
+            var ip = String(remote[..<dot])
+            if let scope = ip.firstIndex(of: "%") { ip = String(ip[..<scope]) }
+            remote = lsofAddr(ip, String(remote[remote.index(after: dot)...]))
+        }
+        return (remote, (Int(parts[4]) ?? 0) + (Int(parts[5]) ?? 0))
     }
 
     /// `lsof -F pcRPn` output -> {(pid, proto, local, remote): (ppid, command)}.
@@ -311,7 +329,8 @@ extension Agent {
         do {
             // stdin must be a pipe that stays open: nettop polls stdin for key presses, and with
             // /dev/null every poll returns at once (~1.4 cores busy instead of ~1%).
-            child = try Spawned.start("/usr/bin/nettop", ["-L", "0", "-s", "1", "-m", "tcp", "-n", "-x", "-P"],
+            // Per connection (no -P): each process line is followed by its connections and their addresses.
+            child = try Spawned.start("/usr/bin/nettop", ["-L", "0", "-s", "1", "-m", "tcp", "-n", "-x"],
                                       stdin: .pipe)
         } catch {
             Agent.logError("nettop backstop disabled: \(error)")
@@ -323,10 +342,20 @@ extension Agent {
         let started = ProcessInfo.processInfo.systemUptime
         var known = Set<Int>()
         var pending: [Int: (seen: TimeInterval, name: String, rx: Int, tx: Int)] = [:]
+        // Remote addresses nettop listed under each process (the busiest kept), for the inferred event.
+        var flows: [Int: [String: Int]] = [:]
+        var current = 0
         let reader = LineReader(fd: child.stdout!)
         while let line = reader.nextString() {
             if isStopped { break }
+            if let flow = AgentParse.nettopFlow(line) {
+                if current > 0, pending[current] != nil || !known.contains(current) {
+                    flows[current, default: [:]][flow.remote] = max(flow.bytes, flows[current]?[flow.remote] ?? 0)
+                }
+                continue
+            }
             guard let p = AgentParse.nettopLine(line) else { continue }
+            current = p.pid
             let now = ProcessInfo.processInfo.systemUptime
             if !known.contains(p.pid), p.rx + p.tx > 0 {
                 known.insert(p.pid)
@@ -340,7 +369,15 @@ extension Agent {
                 let args = pidArgs[pid] ?? ""
                 netLock.unlock()
                 if reported { continue }
-                let dest = inferDestination(args)
+                // The address nettop saw (busiest connection), else a guess from the command line.
+                let seen = flows.removeValue(forKey: pid)?.filter { !AgentParse.stripHost($0.key).hasPrefix("127.") && $0.key != "[::1]" }
+                    .max { $0.value < $1.value }?.key
+                var dest = inferDestination(args)
+                if let seen {
+                    let ip = AgentParse.stripHost(seen)
+                    let host = resolveHosts([ip], budget: 0.3)[ip]
+                    dest = (seen, host?.0 ?? (dest.host.isEmpty ? "" : dest.host), host?.1 ?? (dest.host.isEmpty ? "" : dest.source))
+                }
                 let exe = pidPath(pid)
                 let name = Agent.base(exe)
                 var ev = AgentEvent([("kind", .str("net")), ("time", .str(Agent.nowHMS())), ("pid", .int(pid)),
@@ -354,6 +391,7 @@ extension Agent {
                 publish(ev)
             }
             if known.count > 50_000 { known.removeAll() }
+            if flows.count > 5_000 { flows = flows.filter { pending[$0.key] != nil } }
         }
         child.wait()
     }
