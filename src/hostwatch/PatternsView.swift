@@ -1,6 +1,40 @@
 import AppKit
 import SwiftUI
 
+extension Color {
+    /// Claude's warm clay accent, for anything Claude decided or suggested.
+    static let claude = Color(red: 0.85, green: 0.47, blue: 0.34)
+}
+
+/// "Decided By": regular text with a small mark for who decided (Claude, on-device AI, you, a rule…).
+struct DeciderLabel: View {
+    let text: String
+
+    private var mark: (symbol: String, color: Color)? {
+        if text.contains("Claude") { return ("asterisk", .claude) }
+        if text.hasPrefix("AI suggests") { return ("sparkle", .secondary) }
+        if text.hasPrefix("AI") { return ("apple.intelligence", .secondary) }
+        if text.hasPrefix("You") { return ("person.fill", .secondary) }
+        if text.hasPrefix("Rule") { return ("checklist", .secondary) }
+        if text.hasPrefix("Baseline") { return ("checkmark.shield", .secondary) }
+        if text.hasPrefix("Automatic") { return ("gearshape", .secondary) }
+        return nil
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let mark {
+                Image(systemName: mark.symbol)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(mark.color)
+                    .frame(width: 12)
+            }
+            Text(text).foregroundStyle(text == "New" ? .secondary : .primary).lineLimit(1)
+        }
+        .help(text)
+    }
+}
+
 struct StatusPill: View {
     let status: SignatureStatus
 
@@ -71,10 +105,7 @@ struct PatternsView: View {
                 }
                 .width(min: 88, ideal: 108, max: 140)
                 TableColumn("Decided By", value: \.decidedBy) { item in
-                    Text(item.decidedBy)
-                        .foregroundStyle(item.decidedBy.hasPrefix("AI") ? AnyShapeStyle(.purple)
-                                         : item.decidedBy.hasPrefix("You") ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                        .help(item.decidedBy)
+                    DeciderLabel(text: item.decidedBy)
                 }
                 .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Kind", value: \.kind) { item in

@@ -373,8 +373,13 @@ private struct ReviewRow: View {
                     Text("· and \(group.reasons.count - 4) more").font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
                 if let text = suggestionText {
-                    Label("AI suggests: " + text, systemImage: "sparkles")
-                        .font(.system(size: 11)).foregroundStyle(.purple).lineLimit(1)
+                    HStack(spacing: 4) {
+                        Image(systemName: text.contains("Claude") ? "asterisk" : "apple.intelligence")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(text.contains("Claude") ? Color.claude : Color.secondary)
+                        Text("AI suggests: " + text).foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 11)).lineLimit(1)
                 }
                 if expand.open {
                     VStack(alignment: .leading, spacing: 4) {
@@ -425,8 +430,13 @@ private struct ReviewPatternLine: View {
             }
             Spacer(minLength: 0)
             if let sug = entry.suggestion {
-                Text("AI: \(sug.status.title)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.purple)
-                    .help(sug.note ?? sug.engineName)
+                HStack(spacing: 3) {
+                    Image(systemName: sug.source == "claude" ? "asterisk" : "apple.intelligence")
+                        .foregroundStyle(sug.source == "claude" ? Color.claude : Color.secondary)
+                    Text(sug.status.title)
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .help("Suggested by \(sug.engineName)" + (sug.note.map { ": \($0)" } ?? ""))
             }
             if entry.risk == .high {
                 Text("High risk").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
@@ -462,10 +472,10 @@ private struct DecidedView: View {
             }
         }
         var symbol: String {
-            switch self { case .ai: return "sparkles"; case .you: return "person.fill"; case .rules: return "checklist"; case .baseline: return "checkmark.shield" }
+            switch self { case .ai: return "asterisk"; case .you: return "person.fill"; case .rules: return "checklist"; case .baseline: return "checkmark.shield" }
         }
         var tint: Color {
-            switch self { case .ai: return .purple; case .you: return .blue; case .rules: return .teal; case .baseline: return .green }
+            switch self { case .ai: return .claude; case .you: return .blue; case .rules: return .teal; case .baseline: return .green }
         }
 
         static func of(_ e: SignatureEntry) -> Who? {
@@ -489,8 +499,8 @@ private struct DecidedView: View {
                 let total = list.reduce(0) { $0 + $1.keys.count }
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Label(who.rawValue, systemImage: who.symbol).font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(who.tint)
+                        Label { Text(who.rawValue) } icon: { Image(systemName: who.symbol).foregroundStyle(who.tint) }
+                            .font(.system(size: 15, weight: .semibold))
                         Text("\(total) pattern\(total == 1 ? "" : "s") · \(who.detail)").font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     if list.isEmpty {
