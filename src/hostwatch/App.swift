@@ -755,7 +755,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.title = "Full Disk Access"
-        window.level = .floating                          // stays above other windows until it's dealt with
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
         let close: () -> Void = { [weak window] in window?.close() }
@@ -769,7 +768,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             MainActor.assumeIsolated { setup.stop(); self?.accessWindow = nil }
         }
         accessWindow = window
+        // In front of everything when it appears (even at login, before Hostwatch is the active app);
+        // an ordinary window after that, so System Settings can come forward.
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     // MARK: Windows
