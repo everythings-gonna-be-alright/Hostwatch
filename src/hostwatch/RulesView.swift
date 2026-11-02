@@ -30,7 +30,7 @@ struct RulesView: View {
             Picker("", selection: Binding(get: { tab.segment }, set: { tab.segment = $0; tab.chosen = true })) {
                 Text(waiting > 0 ? "Needs You  \(waiting)" : "Needs You").tag(RulesSegment.needsYou)
                 Text("Rules  \(baseline.rules.filter { !$0.paused }.count + book.activeCount)").tag(RulesSegment.rules)
-                Text("Decided").tag(RulesSegment.decided)
+                Text("Decisions").tag(RulesSegment.decided)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -199,8 +199,16 @@ struct RulesView: View {
             }
             .controlSize(.small)
             if book.rules.isEmpty {
-                Text("No learned rules yet. Mark a few patterns Safe or Suspicious yourself, then ask for suggestions.")
-                    .font(.system(size: 12)).foregroundStyle(.tertiary)
+                let mine = book.yourDecisions.count
+                Text(mine >= 2
+                     ? "No learned rules yet. You've decided \(mine) patterns yourself: Suggest Rules… can turn them into a few "
+                       + "rules that also cover new ones."
+                     : "No learned rules yet. Mark at least two patterns Safe or Suspicious yourself, then ask for suggestions.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if classifier.engine == .onDevice {
+                    Text("Suggest Rules needs Claude: choose an engine with Claude in Settings ▸ AI.")
+                        .font(.system(size: 12)).foregroundStyle(.orange)
+                }
             }
             ForEach(book.rules) { RuleRow(rule: $0, book: book, signatures: signatures, keys: matchingKeys($0), showKeys: showKeys) }
         }
@@ -535,12 +543,13 @@ private struct DecidedView: View {
     }
 
     enum Who: String, CaseIterable {
-        case ai = "Decided by AI", you = "Decided by you", rules = "Learned rules", baseline = "Baseline rules"
+        case ai = "Patterns AI decided", you = "Patterns you decided", rules = "Patterns decided by learned rules",
+             baseline = "Patterns decided by baseline rules"
 
         var detail: String {
             switch self {
-            case .ai: return "on-device AI or Claude, accepted by you or automatically (Settings ▸ AI)"
-            case .you: return "patterns you marked, and apps you trusted"
+            case .ai: return "one by one: on-device AI or Claude, accepted by you or automatically"
+            case .you: return "one by one, each covers only itself (and apps you trusted)"
             case .rules: return "rules learned from your decisions"
             case .baseline: return "code signatures, no AI"
             }

@@ -328,7 +328,7 @@ so a high-risk pattern stays New until you decide. AI verdicts never remove step
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
-## Rules tab: Needs You, Rules, Decided
+## Rules tab: Needs You, Rules, Decisions
 
 Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted, in
 that order of authority. The Rules tab shows it in three views (its toolbar label counts what waits for you):
@@ -338,7 +338,8 @@ that order of authority. The Rules tab shows it in three views (its toolbar labe
   (Show in Patterns, Mark Suspicious), and Claude's rule proposals (**Approve** / **Reject**). Rebuilt live
   as patterns change; interpreters, shells and Hostwatch itself aren't listed.
 - **Rules:** baseline rules (code signatures, no AI: **Update Baseline**) and learned rules (**Suggest Rules…**).
-- **Decided:** who decided what, by app: *Decided by AI*, *Decided by you*, *Learned rules*, *Baseline rules*,
+- **Decisions:** who decided which patterns, by app: *Patterns AI decided*, *Patterns you decided* (one by one,
+  each covers only itself), *…decided by learned rules*, *…decided by baseline rules*,
   each with **Undo** (back to New) for AI and your decisions.
 - Every row (needs-you apps, baseline and learned rules, decided groups) has *N patterns ›*: click it to list
   those patterns in place (high risk first; up to 40, with *Open in Patterns* for all of them).
