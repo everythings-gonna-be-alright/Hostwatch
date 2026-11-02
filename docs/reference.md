@@ -231,6 +231,18 @@ Saved in `~/Library/Application Support/Hostwatch/domains.json`.
 - Test with a replay: `REPLAY_LEARN_MINUTES=30 Hostwatch --story-replay <history.jsonl>` lists the
   domains that would be flagged after that much learning.
 
+### Domain details and risk score
+
+Double-click a domain in the Domains tab (or right-click ▸ *Details & Ask AI…*). The window shows the domain
+with New / Usual / Known, beaconing and untrusted-program chips, and a **local risk score (0–100)** with
+each reason and its points: not usual on this Mac +20 (first seen in the last 24 h +10), reached by unsigned,
+ad-hoc, quarantined or downloaded software +30, beaconing +25, an often-abused top-level domain (.xyz, .top,
+.zip, …) +15, an internationalised `xn--` name +15, a random-looking (generated) name +15; known −30, usual
+(baseline) −20, used by 3+ programs −10. Below it: hostnames, current addresses, first and last contact (open
+the first in Time Travel), the programs with their signers, and recent connections. **Ask AI** (Claude or
+on-device, same bar as event details) answers with a verdict, confidence and its own **RISK** score; the
+evidence it gets is in the collapsed section and can be edited first.
+
 ## Beacons and raw-IP connections
 
 Two more per-connection signals (like new domains, not part of pattern keys):

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Domain details with a risk score:** double-click a domain (or right-click ▸ *Details & Ask AI…*) for the
+  same design as event details: a 0–100 risk score from what this Mac saw, with every reason and its points
+  (new, untrusted program, beaconing, abused top-level domain, random-looking or look-alike name, how widely
+  it's used), the domain's hostnames, addresses, first and last contact (with Time Travel), the programs with
+  their signers, recent connections, and Ask AI (Claude or on-device) with its own risk score. Mark Known
+  from the window. Event and pattern verdicts show the AI's risk score too.
 - **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** each trusted signer (Apple,
   or a developer of your installed apps) becomes a rule in the Rules tab that keeps trusting its normal-risk
   patterns, now and later. Never high-risk, unsigned, downloaded, temporary or sensitive; signed-but-untrusted

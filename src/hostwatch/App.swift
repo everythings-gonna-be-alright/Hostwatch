@@ -48,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         openSettings: { [weak self] in self?.openSettings(nil) },
         exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
-        openBaseline: { [weak self] in self?.openBaselineReport() }
+        openBaseline: { [weak self] in self?.openBaselineReport() },
+        openDomain: { [weak self] domain in self?.openDomainDetails(domain) }
     )
     private var askWindows: [NSWindow] = []
     /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
@@ -590,6 +591,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func showBaselineReport() { openBaselineReport() }
+
+    /// A domain's details: risk score, programs, connections, Ask AI.
+    private func openDomainDetails(_ domain: String) {
+        guard let record = domains.records[domain] else { return }
+        let connections = model.history.filter {
+            $0.kind == .net && ($0.registrableDomain == domain || $0.host == domain || $0.host.hasSuffix("." + domain))
+        }
+        let details = DomainDetails(record: record, connections: Array(connections.prefix(200)))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 820),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Domain: \(domain)"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: DomainDetailView(
+            details: details, analysis: details.analysis, domains: domains,
+            markKnown: { [weak self] known in self?.domains.setKnown([domain], known) },
+            showInTimeline: { [weak self] date in self?.showInTimeline(date) }))
+        window.center()
+        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated {
+                details.analysis.cancel()
+                self?.askWindows.removeAll { $0 === note.object as? NSWindow }
+            }
+        }
+        askWindows.append(window)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
 
     /// The baseline lives in the Rules tab.
     private func openBaselineReport() {
