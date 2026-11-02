@@ -26,6 +26,7 @@ struct HUDView: View {
     @ObservedObject var collector: Collector
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var metrics: MetricsStore
+    @ObservedObject var vitals: ProcessVitals
     let actions: HUDActions
 
     private var s: CGFloat { model.overlayScale }
@@ -60,7 +61,7 @@ struct HUDView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     // Each banner takes about two rows of room.
                     ForEach(Array(model.overlayEvents.prefix(max(0, model.overlayRows - 2 * min(2, stories.recent().count))))) { event in
-                        EventRow(event: event, status: signatures.status(for: event), s: s)
+                        EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event))
                             .contentShape(Rectangle())
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
@@ -392,6 +393,8 @@ struct EventRow: View {
     let event: ActivityEvent
     var status: SignatureStatus = .unclassified
     var s: CGFloat = 1
+    /// Still running heavy (or recently ended after being heavy).
+    var vital: ProcessVitals.Badge? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -418,7 +421,12 @@ struct EventRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 2)
-            if !event.beacon.isEmpty {
+            if case .heavy(let cpu, let mem, _, let cpuHeavy, _) = vital {
+                Text(cpuHeavy ? "🔥 \(Int(cpu))%" : "🔥 \(ProcessVitals.memory(mem))")
+                    .font(.system(size: 8.5 * s, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color(red: 1.0, green: 0.62, blue: 0.25))
+                    .help("Still running heavy")
+            } else if !event.beacon.isEmpty {
                 Text("BEACON \(event.beacon.replacingOccurrences(of: "every ", with: ""))")
                     .font(.system(size: 8 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 1.0, green: 0.45, blue: 0.4))
@@ -467,6 +475,7 @@ struct ActivityWindowView: View {
     @ObservedObject var domains: DomainRegistry
     let domainsState: DomainsViewState
     let rulesTab: RulesTabState
+    @ObservedObject var vitals: ProcessVitals
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -483,6 +492,19 @@ struct ActivityWindowView: View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
+            if model.windowTab == 0 && !traveling && (!vitals.heavyNow.isEmpty || model.onlyPids != nil) {
+                HeavyStrip(vitals: vitals, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
+                    model.onlyPids = model.onlyPids == nil ? vitals.heavyPids : nil
+                }, actions: actions)
+                if vitals.heavyNow.isEmpty, model.onlyPids != nil {
+                    HStack {
+                        Text("Those processes are no longer heavy.").font(.system(size: 12)).foregroundStyle(.secondary)
+                        Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.link)
+                    }
+                    .padding(8)
+                }
+                Divider()
+            }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
             case 0: eventsList
@@ -647,7 +669,10 @@ struct ActivityWindowView: View {
                 TableColumn("Status", value: \.statusRank) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
-                        if !item.event.beacon.isEmpty {
+                        if case .heavy = vitals.badge(for: item.event) {
+                            Image(systemName: "flame.fill").foregroundStyle(.orange)
+                                .help("Still running and using a lot of CPU or memory")
+                        } else if !item.event.beacon.isEmpty {
                             Image(systemName: "dot.radiowaves.right").foregroundStyle(.red)
                                 .help("BEACON: connects \(item.event.beacon)")
                         } else if item.event.rawIP {
@@ -675,7 +700,10 @@ struct ActivityWindowView: View {
                 }
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Detail", value: \.detail) { item in
-                    Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                    HStack(spacing: 6) {
+                        if let badge = vitals.badge(for: item.event) { VitalBadgeView(badge: badge) }
+                        Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                    }
                 }
                 .width(min: 200, ideal: 520)
             }

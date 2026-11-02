@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Heavy processes stand out in Events:** a process Hostwatch saw start that keeps using a lot of CPU (30 s
+  average) or memory gets a live 🔥 badge on its launch row, a flame in the HUD, and a strip above the list
+  (CPU bar, memory, running time, Show Only These, Ask AI); it turns grey with its peak when it ends. Unsigned
+  or downloaded heavy processes add a *Heavy untrusted process* story stage (the cryptominer pattern).
+  Thresholds in Settings ▸ Detection. The collector sends every process above a small floor with its start
+  time, and launches carry their start time.
+
 - **Friendlier Full Disk Access setup:** a window instead of an alert: what Hostwatch watches and that it stays
   on the Mac, three numbered steps (Open System Settings, turn on Hostwatch with Show in Finder to drag it in,
   come back), a live check that notices the grant by itself and turns the button into *Start Watching*, and

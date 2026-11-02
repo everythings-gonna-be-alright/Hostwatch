@@ -36,6 +36,15 @@ final class SettingsState: ObservableObject {
     @Published var mcpError: String?
     @Published var refresh = 0
     @Published var showReset = false
+    @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
+    }
+    @Published var heavyCPU: Double = { let v = UserDefaults.standard.double(forKey: "heavyCPUPercent"); return v > 0 ? v : 50 }() {
+        didSet { UserDefaults.standard.set(heavyCPU, forKey: "heavyCPUPercent") }
+    }
+    @Published var heavyMemory: Double = { let v = UserDefaults.standard.double(forKey: "heavyMemoryGB"); return v > 0 ? v : 1 }() {
+        didSet { UserDefaults.standard.set(heavyMemory, forKey: "heavyMemoryGB") }
+    }
     @Published var resetPlan = ResetPlan()
 }
 
@@ -326,6 +335,24 @@ private struct DetectionPane: View {
                          + "passwords, installs a login item or removes the download quarantine, and asks you. "
                          + "Best effort: very quick commands can finish first. If Hostwatch quits, held "
                          + "processes continue.")
+            }
+            Section {
+                Toggle("Highlight heavy processes in Events", isOn: $ui.heavyHighlight)
+                Picker("CPU (average over 30 s)", selection: $ui.heavyCPU) {
+                    Text("25% of a core").tag(25.0); Text("50% of a core").tag(50.0)
+                    Text("1 full core").tag(100.0); Text("2 cores").tag(200.0)
+                }
+                .disabled(!ui.heavyHighlight)
+                Picker("Memory", selection: $ui.heavyMemory) {
+                    Text("500 MB").tag(0.5); Text("1 GB").tag(1.0); Text("2 GB").tag(2.0); Text("4 GB").tag(4.0)
+                }
+                .disabled(!ui.heavyHighlight)
+            } header: {
+                Text("Heavy processes")
+            } footer: {
+                Footnote("A process Hostwatch saw start that keeps using this much gets a 🔥 badge on its launch in "
+                         + "Events, the HUD and a strip above the list. Unsigned or downloaded ones also count toward a story "
+                         + "(the cryptominer pattern).")
             }
             Section {
                 LabeledContent("Patterns") {

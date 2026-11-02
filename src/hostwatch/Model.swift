@@ -49,6 +49,7 @@ struct ActivityEvent: Identifiable, Decodable {
     let args: String             // exec only: command line, secrets masked by the collector
     let inferred: Bool           // net only: seen via traffic stats after it closed; target inferred
     let note: String             // collector's remark (e.g. why a connection is inferred)
+    var pstart: Double = 0       // exec only: when the process started (s since 1970), 0 if unknown
     private(set) var signatureKey = ""
     private(set) var signatureProcess = ""
     private(set) var signaturePattern = ""
@@ -64,7 +65,7 @@ struct ActivityEvent: Identifiable, Decodable {
     var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }
 
     enum CodingKeys: String, CodingKey {
-        case kind, time, pid, ppid, name, proc, target, extra, parent, host, args, inferred, note
+        case kind, time, pid, ppid, name, proc, target, extra, parent, host, args, inferred, note, pstart
         case hostSource = "host_src"
     }
 
@@ -93,6 +94,7 @@ struct ActivityEvent: Identifiable, Decodable {
         args = (try? c.decode(String.self, forKey: .args)) ?? ""
         inferred = (try? c.decode(Bool.self, forKey: .inferred)) ?? false
         note = (try? c.decode(String.self, forKey: .note)) ?? ""
+        pstart = (try? c.decode(Double.self, forKey: .pstart)) ?? 0
         applySignature()
     }
 
@@ -325,6 +327,8 @@ final class HUDModel: ObservableObject {
     @Published private(set) var counts: [EventKind: Int] = [:]
     @Published var paused = false
     @Published var searchText = ""
+    /// "Show Only These" in the heavy-process strip: only events of these processes.
+    @Published var onlyPids: Set<Int>?
     @Published var windowTab = 0          // 0 = events, 1 = patterns, 2 = stories, 3 = domains
     @Published var eventSelection = Set<UUID>()
     /// Events table sort (click a column header); newest first by default.
@@ -345,6 +349,10 @@ final class HUDModel: ObservableObject {
     var hold: ProcessHold?
     /// The collector's 5-second "top processes" samples (procs, disk read B/s, disk write B/s).
     var onTop: (([TopProcess], Double, Double) -> Void)?
+    /// Every process above the collector's floor (CPU or memory), every 5 s.
+    var onVitals: (([ProcessVitalSample]) -> Void)?
+    /// Every event that arrives (launches feed `ProcessVitals`).
+    var onEvent: ((ActivityEvent) -> Void)?
 
     @Published var exclusionText: String {
         didSet {
@@ -493,8 +501,10 @@ final class HUDModel: ObservableObject {
     /// The Show filter, kind toggles, exclusions and search, applied to any list (live or history).
     func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false) -> [ActivityEvent] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        let visible = events.filter {
-            visibleKinds.contains($0.kind) && passesSignatureFilter($0) && !(applyExclusions && rules.excludes($0))
+        let only = onlyPids
+        let visible = events.filter { e in
+            visibleKinds.contains(e.kind) && passesSignatureFilter(e) && !(applyExclusions && rules.excludes(e))
+                && (only?.contains(e.pid) ?? true)
         }
         guard !q.isEmpty else { return visible }
         return visible.filter {
@@ -624,6 +634,7 @@ final class HUDModel: ObservableObject {
         var procs: [TopProcess]
         var disk_read: Double?
         var disk_write: Double?
+        var vitals: [ProcessVitalSample]?
     }
 
     /// Collector output (JSON lines, possibly partial) into the model.
@@ -640,6 +651,7 @@ final class HUDModel: ObservableObject {
             if line.range(of: Self.topMarker) != nil {
                 if let top = try? decoder.decode(TopMessage.self, from: Data(line)) {
                     onTop?(top.procs, top.disk_read ?? 0, top.disk_write ?? 0)
+                    if let vitals = top.vitals { onVitals?(vitals) }
                 }
                 continue
             }
@@ -657,6 +669,7 @@ final class HUDModel: ObservableObject {
             }
             let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
             hold?.consider(event, stages: stages, status: signatures.status(for: event))
+            onEvent?(event)
             fresh.append(event)
             countBuffer[event.kind, default: 0] += 1
         }

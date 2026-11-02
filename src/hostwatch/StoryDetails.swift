@@ -374,7 +374,7 @@ private struct TimelineRow: View {
                         .foregroundStyle(s.stage.isStrong ? severity.color : .secondary)
                 }
                 Text(sentence).fontWeight(isStep ? .semibold : .regular)
-                Text("pid \(event.pid)").font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                Text("pid " + String(event.pid)).font(.caption).foregroundStyle(.tertiary).monospacedDigit()
             }
             .font(.callout)
             if !detail.isEmpty {

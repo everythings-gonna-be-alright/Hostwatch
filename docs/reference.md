@@ -484,6 +484,26 @@ apps among them.
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 
+## Heavy processes
+
+Processes Hostwatch **saw start** that are still running and using a lot stand out in Events (apps that were
+already running when it started aren't followed, or Xcode and browsers would be flagged all day):
+- **Heavy** means sustained: CPU averaged over 30 s (at least 25 s of samples) at or above the limit (default
+  50% of one core), or a memory footprint at or above the limit (default 1 GB). *Settings ▸ Detection ▸ Heavy
+  processes* sets both, or turns it off.
+- The launch row gets a live badge (`🔥 380% CPU · 2.1 GB · 12 min`, or a memory chip when memory is the
+  reason) and a flame in Status; the HUD shows `🔥 380%`. When the process exits, the badge turns grey
+  (`ended 1 min ago · peak 240% · 900 MB`) for 10 minutes.
+- A strip above the list names the heavy ones with a CPU bar, memory, running time and *untrusted program*
+  when it is: **Show Only These** filters Events to them; **Ask AI** and **Reveal in Finder** per process.
+- **Detection:** a heavy process that is unsigned, ad-hoc, quarantined or from a download/temp folder adds the
+  story stage *Heavy untrusted process* (3 points, strong): the cryptominer pattern.
+- **How:** every 5 s the collector's existing sampler (libproc `proc_pid_rusage`, already used for the busiest
+  processes) also sends every process above a floor (≥ 5% CPU or ≥ 300 MB, at most 50) with its start time;
+  launch events carry the start time too (`pstart`), so a reused pid is never mistaken for the process that
+  started. Exits are checked with `kill(pid, 0)`. Launches restored from history after a restart are followed
+  too. Nothing new is recorded; only numbers.
+
 ## Story window
 
 **Double-click a story** (or **Show Chain**) to see the whole chain, event by event, on a vertical timeline:

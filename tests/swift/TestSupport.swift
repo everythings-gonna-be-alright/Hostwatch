@@ -9,6 +9,7 @@ enum TestEnv {
             .appendingPathComponent("hostwatch-tests-\(UUID().uuidString).json")
         setenv("HOSTWATCH_SIGNING_DB", db.path, 1)
         SigningCache.shared.live = false
+        ProcessList.startLookup = { _ in nil }      // deterministic collector output
     }()
 }
 

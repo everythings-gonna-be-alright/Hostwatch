@@ -516,11 +516,14 @@ final class Agent: @unchecked Sendable {
             let args = Self.formatArgs((exec["args"] as? [Any] ?? []).map { "\($0)" })
             rememberArgs(pid, args)
             let name = Self.base(path)
-            return AgentEvent([
+            var fields: [(String, JValue)] = [
                 ("kind", .str("exec")), ("time", .str(Self.nowHMS())), ("pid", .int(pid)), ("ppid", .int(ppid)),
                 ("name", .str(name.isEmpty ? path : name)), ("proc", .str(path)),
                 ("target", .str(path)), ("parent", .str(Self.exe(caller))), ("args", .str(args)),
-            ])
+            ]
+            // Start time: with the pid, the exact process (the app follows its CPU and memory).
+            if let start = ProcessList.start(pid) { fields.append(("pstart", .double(start))) }
+            return AgentEvent(fields)
         }
 
         if let open = event["open"] as? [String: Any] {

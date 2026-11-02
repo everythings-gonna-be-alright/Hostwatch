@@ -11,7 +11,7 @@ import SwiftUI
 
 enum StoryStage: String, Codable, CaseIterable, Comparable {
     case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
-    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP
+    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted
 
     static func < (a: StoryStage, b: StoryStage) -> Bool {
         allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -21,7 +21,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         switch self {
         case .drop, .lolbin, .network: return 1
         case .runFromDrop, .newDomain, .rawIP: return 2
-        case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing: return 3
+        case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted: return 3
         case .persistence: return 4
         case .swappedBinary: return 5
         }
@@ -29,7 +29,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 
     /// Strong enough to make activity started from your own terminal/IDE worth a story.
     var isStrong: Bool {
-        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing]
+        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted]
             .contains(self)
     }
 
@@ -49,6 +49,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .newDomain: return "New domain"
         case .beaconing: return "Beaconing"
         case .rawIP: return "Raw-IP connection"
+        case .heavyUntrusted: return "Heavy untrusted process"
         }
     }
 
@@ -68,6 +69,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .newDomain: return "globe.badge.chevron.backward"
         case .beaconing: return "dot.radiowaves.right"
         case .rawIP: return "number"
+        case .heavyUntrusted: return "flame"
         }
     }
 }
@@ -232,9 +234,12 @@ final class StoryEngine: ObservableObject {
 
     /// Adds the event to its story; returns the stages it added (with notes), for the process hold.
     @discardableResult
-    func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date()) -> [(StoryStage, String)] {
+    /// `extra`: stages found outside the event itself (a launched process that later runs heavy); the
+    /// event was seen before, so its process isn't registered again.
+    func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date(),
+                extra: [(StoryStage, String)] = []) -> [(StoryStage, String)] {
         clock = date
-        if e.kind == .exec, e.pid > 0 {
+        if e.kind == .exec, e.pid > 0, extra.isEmpty {
             procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
             // Replay: a parent that started before the recording is still known by its path.
             if !liveLookups, e.ppid > 1, procs[e.ppid] == nil, !e.parent.isEmpty {
@@ -246,7 +251,7 @@ final class StoryEngine: ObservableObject {
         guard !decidedSafe, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
 
         if e.kind == .file, e.extra.contains("w") { rememberWrite(e) }
-        var found = stages(for: e)
+        var found = extra.isEmpty ? stages(for: e) : extra
         guard !found.isEmpty else { return [] }
         if let q = found.first(where: { $0.0 == .unquarantine }) {
             unquarantines.append(StoryStep(e, stage: .unquarantine, note: q.1, date: clock))

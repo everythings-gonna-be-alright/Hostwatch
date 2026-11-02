@@ -270,7 +270,7 @@ enum SignatureBuilder {
     }
 
     /// Where droppers run from: temp, Downloads, shared, mounted volumes.
-    private static func isDropZone(_ normalized: String) -> Bool {
+    static func isDropZone(_ normalized: String) -> Bool {
         ["/tmp", "$TMPDIR", "/private/var/folders", "~/Downloads", "/Users/Shared", "/Volumes"]
             .contains { under(normalized, $0) }
     }

@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let domains = DomainRegistry()
     private let domainsState = DomainsViewState()
     private let rulesTab = RulesTabState()
+    /// Processes Hostwatch saw start that still run heavy (CPU or memory).
+    private let vitals = ProcessVitals()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
     private lazy var ruleBook = RuleBook(store: signatures)
@@ -86,11 +88,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             MainActor.assumeIsolated { self?.updateUIVisibility() }
         }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
+        model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
+        model.onEvent = { [weak self] event in if event.kind == .exec { self?.vitals.noteLaunch(event) } }
+        vitals.onHeavyUntrusted = { [weak self] launch, tracked in
+            guard let self else { return }
+            let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))
+            let note = "\(launch.name) keeps running heavy (\(cpu)% CPU, \(ProcessVitals.memory(tracked.memNow))) "
+                + "and isn't trusted code: the cryptominer pattern"
+            _ = self.stories.ingest(launch.event, decidedSafe: false, extra: [(.heavyUntrusted, note)])
+        }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
         updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
-        model.restoreRecent(from: history.directory)      // the list isn't empty after a restart
+        // The list isn't empty after a restart; launches from before it are still followed if running.
+        model.restoreRecent(from: history.directory) { [weak self] in
+            guard let self else { return }
+            for e in self.model.history.reversed() where e.kind == .exec && e.pstart > 0 { self.vitals.noteLaunch(e) }
+        }
         _ = ruleBook                      // load approved rules and apply them before events arrive
         // Signing: re-score a binary's patterns if its signature turns out invalid; trust the
         // developers of already-installed apps on first run, then re-score everything.
@@ -221,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, actions: actions))
+        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, actions: actions))
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -841,7 +856,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
