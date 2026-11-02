@@ -16,7 +16,7 @@ enum BaselineDecision: Equatable {
     case trust(BaselineKey)                     // ordinary activity of a trusted, signed app (or macOS itself)
     case onDevice(app: String)                  // signed, developer not yet trusted: the on-device model decides
     case review(app: String, reason: String, homebrew: Bool = false)   // stays New: your decision
-    case ignore                                 // Hostwatch's own activity: never listed
+    case ignore                                 // not listed, stays New: Hostwatch itself, interpreters and shells
 }
 
 /// Decides, from signing facts only, which New patterns are ordinary enough to trust. Anything that
@@ -30,6 +30,18 @@ enum BaselinePolicy {
 
     /// `allowSensitive`: for an app you trusted yourself, its own sensitive reads are fine too.
     static func decide(_ e: SignatureEntry, identify: Identify, allowSensitive: Bool = false) -> BaselineDecision {
+        let decision = sort(e, identify: identify, allowSensitive: allowSensitive)
+        // Interpreters and shells (python, node, bash, osascript…) run any script they're given, so there's
+        // nothing to approve: they stay New, visible in Patterns, and stories keep watching them.
+        if case .review = decision, runsAnyCode(e) { return .ignore }
+        return decision
+    }
+
+    static func runsAnyCode(_ e: SignatureEntry) -> Bool {
+        SignatureBuilder.isLolbin(SignatureStore.subjectPath(e))
+    }
+
+    private static func sort(_ e: SignatureEntry, identify: Identify, allowSensitive: Bool) -> BaselineDecision {
         let subject = SignatureStore.subjectPath(e)
         let actor = e.kind == .exec ? e.exampleParent : e.exampleProc
         let paths = Array(Set([subject, actor]).filter { !$0.isEmpty })
@@ -215,6 +227,7 @@ final class BaselineLearner: ObservableObject {
         if let data = defaults.data(forKey: "baselineReport2") {
             report = try? JSONDecoder().decode(BaselineReport.self, from: data)
         }
+        report?.prune { key in store.entry(key).map { !BaselinePolicy.runsAnyCode($0) } ?? false }
         if let data = defaults.data(forKey: "baselineRules2") {
             rules = (try? JSONDecoder().decode([BaselineRule].self, from: data)) ?? []
         }
@@ -313,6 +326,8 @@ final class BaselineLearner: ObservableObject {
         let decisions = await decide(newPatterns)
         var report = self.report ?? BaselineReport()
         report.date = now()
+        report.review = []          // sorted again from every New pattern (dismissed ones stay hidden)
+        report.onDevice = []
         var byRule: [String: [String]] = [:]
         var onDeviceKeys: [String] = []
         for (entry, decision) in decisions {
@@ -433,10 +448,7 @@ final class BaselineLearner: ObservableObject {
     /// Interpreters and shells (python, node, sh, osascript…) run whatever code they're given, so trusting
     /// them would trust any script, a virus's too. The review offers only Dismiss or Mark Suspicious.
     func runsAnyCode(_ group: BaselineReport.Group) -> Bool {
-        group.keys.contains { key in
-            guard let e = store.entry(key) else { return false }
-            return SignatureBuilder.isLolbin(SignatureStore.subjectPath(e))
-        }
+        group.keys.contains { key in store.entry(key).map(BaselinePolicy.runsAnyCode) ?? false }
     }
 
     func markSuspicious(_ group: BaselineReport.Group) {

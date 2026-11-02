@@ -321,11 +321,6 @@ private struct ReviewRow: View {
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.secondary.opacity(0.07)))
                     .padding(.vertical, 3)
                 }
-                if anyCode {
-                    Label("Runs any script it's given: trusting it would trust a virus's script too. Dismiss keeps it New.",
-                          systemImage: "info.circle")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
             }
             Spacer()
             if !anyCode {

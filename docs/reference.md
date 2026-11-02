@@ -421,7 +421,7 @@ patterns seen so far (`BaselinePolicy`):
 - **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
 - **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
   places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
-- Hostwatch's own activity is never listed.
+- Hostwatch's own activity, and interpreters and shells, are never listed (they stay New).
 
 **Baseline rules** (Rules tab) are narrow: **one per app and its signer** (*Slack · Slack Technologies*; the
 app's helpers included, and the signer must match), one **macOS system** rule, and, if you trust Homebrew
@@ -438,8 +438,9 @@ apps among them.
   - **Trust** marks its patterns Safe (your decision). For a signed app it also adds a baseline rule marked
     *Trusted by you*, which also covers that app's own sensitive places (never high-risk, unsigned or
     downloaded). Unsigned or ad-hoc programs are trusted pattern by pattern, with no rule.
-  - Interpreters and shells (python, node, ruby, sh, osascript…) have no Trust: they run any script they're
-    given, so trusting them would trust a virus's script too.
+  - Interpreters and shells (python, node, ruby, bash, osascript…) aren't listed: they run any script they're
+    given, so trusting them would trust a virus's script too. Their patterns stay New, visible in Patterns,
+    and stories keep watching them.
   - **Dismiss** hides the row; its patterns stay New and aren't listed again.
   - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
     opens exactly those patterns (a removable chip replaces the Show filter). A rule's **Show** does the same.

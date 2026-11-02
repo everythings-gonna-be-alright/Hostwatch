@@ -53,7 +53,7 @@ import Testing
         let cat = entry(.file, pattern: "r ~/.ssh/*  [ssh keys]", proc: "/bin/cat", target: "/id_rsa")
         #expect(BaselinePolicy.decide(cat, identify: identify) == .review(app: "cat", reason: "reads ssh keys"))
         let sqlite = entry(.file, pattern: "r ~/Library/Messages/*  [messages]", proc: "/usr/libexec/sqlite3", target: "/c.db")
-        guard case .review = BaselinePolicy.decide(sqlite, identify: identify) else { Issue.record("lolbin"); return }
+        #expect(BaselinePolicy.decide(sqlite, identify: identify) == .ignore)  // interpreter: stays New, not listed
     }
 
     @Test func appsYouTrustedMayTouchTheirSensitivePlaces() {
@@ -91,9 +91,10 @@ import Testing
         case "missing": e = entry(proc: "/opt/gone/tool")
         default: e = entry(.exec, pattern: "/bin/sh", proc: "/bin/sh", target: "/bin/sh", parent: "/opt/adhoc/launcher")
         }
-        guard case .review = BaselinePolicy.decide(e, identify: identify) else {
-            Issue.record("\(kind) must need review, got \(BaselinePolicy.decide(e, identify: identify))")
-            return
+        switch BaselinePolicy.decide(e, identify: identify) {
+        case .review: break
+        case .ignore where kind == "untrustedParent": break                    // a shell: stays New, not listed
+        case let d: Issue.record("\(kind) must stay New, got \(d)")
         }
     }
 
@@ -196,27 +197,28 @@ import Testing
         #expect(store.status(for: e) == .safe && learner.rules.isEmpty)
     }
 
-    @Test func interpretersCantBeTrustedFromTheReview() async throws {
+    @Test func interpretersAndShellsAreNotListedAndCantBeTrusted() async throws {
         let (learner, store, _) = try makeLearner()
         let python = "/opt/homebrew/Cellar/python@3.12/3.12.9/bin/python3.12"
         let e = net(python, pid: 17, to: "5.6.7.8:443")
         store.observe(e)
         await learner.runWave()
-        let group = try #require(learner.report?.review.first { $0.app == "python3.12" })
+        #expect(learner.report?.review.isEmpty == true && store.status(for: e) == .unclassified)   // stays New
+        let group = BaselineReport.Group(app: "python3.12", reasons: [], keys: [e.signatureKey])
         #expect(learner.runsAnyCode(group))
-        await learner.trustApp(group)
+        await learner.trustApp(group)                                           // refused even if asked
         #expect(store.status(for: e) == .unclassified && learner.rules.isEmpty)
     }
 
     @Test func showInPatternsOpensExactlyThosePatterns() async throws {
         let (learner, store, _) = try makeLearner()
-        let py312 = net("/opt/homebrew/bin/python3.12", pid: 18, to: "5.6.7.8:443")
-        let py3 = net("/opt/homebrew/bin/python3", pid: 19, to: "5.6.7.8:8443")
+        let py312 = net("/opt/adhoc/tool3.12", pid: 18, to: "5.6.7.8:443")
+        let py3 = net("/opt/adhoc/tool3", pid: 19, to: "5.6.7.8:8443")
         store.observe(py312)
         store.observe(py3)
         await learner.runWave()
-        let group = try #require(learner.report?.review.first { $0.app == "python3.12" })
-        store.search = "python3"                                                // a text search matches both
+        let group = try #require(learner.report?.review.first { $0.app == "tool3.12" })
+        store.search = "tool3"                                                // a text search matches both
         #expect(store.patternItems(filter: .all).count == 2)
         store.search = ""
         store.scope = .init(title: group.app, keys: Set(group.keys))
