@@ -791,13 +791,20 @@ final class SignatureStore: ObservableObject {
     /// "Everything python does is Safe" would trust any script: not allowed for interpreters and shells.
     static func canTrustWholeProcess(_ process: String) -> Bool { !SignatureBuilder.isLolbin(process) }
 
+    /// Puts an entry back as it was (tests, and loading entries made by older versions).
+    func restore(_ e: SignatureEntry) {
+        entries[e.id] = e
+        changedNow()
+    }
+
     /// Interpreters and shells run any script, so blanket trust in them is undone: whole-process Safe
     /// rules, and Safe set by AI or the baseline (your own per-pattern decisions stay).
     private func dropInterpreterTrust() {
         var changed = false
-        // Wide interpreter patterns from earlier versions (python → internet:443, python → ~/Documents/**)
-        // that nobody decided: dropped, they come back narrow (domain, exact folder) when seen again.
-        for (key, e) in entries where e.status == .unclassified && e.source == nil && SignatureBuilder.runsAnyCode(e) {
+        // Wide interpreter patterns from earlier versions (python → internet:443, zsh → r /*, bash → r /Users/**)
+        // that weren't your decision: dropped, they come back narrow (domain, folder, file) when seen again.
+        // Kept only when you (or a rule you approved) decided them.
+        for (key, e) in entries where !["you", "rule"].contains(e.source ?? "") && SignatureBuilder.runsAnyCode(e) {
             let folder = e.pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
             let wide = e.kind == .net ? (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
                 : e.kind == .file ? (folder.hasSuffix("/**") || folder.hasSuffix("/*") && folder.split(separator: "/").count <= 3)

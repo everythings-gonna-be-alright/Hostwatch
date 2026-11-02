@@ -173,6 +173,24 @@ import Testing
         #expect(RuleEvaluation.evaluate(rule, entries: store.allEntries).problems.contains { $0.contains("interpreter") })
     }
 
+    @Test func wideInterpreterPatternsAreDroppedUnlessYouDecided() throws {
+        let zsh = "/bin/zsh"
+        func wide(_ pattern: String, _ source: String?, _ status: SignatureStatus) -> String {
+            let key = "file|\(zsh)|\(pattern)"
+            store.restore(SignatureEntry(id: key, kind: .file, process: zsh, pattern: pattern, count: 1, firstSeen: Date(),
+                                         lastSeen: Date(), status: status, source: source, note: nil, exampleName: "zsh",
+                                         examplePid: 1, exampleProc: zsh, exampleTarget: "/x", exampleExtra: "r", exampleParent: ""))
+            return key
+        }
+        let auto = wide("r /*", "auto", .safe)
+        let new = wide("r /Users/**", nil, .unclassified)
+        let mine = wide("r ~/Documents/**", "you", .safe)
+        store.save(sync: true)
+        let reopened = SignatureStore(directory: dir)
+        #expect(reopened.entry(auto) == nil && reopened.entry(new) == nil)
+        #expect(reopened.status(forKey: mine) == .safe)                                // your decision stays
+    }
+
     @Test func blanketTrustInInterpretersIsUndoneAtLaunch() throws {
         let python = seen(net("/opt/homebrew/bin/python3.12", pid: 4104, to: "5.6.7.8:443"))
         let curlKey = seen(net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 4105, to: "5.6.7.8:443"))
