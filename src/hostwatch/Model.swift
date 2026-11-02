@@ -388,6 +388,14 @@ final class HUDModel: ObservableObject {
     @Published var overlayScale: CGFloat {
         didSet { UserDefaults.standard.set(Double(overlayScale), forKey: Keys.overlayScale) }
     }
+    /// Height of the HUD's fixed parts (title, resource line, padding), at text scale `s`.
+    func overlayChrome(_ s: CGFloat) -> CGFloat { (62 + (overlayShowResources ? 17 : 0)) * s }
+
+    /// A compact CPU / memory / network / disk line under the HUD's title.
+    @Published var overlayShowResources: Bool =
+        UserDefaults.standard.object(forKey: "overlayShowResources") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(overlayShowResources, forKey: "overlayShowResources") }
+    }
 
     static let rowRange = 3...200
     static let widthRange: ClosedRange<CGFloat> = 240...2400

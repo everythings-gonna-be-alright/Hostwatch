@@ -206,6 +206,7 @@ private struct HUDPane: View {
             Section {
                 Toggle("Show HUD", isOn: $model.overlayEnabled)
                 Toggle("Click-through", isOn: $model.overlayClickThrough)
+                Toggle("Show CPU, memory, network and disk", isOn: $model.overlayShowResources)
             } footer: {
                 Footnote("Toggle from anywhere with ⌃⌥⌘H. Turn off click-through to move it by its header, "
                          + "resize it from the ◣ corner, double-click rows and right-click to exclude.")

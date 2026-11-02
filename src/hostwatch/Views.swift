@@ -22,6 +22,7 @@ struct HUDView: View {
     @ObservedObject var stories: StoryEngine
     @ObservedObject var collector: Collector
     @ObservedObject var signatures: SignatureStore
+    @ObservedObject var metrics: MetricsStore
     let actions: HUDActions
 
     private var s: CGFloat { model.overlayScale }
@@ -29,6 +30,9 @@ struct HUDView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6 * s) {
             header
+            if model.overlayShowResources, let sample = metrics.latest {
+                HUDResources(sample: sample, history: Array(metrics.recent.suffix(60)), s: s)
+            }
             Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
             let banners = Array(stories.recent().prefix(2))
             ForEach(banners) { story in
@@ -100,7 +104,7 @@ struct HUDView: View {
 
     /// Panel height for the current rows, matching AppDelegate.overlaySize().
     private var contentHeight: CGFloat {
-        CGFloat(model.overlayRows) * (rowHeight(s) + 1) + 62 * s
+        CGFloat(model.overlayRows) * (rowHeight(s) + 1) + model.overlayChrome(s)
     }
 
     private func beginResize() {
@@ -111,7 +115,7 @@ struct HUDView: View {
     /// dx/dy: screen points the mouse moved left/down since the drag began (positive = grow).
     private func resize(dx: CGFloat, dy: CGFloat) {
         let width = min(max(resizeStart.width + dx, HUDModel.widthRange.lowerBound), HUDModel.widthRange.upperBound)
-        let rows = Int(((resizeStart.height + dy - 62 * s) / (rowHeight(s) + 1)).rounded())
+        let rows = Int(((resizeStart.height + dy - model.overlayChrome(s)) / (rowHeight(s) + 1)).rounded())
         let clampedRows = min(max(rows, HUDModel.rowRange.lowerBound), HUDModel.rowRange.upperBound)
         if abs(width - model.overlayWidth) >= 1 { model.overlayWidth = width.rounded() }
         if clampedRows != model.overlayRows { model.overlayRows = clampedRows }
@@ -317,6 +321,63 @@ func rowHeight(_ s: CGFloat) -> CGFloat { (16 * s).rounded(.up) }
 
 /// HUD text hierarchy on the dark-tinted panel: primary / secondary / tertiary (timestamps).
 /// Sized against the glass tint floor so body text stays near Apple's 4.5:1 over bright wallpapers.
+/// One compact line of resource use for the HUD: CPU and memory with tiny sparklines, network and
+/// disk throughput. Sparklines, then disk, give way first when the HUD is narrow.
+struct HUDResources: View {
+    let sample: MetricSample
+    let history: [MetricSample]
+    let s: CGFloat
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            line(sparklines: true, disk: true)
+            line(sparklines: false, disk: true)
+            line(sparklines: false, disk: false)
+        }
+        .font(.system(size: 10 * s, weight: .semibold, design: .rounded).monospacedDigit())
+        .foregroundStyle(HUDInk.secondary)
+        .lineLimit(1)
+        .help("CPU · memory (orange or red under memory pressure) · network download/upload · disk read/write")
+    }
+
+    private func line(sparklines: Bool, disk: Bool) -> some View {
+        HStack(spacing: 7 * s) {
+            gauge("CPU", "\(Int(sample.cpu.rounded()))%", history.map { $0.cpu / 100 }, .blue, sparklines)
+            gauge("MEM", "\(Int((sample.mem * 100).rounded()))%", history.map(\.mem), sample.pressureColor, sparklines,
+                  valueColor: sample.pressure >= 2 ? sample.pressureColor : nil)
+            Text("↓\(Self.short(sample.netIn)) ↑\(Self.short(sample.netOut))")
+                .foregroundStyle(EventKind.net.color.opacity(0.95))
+            if disk, let r = sample.diskRead, let w = sample.diskWrite {
+                Text("R\(Self.short(r)) W\(Self.short(w))")
+                    .foregroundStyle(EventKind.file.color.opacity(0.95))
+            }
+        }
+        .fixedSize()
+    }
+
+    private func gauge(_ label: String, _ value: String, _ series: [Double], _ color: Color, _ spark: Bool,
+                       valueColor: Color? = nil) -> some View {
+        HStack(spacing: 3 * s) {
+            Text(label).foregroundStyle(HUDInk.tertiary)
+            Text(value).foregroundStyle(valueColor ?? HUDInk.primary)
+            if spark, series.count > 1 { Sparkline(values: series, color: color, width: 18 * s, height: 9 * s) }
+        }
+    }
+
+    /// Bytes per second, as short as possible: 0, 820, 12K, 1.2M, 3G.
+    static func short(_ bytesPerSecond: Double) -> String {
+        let v = max(0, bytesPerSecond)
+        switch v {
+        case ..<1000: return "\(Int(v))"
+        case ..<10_000: return String(format: "%.1fK", v / 1000)
+        case ..<1_000_000: return "\(Int(v / 1000))K"
+        case ..<10_000_000: return String(format: "%.1fM", v / 1_000_000)
+        case ..<1_000_000_000: return "\(Int(v / 1_000_000))M"
+        default: return String(format: "%.1fG", v / 1_000_000_000)
+        }
+    }
+}
+
 enum HUDInk {
     static let primary = Color.white.opacity(0.95)
     static let secondary = Color.white.opacity(0.78)

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **CPU, memory, network and disk in the HUD:** one compact line under its title (sparklines when there's
+  room, memory coloured by memory pressure). Settings ▸ HUD can hide it.
 - **The event list isn't empty after a restart:** it starts with the newest recorded events (up to 5,000,
   display only, below new events), and the footer says how many came from before the restart.
 - **On-device Ask no longer fails with "Detected content likely to be unsafe":** it uses Apple's

@@ -208,7 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, actions: actions))
+        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, actions: actions))
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -235,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             .store(in: &cancellables)
 
         self.panel = panel
-        model.$overlayRows.combineLatest(model.$overlayWidth, model.$overlayScale)
+        model.$overlayRows.combineLatest(model.$overlayWidth, model.$overlayScale, model.$overlayShowResources)
             .dropFirst()
             .sink { [weak self] _ in
                 DispatchQueue.main.async { if let self, let panel = self.panel { self.resizeOverlay(panel) } }
@@ -250,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func overlaySize() -> NSSize {
         let s = model.overlayScale
         let rows = CGFloat(model.overlayRows) * (rowHeight(s) + 1)
-        return NSSize(width: model.overlayWidth + 2, height: (rows + 62 * s).rounded(.up))
+        return NSSize(width: model.overlayWidth + 2, height: (rows + model.overlayChrome(s)).rounded(.up))
     }
 
     /// Applies the size while keeping the top-right corner fixed, clamped to the screen.
