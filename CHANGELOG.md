@@ -1,13 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 – a cleaner HUD and Events list
 
 - **Specific launch patterns for interpreters and tools** (perl, python, bash, ditto, curl, osascript…): the
   pattern names what was run, `bash → perl ~/bin/build.pl`, `sh -c ‹curl … | sh›`, `ditto -x -k ~/Downloads/app.zip
   ~/Downloads`, never just `bash → perl`. Old bare ones that weren't your decision are dropped at launch.
-
-## 0.6.1 – a cleaner HUD and Events list
-
 - **Events:** narrower Status and Process columns; file reads and writes shown as icons (👁 read, ✎ write in
   orange, both) instead of `r` and `w`, and TCP / UDP as small tags.
 - **HUD appearance:** three clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid)
