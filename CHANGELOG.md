@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The event list isn't empty after a restart:** it starts with the newest recorded events (up to 5,000,
+  display only, below new events), and the footer says how many came from before the restart.
 - **On-device Ask no longer fails with "Detected content likely to be unsafe":** it uses Apple's
   guardrail mode for analysing sensitive text, retries once with the core evidence if still refused, and
   explains a refusal in plain words. A live test of the real model on security evidence is opt-in.

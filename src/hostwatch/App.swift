@@ -77,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
+        model.restoreRecent(from: history.directory)      // the list isn't empty after a restart
         _ = ruleBook                      // load approved rules and apply them before events arrive
         // Signing: re-score a binary's patterns if its signature turns out invalid; trust the
         // developers of already-installed apps on first run, then re-score everything.
