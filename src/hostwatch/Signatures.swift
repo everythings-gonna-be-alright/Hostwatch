@@ -258,6 +258,57 @@ enum SignatureBuilder {
             || rawPath.hasPrefix("/bin/") || rawPath.hasPrefix("/sbin/") || rawPath.hasPrefix("/Library/Apple/")
     }
 
+    // MARK: Launch patterns for interpreters and tools
+
+    /// Interpreters: the script they run is what matters.
+    static let interpreters: Set<String> = ["sh", "bash", "zsh", "dash", "ksh", "tcsh", "csh", "fish", "perl", "ruby",
+                                             "php", "node", "osascript", "tclsh", "expect"]
+
+    /// "perl ~/bin/build.pl", "sh -c ‹curl -s https://x/p | sh›", "ditto -x -k ~/Downloads/app.zip ~/Downloads":
+    /// a launch of an interpreter or tool names what it was told to do, never just the program (which
+    /// would trust it running anything). Paths and numbers are normalised, secrets were masked by the
+    /// collector; at most ~120 characters.
+    static func launchPattern(target: String, args: String) -> String {
+        var tokens = shellTokens(args)
+        if !tokens.isEmpty { tokens.removeFirst() }                      // argv[0]
+        guard !tokens.isEmpty else { return target }                     // an interactive shell or a bare run
+        let name = (target as NSString).lastPathComponent.lowercased()
+        let interpreter = interpreters.contains(name) || name.hasPrefix("python")
+        if interpreter {
+            if let i = tokens.firstIndex(where: { ["-c", "-e", "-E", "--eval", "-r"].contains($0) }), i + 1 < tokens.count {
+                return "\(target) \(tokens[i]) ‹\(String(normalize(tokens[i + 1]).prefix(80)))›"
+            }
+            if let script = tokens.first(where: { !$0.hasPrefix("-") }) {
+                return "\(target) \(normalizeToken(script))"
+            }
+        }
+        var out = target
+        for token in tokens {
+            let next = out + " " + normalizeToken(token)
+            if next.count > 120 { return out + " …" }
+            out = next
+        }
+        return out
+    }
+
+    private static func normalizeToken(_ token: String) -> String {
+        token.count > 60 && !token.contains("/") ? "<long>" : normalize(token)
+    }
+
+    /// Splits a command line the way `Agent.formatArgs` wrote it (single quotes around spaced arguments).
+    static func shellTokens(_ line: String) -> [String] {
+        var tokens: [String] = [], current = "", quoted = false, any = false
+        for c in line {
+            if c == "'" { quoted.toggle(); any = true; continue }
+            if c == " " && !quoted {
+                if any || !current.isEmpty { tokens.append(current) }
+                current = ""; any = false
+            } else { current.append(c) }
+        }
+        if any || !current.isEmpty { tokens.append(current) }
+        return tokens
+    }
+
     /// The program a pattern is about (what runs, or what acts) is an interpreter or shell: it runs any
     /// script it's given, so trusting it broadly would trust a virus's script too.
     static func runsAnyCode(_ e: SignatureEntry) -> Bool { isLolbin(SignatureStore.subjectPath(e)) }
@@ -475,7 +526,10 @@ enum SignatureBuilder {
             let parentName = (e.parent as NSString).lastPathComponent
             let target = normalizeExecutable(e.target)
             let normTarget = normalize(e.target)
-            var pattern = target, risk = PatternRisk.normal, reason = ""
+            // Interpreters and tools that do what they're told: the pattern names what was run, not just
+            // the program ("bash → perl ~/bin/build.pl", never "bash → perl").
+            var pattern = isLolbin(e.target) ? launchPattern(target: target, args: e.args) : target
+            var risk = PatternRisk.normal, reason = ""
             if isDropZone(normTarget) {
                 pattern = (normTarget as NSString).deletingLastPathComponent.isEmpty ? target
                     : collapse((normTarget as NSString).deletingLastPathComponent) + "/" + (target as NSString).lastPathComponent
@@ -844,6 +898,7 @@ final class SignatureStore: ObservableObject {
             let interpreter = SignatureBuilder.runsAnyCode(e)
             let wide = e.kind == .file ? SignatureBuilder.isTooWide(filePattern: e.pattern)
                     || interpreter && e.pattern.hasSuffix("/**")
+                : e.kind == .exec ? interpreter && e.pattern.hasPrefix("/") && !e.pattern.contains(" ")   // "bash → /usr/bin/perl"
                 : e.kind == .net ? interpreter && (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
                 : false
             if wide { entries[key] = nil; changed = true }

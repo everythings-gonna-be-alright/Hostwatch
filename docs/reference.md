@@ -154,6 +154,11 @@ migrated and can be deleted.
 - No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
   or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
   verdict also becomes a suggestion for that event's pattern.
+- **Launches of interpreters and tools** (perl, python, bash, ditto, curl, osascript…) name what was run, not just
+  the program: the script for an interpreter (`bash → /usr/bin/perl ~/bin/build.pl`), the code for `-c`/`-e`
+  (`sh -c ‹curl -s https://x/p | sh›`, first 80 characters), otherwise the arguments with paths and numbers
+  normalised (`ditto -x -k ~/Downloads/app.zip ~/Downloads`, up to ~120 characters). A bare program run alone
+  stays as it is.
 - **Interpreters and shells** (python, bash, node, curl, osascript…): network patterns name the destination's
   domain (`TCP pythonhosted.org:443`) or address, never `internet`; file patterns follow the general rule
   (above) with the exact folder even in deep trees.

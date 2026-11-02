@@ -26,7 +26,7 @@ import Testing
 
     var gitRule: LearnedRule {
         LearnedRule(name: "git credential helper reads keychain", rationale: "you marked these safe",
-                    kind: .exec, process: "*/git-credential-osxkeychain", pattern: "/usr/bin/security", action: .safe)
+                    kind: .exec, process: "*/git-credential-osxkeychain", pattern: "/usr/bin/security find-internet-password*", action: .safe)
     }
 
     @Test func globMatching() {
