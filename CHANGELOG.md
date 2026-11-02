@@ -1,10 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 – a cleaner HUD and Events list
 
 - **Events:** narrower Status and Process columns; file reads and writes shown as icons (👁 read, ✎ write in
   orange, both) instead of `r` and `w`, and TCP / UDP as small tags.
-
 - **HUD appearance:** three clearly different backgrounds with preview tiles (Glass, Clear Glass, Solid)
   instead of Liquid Glass, Blur, Dark and Transparent (Blur becomes Glass, Dark Solid, Transparent Clear
   Glass); no border on Solid. *Tint* is now *Contrast* (Lighter … Darker), from pure glass to nearly
