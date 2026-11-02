@@ -449,6 +449,19 @@ apps among them.
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 
+## Reset Hostwatch
+
+**Settings ▸ General ▸ Reset Hostwatch…** starts over as on the first launch. Choose what to erase:
+
+- **Patterns, decisions and baseline:** `~/Library/Application Support/Hostwatch` (patterns, stories, domains,
+  your rules, signing facts, MCP token) and the baseline's state.
+- **Settings:** HUD, window, detection, AI, exclusions and history options (`local.hostwatch.app` defaults).
+- **Event history and logs:** `~/Library/Logs/Hostwatch`, and in a custom history folder only Hostwatch's
+  `activity-*` and `metrics-*` files.
+
+Hostwatch stops the collector, removes the settings, exits, and a small helper deletes the files once the app
+has quit (so nothing is saved back) and opens it again. Full Disk Access stays granted.
+
 ## After a restart
 
 The event list starts with the newest recorded events from history (up to its 5,000-event limit), so it isn't

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Reset Hostwatch…** (Settings ▸ General): erase patterns and the baseline, settings, and/or event history
+  and logs, then restart as on the first launch.
 - **Domain details with a risk score:** double-click a domain (or right-click ▸ *Details & Ask AI…*) for the
   same design as event details: a 0–100 risk score from what this Mac saw, with every reason and its points
   (new, untrusted program, beaconing, abused top-level domain, random-looking or look-alike name, how widely

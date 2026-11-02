@@ -29,7 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
         changeHistoryLocation: { [weak self] in self?.changeHistoryLocation() },
-        clearHistory: { [weak self] in self?.clearHistory() }))
+        clearHistory: { [weak self] in self?.clearHistory() },
+        reset: { [weak self] plan in
+            guard let self else { return }
+            Reset.run(plan, collector: self.collector, model: self.model, historyDir: self.history.directory)
+        }))
     private var activityWindow: NSWindow?
     private let editorDraft = EditorDraft()
     private var cancellables = Set<AnyCancellable>()
