@@ -162,6 +162,11 @@ final class RuleBook: ObservableObject {
     @Published private(set) var proposals: [RuleProposal] = []
     @Published private(set) var running = false
     @Published private(set) var message = ""
+    /// When the current Suggest Rules run started (for the progress card), and how many decisions it sent.
+    @Published private(set) var startedAt: Date?
+    @Published private(set) var sentDecisions = 0
+    /// The last run's outcome, shown in Needs You until you close it.
+    @Published var lastResult: String?
 
     private let store: SignatureStore
     private let fileURL: URL
@@ -296,6 +301,9 @@ final class RuleBook: ObservableObject {
         }
         guard let claude = ClaudeLocator.path else { message = "Claude Code CLI not found."; return }
         running = true
+        startedAt = Date()
+        sentDecisions = decisions.count
+        lastResult = nil
         message = "Asking Claude for rules from your \(decisions.count) decisions…"
         let ignored = UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? []
         let prompt = Self.prompt(decisions: decisions, rules: rules, ignoredChains: ignored)
@@ -332,6 +340,7 @@ final class RuleBook: ObservableObject {
         process?.terminate()
         process = nil
         running = false
+        startedAt = nil
         message = "Cancelled."
     }
 
@@ -339,6 +348,8 @@ final class RuleBook: ObservableObject {
         guard running else { return }
         running = false
         process = nil
+        startedAt = nil
+        defer { lastResult = message }
         guard status == 0, let obj = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any],
               let text = obj["result"] as? String else {
             message = "Claude failed: " + String(err.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200))

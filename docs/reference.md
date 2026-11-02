@@ -362,7 +362,9 @@ Every proposal is checked locally before you see it:
 | a Safe rule covering New high-risk patterns | warning (shows how many) |
 | a Safe rule covering an interpreter or shell broadly (program or pattern < 4 letters) | **refused** |
 
-**Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
+While it runs, **Needs You** shows a progress card (how many of your decisions were sent, a live timer,
+**Cancel**) and the Rules tab reads *Rules (…)*; afterwards a result line says how many proposals came back
+and how many passed the checks (or why none did). **Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
 
 **Precedence:** your markings and the baseline > your rules > Claude/on-device verdicts > automatic
 routine. A rule's verdict counts as yours: it satisfies *Only New (not reviewed)*, and a Safe rule

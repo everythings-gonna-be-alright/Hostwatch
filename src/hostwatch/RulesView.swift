@@ -96,12 +96,26 @@ struct RulesView: View {
             }
             .controlSize(.small)
         }
+        if book.running {
+            RuleProgressCard(book: book)
+        } else if let result = book.lastResult {
+            HStack(spacing: 8) {
+                Image(systemName: book.proposals.isEmpty ? "info.circle" : "checkmark.circle.fill")
+                    .foregroundStyle(book.proposals.isEmpty ? Color.secondary : Color.green)
+                Text("Suggest Rules: " + result).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button { book.lastResult = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Close")
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.secondary.opacity(0.07)))
+        }
         if !book.proposals.isEmpty {
             section("Rule proposals", subtitle: "from Claude, checked by Hostwatch") {
                 ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
             }
         }
-        if review.isEmpty && book.proposals.isEmpty {
+        if review.isEmpty && book.proposals.isEmpty && !book.running {
             VStack(spacing: 8) {
                 Image(systemName: "checkmark.circle").font(.system(size: 34)).foregroundStyle(.green)
                 Text("Nothing needs you").font(.headline)
@@ -172,6 +186,7 @@ struct RulesView: View {
                 Spacer()
                 if book.running {
                     ProgressView().controlSize(.small)
+                    Text("Claude is working… proposals appear in Needs You").font(.system(size: 12)).foregroundStyle(.secondary)
                     Button("Cancel") { book.cancel() }.buttonStyle(.glass)
                 } else {
                     Button { book.suggest(); tab.segment = .needsYou } label: { Label("Suggest Rules…", systemImage: "sparkles") }
@@ -630,5 +645,37 @@ private struct DecidedRow: View {
         .controlSize(.small)
         .font(.system(size: 12))
         .padding(.vertical, 6)
+    }
+}
+
+/// "Claude is suggesting rules from your 214 decisions… 0:12" with Cancel, while Suggest Rules runs.
+private struct RuleProgressCard: View {
+    @ObservedObject var book: RuleBook
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ProgressView().controlSize(.regular)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("Claude is suggesting rules from your \(book.sentDecisions) decisions…")
+                        .font(.system(size: 13, weight: .semibold))
+                    if let start = book.startedAt {
+                        TimelineView(.periodic(from: start, by: 1)) { context in
+                            let s = max(0, Int(context.date.timeIntervalSince(start)))
+                            Text(String(format: "%d:%02d", s / 60, s % 60))
+                                .font(.system(size: 12).monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("Proposals appear here when it's done, usually in 10–30 seconds. Only patterns you decided "
+                     + "are sent, with secrets masked.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button("Cancel") { book.cancel() }.buttonStyle(.glass).controlSize(.small)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor.opacity(0.25)))
     }
 }
