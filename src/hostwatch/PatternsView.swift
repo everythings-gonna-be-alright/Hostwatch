@@ -1,6 +1,40 @@
 import AppKit
 import SwiftUI
 
+extension Color {
+    /// Claude's warm clay accent, for anything Claude decided or suggested.
+    static let claude = Color(red: 0.85, green: 0.47, blue: 0.34)
+}
+
+/// "Decided By": regular text with a small mark for who decided (Claude, on-device AI, you, a rule…).
+struct DeciderLabel: View {
+    let text: String
+
+    private var mark: (symbol: String, color: Color)? {
+        if text.contains("Claude") { return ("asterisk", .claude) }
+        if text.hasPrefix("AI suggests") { return ("sparkle", .secondary) }
+        if text.hasPrefix("AI") { return ("apple.intelligence", .secondary) }
+        if text.hasPrefix("You") { return ("person.fill", .secondary) }
+        if text.hasPrefix("Rule") { return ("checklist", .secondary) }
+        if text.hasPrefix("Baseline") { return ("checkmark.shield", .secondary) }
+        if text.hasPrefix("Automatic") { return ("gearshape", .secondary) }
+        return nil
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let mark {
+                Image(systemName: mark.symbol)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(mark.color)
+                    .frame(width: 12)
+            }
+            Text(text).foregroundStyle(text == "New" ? .secondary : .primary).lineLimit(1)
+        }
+        .help(text)
+    }
+}
+
 struct StatusPill: View {
     let status: SignatureStatus
 
@@ -69,7 +103,11 @@ struct PatternsView: View {
                         }
                     }
                 }
-                .width(min: 88, ideal: 108, max: 140)
+                .width(min: 64, ideal: 84, max: 140)
+                TableColumn("Decided By", value: \.decidedBy) { item in
+                    DeciderLabel(text: item.decidedBy)
+                }
+                .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Kind", value: \.kind) { item in
                     Image(systemName: item.entry.kind.symbol)
                         .foregroundStyle(item.entry.kind.color)
@@ -79,7 +117,7 @@ struct PatternsView: View {
                 TableColumn("Process", value: \.processName) { item in
                     Text(displayProcessName(item.entry.process)).fontWeight(.semibold).help(item.entry.process)
                 }
-                .width(min: 90, ideal: 170)
+                .width(min: 60, ideal: 110)
                 TableColumn("Pattern", value: \.pattern) { item in
                     Text(item.pattern).truncationMode(.middle).help(item.pattern)
                 }
@@ -101,7 +139,7 @@ struct PatternsView: View {
                 TableColumn("Reason", value: \.reason) { item in
                     Text(item.reason).foregroundStyle(.secondary).help(item.reason)
                 }
-                .width(min: 80, ideal: 220)
+                .width(min: 60, ideal: 140)
                 TableColumn("Count", value: \.count) { item in
                     Text("\(item.count)×").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -145,7 +183,21 @@ struct PatternsView: View {
 
     private func toolbar(count: Int) -> some View {
         HStack(spacing: 10) {
-            ShowFilterPicker(filter: $filter)
+            if let scope = signatures.scope {
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(.tint)
+                    Text("\(scope.title) · \(scope.keys.count) pattern\(scope.keys.count == 1 ? "" : "s")").lineLimit(1)
+                    Button { signatures.scope = nil } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .help("Show all patterns")
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 9).padding(.vertical, 3)
+                .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                .fixedSize()
+            } else {
+                ShowFilterPicker(filter: $filter)
+            }
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
@@ -158,26 +210,9 @@ struct PatternsView: View {
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
             Spacer()
-            Toggle("Auto-classify new", isOn: $classifier.autoClassify)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("Every 90 s, triage up to 40 new patterns (seen for over a minute): on-device first, then Claude.")
-            if classifier.running {
-                ProgressView().controlSize(.small)
-                Button("Cancel") { classifier.cancel() }
-                    .buttonStyle(.glass)
-            } else {
-                Button { classifier.classifyNow() } label: {
-                    Label("Classify New", systemImage: "sparkles")
-                }
-                .buttonStyle(.glassProminent)
-                    .disabled(signatures.count(.unclassified) == 0)
-                    .help("Triage up to \(classifier.batchSize) new patterns: on-device model first (private), "
-                          + "then Claude for what it can't settle. Choose the engine in Settings ▸ AI.")
-            }
-            Button { actions.openBaseline() } label: { Label("Baseline…", systemImage: "checkmark.shield") }
+            Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
-                .help("What this Mac's baseline trusted automatically, and what needs your review")
+                .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -221,6 +256,7 @@ struct PatternsView: View {
                 Button(status == .unclassified ? "Clear Rule" : status.title) {
                     signatures.setProcessRule(status, kind: entry.kind, process: entry.process)
                 }
+                .disabled(status == .safe && !SignatureStore.canTrustWholeProcess(entry.process))
             }
         }
         Divider()

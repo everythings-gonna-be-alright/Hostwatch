@@ -70,8 +70,7 @@ import Testing
 /// Choosing the AI engine: what each choice uses, and migration from the earlier two toggles.
 @Suite struct AIEngineChoice {
     func defaults(_ values: [String: Any]) -> UserDefaults {
-        let name = "hostwatch-tests-\(UUID().uuidString)"
-        let d = UserDefaults(suiteName: name)!
+        let d = scratchDefaults()
         for (k, v) in values { d.set(v, forKey: k) }
         return d
     }

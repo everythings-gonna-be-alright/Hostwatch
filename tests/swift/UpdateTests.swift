@@ -14,7 +14,7 @@ import Testing
 
     func checker(_ current: String, answer: Data, status: Int = 200) -> UpdateChecker {
         let c = UpdateChecker(currentVersion: current,
-                              defaults: UserDefaults(suiteName: "updates-\(UUID().uuidString)")!)
+                              defaults: scratchDefaults("updates"))
         c.fetch = { request in
             (answer, HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
         }

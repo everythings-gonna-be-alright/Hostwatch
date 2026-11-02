@@ -85,12 +85,24 @@ struct SignatureEntry: Codable, Identifiable {
     var exampleParent: String
     var exampleHost: String?
     var exampleHostSource: String?
+    /// What an AI (on-device or Claude) suggests for this New pattern; you accept it or decide yourself.
+    var suggestion: AISuggestion? = nil
 
     var exampleEvent: ActivityEvent {
         ActivityEvent(kind: kind, time: "", pid: examplePid, ppid: 0, name: exampleName,
                       proc: exampleProc, target: exampleTarget, extra: exampleExtra, parent: exampleParent,
                       host: exampleHost ?? "", hostSource: exampleHostSource ?? "")
     }
+}
+
+/// An AI verdict waiting for you: AI suggests, you decide (unless you let it accept by itself).
+struct AISuggestion: Codable, Equatable {
+    var status: SignatureStatus
+    var source: String          // "on-device" or "claude"
+    var note: String?
+    var date = Date()
+
+    var engineName: String { source == "claude" ? "Claude" : "on-device AI" }
 }
 
 // MARK: - Risk
@@ -246,20 +258,63 @@ enum SignatureBuilder {
             || rawPath.hasPrefix("/bin/") || rawPath.hasPrefix("/sbin/") || rawPath.hasPrefix("/Library/Apple/")
     }
 
+    /// The program a pattern is about (what runs, or what acts) is an interpreter or shell: it runs any
+    /// script it's given, so trusting it broadly would trust a virus's script too.
+    static func runsAnyCode(_ e: SignatureEntry) -> Bool { isLolbin(SignatureStore.subjectPath(e)) }
+
     static func isLolbin(_ path: String) -> Bool {
         var name = (path as NSString).lastPathComponent.lowercased()
-        if name.hasPrefix("python") || name.hasPrefix("pip") { return true }
+        if name.hasPrefix("python") || name.hasPrefix("pip") || lolbins.contains(name) { return true }   // sqlite3
         name = String(name.prefix(while: { !$0.isNumber && $0 != "." }))
         return lolbins.contains(name)
     }
 
     /// Where droppers run from: temp, Downloads, shared, mounted volumes.
-    private static func isDropZone(_ normalized: String) -> Bool {
+    static func isDropZone(_ normalized: String) -> Bool {
         ["/tmp", "$TMPDIR", "/private/var/folders", "~/Downloads", "/Users/Shared", "/Volumes"]
             .contains { under(normalized, $0) }
     }
 
     // MARK: Path patterns
+
+    // MARK: Specific patterns (the general rule)
+
+    /// Folders a file pattern needs before it may use a wildcard: 2 below home ("~/Documents/work/*"),
+    /// 3 elsewhere ("/Users/Shared/tools/*"). Never "r ~/*", "r ~/Documents/*", "r /*", "r /tmp/*" or "r /Users/**".
+    static func minWildcardDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 2 : 3 }
+    /// Deeper than this, an app's pattern ends in "/**" (so node_modules isn't a pattern per folder).
+    static func maxFolderDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 4 : 5 }
+
+    /// Folders below "~" or "/": "~/Documents/work" → 2, "/usr/bin" → 2, "~" → 0.
+    static func depth(_ dir: String) -> Int {
+        dir.split(separator: "/", omittingEmptySubsequences: true).filter { $0 != "~" }.count
+    }
+
+    /// The general rule for file patterns: specific enough that deciding one never covers a whole area.
+    /// A file in a shallow folder is its own pattern ("~/todo.txt", "~/Documents/a.pdf", "/tmp/x.log");
+    /// otherwise its folder ("~/Documents/work/*"); for apps, very deep trees end in "/**" (4 folders below
+    /// home, 5 elsewhere). Interpreters and shells (`deep: false`) always get the exact folder.
+    static func specificPath(_ path: String, deep: Bool) -> String {
+        let file = normalize(path)
+        let folder = normalize((path as NSString).deletingLastPathComponent)
+        let d = depth(folder)
+        if d < minWildcardDepth(folder) { return file }
+        let max = maxFolderDepth(folder)
+        if !deep || d <= max { return folder + "/*" }
+        let parts = folder.split(separator: "/", omittingEmptySubsequences: true)
+        return (folder.hasPrefix("/") ? "/" : "") + parts.prefix(folder.hasPrefix("~") ? max + 1 : max).joined(separator: "/") + "/**"
+    }
+
+    /// A file pattern (or a rule's file glob) that covers a whole area: a wildcard too few folders down
+    /// ("r ~/*", "r ~/Documents/*", "r /Users/**", "r *"). Labelled sensitive places ("[ssh keys]") and an
+    /// app's own data folder are specific by construction.
+    static func isTooWide(filePattern: String) -> Bool {
+        if filePattern.hasSuffix("]") { return false }
+        let path = filePattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? filePattern
+        guard let star = path.firstIndex(where: { $0 == "*" || $0 == "?" }) else { return false }
+        let prefix = String(path[..<star])
+        return depth(prefix) < minWildcardDepth(prefix)
+    }
 
     /// Keeps up to `depth` folders below the zone root, then "/**".
     static func collapse(_ dir: String) -> String {
@@ -343,7 +398,7 @@ enum SignatureBuilder {
             return ("\(mode) \(normalize(own))/**  [own data]", .routine, "app's own data folder")
         }
 
-        let pattern = "\(mode) \(collapse(normalize((path as NSString).deletingLastPathComponent)))"
+        let pattern = "\(mode) \(specificPath(path, deep: !isLolbin(actor)))"
         if writes {
             if routineWriteRoots.contains(where: { under(norm, $0) }) {
                 return (pattern, .routine, "scratch/cache write")
@@ -441,6 +496,10 @@ enum SignatureBuilder {
             var bucket = hostBucket(host)
             // Which cloud /16 a web request lands in says nothing; odd ports keep the /16.
             if !localBuckets.contains(bucket), webPorts.contains(port) { bucket = "internet" }
+            // Interpreters and shells: the destination itself (its domain, or the address), never "internet".
+            if isLolbin(rawActor), !localBuckets.contains(bucket) {
+                bucket = e.host.isEmpty ? host.lowercased() : (DomainRegistry.registrable(e.host) ?? e.host.lowercased())
+            }
             let pattern = "\(e.extra) \(bucket):\(portBucket(port))"
             var risk = PatternRisk.normal, reason = ""
             let actorName = (rawActor as NSString).lastPathComponent
@@ -478,15 +537,14 @@ enum SignatureBuilder {
             // it only matters when it came from a download or temp folder.
             s.risk = .high; s.reason = "\(id.label.lowercased()) code from a download/temp folder"
         } else if s.risk == .normal, cache.trusts(subject, id), !s.pattern.hasSuffix("]") {
-            // Apple, a trusted developer or (opt-in) Homebrew doing non-sensitive things. A spawn
+            // Apple or a trusted developer doing non-sensitive things. A spawn
             // also needs a trusted (or system) parent, and never covers starting shells/LOLBins.
             var ok = true
             if e.kind == .exec {
                 ok = !isLolbin(e.target) && (isSealedSystem(e.parent)
                      || cache.identity(e.parent).map { cache.trusts(e.parent, $0) } == true)
             }
-            let who = id.untrustedCode ? "Homebrew-installed tool" : "trusted signer: \(id.label)"
-            if ok { s.risk = .routine; s.reason = who }
+            if ok { s.risk = .routine; s.reason = "trusted signer: \(id.label)" }
         }
         return s
     }
@@ -521,6 +579,9 @@ final class SignatureStore: ObservableObject {
     @Published private(set) var revision = 0
     @Published var selection = Set<String>()
     @Published var search = ""
+    /// Exactly these patterns (from the baseline review), shown as a removable chip in Patterns.
+    struct Scope: Equatable { var title: String; var keys: Set<String> }
+    @Published var scope: Scope?
     /// Patterns table sort (click a column header); remembered across launches.
     @Published var patternOrder: [KeyPathComparator<PatternItem>] {
         didSet { SortMemory.save(patternOrder, key: "patternTableSort", columns: PatternItem.sortColumns) }
@@ -545,6 +606,7 @@ final class SignatureStore: ObservableObject {
         // v2: zone-based patterns with risk; the old per-folder format is not migrated.
         fileURL = dir.appendingPathComponent("signatures-v2.json")
         load()
+        dropInterpreterTrust()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -706,16 +768,99 @@ final class SignatureStore: ObservableObject {
         if source == "you" { onDecisionsChanged?() }
     }
 
-    /// Applies an automatic verdict only where nobody (you or a rule) has decided yet.
-    /// An AI verdict (Claude or on-device). It never marks a high-risk pattern Safe: event text
-    /// (paths, names, hosts) can be crafted to talk a model into it, so that stays your decision.
+    /// Accept AI suggestions by itself (Settings ▸ AI), for patterns that aren't high risk. Off: AI only suggests.
+    var autoAcceptAI: Bool = UserDefaults.standard.bool(forKey: "autoAcceptAISuggestions") {
+        didSet { UserDefaults.standard.set(autoAcceptAI, forKey: "autoAcceptAISuggestions") }
+    }
+
+    /// An AI verdict (Claude or on-device), only where nobody (you or a rule) has decided yet. It is kept
+    /// as a suggestion for you, or applied when you let AI accept by itself. Never Safe for a high-risk
+    /// pattern: event text (paths, names, hosts) can be crafted to talk a model into it.
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
-        guard status != .unclassified, self.status(forKey: key) == .unclassified else { return }
-        if status == .safe, entries[key]?.risk == .high { return }
-        set(status, keys: [key], source: source, note: note)
+        guard status != .unclassified, self.status(forKey: key) == .unclassified, var e = entries[key] else { return }
+        if status == .safe, e.risk == .high || SignatureBuilder.runsAnyCode(e) { return }
+        if autoAcceptAI, e.risk != .high {
+            set(status, keys: [key], source: source, note: note)
+            return
+        }
+        e.suggestion = AISuggestion(status: status, source: source, note: note)
+        entries[key] = e
+        changedNow()
+    }
+
+    /// Your decision: applies the AI's suggestions for these patterns (where still New). Returns how many.
+    @discardableResult
+    func acceptSuggestions(keys: [String]) -> Int {
+        var n = 0
+        for key in keys {
+            guard status(forKey: key) == .unclassified, let e = entries[key], let s = e.suggestion,
+                  !(s.status == .safe && (e.risk == .high || SignatureBuilder.runsAnyCode(e))) else { continue }
+            set(s.status, keys: [key], source: s.source, note: s.note)
+            n += 1
+        }
+        return n
+    }
+
+    /// "You", "Rule: …", "Baseline: Slack", "AI (on-device)", "AI suggests Safe", or "New".
+    func decidedBy(_ key: String) -> String {
+        guard let e = entries[key] else { return "" }
+        let status = status(forKey: key)
+        if status == .unclassified {
+            if let s = e.suggestion { return "AI suggests \(s.status.title)" }
+            return "New"
+        }
+        if e.status == .unclassified { return "You (whole process)" }
+        switch e.source {
+        case "you": return e.note?.hasPrefix("Baseline: ") == true ? "You · " + (e.note?.dropFirst(10) ?? "") : "You"
+        case "rule": return "Rule: " + (e.note ?? "")
+        case "baseline": return e.note.map { $0.hasPrefix("Baseline: ") ? "Baseline: " + $0.dropFirst(10) : $0 } ?? "Baseline"
+        case "claude": return "AI (Claude)"
+        case "on-device": return "AI (on-device)"
+        case "auto": return "Automatic (routine)"
+        default: return e.source ?? ""
+        }
+    }
+
+    /// "Everything python does is Safe" would trust any script: not allowed for interpreters and shells.
+    /// "Everything this program does is Safe" is the widest pattern there is: never for any program
+    /// (Suspicious or Dangerous for a whole program is fine: that only flags more).
+    static func canTrustWholeProcess(_ process: String) -> Bool { false }
+
+    /// Puts an entry back as it was (tests, and loading entries made by older versions).
+    func restore(_ e: SignatureEntry) {
+        entries[e.id] = e
+        changedNow()
+    }
+
+    /// Interpreters and shells run any script, so blanket trust in them is undone: whole-process Safe
+    /// rules, and Safe set by AI or the baseline (your own per-pattern decisions stay).
+    private func dropInterpreterTrust() {
+        var changed = false
+        // Wide patterns from earlier versions (r ~/Documents/**, zsh → r /*, python → internet:443) that weren't
+        // your decision: dropped, they come back specific (file, folder, domain) when seen again.
+        // Kept only when you (or a rule you approved) decided them.
+        // Any program: file patterns that cover a whole area (the general rule, `isTooWide`).
+        for (key, e) in entries where !["you", "rule"].contains(e.source ?? "") {
+            let interpreter = SignatureBuilder.runsAnyCode(e)
+            let wide = e.kind == .file ? SignatureBuilder.isTooWide(filePattern: e.pattern)
+                    || interpreter && e.pattern.hasSuffix("/**")
+                : e.kind == .net ? interpreter && (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
+                : false
+            if wide { entries[key] = nil; changed = true }
+        }
+        for (key, rule) in processRules where rule.status == .safe && !Self.canTrustWholeProcess(rule.process) {
+            processRules[key] = nil; changed = true
+        }
+        for (key, e) in entries where e.status == .safe && ["claude", "on-device", "baseline"].contains(e.source ?? "")
+            && SignatureBuilder.runsAnyCode(e) {
+            var e = e; e.status = .unclassified; e.source = nil; e.note = nil
+            entries[key] = e; changed = true
+        }
+        if changed { changedNow() }
     }
 
     func setProcessRule(_ status: SignatureStatus, kind: EventKind, process: String) {
+        if status == .safe, !Self.canTrustWholeProcess(process) { return }
         let key = SignatureBuilder.processRuleKey(kind: kind, process: process)
         if status == .unclassified {
             processRules[key] = nil
@@ -746,15 +891,17 @@ final class SignatureStore: ObservableObject {
     /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
     func patternItems(filter: SignatureFilter) -> [PatternItem] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let scope = self.scope
         return entries.values
+            .filter { e in scope.map { $0.keys.contains(e.id) } ?? true }
             .filter { q.isEmpty || $0.process.lowercased().contains(q) || $0.pattern.lowercased().contains(q)
                 || $0.exampleName.lowercased().contains(q) }
             .compactMap { e -> PatternItem? in
                 let status = status(forKey: e.id)
-                guard filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
+                guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
                 let note = note(forKey: e.id)
                 return PatternItem(entry: e, status: status, statusRank: rank(status),
-                                   source: note.source, note: note.note)
+                                   source: note.source, note: note.note, decidedBy: decidedBy(e.id))
             }
             .sorted(using: patternOrder)
     }
@@ -1094,7 +1241,7 @@ final class PatternClassifier: ObservableObject {
         }
         self.process = process
         DispatchQueue.global().async {
-            stdin.fileHandleForWriting.write(Data(prompt.utf8))
+            stdin.fileHandleForWriting.write(Data(Secrets.mask(prompt).utf8))   // never send a secret
             try? stdin.fileHandleForWriting.close()
         }
     }

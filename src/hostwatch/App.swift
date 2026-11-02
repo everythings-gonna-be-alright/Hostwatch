@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let stories = StoryEngine()
     private let domains = DomainRegistry()
     private let domainsState = DomainsViewState()
+    private let rulesTab = RulesTabState()
+    /// Processes Hostwatch saw start that still run heavy (CPU or memory).
+    private let vitals = ProcessVitals()
+    private let heavyStrip = HeavyStripState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
     private lazy var ruleBook = RuleBook(store: signatures)
@@ -29,7 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
         changeHistoryLocation: { [weak self] in self?.changeHistoryLocation() },
-        clearHistory: { [weak self] in self?.clearHistory() }))
+        clearHistory: { [weak self] in self?.clearHistory() },
+        reset: { [weak self] plan in
+            guard let self else { return }
+            Reset.run(plan, collector: self.collector, model: self.model, historyDir: self.history.directory)
+        }))
     private var activityWindow: NSWindow?
     private let editorDraft = EditorDraft()
     private var cancellables = Set<AnyCancellable>()
@@ -49,7 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
-        openDomain: { [weak self] domain in self?.openDomainDetails(domain) }
+        openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
+        openStory: { [weak self] story in self?.openStoryDetails(story) }
     )
     private var askWindows: [NSWindow] = []
     /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
@@ -80,11 +89,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             MainActor.assumeIsolated { self?.updateUIVisibility() }
         }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
+        model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
+        metrics.heavyProvider = { [weak self] in self?.vitals.snapshot ?? [] }      // recorded for Time Travel
+        model.onEvent = { [weak self] event in if event.kind == .exec { self?.vitals.noteLaunch(event) } }
+        vitals.onHeavyUntrusted = { [weak self] launch, tracked in
+            guard let self else { return }
+            let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))
+            let note = "\(launch.name) keeps running heavy (\(cpu)% CPU, \(ProcessVitals.memory(tracked.memNow))) "
+                + "and isn't trusted code: the cryptominer pattern"
+            _ = self.stories.ingest(launch.event, decidedSafe: false, extra: [(.heavyUntrusted, note)])
+        }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
         updates.schedule()                // daily, if allowed in Settings ▸ General
         model.connect()
         setUpHistory()
-        model.restoreRecent(from: history.directory)      // the list isn't empty after a restart
+        // The list isn't empty after a restart; launches from before it are still followed if running.
+        model.restoreRecent(from: history.directory) { [weak self] in
+            guard let self else { return }
+            for e in self.model.history.reversed() where e.kind == .exec && e.pstart > 0 { self.vitals.noteLaunch(e) }
+        }
         _ = ruleBook                      // load approved rules and apply them before events arrive
         // Signing: re-score a binary's patterns if its signature turns out invalid; trust the
         // developers of already-installed apps on first run, then re-score everything.
@@ -94,6 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         SigningCache.shared.seedTrustFromInstalledApps { [weak self] in self?.signatures.reassess() }
         // First run: domains already in recorded history are the baseline for "new domain".
         domains.seedBaseline(fromHistory: history.directory)
+
+        // The main window opens with the app (the setup window, if needed, comes in front of it).
+        openActivityWindow(fullScreen: false)
 
         // Start the bundled collector unless one (e.g. run-agent.sh) is already serving.
         if collector.startAtLaunch {
@@ -215,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, actions: actions))
+        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, actions: actions))
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -325,10 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
-        if case .done = baseline.phase, let review = baseline.report?.reviewCount, review > 0 {
-            menu.addItem(item("Baseline: \(review) pattern\(review == 1 ? "" : "s") to review…",
-                              #selector(showBaselineReport), symbol: "checkmark.shield"))
-        } else if case .learning(let wave, _) = baseline.phase {
+        if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
             learning.image = symbol("hourglass")
             learning.isEnabled = false
@@ -417,8 +440,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             std("Find", #selector(NSResponder.performTextFinderAction(_:)), "f").withTag(Int(NSTextFinder.Action.showFindInterface.rawValue)),
         ])
 
-        let tabs = ["Events", "Patterns", "Stories", "Domains", "Rules"].enumerated().map { i, title in
-            tagged(item(title, #selector(showTab(_:)), key: "\(i + 1)"), i)
+        // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
+        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
+            tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
         let filters = NSMenu()
@@ -620,8 +644,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// The whole chain of a story, event by event (double-click a story).
+    private func openStoryDetails(_ story: Story) {
+        let details = StoryDetails(story: story, historyDirectory: history.directory, live: model.history)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Story: \(story.title)"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: StoryDetailView(
+            details: details, actions: actions,
+            dismiss: { [weak self, weak window] in self?.stories.dismiss(story.id); window?.close() },
+            ignore: { [weak self, weak window] in self?.stories.ignoreAlways(story.id); window?.close() }))
+        window.center()
+        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated { self?.askWindows.removeAll { $0 === note.object as? NSWindow } }
+        }
+        askWindows.append(window)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
     /// The baseline lives in the Rules tab.
     private func openBaselineReport() {
+        rulesTab.segment = .needsYou
+        rulesTab.chosen = true
         model.windowTab = 4
         openActivityWindow(fullScreen: false)
     }
@@ -697,33 +744,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
+    private var accessWindow: NSWindow?
+
+    /// The Full Disk Access setup window (one at a time); it notices the grant by itself.
     private func showFullDiskAccessAlert(afterFailure: Bool) {
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Hostwatch needs Full Disk Access"
-        alert.informativeText = """
-        macOS only lets the collector (eslogger) watch processes and files when the app that \
-        starts it has Full Disk Access.
-
-        1. Click Open Settings.
-        2. Turn on Hostwatch. If it is not listed, click + and choose:
-           \(Bundle.main.bundlePath)
-        3. Quit and reopen Hostwatch.
-
-        After each rebuild, remove the old Hostwatch entry and add it again.
-        """
-        alert.alertStyle = afterFailure ? .warning : .informational
-        alert.addButton(withTitle: "Open Settings")
-        if !afterFailure { alert.addButton(withTitle: "Start Anyway") }
-        alert.addButton(withTitle: "Cancel")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            Collector.openFullDiskAccessSettings()
-        case .alertSecondButtonReturn where !afterFailure:
-            collector.start()
-        default:
-            break
+        if let accessWindow { accessWindow.makeKeyAndOrderFront(nil); return }
+        let setup = FullDiskAccessSetup(afterFailure: afterFailure)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
+                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.title = "Full Disk Access"
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.hidesOnDeactivate = false
+        let close: () -> Void = { [weak window] in window?.close() }
+        window.contentView = NSHostingView(rootView: FullDiskAccessView(
+            setup: setup,
+            start: { [weak self] in close(); self?.collector.start() },
+            close: close,
+            startAnyway: afterFailure ? nil : { [weak self] in close(); self?.collector.start() }))
+        window.center()
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { setup.stop(); self?.accessWindow = nil }
         }
+        accessWindow = window
+        // In front of everything when it appears (even at login, before Hostwatch is the active app);
+        // an ordinary window after that, so System Settings can come forward.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     // MARK: Windows
@@ -812,7 +864,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's

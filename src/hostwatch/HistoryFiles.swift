@@ -148,6 +148,53 @@ enum HistoryFiles {
         return index
     }
 
+    // MARK: Masking secrets in finished files
+
+    /// Masks passwords and tokens in launch events' command lines (`Secrets`) in a finished file: a compressed
+    /// one is rewritten (blocks and index), a plain one replaced. Returns how many lines changed (0: untouched).
+    @discardableResult
+    static func scrubSecrets(_ file: File) throws -> Int {
+        let stem: URL
+        switch file {
+        case .plain(let url): stem = url
+        case .compressed(let gz, _): stem = Self.stem(gz)
+        }
+        let tmp = stem.deletingLastPathComponent().appendingPathComponent(".scrub-" + stem.lastPathComponent)
+        try? FileManager.default.removeItem(at: tmp)
+        FileManager.default.createFile(atPath: tmp.path, contents: nil, attributes: [.posixPermissions: 0o600])
+        let out = try FileHandle(forWritingTo: tmp)
+        var changed = 0
+        var failure: Error?
+        forEachChunk(file) { chunk in
+            var buffer = Data(capacity: chunk.count)
+            for line in chunk.split(separator: 0x0A, omittingEmptySubsequences: false) where !line.isEmpty {
+                var bytes = Data(line)
+                // Only launches carry a command line ("args"); everything else is copied as is.
+                if bytes.range(of: Data(#""kind":"exec""#.utf8)) != nil, let text = String(data: bytes, encoding: .utf8) {
+                    let masked = Secrets.mask(text, marker: Secrets.historyMarker)
+                    if masked != text { bytes = Data(masked.utf8); changed += 1 }
+                }
+                buffer.append(bytes)
+                buffer.append(0x0A)
+            }
+            do { try out.write(contentsOf: buffer) } catch { failure = error; return false }
+            return true
+        }
+        try out.close()
+        if let failure { try? FileManager.default.removeItem(at: tmp); throw failure }
+        guard changed > 0 else { try? FileManager.default.removeItem(at: tmp); return 0 }
+        switch file {
+        case .plain(let url):
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
+        case .compressed:
+            // compress() writes the new .gz and index, then removes the plain input.
+            let plain = stem
+            try FileManager.default.moveItem(at: tmp, to: plain)
+            try compress(plain)
+        }
+        return changed
+    }
+
     // MARK: Reading
 
     /// Decompresses one block.

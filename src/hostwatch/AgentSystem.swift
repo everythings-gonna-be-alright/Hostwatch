@@ -24,6 +24,14 @@ enum ProcessList {
     }
 
     static func parent(_ pid: Int) -> Int { bsdInfo(pid).map { Int($0.pbi_ppid) } ?? 0 }
+
+    /// When the process started (wall clock, seconds since 1970, 0.01 s precision): with the pid, one
+    /// exact process even when a pid is reused. Tests set `startLookup` to keep output deterministic.
+    nonisolated(unsafe) static var startLookup: (Int) -> Double? = realStart
+    static func realStart(_ pid: Int) -> Double? {
+        bsdInfo(pid).map { (Double($0.pbi_start_tvsec) * 100 + Double($0.pbi_start_tvusec) / 10_000).rounded() / 100 }
+    }
+    static func start(_ pid: Int) -> Double? { startLookup(pid) }
     static func uid(_ pid: Int) -> uid_t? { bsdInfo(pid)?.pbi_uid }
 }
 
@@ -170,26 +178,36 @@ enum AgentSocket {
         }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw Failure(description: "socket: \(String(cString: strerror(errno)))") }
+        // Bound inside a private 0700 folder, narrowed to 0600, then moved into place: nobody can reach it
+        // while it's wider, and without changing the process-wide umask (which would race other threads).
+        let staging = (path as NSString).deletingLastPathComponent + "/.bind-\(getpid())-\(fd)"
+        rmdir(staging)
+        guard mkdir(staging, 0o700) == 0 else {
+            let e = String(cString: strerror(errno)); close(fd); throw Failure(description: "staging folder: \(e)")
+        }
+        defer { rmdir(staging) }
+        let temp = staging + "/s"
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
-        let bytes = Array(path.utf8)
+        let bytes = Array(temp.utf8)
         guard bytes.count < MemoryLayout.size(ofValue: addr.sun_path) else {
-            close(fd); throw Failure(description: "socket path too long: \(path)")
+            close(fd); throw Failure(description: "socket path too long: \(temp)")
         }
         withUnsafeMutableBytes(of: &addr.sun_path) { raw in
             raw.copyBytes(from: bytes)
             raw[bytes.count] = 0
         }
-        let old = umask(0o177)                               // created as 0600, never briefly wider
         let bound = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
-        umask(old)
         guard bound == 0 else {
             let e = String(cString: strerror(errno)); close(fd); throw Failure(description: "bind: \(e)")
         }
-        if let clientUID, clientUID != geteuid() { chown(path, clientUID, gid_t.max) }
-        chmod(path, 0o600)
+        chmod(temp, 0o600)
+        if let clientUID, clientUID != geteuid() { chown(temp, clientUID, gid_t.max) }
+        guard rename(temp, path) == 0 else {
+            let e = String(cString: strerror(errno)); unlink(temp); close(fd); throw Failure(description: "rename: \(e)")
+        }
         guard listen(fd, 8) == 0 else { close(fd); throw Failure(description: "listen failed") }
         return fd
     }
@@ -290,6 +308,7 @@ struct TopRow: Equatable {
     var mem: UInt64
     var read: Double             // bytes/s
     var write: Double
+    var cpuSeconds: Double = 0   // CPU time used since it started
 }
 
 enum TopSampler {
@@ -328,11 +347,29 @@ enum TopSampler {
             read += drd
             write += dwr
             rows.append(TopRow(pid: key.pid, cpu: 100 * dcpu / (seconds * 1e9), mem: now.footprint,
-                               read: drd / seconds, write: dwr / seconds))
+                               read: drd / seconds, write: dwr / seconds, cpuSeconds: now.cpuNanos / 1e9))
         }
         let byCPU = Array(rows.sorted { ($0.cpu, $0.pid) > ($1.cpu, $1.pid) }.prefix(limit))
         let byMem = rows.sorted { ($0.mem, $0.pid) > ($1.mem, $1.pid) }.prefix(3).filter { !byCPU.contains($0) }
         return (byCPU + byMem, read / seconds, write / seconds)
+    }
+
+    /// Floors for the "vitals" list: below both, a process isn't worth reporting.
+    static let vitalsCPU = 5.0                       // % of one core
+    static let vitalsMemory: UInt64 = 300_000_000
+    static let vitalsLimit = 50
+
+    /// Every process above a floor (by CPU, then memory), so the app can follow processes it saw start.
+    static func vitals(before: [ProcessInstance: ProcessUsage], after: [ProcessInstance: ProcessUsage],
+                       seconds: Double) -> [TopRow] {
+        var rows: [TopRow] = []
+        for (key, now) in after {
+            guard let prev = before[key] else { continue }
+            let cpu = 100 * max(0, now.cpuNanos - prev.cpuNanos) / (seconds * 1e9)
+            guard cpu >= vitalsCPU || now.footprint >= vitalsMemory else { continue }
+            rows.append(TopRow(pid: key.pid, cpu: cpu, mem: now.footprint, read: 0, write: 0, cpuSeconds: now.cpuNanos / 1e9))
+        }
+        return Array(rows.sorted { ($0.cpu, $0.mem, $0.pid) > ($1.cpu, $1.mem, $1.pid) }.prefix(vitalsLimit))
     }
 }
 
@@ -355,9 +392,17 @@ extension Agent {
                                     ("mem", .int(Int(r.mem))), ("read", .int(Int(r.read.rounded()))),
                                     ("write", .int(Int(r.write.rounded())))])
                 }
+                let vitals: [JValue] = TopSampler.vitals(before: before, after: snap, seconds: now - started).map { r in
+                    let path = pidPath(r.pid)
+                    return .object([("pid", .int(r.pid)), ("start", .double(ProcessList.start(r.pid) ?? 0)),
+                                    ("name", .str(Agent.base(path))), ("path", .str(path)),
+                                    ("cpu", .double((r.cpu * 10).rounded() / 10)), ("mem", .int(Int(r.mem))),
+                                    ("cpu_total", .double(r.cpuSeconds.rounded()))])
+                }
                 publish(AgentEvent([("kind", .str("top")), ("procs", .array(procs)),
                                     ("disk_read", .int(Int(result.read.rounded()))),
-                                    ("disk_write", .int(Int(result.write.rounded())))]))
+                                    ("disk_write", .int(Int(result.write.rounded()))),
+                                    ("vitals", .array(vitals))]))
             }
             before = snap
             started = now

@@ -2,18 +2,67 @@
 
 ## Unreleased
 
+- **The main window opens when Hostwatch starts** (the Full Disk Access setup, when needed, comes in front of it).
+
+- **Heavy processes in Time Travel, with a native design:** a tinted banner with app icons, a CPU gauge,
+  tags and a ⋯ menu (collapsible to one line); badges are tinted tags. The heavy list is recorded with the
+  metrics every 5 s, so Time Travel shows the same banner and badges at the playhead.
+- **Heavy processes stand out in Events:** a process Hostwatch saw start that keeps using a lot of CPU (30 s
+  average) or memory gets a live 🔥 badge on its launch row, a flame in the HUD, and a strip above the list
+  (CPU bar, memory, running time, Show Only These, Ask AI); it turns grey with its peak when it ends. Unsigned
+  or downloaded heavy processes add a *Heavy untrusted process* story stage (the cryptominer pattern).
+  Thresholds in Settings ▸ Detection. The collector sends every process above a small floor with its start
+  time, and launches carry their start time.
+
+- **Friendlier Full Disk Access setup:** a window instead of an alert: what Hostwatch watches and that it stays
+  on the Mac, two steps (turn on Hostwatch in System Settings, come back), in front of other windows when it appears, a live check that notices the grant by itself and turns the button into *Start Watching*, and
+  *Quit & Reopen* when macOS needs a fresh start.
+
+- **Story window:** double-click a story (or *Show Chain*) for the whole chain event by event: a vertical
+  timeline indented by process, each step in one sentence with its command line or address and why it counts,
+  *All activity* to add the processes' other events from history, and the process tree.
+
+- **No wide patterns, for any program:** a file pattern names its folder at least 2 levels below home (3
+  elsewhere), or the file itself: `r ~/Documents/work/*`, `r ~/todo.txt` instead of `r ~/Documents/**` or
+  `r ~/*`. No learned Safe rule or whole-program Safe may cover an area. Interpreters and shells also get
+  the destination's domain instead of `internet:443`. Wide patterns that weren't your decision are dropped.
+- **Collector socket without a process-wide umask** (it raced other threads creating folders).
+
+- **Secrets masked everywhere:** one stronger rule set (headers, cookies, `--password`, `FOO_TOKEN=`, URL
+  credentials, `curl -u`, `security -w`, `sshpass`, `mysql -p`, token formats, JWTs, private keys) masks command
+  lines before they reach history, and every prompt right before it goes to any AI. Existing history is
+  masked once in the background, and each file again before it's compressed.
+
+- **AI suggests, you decide:** AI verdicts on patterns (on-device or Claude) are suggestions you **Accept** in
+  Rules ▸ Needs You; *Accept AI suggestions without asking* (Settings ▸ AI, off) restores hands-off use,
+  except for high-risk patterns.
+- **Rules tab in three views:** *Needs You* (New patterns by app, AI suggestions, rule proposals; live),
+  *Rules* (baseline and learned) and *Decided* (who decided what: AI apart from you, with Undo). Patterns has a
+  **Decided By** column; *Classify New* became *Ask AI for Suggestions* in Needs You.
+- **No blanket trust in interpreters and shells** (python, bash, node, curl, osascript…): not by
+  whole-process Safe, learned rules, AI or the baseline (macOS's own included). Earlier blanket trust is undone.
+
+- **Removed "Trust Homebrew-installed tools":** Homebrew tools are judged like your own builds; mark
+  their patterns yourself.
+
+- **Reset Hostwatch…** (Settings ▸ General): erase patterns and the baseline, settings, and/or event history
+  and logs, then restart as on the first launch.
 - **Domain details with a risk score:** double-click a domain (or right-click ▸ *Details & Ask AI…*) for the
   same design as event details: a 0–100 risk score from what this Mac saw, with every reason and its points
   (new, untrusted program, beaconing, abused top-level domain, random-looking or look-alike name, how widely
   it's used), the domain's hostnames, addresses, first and last contact (with Time Travel), the programs with
   their signers, recent connections, and Ask AI (Claude or on-device) with its own risk score. Mark Known
   from the window. Event and pattern verdicts show the AI's risk score too.
-- **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** each trusted signer (Apple,
-  or a developer of your installed apps) becomes a rule in the Rules tab that keeps trusting its normal-risk
-  patterns, now and later. Never high-risk, unsigned, downloaded, temporary or sensitive; signed-but-untrusted
-  developers go to the on-device model; the rest waits for your review, grouped by app (Trust App, Show).
-  Pause, Delete, Undo Baseline and Build Now; your decisions win and stories ignore baseline trust. It
-  replaces the old "Trust Baseline…", which trusted everything, high-risk included.
+- **First-run baseline in three waves (5, 15, 60 minutes), as baseline rules:** one narrow rule per trusted
+  app and its signer (*Slack · Slack Technologies*), and one for macOS system services, in the Rules tab. A rule keeps trusting the app's normal-risk patterns, now and later. Never
+  high-risk, unsigned, downloaded or temporary; sensitive places only for macOS services or apps you trusted.
+  Signed-but-untrusted developers go to the on-device model; the rest waits in **Needs your review**, one row
+  per app with its reasons: **Trust** (adds a rule marked *Trusted by you*), **Dismiss** (stays New, not listed
+  again), Mark Suspicious; interpreters and shells (python, node, bash…) aren't listed, since they run any
+  script: they stay New. Hostwatch's own activity is never listed. Pause, Delete and **Update Baseline**
+  (local, no AI; separate from *Suggest Rules from My Decisions*, which asks Claude). Your decisions win and
+  stories ignore baseline trust. It replaces the old "Trust Baseline…", which trusted everything.
+- **`sqlite3` is recognised as a living-off-the-land tool** (its name was cut at the digit before).
 - **Domain learning now lasts an hour** (was 12 hours), and a domain first reached by unsigned, quarantined or
   downloaded software during learning stays new.
 - **CPU, memory, network and disk in the HUD:** one compact line under its title (sparklines when there's

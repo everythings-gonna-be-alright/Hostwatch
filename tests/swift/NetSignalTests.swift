@@ -70,27 +70,10 @@ import Testing
         #expect(Set(story.stages).isSuperset(of: [.beaconing, .rawIP, .runFromDrop]))
     }
 
-    @Test func homebrewReceiptCheck() throws {
-        let cellar = Binaries.dir.appendingPathComponent("Cellar").path + "/"
-        let bin = cellar + "git/2.54.0/bin/git"
-        try FileManager.default.createDirectory(atPath: cellar + "git/2.54.0/bin", withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: bin, contents: Data())
-        #expect(!SigningCache.homebrewManaged(bin, cellars: [cellar]))                   // no receipt yet
-        FileManager.default.createFile(atPath: cellar + "git/2.54.0/INSTALL_RECEIPT.json", contents: Data("{}".utf8))
-        #expect(SigningCache.homebrewManaged(bin, cellars: [cellar]))
-        #expect(!SigningCache.homebrewManaged("/usr/local/bin/git", cellars: [cellar]))
-    }
-
-    /// Real Homebrew binary (skipped when none is installed): routine only with the option on.
-    @Test(.enabled(if: realHomebrewBinary != nil)) func homebrewTrustIsOptIn() throws {
+    /// Real Homebrew binary (skipped when none is installed): ad-hoc, so never routine by signature.
+    @Test(.enabled(if: realHomebrewBinary != nil)) func homebrewToolsAreNotTrustedBySignature() throws {
         let git = try #require(realHomebrewBinary)
-        let cache = SigningCache.shared
-        let saved = cache.trustHomebrew
-        defer { cache.trustHomebrew = saved }
-        cache.trustHomebrew = false
         #expect(file(git, pid: 95, "r", "\(home)/Documents/repo/main.go").signatureRisk == .normal)
-        cache.trustHomebrew = true
-        #expect(file(git, pid: 95, "r", "\(home)/Documents/repo/main.go").signatureRisk == .routine)
     }
 }
 

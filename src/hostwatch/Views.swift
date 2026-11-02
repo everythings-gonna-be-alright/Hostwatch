@@ -15,6 +15,7 @@ struct HUDActions {
     var showInTimeline: (Date) -> Void = { _ in }
     var openBaseline: () -> Void = {}
     var openDomain: (String) -> Void = { _ in }
+    var openStory: (Story) -> Void = { _ in }
 }
 
 // MARK: - Overlay
@@ -25,6 +26,7 @@ struct HUDView: View {
     @ObservedObject var collector: Collector
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var metrics: MetricsStore
+    @ObservedObject var vitals: ProcessVitals
     let actions: HUDActions
 
     private var s: CGFloat { model.overlayScale }
@@ -59,7 +61,7 @@ struct HUDView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     // Each banner takes about two rows of room.
                     ForEach(Array(model.overlayEvents.prefix(max(0, model.overlayRows - 2 * min(2, stories.recent().count))))) { event in
-                        EventRow(event: event, status: signatures.status(for: event), s: s)
+                        EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event))
                             .contentShape(Rectangle())
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
@@ -391,6 +393,8 @@ struct EventRow: View {
     let event: ActivityEvent
     var status: SignatureStatus = .unclassified
     var s: CGFloat = 1
+    /// Still running heavy (or recently ended after being heavy).
+    var vital: ProcessVitals.Badge? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -417,7 +421,12 @@ struct EventRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 2)
-            if !event.beacon.isEmpty {
+            if case .heavy(let cpu, let mem, _, let cpuHeavy, _) = vital {
+                Text(cpuHeavy ? "🔥 \(Int(cpu))%" : "🔥 \(ProcessVitals.memory(mem))")
+                    .font(.system(size: 8.5 * s, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color(red: 1.0, green: 0.62, blue: 0.25))
+                    .help("Still running heavy")
+            } else if !event.beacon.isEmpty {
                 Text("BEACON \(event.beacon.replacingOccurrences(of: "every ", with: ""))")
                     .font(.system(size: 8 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 1.0, green: 0.45, blue: 0.4))
@@ -465,6 +474,9 @@ struct ActivityWindowView: View {
     @ObservedObject var stories: StoryEngine
     @ObservedObject var domains: DomainRegistry
     let domainsState: DomainsViewState
+    let rulesTab: RulesTabState
+    @ObservedObject var vitals: ProcessVitals
+    @ObservedObject var heavyStrip: HeavyStripState
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -481,6 +493,7 @@ struct ActivityWindowView: View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
+            if model.windowTab == 0 { heavySection }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
             case 0: eventsList
@@ -488,10 +501,17 @@ struct ActivityWindowView: View {
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain)
-            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline) { app in
-                signatures.search = app
-                model.windowTab = 1
-            }
+            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
+                               showPatterns: { app in
+                                   signatures.scope = nil
+                                   signatures.search = app
+                                   model.windowTab = 1
+                               },
+                               showKeys: { title, keys in
+                                   signatures.search = ""
+                                   signatures.scope = .init(title: title, keys: Set(keys))
+                                   model.windowTab = 1
+                               })
             }
         }
         .frame(minWidth: 900, minHeight: 480)
@@ -533,16 +553,17 @@ struct ActivityWindowView: View {
             Picker("View", selection: $model.windowTab) {
                 Label("Events", systemImage: "list.bullet.rectangle").tag(0)
                 Label("Patterns", systemImage: "square.stack.3d.up").tag(1)
+                let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
+                Label(rules.running ? "Rules (…)" : waiting == 0 ? "Rules" : "Rules (\(waiting))",
+                      systemImage: "checklist").tag(4)
                 Label(stories.activeCount > 0 ? "Stories (\(stories.activeCount))" : "Stories",
                       systemImage: "point.3.connected.trianglepath.dotted").tag(2)
                 Label(domains.newCount > 0 ? "Domains (\(domains.newCount))" : "Domains",
                       systemImage: "globe").tag(3)
-                Label(rules.proposals.isEmpty ? "Rules" : "Rules (\(rules.proposals.count))",
-                      systemImage: "checklist").tag(4)
             }
             .pickerStyle(.segmented)
             .labelStyle(.titleAndIcon)
-            .help("Events: the live stream · Patterns: learned fingerprints · Stories: correlated chains (⌘1–⌘5)")
+            .help("Events: the live stream · Patterns: learned fingerprints · Rules: what decides them · Stories: correlated chains · Domains (⌘1–⌘5)")
         }
         ToolbarItemGroup(placement: .principal) {
             ForEach(EventKind.allCases, id: \.self) { kind in
@@ -611,6 +632,34 @@ struct ActivityWindowView: View {
     }
 
     @ViewBuilder
+    /// Heavy processes, live or at the Time Travel playhead (recorded every 5 s): one design for both.
+    private var heavy: HeavyContext {
+        let _ = vitals.revision
+        if traveling {
+            return HeavyContext(entries: travel.sampleAtPlayhead?.heavy ?? [], at: travel.playhead, live: false,
+                                events: { pid in travel.events.first { $0.kind == .exec && $0.pid == pid } })
+        }
+        return vitals.liveContext
+    }
+
+    @ViewBuilder private var heavySection: some View {
+        let context = heavy
+        if !context.entries.isEmpty {
+            HeavyStrip(context: context, state: heavyStrip, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
+                model.onlyPids = model.onlyPids == nil ? context.pids : nil
+            }, actions: actions)
+        } else if model.onlyPids != nil {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle").foregroundStyle(.secondary)
+                Text(traveling ? "Nothing ran heavy at this moment." : "Those processes are no longer heavy.")
+                    .foregroundStyle(.secondary)
+                Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.link)
+            }
+            .font(.callout)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+        }
+    }
+
     private var eventsList: some View {
         let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
         let items = events.map { e -> EventItem in
@@ -637,7 +686,10 @@ struct ActivityWindowView: View {
                 TableColumn("Status", value: \.statusRank) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
-                        if !item.event.beacon.isEmpty {
+                        if case .heavy = heavy.badge(for: item.event) {
+                            Image(systemName: "flame.fill").foregroundStyle(.orange)
+                                .help("Still running and using a lot of CPU or memory")
+                        } else if !item.event.beacon.isEmpty {
                             Image(systemName: "dot.radiowaves.right").foregroundStyle(.red)
                                 .help("BEACON: connects \(item.event.beacon)")
                         } else if item.event.rawIP {
@@ -665,7 +717,10 @@ struct ActivityWindowView: View {
                 }
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Detail", value: \.detail) { item in
-                    Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                    HStack(spacing: 6) {
+                        if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
+                        Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
+                    }
                 }
                 .width(min: 200, ideal: 520)
             }
@@ -711,6 +766,7 @@ struct ActivityWindowView: View {
                 Button(status == .unclassified ? "Clear Rule" : status.title) {
                     signatures.setProcessRule(status, kind: event.kind, process: event.signatureProcess)
                 }
+                .disabled(status == .safe && !SignatureStore.canTrustWholeProcess(event.signatureProcess))
             }
         }
         Menu("Exclude") {

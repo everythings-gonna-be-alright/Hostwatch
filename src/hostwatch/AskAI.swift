@@ -130,19 +130,7 @@ enum EvidenceGatherer {
     }
 
     /// Masks obvious credentials (tokens in command lines, URL passwords, bearer tokens).
-    static func redactSecrets(_ text: String) -> String {
-        let rules: [(String, String)] = [
-            (#"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}"#, "$1 [REDACTED]"),
-            (#"(?i)(://[^/\s:@]+):[^@\s/]+@"#, "$1:[REDACTED]@"),
-            (#"(?i)((?:--?)?(?:password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|client[_-]?secret)\b)(\s*[=:]\s*|\s+)([^\s"']+)"#, "$1$2[REDACTED]"),
-            (#"\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,})"#, "[REDACTED]"),
-        ]
-        var result = text
-        for (pattern, template) in rules {
-            result = result.replacingOccurrences(of: pattern, with: template, options: .regularExpression)
-        }
-        return result
-    }
+    static func redactSecrets(_ text: String) -> String { Secrets.mask(text) }
 }
 
 // MARK: - Claude Code runner
@@ -337,7 +325,7 @@ final class AIAnalysis: ObservableObject {
         self.process = process
         let prompt = "Is this activity dangerous? Evidence collected on the Mac:\n\n" + context
         DispatchQueue.global().async {
-            stdin.fileHandleForWriting.write(Data(prompt.utf8))
+            stdin.fileHandleForWriting.write(Data(Secrets.mask(prompt).utf8))   // never send a secret
             try? stdin.fileHandleForWriting.close()
         }
     }

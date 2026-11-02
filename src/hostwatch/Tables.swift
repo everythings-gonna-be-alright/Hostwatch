@@ -10,6 +10,7 @@ struct PatternItem: Identifiable {
     let statusRank: Int          // dangerous 0 … safe 3
     let source: String?
     let note: String?
+    let decidedBy: String
 
     var id: String { entry.id }
     /// Status, then high-risk first within it.
@@ -17,9 +18,10 @@ struct PatternItem: Identifiable {
     var kind: String { entry.kind.rawValue }
     var processName: String { displayProcessName(entry.process).lowercased() }
     var pattern: String { entry.pattern }
+    /// Why: the decision's note, or the AI's reason for its suggestion.
     var reason: String {
-        if let note, !note.isEmpty { return "\(source ?? "note"): \(note)" }
-        return source.map { "marked by \($0)" } ?? ""
+        if let note, !note.isEmpty { return note }
+        return entry.suggestion?.note ?? ""
     }
     /// Who signed the binary this pattern is about (cached facts only; never touches disk).
     var signer: String { SigningCache.shared.cached(SignatureStore.subjectPath(entry))?.label ?? "" }
@@ -33,6 +35,7 @@ struct PatternItem: Identifiable {
         "process": { KeyPathComparator(\.processName, order: $0) },
         "pattern": { KeyPathComparator(\.pattern, order: $0) },
         "reason": { KeyPathComparator(\.reason, order: $0) },
+        "decided": { KeyPathComparator(\.decidedBy, order: $0) },
         "signer": { KeyPathComparator(\.signer, order: $0) },
         "count": { KeyPathComparator(\.count, order: $0) },
         "first": { KeyPathComparator(\.firstSeen, order: $0) },

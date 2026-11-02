@@ -18,7 +18,7 @@ Each kind of control has one home:
   badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
   **Settings…** (⌘,) and Quit.
 - **App menu bar** (while a Hostwatch window is open):
-  - *View*: Events ⌘1 · Patterns ⌘2 · Stories ⌘3 · Domains ⌘4 · Rules ⌘5, the **Show** filter
+  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, the **Show** filter
     (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
   - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
     Dangerous, Exclude Selection…, Start/Stop Collector.
@@ -68,14 +68,21 @@ signature are grouped into one **pattern**:
 |------|-----------|---------|
 | process | parent program → executable | `Microsoft Excel → /usr/bin/osascript` |
 | connection | process → proto, host bucket, port | `Slack → TCP internet:443`, `curl → TCP 45.33.*.*:8081` |
-| file | process → mode, zone | `rg → r ~/Documents/**`, `agent → r ~/.ssh/*  [SSH keys]` |
+| file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]` |
 
 Normalization: home → `~`, `$TMPDIR`, UUIDs, hex IDs and version numbers → placeholders (also in
 executable names that are only a version, e.g. `claude/versions/#.#.#`).
 
-**Files collapse into coarse zones.** What matters is *where* a process reaches, not every folder
-it walks: `/System/**`, `/usr/**`, `/Applications/**`, `$TMPDIR/**`, `~/Library/Containers/**`,
-`~/Documents/**`, `~/.cache/**` and so on. Full detail is kept only where it matters:
+**The general rule: no pattern covers a whole area** (`SignatureBuilder.specificPath`, for every program).
+A wildcard needs at least 2 folders below home (`~/Documents/work/*`) or 3 elsewhere
+(`/Users/Shared/tools/*`); a file in a shallower folder is its own pattern (`r ~/todo.txt`,
+`r ~/Documents/a.pdf`, `r /tmp/x.log`, `r /usr/bin/ls`). Patterns name the file's folder; for apps, trees
+deeper than 4 folders below home (5 elsewhere) end in `/**` there (`~/Projects/app/node_modules/a/**`), while
+interpreters and shells always get the exact folder. So `r *`, `r ~/*`, `r ~/Documents/**`, `r /*`,
+`r /tmp/*` or `r /Users/**` never exist, can't be a learned Safe rule, and "Mark All … From This Process ▸ Safe"
+is gone (Suspicious or Dangerous for a whole program still work). Undecided or automatic wide patterns from
+earlier versions are dropped at launch; ones you decided stay. On a real day of history: 1,219 → 2,803
+patterns, mostly routine (auto Safe); patterns to decide 150 → 227. Labelled places stay as before:
 - **sensitive places**, for any access: SSH/GPG keys, cloud and registry credentials, keychains,
   TCC, cookies, Safari/Mail/Messages data, browser credential stores, local accounts, sudoers.
   These are tagged `[label]`.
@@ -136,12 +143,24 @@ migrated and can be deleted.
   remembers its sort. Columns can be resized and reordered. Double-click a row to ask Claude. Patterns
   use the Show filter, can be searched and multi-selected. Right-click to mark one or many patterns, or **Mark All … From This Process**
   as a whole-process rule.
-- **Baseline…**: the first-run baseline report (see *Baseline: learning this Mac's normal behaviour*).
-- **Classify New with Claude**: sends 40 unclassified patterns (high-risk first, then most recent), with code-signing facts,
-  in one headless `claude -p` call (about 8 s and $0.03). Claude returns a verdict and reason for each.
-  **Auto-classify new** repeats this every 90 s for patterns older than a minute.
-- Claude never overrides a decision you made. A single **Ask Claude** verdict also classifies that
-  event's pattern.
+- **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*,
+  *AI suggests Safe* (waiting for you), *Automatic (routine)* or *New*. **Needs You…** opens Rules ▸ Needs You.
+- **AI suggests, you decide.** *Ask AI for Suggestions* (Rules ▸ Needs You) sends up to 40 New patterns
+  (high-risk first, then most recent), with code-signing facts, to the on-device model and/or Claude (one
+  headless `claude -p` call, about 8 s and $0.03). Each verdict is stored as a **suggestion** on the pattern;
+  nothing changes until you **Accept** it. *Suggest for new patterns automatically* (Settings ▸ AI) repeats this
+  every 90 s for patterns older than a minute. *Accept AI suggestions without asking* applies them by
+  themselves, except for high-risk patterns.
+- No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
+  or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
+  verdict also becomes a suggestion for that event's pattern.
+- **Interpreters and shells** (python, bash, node, curl, osascript…): network patterns name the destination's
+  domain (`TCP pythonhosted.org:443`) or address, never `internet`; file patterns follow the general rule
+  (above) with the exact folder even in deep trees.
+- **Interpreters can't be trusted wholesale:** *Mark All … From This Process ▸ Safe* is disabled for them, a
+  learned Safe rule that covers them broadly is refused, and the baseline never trusts them (macOS's own
+  `/bin/bash` or `/usr/bin/python3` included). Blanket trust from earlier versions (whole-process Safe, or Safe by
+  AI or the baseline) is undone at launch; your own per-pattern decisions stay.
 
 Debug helper: `Hostwatch.app/Contents/MacOS/Hostwatch --signature-report <history.jsonl>` prints
 how a history file groups into patterns and risk levels (`REPORT_KIND=file|net|exec|routine|normal|high`,
@@ -258,17 +277,15 @@ Two more per-connection signals (like new domains, not part of pattern keys):
 - Both pass *Only Important*, *Only New* and *Hide Safe*. On ~2 hours of real history: 0 beacons and
   0 raw-IP alerts; the one periodic flow (Slack → slack.com every ~125 s) was correctly ignored.
 
-**Settings ▸ Detection ▸ Trust Homebrew-installed tools** (off by default): Homebrew ad-hoc-signs what it builds,
-so signing cannot vouch for `git`, `kubectl`, `fish`… With this on, a binary in Homebrew's `Cellar`
-that has its `INSTALL_RECEIPT.json` is treated like a trusted developer's (measured: normal patterns
-261 → 225). `/opt/homebrew` is writable by your user, so a binary planted there would be trusted too.
-*End Now* for domain learning is also there.
+Homebrew ad-hoc-signs what it builds, so signing can't vouch for `git`, `kubectl`, `fish`…: they're judged
+by the path rules like your own builds, and you decide their patterns. *End Now* for domain learning is in
+Settings ▸ Detection.
 
 ## AI engine and triage
 
 **Settings ▸ AI** picks which AI Hostwatch uses (with the on-device model's status):
 
-| Engine | Classify New / Auto-classify | Ask AI (event or story) |
+| Engine | AI suggestions for patterns | Ask AI (event or story) |
 |--------|------------------------------|-------------------------|
 | **Apple On-Device (private)** | on-device only; what it can't settle stays New | on-device model |
 | **Claude** | Claude only | Claude |
@@ -311,9 +328,25 @@ so a high-risk pattern stays New until you decide. AI verdicts never remove step
 The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not eligible
 (Intel). When unavailable, everything goes to Claude as before.
 
-## Rules learned from your decisions (Rules tab)
+## Rules tab: Needs You, Rules, Decisions
 
-**Suggest Rules with Claude** sends your decisions (patterns *you* marked; secrets masked), your existing
+Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted, in
+that order of authority. The Rules tab shows it in three views (its toolbar label counts what waits for you):
+
+- **Needs You:** New patterns, one row per app with its reasons (see the baseline section), the AI's
+  suggestions (*AI suggests: Safe ×3 · on-device AI*) with **Accept**, **Trust**, **Dismiss** and *⋯*
+  (Show in Patterns, Mark Suspicious), and Claude's rule proposals (**Approve** / **Reject**). Rebuilt live
+  as patterns change; interpreters, shells and Hostwatch itself aren't listed.
+- **Rules:** baseline rules (code signatures, no AI: **Update Baseline**) and learned rules (**Suggest Rules…**).
+- **Decisions:** who decided which patterns, by app: *Patterns AI decided*, *Patterns you decided* (one by one,
+  each covers only itself), *…decided by learned rules*, *…decided by baseline rules*,
+  each with **Undo** (back to New) for AI and your decisions.
+- Every row (needs-you apps, baseline and learned rules, decided groups) has *N patterns ›*: click it to list
+  those patterns in place (high risk first; up to 40, with *Open in Patterns* for all of them).
+
+## Rules learned from your decisions
+
+**Suggest Rules…** (Rules ▸ Rules ▸ Learned rules) sends your decisions (patterns *you* marked; secrets masked), your existing
 rules and the story chains you always ignore. Claude's own verdicts are deliberately not used, so rules
 don't amplify the AI. Claude returns up to 8 rules: `kind` (exec/net/file/any), `process` glob, `pattern`
 glob (`*`, `?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale. It
@@ -328,8 +361,11 @@ Every proposal is checked locally before you see it:
 | matches no pattern, or > 25% of all patterns (with ≥ 200 patterns) | **refused** |
 | based on none of your decisions | warning |
 | a Safe rule covering New high-risk patterns | warning (shows how many) |
+| a Safe rule covering an interpreter or shell broadly (program or pattern < 4 letters) | **refused** |
 
-**Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
+While it runs, **Needs You** shows a progress card (how many of your decisions were sent, a live timer,
+**Cancel**) and the Rules tab reads *Rules (…)*; afterwards a result line says how many proposals came back
+and how many passed the checks (or why none did). **Approve** applies a rule; **Reject** drops it. Approved rules are saved in `rules.json`.
 
 **Precedence:** your markings and the baseline > your rules > Claude/on-device verdicts > automatic
 routine. A rule's verdict counts as yours: it satisfies *Only New (not reviewed)*, and a Safe rule
@@ -415,24 +451,87 @@ patterns seen so far (`BaselinePolicy`):
 
 - **Trusted** (Safe, source "baseline"): normal risk, the acting program (and for a launch the launched one)
   signed by Apple or by the developer of an installed app, valid signature, not quarantined, not in Downloads /
-  temp / Shared / a volume, and not touching a sensitive place (login items, credentials).
-- **On-device model** (never Claude): signed, but the developer isn't trusted yet. It can't mark high-risk Safe.
-- **Needs your review** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
+  temp / Shared / a volume, and not touching a sensitive place (login items, credentials, mail, messages).
+  macOS system services (daemons and agents on the sealed system volume, not command-line tools like `cat`,
+  `sqlite3` or a shell) may touch sensitive places: indexing, sync and malware scanning is their job.
+- **On-device model** (never Claude): signed, but the developer isn't trusted yet. Its verdicts are
+  suggestions in Needs You; it never suggests Safe for high risk.
+- **Needs You** (stays New): high risk, unsigned or ad-hoc, quarantined, Downloads or temp, sensitive
   places, or the program is gone. Malware already on the Mac lands here, so the baseline can't be poisoned.
+- Hostwatch's own activity, and interpreters and shells (macOS's own included), are never trusted or listed (they stay New).
 
-**Baseline rules.** Every trusted signer becomes one rule in the **Rules tab**: *Apple*, *Slack Technologies
-(Team BQR82RBBHL)*, and so on, listing the apps it covers and how many patterns it trusts. A rule keeps
-trusting that signer's **future** normal-risk patterns (checked every 30 s, always through the same policy, so
-never high-risk, unsigned, downloaded or sensitive). After learning, a developer without a rule isn't added
-by itself: **Build Now** adds rules for the trusted developers among the New patterns.
+**Baseline rules** (Rules tab) are narrow: **one per app and its signer** (*Slack · Slack Technologies*; the
+app's helpers included, and the signer must match), and one **macOS system** rule. A rule keeps trusting that app's **future** normal-risk patterns (checked
+every 30 s, always through the same policy). After learning, a new app isn't added by itself:
+**Update Baseline** (local, code signatures only, no AI) sorts New patterns again and adds rules for trusted
+apps among them.
 
-- **Pause** a rule: its patterns go back to New and it stops applying (kept, so Build Now won't recreate it).
-  **Delete** does the same and removes it; **Undo Baseline** removes every baseline rule.
+- **Pause** a rule: its patterns go back to New and it stops applying (kept, so Update Baseline won't recreate
+  it). **Delete** does the same and removes it; *⋯ ▸ Remove All Baseline Rules* removes every baseline rule.
 - **Low weight:** your markings and learned rules win over baseline rules, and stories ignore baseline
   trust (they count only your decisions and learned rules), so a chain still alerts.
-- **Needs your review** is grouped by app in the same tab: *Trust App* marks an app's patterns Safe as your
-  decision, *Show* opens them in Patterns.
-- Existing installs don't start learning by themselves: **Build Now** (Rules tab or Settings ▸ Detection).
+- **Needs You** has one row per app with all its reasons (for example *signed by Zoom (trusted developer, no
+  rule yet)* for an app installed after learning):
+  - **Trust** marks its patterns Safe (your decision). For a signed app it also adds a baseline rule marked
+    *Trusted by you*, which also covers that app's own sensitive places (never high-risk, unsigned or
+    downloaded). Unsigned or ad-hoc programs are trusted pattern by pattern, with no rule.
+  - Interpreters and shells (python, node, ruby, bash, osascript…) aren't listed: they run any script they're
+    given, so trusting them would trust a virus's script too. Their patterns stay New, visible in Patterns,
+    and stories keep watching them.
+  - **Dismiss** hides the row; its patterns stay New and aren't listed again.
+  - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
+    opens exactly those patterns (a removable chip replaces the Show filter).
+- Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
+- Baselines from the first version (one rule per developer) are undone once and sorted again.
+
+## Heavy processes
+
+Processes Hostwatch **saw start** that are still running and using a lot stand out in Events (apps that were
+already running when it started aren't followed, or Xcode and browsers would be flagged all day):
+- **Heavy** means sustained: CPU averaged over 30 s (at least 25 s of samples) at or above the limit (default
+  50% of one core), or a memory footprint at or above the limit (default 1 GB). *Settings ▸ Detection ▸ Heavy
+  processes* sets both, or turns it off.
+- The launch row gets a live badge (`🔥 380% CPU · 2.1 GB · 12 min`, or a memory chip when memory is the
+  reason) and a flame in Status; the HUD shows `🔥 380%`. When the process exits, the badge turns grey
+  (`ended 1 min ago · peak 240% · 900 MB`) for 10 minutes.
+- A banner above the list names the heavy ones: app icon, name (with an *Untrusted* tag when it is), the
+  program that started it, a CPU gauge (400% fills it), memory and running time; ✦ asks AI and ⋯ has Show in
+  Finder and Copy Path. **Only These** filters Events to them; the chevron collapses it to one line (the
+  busiest names), so it never hides that something is there.
+- **Time Travel uses the same design:** the heavy list is recorded with each 5-second metrics sample (usually
+  0–3 entries), so at the playhead the banner reads *Running heavy at 14:32:05* and the launch rows carry the
+  same badges as they did live (the running time is computed for that moment).
+- **Detection:** a heavy process that is unsigned, ad-hoc, quarantined or from a download/temp folder adds the
+  story stage *Heavy untrusted process* (3 points, strong): the cryptominer pattern.
+- **How:** every 5 s the collector's existing sampler (libproc `proc_pid_rusage`, already used for the busiest
+  processes) also sends every process above a floor (≥ 5% CPU or ≥ 300 MB, at most 50) with its start time;
+  launch events carry the start time too (`pstart`), so a reused pid is never mistaken for the process that
+  started. Exits are checked with `kill(pid, 0)`. Launches restored from history after a restart are followed
+  too. Nothing new is recorded; only numbers.
+
+## Story window
+
+**Double-click a story** (or **Show Chain**) to see the whole chain, event by event, on a vertical timeline:
+- each step with its time, stage (coloured for strong stages), one sentence ("sh started curl", "curl connected
+  to evil.example:443", "sh wrote ~/Library/LaunchAgents/x.plist"), the command line or address, and why it counts;
+- indented by process lineage (a child runs below its parent), with a *Processes in this chain* tree and signers;
+- **All activity** adds everything those processes did from a minute before to two minutes after the story (from
+  history, or what's still in memory when history is off), dimmed between the suspicious steps;
+- double-click or right-click a step to ask AI about it, show it in the timeline, or copy it; *Ask AI About This
+  Story*, *Show in Timeline*, *Dismiss* and *Always Ignore This Chain* at the bottom.
+
+## Reset Hostwatch
+
+**Settings ▸ General ▸ Reset Hostwatch…** starts over as on the first launch. Choose what to erase:
+
+- **Patterns, decisions and baseline:** `~/Library/Application Support/Hostwatch` (patterns, stories, domains,
+  your rules, signing facts, MCP token) and the baseline's state.
+- **Settings:** HUD, window, detection, AI, exclusions and history options (`local.hostwatch.app` defaults).
+- **Event history and logs:** `~/Library/Logs/Hostwatch`, and in a custom history folder only Hostwatch's
+  `activity-*` and `metrics-*` files.
+
+Hostwatch stops the collector, removes the settings, exits, and a small helper deletes the files once the app
+has quit (so nothing is saved back) and opens it again. Full Disk Access stays granted.
 
 ## After a restart
 
@@ -629,8 +728,8 @@ Runs every automated test (about 10 s):
 - **Swift** (`tests/swift`, Swift Testing, `swift test`): pattern grouping and risk rules; Stories
   (attack chains must fire as Dangerous, everyday dev work and known false positives must stay
   quiet); code signing on real unsigned / ad-hoc / quarantined / replaced binaries made in a temp
-  folder; new-domain baseline and badges; beaconing maths and rules, raw-IP rules, opt-in Homebrew
-  trust (on a real Homebrew binary when one is installed). Tests use in-memory engines and a scratch signing
+  folder; new-domain baseline and badges; beaconing maths and rules, raw-IP rules, Homebrew tools
+  not trusted by signature (on a real Homebrew binary when one is installed). Tests use in-memory engines and a scratch signing
   database, so they never touch your data.
 - **Collector** (`tests/swift/AgentTests.swift`): DNS answers, pktap SYN and `nettop` parsing with real
   lines captured on a Mac, destination inference, secret masking, exclusions, JSON output identical to
@@ -669,9 +768,17 @@ cat ~/.zshrc >/dev/null              # 📄 file
     that nobody else can write (and not a link). Otherwise it refuses and the HUD says why, so a fake
     collector run by an ordinary user cannot feed it data.
 - New-process events carry the **command line**, which is forwarded to the app, shown, given to
-  Claude and **written to history**. The collector masks obvious secrets first (Authorization
-  headers, `password=`/`token=`-style values, URL credentials, common token prefixes), but other
-  secrets passed as arguments can still be recorded. Environment variables are never forwarded.
+  Claude and **written to history**. Secrets are masked first (`Secrets`, one rule set): Authorization
+  and API-key headers and cookies, `name=value` / `--name value` for password, token, secret, API/access/
+  private key, auth, session and signature (`GITHUB_TOKEN=`, `?token=`, `--password` too), URL credentials
+  (`user:pass@`, `token@`), `curl -u`, `security … -w`, `sshpass -p`, `mysql -p…`, known token formats
+  (`ghp_`, `github_pat_`, `glpat-`, `xox…`, `sk-`, `AKIA`/`ASIA`, `AIza`, `npm_`, `hf_`), JWTs and private
+  key blocks. History shows `***`; AI prompts `[REDACTED]`.
+- **Nothing unmasked goes to an AI:** every prompt (Ask AI, pattern suggestions, rule proposals, domain
+  details, on-device or Claude) is masked again right before it's sent, whatever built it. MCP output too.
+- **Older history is masked too:** once, in the background, finished history files are re-masked (compressed
+  ones rewritten with a new index), and every file is masked again before it's compressed. A secret in a
+  shape no rule knows can still slip through. Environment variables are never forwarded.
 - To find connections, the collector runs `tcpdump` (DNS answers and TCP SYN headers only, no
   payloads) and `nettop` as root, read-only. Nothing is captured to disk.
 - `eslogger` is a notify-only observer. It cannot deny execution.

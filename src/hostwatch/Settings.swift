@@ -22,19 +22,30 @@ struct SettingsContext {
     let customHistorySize: () -> Void
     let changeHistoryLocation: () -> Void
     let clearHistory: () -> Void
+    let reset: (ResetPlan) -> Void
 }
 
 /// Small view state for the panes (SwiftUI's @State needs a macro plugin the CLT lacks).
 @MainActor
 final class SettingsState: ObservableObject {
     @Published var fullDiskAccess = Collector.appearsToHaveFullDiskAccess
-    @Published var trustHomebrew = SigningCache.shared.trustHomebrew
     @Published var copied = false
     @Published var mcpEnabled = MCPAccess.isEnabled()
     /// The registration command with a fresh token: shown once (only its hash is kept).
     @Published var mcpCommand: String?
     @Published var mcpError: String?
     @Published var refresh = 0
+    @Published var showReset = false
+    @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
+    }
+    @Published var heavyCPU: Double = { let v = UserDefaults.standard.double(forKey: "heavyCPUPercent"); return v > 0 ? v : 50 }() {
+        didSet { UserDefaults.standard.set(heavyCPU, forKey: "heavyCPUPercent") }
+    }
+    @Published var heavyMemory: Double = { let v = UserDefaults.standard.double(forKey: "heavyMemoryGB"); return v > 0 ? v : 1 }() {
+        didSet { UserDefaults.standard.set(heavyMemory, forKey: "heavyMemoryGB") }
+    }
+    @Published var resetPlan = ResetPlan()
 }
 
 enum SettingsPane: Int, CaseIterable {
@@ -75,12 +86,12 @@ final class SettingsWindowController: NSWindowController {
             let view: AnyView
             switch pane {
             case .general: view = AnyView(GeneralPane(collector: c.collector, updates: c.updates, ui: state,
-                                                      toggleCollector: c.toggleCollector))
+                                                      toggleCollector: c.toggleCollector, reset: c.reset))
             case .hud: view = AnyView(HUDPane(model: c.model, reset: c.resetOverlayFrame))
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline,
                                                           openBaseline: c.openBaseline, ui: state))
-            case .ai: view = AnyView(AIPane(classifier: c.classifier, ui: state))
+            case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
                                                       changeLocation: c.changeHistoryLocation, clear: c.clearHistory))
@@ -148,6 +159,7 @@ private struct GeneralPane: View {
     @ObservedObject var updates: UpdateChecker
     @ObservedObject var ui: SettingsState
     let toggleCollector: () -> Void
+    let reset: (ResetPlan) -> Void
     private var fullDiskAccess: Bool { ui.fullDiskAccess }
 
     var body: some View {
@@ -196,7 +208,73 @@ private struct GeneralPane: View {
                 Footnote("Once a day Hostwatch asks GitHub (api.github.com) for the latest release; nothing "
                          + "about this Mac is sent, and nothing is downloaded or installed by itself.")
             }
+            Section {
+                LabeledContent("Start over") {
+                    Button("Reset Hostwatch…") { ui.resetPlan = ResetPlan(); ui.showReset = true }
+                }
+            } header: {
+                Text("Reset")
+            } footer: {
+                Footnote("Erase patterns, the baseline, settings or history, then restart as on the first launch.")
+            }
         }
+        .sheet(isPresented: $ui.showReset) {
+            ResetSheet(plan: $ui.resetPlan,
+                       cancel: { ui.showReset = false },
+                       reset: { ui.showReset = false; reset(ui.resetPlan) })
+        }
+    }
+}
+
+/// Choose what to erase. The default erases everything, like a fresh install.
+private struct ResetSheet: View {
+    @Binding var plan: ResetPlan
+    let cancel: () -> Void
+    let reset: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "arrow.counterclockwise.circle.fill")
+                    .font(.system(size: 34)).foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Reset Hostwatch?").font(.headline)
+                    Text("Hostwatch stops the collector, erases what you choose and opens again, as on the first "
+                         + "launch. This can't be undone.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                option($plan.data, "Patterns, decisions and baseline",
+                       "Patterns and what you marked, stories, domains, your rules, baseline rules and review, "
+                       + "signing facts, the MCP token.")
+                option($plan.settings, "Settings",
+                       "HUD, window, detection, AI, exclusions and history options.")
+                option($plan.history, "Event history and logs",
+                       "Recorded events (Time Travel), resource history and the collector log.")
+            }
+            Text("Full Disk Access stays granted; remove it in System Settings if you want.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
+                Button("Reset and Restart", role: .destructive, action: reset)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(plan.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+    }
+
+    private func option(_ on: Binding<Bool>, _ title: String, _ detail: String) -> some View {
+        Toggle(isOn: on) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.checkbox)
     }
 }
 
@@ -259,23 +337,29 @@ private struct DetectionPane: View {
                          + "processes continue.")
             }
             Section {
-                Toggle("Trust Homebrew-installed tools", isOn: $ui.trustHomebrew)
-                    .onChange(of: ui.trustHomebrew) { _, on in
-                        SigningCache.shared.trustHomebrew = on
-                        signatures.reassess()
-                    }
+                Toggle("Highlight heavy processes in Events", isOn: $ui.heavyHighlight)
+                Picker("CPU (average over 30 s)", selection: $ui.heavyCPU) {
+                    Text("25% of a core").tag(25.0); Text("50% of a core").tag(50.0)
+                    Text("1 full core").tag(100.0); Text("2 cores").tag(200.0)
+                }
+                .disabled(!ui.heavyHighlight)
+                Picker("Memory", selection: $ui.heavyMemory) {
+                    Text("500 MB").tag(0.5); Text("1 GB").tag(1.0); Text("2 GB").tag(2.0); Text("4 GB").tag(4.0)
+                }
+                .disabled(!ui.heavyHighlight)
             } header: {
-                Text("Trust")
+                Text("Heavy processes")
             } footer: {
-                Footnote("Treats tools in Homebrew's Cellar (with an install receipt) like a trusted developer. "
-                         + "/opt/homebrew is writable by your user, so a planted binary there would be trusted too.")
+                Footnote("A process Hostwatch saw start that keeps using this much gets a 🔥 badge on its launch in "
+                         + "Events, the HUD and a strip above the list. Unsigned or downloaded ones also count toward a story "
+                         + "(the cryptominer pattern).")
             }
             Section {
                 LabeledContent("Patterns") {
                     HStack {
                         Text(baseline.statusText).foregroundStyle(.secondary).lineLimit(1)
                         Button("Show in Rules", action: openBaseline)
-                        Button(baseline.running ? "Sorting…" : "Build Now") { Task { await baseline.buildNow() } }
+                        Button(baseline.running ? "Updating…" : "Update Baseline") { Task { await baseline.buildNow() } }
                             .disabled(baseline.running)
                     }
                 }
@@ -308,6 +392,7 @@ private struct DetectionPane: View {
 
 private struct AIPane: View {
     @ObservedObject var classifier: PatternClassifier
+    @ObservedObject var signatures: SignatureStore
     @ObservedObject var ui: SettingsState
 
     var body: some View {
@@ -325,7 +410,20 @@ private struct AIPane: View {
             } header: {
                 Text("Classifying new patterns and Ask AI")
             } footer: {
-                Footnote(classifier.engine.help + " No AI ever marks a high-risk pattern Safe: that stays your decision.")
+                Footnote(classifier.engine.help)
+            }
+            Section {
+                Toggle("Suggest for new patterns automatically", isOn: $classifier.autoClassify)
+                Toggle("Accept AI suggestions without asking", isOn: Binding(
+                    get: { signatures.autoAcceptAI },
+                    set: { signatures.autoAcceptAI = $0; ui.refresh += 1 }))
+            } header: {
+                Text("Suggestions")
+            } footer: {
+                Footnote("AI suggests a status for new patterns; you accept it in Rules ▸ Needs You. Every 90 s it "
+                         + "looks at up to 40 new patterns (seen for over a minute). Accepting by itself skips "
+                         + "high-risk patterns, and no AI ever trusts a high-risk pattern or an interpreter or shell "
+                         + "(python, bash, node…): those stay your decision.")
             }
             Section {
                 Toggle("Allow Claude Code to read Hostwatch data (MCP)", isOn: Binding(

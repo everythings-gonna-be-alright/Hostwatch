@@ -9,6 +9,7 @@ enum TestEnv {
             .appendingPathComponent("hostwatch-tests-\(UUID().uuidString).json")
         setenv("HOSTWATCH_SIGNING_DB", db.path, 1)
         SigningCache.shared.live = false
+        ProcessList.startLookup = { _ in nil }      // deterministic collector output
     }()
 }
 
@@ -96,5 +97,28 @@ enum Binaries {
         if adhoc { run("/usr/bin/codesign", ["-f", "-s", "-", path]) }
         if quarantined { run("/usr/bin/xattr", ["-w", "com.apple.quarantine", "0083;6720a0b0;Chrome;", path]) }
         return path
+    }
+}
+
+/// A throwaway UserDefaults suite, removed (with its plist in ~/Library/Preferences) when the test run ends.
+func scratchDefaults(_ prefix: String = "hostwatch-tests") -> UserDefaults {
+    let name = "\(prefix)-\(UUID().uuidString)"
+    ScratchDefaults.lock.lock()
+    if ScratchDefaults.names.isEmpty { atexit { ScratchDefaults.removeAll() } }
+    ScratchDefaults.names.append(name)
+    ScratchDefaults.lock.unlock()
+    return UserDefaults(suiteName: name)!
+}
+
+enum ScratchDefaults {
+    nonisolated(unsafe) static var names: [String] = []
+    static let lock = NSLock()
+
+    static func removeAll() {
+        let prefs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
+        for name in names {
+            UserDefaults.standard.removePersistentDomain(forName: name)
+            try? FileManager.default.removeItem(at: prefs.appendingPathComponent(name + ".plist"))
+        }
     }
 }

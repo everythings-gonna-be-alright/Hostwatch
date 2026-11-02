@@ -80,6 +80,7 @@ final class SigningCache: @unchecked Sendable {
         fileURL = ProcessInfo.processInfo.environment["HOSTWATCH_SIGNING_DB"].map { URL(fileURLWithPath: $0) }
             ?? AppPaths.support.appendingPathComponent("signing.json")
         trusted = Set(UserDefaults.standard.stringArray(forKey: "trustedTeams") ?? [])
+        UserDefaults.standard.removeObject(forKey: "trustHomebrewTools")   // removed option
         if let data = try? Data(contentsOf: fileURL),
            let stored = try? JSONDecoder().decode([String: CodeIdentity].self, from: data) {
             known = stored
@@ -130,32 +131,8 @@ final class SigningCache: @unchecked Sendable {
 
     var trustedTeams: Set<String> { lock.lock(); defer { lock.unlock() }; return trusted }
 
-    /// Optional (off by default): treat Homebrew-installed tools as trusted. Homebrew ad-hoc-signs
-    /// what it builds, so signing cannot vouch for them; this trusts the install receipt instead.
-    /// /opt/homebrew is writable by your user, so a planted binary there would be trusted too.
-    var trustHomebrew: Bool = ProcessInfo.processInfo.environment["REPORT_TRUST_HOMEBREW"] != nil
-        || UserDefaults.standard.bool(forKey: "trustHomebrewTools") {
-        didSet { UserDefaults.standard.set(trustHomebrew, forKey: "trustHomebrewTools") }
-    }
-
-    static let homebrewCellars = ["/opt/homebrew/Cellar/", "/usr/local/Cellar/"]
-
-    /// A binary inside <Cellar>/<formula>/<version>/ that has Homebrew's INSTALL_RECEIPT.json.
-    static func homebrewManaged(_ path: String, cellars: [String] = homebrewCellars) -> Bool {
-        for cellar in cellars where path.hasPrefix(cellar) {
-            let rest = path.dropFirst(cellar.count).split(separator: "/", maxSplits: 2)
-            guard rest.count == 3 else { return false }
-            let receipt = cellar + rest[0] + "/" + rest[1] + "/INSTALL_RECEIPT.json"
-            return FileManager.default.fileExists(atPath: receipt)
-        }
-        return false
-    }
-
-    /// Trust decision for a binary: Apple, a trusted developer, or (if enabled) a Homebrew tool.
-    func trusts(_ path: String, _ id: CodeIdentity) -> Bool {
-        if isTrusted(id) { return true }
-        return trustHomebrew && id.valid != false && !id.missing && !id.quarantined && Self.homebrewManaged(path)
-    }
+    /// Trust decision for a binary: Apple or a trusted developer.
+    func trusts(_ path: String, _ id: CodeIdentity) -> Bool { isTrusted(id) }
 
     func setTrusted(_ team: String, _ on: Bool) {
         lock.lock()

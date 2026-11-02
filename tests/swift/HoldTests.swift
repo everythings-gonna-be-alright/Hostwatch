@@ -16,7 +16,7 @@ import Testing
         var watchdogs = 0
 
         @MainActor init(enabled: Bool = true) {
-            let defaults = UserDefaults(suiteName: "hold-tests-\(UUID().uuidString)")!
+            let defaults = scratchDefaults("hold-tests")
             hold = ProcessHold(defaults: defaults)
             hold.enabled = enabled
             hold.signal = { [unowned self] pid, sig in signals.append((pid, sig)); return procs[pid] == nil ? -1 : 0 }
@@ -31,7 +31,7 @@ import Testing
     func mine(_ path: String) -> ProcessFacts { ProcessFacts(uid: getuid(), path: path) }
 
     @Test func offByDefault() {
-        let hold = ProcessHold(defaults: UserDefaults(suiteName: "hold-default-\(UUID().uuidString)")!)
+        let hold = ProcessHold(defaults: scratchDefaults("hold-default"))
         #expect(!hold.enabled)
         #expect(hold.timeoutAction == .resume)
     }

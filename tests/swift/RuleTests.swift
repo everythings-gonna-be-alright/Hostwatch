@@ -125,21 +125,82 @@ import Testing
 
     // MARK: AI verdicts
 
-    @Test func aiNeverMarksAHighRiskPatternSafe() {
+    @Test func aiSuggestsAndYouDecide() {
+        let key = seen(net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 4101, to: "5.6.7.8:443"))
+        #expect(store.status(forKey: key) == .unclassified)
+        store.suggest(.safe, key: key, source: "claude", note: "routine archive")
+        #expect(store.status(forKey: key) == .unclassified)                  // only a suggestion
+        #expect(store.entry(key)?.suggestion?.status == .safe && store.decidedBy(key) == "AI suggests Safe")
+        #expect(store.acceptSuggestions(keys: [key]) == 1)
+        #expect(store.status(forKey: key) == .safe && store.entry(key)?.source == "claude")
+        #expect(store.decidedBy(key) == "AI (Claude)")
+    }
+
+    @Test func acceptingByItselfIsOptInAndSkipsHighRisk() {
+        store.autoAcceptAI = true
+        defer { store.autoAcceptAI = false }
         let shell = exec("/bin/sh", pid: 4100, ppid: 5, parent: "/Applications/Slack.app/Contents/MacOS/Slack")
         #expect(shell.signatureRisk == .high)
-        let key = seen(shell)
-        for source in ["claude", "on-device"] {
-            store.suggest(.safe, key: key, source: source, note: "looks routine")
-            #expect(store.status(forKey: key) == .unclassified)              // stays New for you
-        }
-        store.suggest(.suspicious, key: key, source: "claude", note: "app shell")
-        #expect(store.status(forKey: key) == .suspicious)                    // other verdicts still apply
+        let high = seen(shell)
+        store.suggest(.suspicious, key: high, source: "claude", note: "app shell")
+        #expect(store.status(forKey: high) == .unclassified && store.entry(high)?.suggestion?.status == .suspicious)
+        let curl = seen(net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 4101, to: "5.6.7.8:443"))
+        store.suggest(.safe, key: curl, source: "on-device", note: nil)
+        #expect(store.status(forKey: curl) == .safe)
+    }
 
-        let curl = exec("/usr/bin/curl", pid: 4101, ppid: 1, parent: "/bin/zsh")
-        #expect(curl.signatureRisk != .high)
-        let normal = seen(curl)
-        store.suggest(.safe, key: normal, source: "claude", note: nil)
-        #expect(store.status(forKey: normal) == .safe)                       // Safe is fine below high risk
+    @Test func aiNeverSuggestsSafeForHighRiskOrInterpreters() {
+        let shell = seen(exec("/bin/sh", pid: 4100, ppid: 5, parent: "/Applications/Slack.app/Contents/MacOS/Slack"))
+        let python = seen(net("/opt/homebrew/bin/python3.12", pid: 4102, to: "5.6.7.8:443"))
+        for key in [shell, python] {
+            for source in ["claude", "on-device"] { store.suggest(.safe, key: key, source: source, note: "looks routine") }
+            #expect(store.entry(key)?.suggestion == nil && store.status(forKey: key) == .unclassified)
+        }
+        store.suggest(.suspicious, key: python, source: "claude", note: nil)          // other verdicts are fine
+        #expect(store.entry(python)?.suggestion?.status == .suspicious)
+    }
+
+    @Test func interpretersCantBeTrustedWholesale() {
+        let python = "/opt/homebrew/bin/python3.12"
+        let key = seen(net(python, pid: 4103, to: "5.6.7.8:443"))
+        store.setProcessRule(.safe, kind: .net, process: python)                       // "python: everything Safe"
+        #expect(store.status(forKey: key) == .unclassified)
+        store.setProcessRule(.suspicious, kind: .net, process: python)                 // flagging is fine
+        #expect(store.status(forKey: key) == .suspicious)
+
+        let rule = LearnedRule(name: "python is fine", rationale: "", kind: .net,
+                               process: "*/python3.12", pattern: "*", action: .safe)
+        #expect(RuleEvaluation.evaluate(rule, entries: store.allEntries).problems.contains { $0.contains("interpreter") })
+    }
+
+    @Test func wideInterpreterPatternsAreDroppedUnlessYouDecided() throws {
+        let zsh = "/bin/zsh"
+        func wide(_ pattern: String, _ source: String?, _ status: SignatureStatus) -> String {
+            let key = "file|\(zsh)|\(pattern)"
+            store.restore(SignatureEntry(id: key, kind: .file, process: zsh, pattern: pattern, count: 1, firstSeen: Date(),
+                                         lastSeen: Date(), status: status, source: source, note: nil, exampleName: "zsh",
+                                         examplePid: 1, exampleProc: zsh, exampleTarget: "/x", exampleExtra: "r", exampleParent: ""))
+            return key
+        }
+        let auto = wide("r /*", "auto", .safe)
+        let new = wide("r /Users/**", nil, .unclassified)
+        let mine = wide("r ~/Documents/**", "you", .safe)
+        store.save(sync: true)
+        let reopened = SignatureStore(directory: dir)
+        #expect(reopened.entry(auto) == nil && reopened.entry(new) == nil)
+        #expect(reopened.status(forKey: mine) == .safe)                                // your decision stays
+    }
+
+    @Test func blanketTrustInInterpretersIsUndoneAtLaunch() throws {
+        let python = seen(net("/opt/homebrew/bin/python3.12", pid: 4104, to: "5.6.7.8:443"))
+        let curlKey = seen(net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 4105, to: "5.6.7.8:443"))
+        let mine = seen(net("/opt/homebrew/bin/node", pid: 4106, to: "5.6.7.8:443"))
+        store.set(.safe, keys: [python], source: "claude")
+        store.set(.safe, keys: [curlKey], source: "claude")
+        store.set(.safe, keys: [mine])                                                  // your own decision
+        store.save(sync: true)
+        let reopened = SignatureStore(directory: dir)
+        #expect(reopened.status(forKey: python) == .unclassified)
+        #expect(reopened.status(forKey: curlKey) == .safe && reopened.status(forKey: mine) == .safe)
     }
 }

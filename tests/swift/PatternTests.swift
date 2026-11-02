@@ -11,12 +11,21 @@ import Testing
         #expect(a.signatureRisk == .routine)
     }
 
-    @Test func homeFoldersCollapseToOneZone() {
+    /// The general rule: no pattern covers a whole area like ~/Documents/** or ~/*.
+    @Test func patternsAreSpecific() {
         let rg = "/opt/homebrew/bin/rg"
-        let a = file(rg, pid: 2, "r", "\(home)/Documents/git/my-project/src/main.go")
-        let b = file(rg, pid: 2, "r", "\(home)/Documents/notes.txt")
-        #expect(a.signaturePattern == "r ~/Documents/**")
-        #expect(a.signatureKey == b.signatureKey)
+        #expect(file(rg, pid: 2, "r", "\(home)/Documents/git/my-project/src/main.go").signaturePattern == "r ~/Documents/git/my-project/src/*")
+        #expect(file(rg, pid: 2, "r", "\(home)/Documents/notes.txt").signaturePattern == "r ~/Documents/notes.txt")
+        #expect(file(rg, pid: 2, "r", "\(home)/todo.txt").signaturePattern == "r ~/todo.txt")
+        #expect(file(rg, pid: 2, "r", "\(home)/Projects/app/node_modules/a/b/c/index.js").signaturePattern
+                == "r ~/Projects/app/node_modules/a/**")                          // deep trees end in /**
+        #expect(file(rg, pid: 2, "r", "/Users/Shared/run.sh").signaturePattern == "r /Users/Shared/run.sh")
+        for pattern in ["r ~/*", "r ~/Documents/*", "r ~/Documents/**", "r /*", "r /Users/**", "r /tmp/*", "r *", "w /Users/Shared/*"] {
+            #expect(SignatureBuilder.isTooWide(filePattern: pattern), "\(pattern)")
+        }
+        for pattern in ["r ~/Documents/work/*", "r /Users/Shared/tools/*", "r ~/.ssh/*  [ssh keys]", "r ~/todo.txt"] {
+            #expect(!SignatureBuilder.isTooWide(filePattern: pattern), "\(pattern)")
+        }
     }
 
     @Test func versionNamedExecutablesAreOneProcess() {
@@ -103,5 +112,32 @@ import Testing
         #expect(f.admits(.dangerous, risk: .normal, reviewed: true))
         #expect(f.admits(.unclassified, risk: .high, reviewed: false))
         #expect(!f.admits(.unclassified, risk: .normal, reviewed: false))
+    }
+}
+
+/// Interpreters and shells get narrow patterns: the domain, the exact folder; never "internet" or "~/Documents/**".
+@Suite struct NarrowInterpreterPatterns {
+    @Test func networkNamesTheDomain() {
+        let e = net("/opt/homebrew/bin/python3.12", pid: 11, to: "151.101.0.223:443", host: "files.pythonhosted.org")
+        #expect(e.signaturePattern == "TCP pythonhosted.org:443")
+        let raw = net("/opt/homebrew/bin/node", pid: 12, to: "45.1.2.3:443")
+        #expect(raw.signaturePattern == "TCP 45.1.2.3:443")
+        let app = net("/Applications/Slack.app/Contents/MacOS/Slack", pid: 13, to: "3.68.170.153:443", host: "app.slack.com")
+        #expect(app.signaturePattern == "TCP internet:443")                      // apps keep the broad bucket
+    }
+
+    @Test func filesNameTheExactFolder() {
+        let py = file("/opt/homebrew/bin/python3", pid: 14, "r", "\(home)/Documents/work/report/data.csv")
+        #expect(py.signaturePattern == "r ~/Documents/work/report/*")
+        let other = file("/opt/homebrew/bin/python3", pid: 14, "r", "\(home)/Documents/notes.txt")
+        #expect(other.signatureKey != py.signatureKey)
+        let app = file("/Applications/Tool.app/Contents/MacOS/Tool", pid: 15, "r", "\(home)/Documents/work/report/data.csv")
+        #expect(app.signaturePattern == "r ~/Documents/work/report/*")             // the same general rule for apps
+        #expect(file("/opt/homebrew/bin/python3", pid: 18, "r", "\(home)/todo.txt").signaturePattern == "r ~/todo.txt")
+        #expect(other.signaturePattern == "r ~/Documents/notes.txt")
+        #expect(file("/bin/bash", pid: 19, "r", "/Users/Shared/run.sh").signaturePattern == "r /Users/Shared/run.sh")
+        let bash = file("/bin/bash", pid: 16, "r", "/Users/Shared/tools/run.sh")
+        #expect(bash.signaturePattern == "r /Users/Shared/tools/*")
+        #expect(!file("/bin/zsh", pid: 17, "r", "\(home)/Projects/a/b/c.txt").signaturePattern.contains("**"))
     }
 }

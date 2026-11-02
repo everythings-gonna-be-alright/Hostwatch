@@ -26,11 +26,14 @@ struct MetricSample: Codable, Sendable, Equatable {
     var diskRead: Double?        // bytes/s (from the collector)
     var diskWrite: Double?
     var top: [TopProcess]?
+    /// Processes started while watching that ran heavy at this moment (live strip and badges, for Time Travel).
+    var heavy: [HeavyProcess]?
 
     var date: Date { Date(timeIntervalSince1970: t) }
 
     enum CodingKeys: String, CodingKey {
         case t, cpu = "c", mem = "m", pressure = "p", netIn = "ni", netOut = "no", diskRead = "dr", diskWrite = "dw", top
+        case heavy = "h"
     }
 }
 
@@ -231,6 +234,8 @@ final class MetricsStore: ObservableObject {
     private let directory: () -> URL
     private var timer: Timer?
     private var lastTop: (date: Date, procs: [TopProcess], read: Double, write: Double)?
+    /// Heavy processes now (from `ProcessVitals`), stored with each sample.
+    var heavyProvider: () -> [HeavyProcess] = { [] }
     private let writer = DispatchQueue(label: "hostwatch.metrics", qos: .utility)
     private var lastMaintenanceDay = ""
     private let cache = MetricsCache()
@@ -265,6 +270,8 @@ final class MetricsStore: ObservableObject {
             sample.diskWrite = top.write
             sample.top = top.procs
         }
+        let heavy = heavyProvider()
+        if !heavy.isEmpty { sample.heavy = heavy }
         recent.append(sample)
         if let first = recent.first, now.timeIntervalSince(first.date) > 30 * 60 { recent.removeFirst() }
         let archive = archive

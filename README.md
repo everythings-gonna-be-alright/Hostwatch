@@ -129,7 +129,8 @@ open dist/Hostwatch.app
 Then, either way:
 
 1. Open **System Settings → Privacy & Security → Full Disk Access**, add `Hostwatch.app` and turn it on.
-   The app checks this and shows a guide if it's missing.
+   If it's missing, Hostwatch opens a short setup window that walks you through it and notices the
+   grant by itself.
 2. Hostwatch asks for your administrator password to start its collector.
 3. The 〰 icon appears in the menu bar, and the HUD starts showing activity.
 
@@ -141,14 +142,15 @@ with a stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (
 - **The first hour is a learning period.** In three waves (5, 15 and 60 minutes) Hostwatch trusts ordinary
   activity of Apple and your installed apps' developers, and leaves anything unsigned, downloaded, temporary
   or high-risk for you. Each trusted developer becomes a baseline rule in the Rules tab (pause or delete any of
-  them), and what needs your review is listed there by app. Domains your trusted software uses become the
+  them), and what needs your decision is listed there by app (Rules ▸ Needs You), with AI suggestions you
+  accept or not. Domains your trusted software uses become the
   baseline too.
 - Choose **Open Hostwatch** (⌘O) from the menu bar icon. The window's tabs (⌘1–⌘5):
   - **Events:** the live stream, with CPU, memory, network and disk in the footer.
-  - **Patterns:** what has been learned.
+  - **Patterns:** what has been learned, and who decided each one.
+  - **Rules:** what needs your decision, the rules that decide automatically, and who decided what.
   - **Stories:** suspicious chains.
   - **Domains:** where your apps connect.
-  - **Rules:** rules learned from your decisions.
 - Set **Show** to *Only Important* to see only flagged patterns and new high-risk activity.
 - Click **Time Travel** in the toolbar (⌥⌘T) to go back to any recorded moment.
 - Right-click to mark patterns safe or suspicious, trust a developer, or exclude a process, host or folder.
@@ -197,8 +199,10 @@ Results are secret-masked and size-capped, and only what Claude asks for is sent
 - **Update checks.** Once a day (and on *Check for Updates…*) Hostwatch asks GitHub's API for the latest
   release. Nothing about your Mac is sent, and nothing is downloaded or installed by itself. Turn it off in
   *Settings ▸ General*.
-- **Command lines are recorded.** Obvious secrets (tokens, passwords, URL credentials) are masked by
-  the collector, but other secrets passed as arguments can end up in history.
+- **Command lines are recorded, with secrets masked.** Passwords, tokens and keys (headers, `--password`,
+  `FOO_TOKEN=`, URL credentials, `curl -u`, `security -w`, known token formats, JWTs, private keys) are masked
+  before they reach history, and every prompt is masked again right before it goes to any AI. A secret in a
+  shape no rule knows can still slip through.
 - **The collector runs as root.** Keep the app somewhere only you can write to (e.g. `/Applications`).
 - **Detection first.** Hostwatch never deletes anything. It only pauses or kills a process if you turn on
   the opt-in hold, and only your own processes, with your answer.
