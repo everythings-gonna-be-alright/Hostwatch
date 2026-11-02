@@ -6,7 +6,7 @@ import Testing
 /// on the Mac; waves at 5, 15 and 60 minutes; undoable; stories still alert.
 @MainActor @Suite(.serialized) struct Baseline {
     let slack = "/Applications/Slack.app/Contents/MacOS/Slack"
-    let dropper = FileManager.default.homeDirectoryForCurrentUser.path + "/Downloads/Installer"
+    let dropper = FileManager.default.homeDirectoryForCurrentUser.path + "/Downloads/Setup"
     let zoom = "/Applications/zoom.us.app/Contents/MacOS/zoom.us"
 
     func entry(_ kind: EventKind = .net, risk: PatternRisk = .normal, pattern: String = "TCP internet:443",
@@ -158,7 +158,7 @@ import Testing
         #expect(store.status(for: dropperNet) == .unclassified)                 // left for you
         let report = try #require(learner.report)
         #expect(learner.trustedCount == 1 && report.reviewCount == 1)
-        #expect(report.review.first?.app == "Installer")
+        #expect(report.review.first?.app == "Setup")
         #expect(!store.markedSafeByYou(slackNet))                               // stories still alert on it
         #expect(learner.rules.map(\.id) == [slackKey])                         // one rule per app
         #expect(learner.rules.first?.name == "Slack" && learner.rules.first?.signer == "Slack Technologies")
@@ -194,6 +194,18 @@ import Testing
         let group = try #require(learner.report?.review.first)
         await learner.trustApp(group)
         #expect(store.status(for: e) == .safe && learner.rules.isEmpty)
+    }
+
+    @Test func interpretersCantBeTrustedFromTheReview() async throws {
+        let (learner, store, _) = try makeLearner()
+        let python = "/opt/homebrew/Cellar/python@3.12/3.12.9/bin/python3.12"
+        let e = net(python, pid: 17, to: "5.6.7.8:443")
+        store.observe(e)
+        await learner.runWave()
+        let group = try #require(learner.report?.review.first { $0.app == "python3.12" })
+        #expect(learner.runsAnyCode(group))
+        await learner.trustApp(group)
+        #expect(store.status(for: e) == .unclassified && learner.rules.isEmpty)
     }
 
     @Test func dismissedStaysNewAndIsNotListedAgain() async throws {

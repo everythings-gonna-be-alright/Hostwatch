@@ -14,7 +14,8 @@
   high-risk, unsigned, downloaded or temporary; sensitive places only for macOS services or apps you trusted.
   Signed-but-untrusted developers go to the on-device model; the rest waits in **Needs your review**, one row
   per app with its reasons: **Trust** (adds a rule marked *Trusted by you*), **Dismiss** (stays New, not listed
-  again), Mark Suspicious. Hostwatch's own activity is never listed. Pause, Delete and **Update Baseline**
+  again), Mark Suspicious; interpreters like python or node can't be trusted from here, since they run any
+  script. Hostwatch's own activity is never listed. Pause, Delete and **Update Baseline**
   (local, no AI; separate from *Suggest Rules from My Decisions*, which asks Claude). Your decisions win and
   stories ignore baseline trust. It replaces the old "Trust Baseline…", which trusted everything.
 - **`sqlite3` is recognised as a living-off-the-land tool** (its name was cut at the digit before).

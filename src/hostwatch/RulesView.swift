@@ -277,6 +277,7 @@ private struct ReviewRow: View {
     let group: BaselineReport.Group
     let baseline: BaselineLearner
     let showPatterns: (String) -> Void
+    private var anyCode: Bool { baseline.runsAnyCode(group) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -295,10 +296,17 @@ private struct ReviewRow: View {
                 if group.reasons.count > 4 {
                     Text("· and \(group.reasons.count - 4) more").font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
+                if anyCode {
+                    Label("Runs any script it's given: trusting it would trust a virus's script too. Dismiss keeps it New.",
+                          systemImage: "info.circle")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
-            Button("Trust") { Task { await baseline.trustApp(group) } }.buttonStyle(.glass)
-                .help("Your decision: mark these Safe; a signed app also gets a baseline rule (Trusted by you)")
+            if !anyCode {
+                Button("Trust") { Task { await baseline.trustApp(group) } }.buttonStyle(.glass)
+                    .help("Your decision: mark these Safe; a signed app also gets a baseline rule (Trusted by you)")
+            }
             Button("Dismiss") { baseline.dismiss(group) }.buttonStyle(.glass)
                 .help("Hide it here; its patterns stay New")
             Menu {

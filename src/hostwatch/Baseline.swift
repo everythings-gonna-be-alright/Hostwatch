@@ -404,6 +404,10 @@ final class BaselineLearner: ObservableObject {
     /// Trust (your decision): marks the app's listed patterns Safe and, for a signed app, makes a rule
     /// you can see ("Trusted by you") that keeps covering the app's ordinary activity.
     func trustApp(_ group: BaselineReport.Group) async {
+        guard !runsAnyCode(group) else {
+            message = "\(group.app) runs any script it's given, so it can't be trusted from here: Dismiss keeps it New."
+            return
+        }
         let entries = group.keys.compactMap { store.entry($0) }
         var madeRule: BaselineRule?
         for (_, decision) in await decide(entries, allowSensitive: true) {
@@ -416,6 +420,15 @@ final class BaselineLearner: ObservableObject {
         report?.prune { [store] key in store.status(forKey: key) == .unclassified }
         save()
         await applyApproved()
+    }
+
+    /// Interpreters and shells (python, node, sh, osascript…) run whatever code they're given, so trusting
+    /// them would trust any script, a virus's too. The review offers only Dismiss or Mark Suspicious.
+    func runsAnyCode(_ group: BaselineReport.Group) -> Bool {
+        group.keys.contains { key in
+            guard let e = store.entry(key) else { return false }
+            return SignatureBuilder.isLolbin(SignatureStore.subjectPath(e))
+        }
     }
 
     func markSuspicious(_ group: BaselineReport.Group) {

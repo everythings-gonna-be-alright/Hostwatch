@@ -438,6 +438,8 @@ apps among them.
   - **Trust** marks its patterns Safe (your decision). For a signed app it also adds a baseline rule marked
     *Trusted by you*, which also covers that app's own sensitive places (never high-risk, unsigned or
     downloaded). Unsigned or ad-hoc programs are trusted pattern by pattern, with no rule.
+  - Interpreters and shells (python, node, ruby, sh, osascript…) have no Trust: they run any script they're
+    given, so trusting them would trust a virus's script too.
   - **Dismiss** hides the row; its patterns stay New and aren't listed again.
   - *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**.
   - Homebrew builds are ad-hoc signed: **Trust Homebrew Tools** (same as Settings ▸ Detection) trusts programs
