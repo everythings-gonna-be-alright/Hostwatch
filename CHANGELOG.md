@@ -8,7 +8,7 @@
   opaque. With Reduce Transparency on, glass shows as Solid.
 - **HUD resize like a window:** the left edge changes only the width, the bottom edge only the height, the
   corner both; height changes in whole rows only after a full row of movement, so a sideways drag never
-  changes it.
+  changes it; the right edge no longer moves when you widen it from the left.
 
 ## 0.6.0 – decisions you can see
 

@@ -241,7 +241,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, actions: actions))
+        let hud = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, actions: actions))
+        // The panel's size is set only by `resizeOverlay` (top-right corner fixed). Left to itself the hosting
+        // view would resize the panel to its content first, from the bottom-left, so the right edge jumped.
+        hud.sizingOptions = []
+        panel.contentView = hud
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
