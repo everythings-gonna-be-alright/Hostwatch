@@ -348,10 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
-        if case .done = baseline.phase, let apps = baseline.report?.review.count, apps > 0 {
-            menu.addItem(item("\(apps) app\(apps == 1 ? "" : "s") need\(apps == 1 ? "s" : "") your decision…",
-                              #selector(showBaselineReport), symbol: "checkmark.shield"))
-        } else if case .learning(let wave, _) = baseline.phase {
+        if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
             learning.image = symbol("hourglass")
             learning.isEnabled = false
@@ -758,6 +755,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.title = "Full Disk Access"
+        window.level = .floating                          // stays above other windows until it's dealt with
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.hidesOnDeactivate = false
         let close: () -> Void = { [weak window] in window?.close() }
         window.contentView = NSHostingView(rootView: FullDiskAccessView(
             setup: setup,

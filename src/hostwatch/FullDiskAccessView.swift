@@ -122,18 +122,12 @@ struct FullDiskAccessView: View {
     @ViewBuilder private var steps: some View {
         if !setup.granted {
             VStack(alignment: .leading, spacing: 12) {
-                StepRow(number: 1, done: setup.openedSettings, title: "Open Privacy & Security ▸ Full Disk Access") {
+                StepRow(number: 1, done: setup.openedSettings, title: "Turn on Hostwatch in Privacy & Security ▸ Full Disk Access") {
                     Button("Open System Settings") { setup.openSettings() }
                         .buttonStyle(.glassProminent)
                         .controlSize(.small)
                 }
-                StepRow(number: 2, done: false, title: "Turn on Hostwatch") {
-                    Button("Show in Finder") { setup.revealApp() }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                        .help("Not in the list? Drag Hostwatch from Finder into it, or click + and choose it.")
-                }
-                StepRow(number: 3, done: false, title: "Come back here: Hostwatch notices by itself") {
+                StepRow(number: 2, done: false, title: "Come back here: Hostwatch notices by itself") {
                     ProgressView().controlSize(.small)
                 }
                 if setup.openedSettings {

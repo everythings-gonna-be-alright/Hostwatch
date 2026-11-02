@@ -13,8 +13,7 @@
   time, and launches carry their start time.
 
 - **Friendlier Full Disk Access setup:** a window instead of an alert: what Hostwatch watches and that it stays
-  on the Mac, three numbered steps (Open System Settings, turn on Hostwatch with Show in Finder to drag it in,
-  come back), a live check that notices the grant by itself and turns the button into *Start Watching*, and
+  on the Mac, two steps (turn on Hostwatch in System Settings, come back), kept above other windows, a live check that notices the grant by itself and turns the button into *Start Watching*, and
   *Quit & Reopen* when macOS needs a fresh start.
 
 - **Story window:** double-click a story (or *Show Chain*) for the whole chain event by event: a vertical
