@@ -333,6 +333,12 @@ format (VERDICT line first), with the evidence shortened to ~6,000 characters to
 ~4,000-token context window; reading local files is Claude-only. An on-device "SAFE" from Ask never marks
 a high-risk pattern Safe. Earlier versions' two toggles are migrated to the matching engine.
 
+**Claude usage** (Settings ▸ AI): tokens and cost of every Claude run Hostwatch made (Ask AI, classifying
+patterns, Suggest Rules), counted across launches from each `claude -p` result (`usage`, `total_cost_usd`):
+"1.2M tokens · $3.41", with runs and the start date under it, per feature and input/cached/output in the
+tooltip. Failed runs that still reached Claude count too. **Reset** starts from zero; *Reset Hostwatch* with
+settings clears it. The on-device model is free and isn't counted.
+
 Classification steps:
 
 1. **On-device pass** (engines with on-device): Apple's on-device model (`SystemLanguageModel`, never Private

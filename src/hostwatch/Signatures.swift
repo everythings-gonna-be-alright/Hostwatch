@@ -1672,8 +1672,10 @@ final class PatternClassifier: ObservableObject {
         guard running else { return }
         running = false
         process = nil
+        let parsed = try? JSONSerialization.jsonObject(with: out) as? [String: Any]
+        if let parsed { MainActor.assumeIsolated { ClaudeUsage.shared.add(result: parsed, .classify) } }
         guard status == 0,
-              let obj = try? JSONSerialization.jsonObject(with: out) as? [String: Any],
+              let obj = parsed,
               let text = obj["result"] as? String
         else {
             lastMessage = "Claude failed: " + String(err.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200))

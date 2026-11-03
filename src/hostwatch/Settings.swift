@@ -441,6 +441,7 @@ private struct AIPane: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var ui: SettingsState
+    @ObservedObject var usage = ClaudeUsage.shared
 
     var body: some View {
         let status = classifier.localStatus
@@ -454,6 +455,7 @@ private struct AIPane: View {
                     Label(status.label, systemImage: status.isReady ? "checkmark.circle.fill" : "exclamationmark.circle")
                         .foregroundStyle(status.isReady ? .green : .orange)
                 }
+                ClaudeUsageRow(usage: usage)
             } header: {
                 Text("Classifying new patterns and Ask AI")
             } footer: {
@@ -522,6 +524,45 @@ private struct AIPane: View {
                          + "every earlier registration. Secrets are masked; nothing can be changed through it.")
             }
         }
+    }
+}
+
+/// All-time Claude tokens and cost, one line; per feature in the tooltip.
+private struct ClaudeUsageRow: View {
+    @ObservedObject var usage: ClaudeUsage
+
+    var body: some View {
+        let all = usage.totals.all
+        LabeledContent {
+            HStack(spacing: 8) {
+                if all.runs == 0 {
+                    Text("None yet").foregroundStyle(.secondary)
+                } else {
+                    Text("\(ClaudeUsage.short(all.tokens)) tokens · \(ClaudeUsage.dollars(all.cost))").monospacedDigit()
+                    Button("Reset") { usage.reset() }
+                        .controlSize(.small)
+                        .help("Start counting from zero")
+                }
+            }
+        } label: {
+            Text("Claude usage")
+            if all.runs > 0 {
+                Text("\(all.runs) \(all.runs == 1 ? "run" : "runs") since \(usage.totals.since.formatted(date: .abbreviated, time: .omitted))")
+            }
+        }
+        .help(detail)
+    }
+
+    private var detail: String {
+        let all = usage.totals.all
+        guard all.runs > 0 else { return "Tokens Hostwatch sends to and gets from Claude, over all runs." }
+        var lines = ClaudeUsage.Feature.allCases.compactMap { f -> String? in
+            let t = usage.tally(f)
+            return t.runs == 0 ? nil
+                : "\(f.title): \(ClaudeUsage.short(t.tokens)) tokens, \(ClaudeUsage.dollars(t.cost)), \(t.runs) runs"
+        }
+        lines.append("In \(ClaudeUsage.short(all.input)) (\(ClaudeUsage.short(all.cached)) cached) · out \(ClaudeUsage.short(all.output))")
+        return lines.joined(separator: "\n")
     }
 }
 
