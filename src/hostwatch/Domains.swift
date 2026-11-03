@@ -258,6 +258,8 @@ struct DomainsView: View {
     let search: String
     /// Opens the domain's details window (risk score, programs, Ask AI).
     var openDetails: (String) -> Void = { _ in }
+    /// On a threat list: the reason, else nil.
+    var knownBad: (String) -> String? = { _ in nil }
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -325,14 +327,18 @@ struct DomainsView: View {
     private func table(_ rows: [DomainItem]) -> some View {
         Table(rows, selection: $state.selection, sortOrder: $state.order) {
             TableColumn("Status", value: \.statusRank) { item in
+              if let bad = knownBad(item.domain) {
+                KnownBadTag(detail: bad)
+              } else {
                 Text(item.status)
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(Capsule().fill((item.isNew ? Color.purple : Color.secondary).opacity(0.16)))
                     .overlay(Capsule().strokeBorder((item.isNew ? Color.purple : Color.secondary).opacity(0.45), lineWidth: 0.5))
+              }
             }
-            .width(min: 64, ideal: 76, max: 96)
+            .width(min: 64, ideal: 76, max: 110)
             TableColumn("Domain", value: \.domain) { item in
                 Text(item.domain).fontWeight(.semibold)
                     .help(item.record.hosts.joined(separator: "\n"))

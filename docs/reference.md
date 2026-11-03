@@ -18,7 +18,7 @@ Each kind of control has one home:
   badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
   **Settings…** (⌘,) and Quit.
 - **App menu bar** (while a Hostwatch window is open):
-  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, the **Show** filter
+  - *View*: Overview ⌘1 · Events ⌘2 · Patterns ⌘3 · Rules ⌘4 · Stories ⌘5 · Domains ⌘6, the **Show** filter
     (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
   - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
     Dangerous, Exclude Selection…, Start/Stop Collector.
@@ -524,6 +524,41 @@ already running when it started aren't followed, or Xcode and browsers would be 
   history, or what's still in memory when history is off), dimmed between the suspicious steps;
 - double-click or right-click a step to ask AI about it, show it in the timeline, or copy it; *Ask AI About This
   Story*, *Show in Timeline*, *Dismiss* and *Always Ignore This Chain* at the bottom.
+
+## Overview
+
+The first tab (it opens with the window): *is my Mac OK?* in ten seconds. A headline (fine / something needs a
+look), then cards that lead to their tab: **Protection** (collector, baseline, history, threat lists, CPU and
+memory), **Needs you**, **Known bad**, **Stories**, **macOS vulnerabilities**, **Heavy processes** and **Last
+24 hours** (new patterns and domains, how many were decided, stories). The tab bar shows each tab's icon, with
+counts as badges (icons only when the window is narrow); the event-kind counters appear on Events only.
+
+## Known threats and exploited macOS vulnerabilities
+
+Once a day (and *Update Now* in Settings ▸ Threat Intelligence) Hostwatch downloads public lists and matches them
+on this Mac; nothing about the Mac is sent:
+
+| List | What | Key |
+|------|------|-----|
+| HaGeZi Threat Intelligence (Medium) | ~320k malware, phishing and C2 domains, ~35k IPs | none |
+| Feodo Tracker | active botnet command servers | none |
+| ThreatFox | C2 domains, IPs (and ports), URLs' hosts and file hashes, with the malware family (last 7 days, kept 180) | free abuse.ch key |
+| MalwareBazaar | malware file SHA-256 (last 48 h, kept 180 days) | free abuse.ch key |
+| CISA Known Exploited Vulnerabilities | Apple flaws exploited in the wild | none |
+
+- **Every connection** is checked: its hostname and each parent domain (`a.b.evil.com` → `evil.com`), then its
+  IP and IP:port. **Every launch of an untrusted program** (unsigned, ad-hoc, quarantined, or from a download or
+  temp folder) is hashed (SHA-256, once per file version) and checked against the file lists (with the key).
+- **A match** is the story stage *Known malware*: a story and **Dangerous** on its own, even for a pattern you
+  marked Safe. The row gets a red `KNOWN BAD` tag (Events, HUD), the domain a red badge and risk score 100 with
+  the reason, Overview a *Known bad* card and the tray a line. After each update the last 30 days of domains (and
+  programs already hashed) are checked again (*contacted earlier*).
+- **macOS vulnerabilities:** CISA's Apple entries for macOS (or several Apple systems including it) are compared
+  with the date of your last macOS update and any update waiting in Software Update (`softwareupdate --list
+  --no-scan`). CISA doesn't name fixed versions, so a flaw listed before your last update is *likely fixed*;
+  later ones are *fixed by the waiting update* or *not fixed by your last update*. Overview shows the card and a
+  list (CVE, component, ransomware use, Apple advisory); the tray says when an update fixes exploited flaws.
+- The abuse.ch key is kept in the Keychain. Lists are cached in `~/Library/Application Support/Hostwatch/intel`.
 
 ## Reset Hostwatch
 

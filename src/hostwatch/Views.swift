@@ -27,6 +27,7 @@ struct HUDView: View {
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var metrics: MetricsStore
     @ObservedObject var vitals: ProcessVitals
+    @ObservedObject var intel: ThreatIntel
     let actions: HUDActions
 
     private var s: CGFloat { model.overlayScale }
@@ -61,7 +62,8 @@ struct HUDView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     // Each banner takes about two rows of room.
                     ForEach(Array(model.overlayEvents.prefix(max(0, model.overlayRows - 2 * min(2, stories.recent().count))))) { event in
-                        EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event))
+                        EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event),
+                                 knownBad: intel.flag(for: event))
                             .contentShape(Rectangle())
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
@@ -470,6 +472,8 @@ struct EventRow: View {
     var s: CGFloat = 1
     /// Still running heavy (or recently ended after being heavy).
     var vital: ProcessVitals.Badge? = nil
+    /// On a threat list.
+    var knownBad: String? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -496,7 +500,12 @@ struct EventRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 2)
-            if case .heavy(let cpu, let mem, _, let cpuHeavy, _) = vital {
+            if let knownBad {
+                Text("KNOWN BAD")
+                    .font(.system(size: 8.5 * s, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.35))
+                    .help(knownBad)
+            } else if case .heavy(let cpu, let mem, _, let cpuHeavy, _) = vital {
                 Text(cpuHeavy ? "🔥 \(Int(cpu))%" : "🔥 \(ProcessVitals.memory(mem))")
                     .font(.system(size: 8.5 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 1.0, green: 0.62, blue: 0.25))
@@ -553,6 +562,7 @@ struct ActivityWindowView: View {
     let rulesTab: RulesTabState
     @ObservedObject var vitals: ProcessVitals
     @ObservedObject var heavyStrip: HeavyStripState
+    @ObservedObject var intel: ThreatIntel
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -572,11 +582,19 @@ struct ActivityWindowView: View {
             if model.windowTab == 0 { heavySection }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
+            case 5: OverviewView(model: model, collector: collector, stories: stories, domains: domains, rules: rules,
+                                 baseline: baseline, signatures: signatures, vitals: vitals, history: history,
+                                 metrics: metrics, intel: intel, actions: actions, openNeedsYou: {
+                                     rulesTab.segment = .needsYou
+                                     rulesTab.chosen = true
+                                     model.windowTab = 4
+                                 })
             case 0: eventsList
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
-            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain)
+            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain,
+                                knownBad: { intel.reason(forDomain: $0) })
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
                                showPatterns: { app in
                                    signatures.scope = nil
@@ -599,7 +617,7 @@ struct ActivityWindowView: View {
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
                     prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
-                             "Domain, host, program", "Not used on Rules"][min(model.windowTab, 4)])
+                             "Domain, host, program", "Not used on Rules", "Not used on Overview"][min(model.windowTab, 5)])
         .navigationTitle("Hostwatch")
         .navigationSubtitle(subtitle)
     }
@@ -615,6 +633,7 @@ struct ActivityWindowView: View {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
         switch model.windowTab {
+        case 5: return state
         case 0: return "\(state) · \(model.history.count) events"
         case 1: return "\(state) · \(signatures.total) patterns"
         case 2: return "\(state) · \(stories.activeCount) open stories"
@@ -623,25 +642,30 @@ struct ActivityWindowView: View {
         }
     }
 
+    /// Overview first; the order here is the ⌘1–⌘6 order (the View menu matches).
+    private var windowTabs: [WindowTabBar.Tab] {
+        let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
+        let dangerous = stories.stories.contains { !$0.dismissed && $0.severity == .dangerous }
+        return [
+            .init(id: 5, title: "Overview", symbol: "gauge.with.dots.needle.33percent"),
+            .init(id: 0, title: "Events", symbol: "list.bullet.rectangle"),
+            .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up"),
+            .init(id: 4, title: "Rules", symbol: "checklist",
+                  badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .accentColor),
+            .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
+                  badge: stories.activeCount > 0 ? "\(stories.activeCount)" : nil, badgeTint: dangerous ? .red : .orange),
+            .init(id: 3, title: "Domains", symbol: "globe",
+                  badge: domains.newCount > 0 ? "\(domains.newCount)" : nil, badgeTint: .purple),
+        ]
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            Picker("View", selection: $model.windowTab) {
-                Label("Events", systemImage: "list.bullet.rectangle").tag(0)
-                Label("Patterns", systemImage: "square.stack.3d.up").tag(1)
-                let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
-                Label(rules.running ? "Rules (…)" : waiting == 0 ? "Rules" : "Rules (\(waiting))",
-                      systemImage: "checklist").tag(4)
-                Label(stories.activeCount > 0 ? "Stories (\(stories.activeCount))" : "Stories",
-                      systemImage: "point.3.connected.trianglepath.dotted").tag(2)
-                Label(domains.newCount > 0 ? "Domains (\(domains.newCount))" : "Domains",
-                      systemImage: "globe").tag(3)
-            }
-            .pickerStyle(.segmented)
-            .labelStyle(.titleAndIcon)
-            .help("Events: the live stream · Patterns: learned fingerprints · Rules: what decides them · Stories: correlated chains · Domains (⌘1–⌘5)")
+            WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
         }
         ToolbarItemGroup(placement: .principal) {
+          if model.windowTab == 0 {
             ForEach(EventKind.allCases, id: \.self) { kind in
                 let on = model.visibleKinds.contains(kind)
                 Button { model.toggle(kind) } label: {
@@ -654,6 +678,7 @@ struct ActivityWindowView: View {
                 }
                 .help(on ? "Hide \(kind.title.lowercased())" : "Show \(kind.title.lowercased())")
             }
+          }
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
@@ -762,7 +787,10 @@ struct ActivityWindowView: View {
                 TableColumn("Status", value: \.statusRank) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
-                        if case .heavy = heavy.badge(for: item.event) {
+                        if let bad = intel.flag(for: item.event) {
+                            Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                                .help("KNOWN BAD · \(bad)")
+                        } else if case .heavy = heavy.badge(for: item.event) {
                             Image(systemName: "flame.fill").foregroundStyle(.orange)
                                 .help("Still running and using a lot of CPU or memory")
                         } else if !item.event.beacon.isEmpty {
@@ -796,6 +824,7 @@ struct ActivityWindowView: View {
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Detail", value: \.detail) { item in
                     HStack(spacing: 6) {
+                        if let bad = intel.flag(for: item.event) { KnownBadTag(detail: bad) }
                         if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
                         if item.event.kind == .file {
                             FileModeIcon(mode: item.event.extra)
@@ -948,5 +977,21 @@ struct ProtocolTag: View {
             .overlay(Capsule().strokeBorder((udp ? Color.teal : Color.blue).opacity(0.35), lineWidth: 0.5))
             .help(udp ? "UDP: connectionless (DNS, QUIC, streaming…)" : "TCP connection")
             .accessibilityLabel(proto)
+    }
+}
+
+/// "⛔ KNOWN BAD" on a row whose connection or program is on a threat list.
+struct KnownBadTag: View {
+    let detail: String
+
+    var body: some View {
+        Label("KNOWN BAD", systemImage: "xmark.octagon.fill")
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(Capsule().fill(Color.red))
+            .help(detail)
+            .accessibilityLabel("Known bad: \(detail)")
     }
 }

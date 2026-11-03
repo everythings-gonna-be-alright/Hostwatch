@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Processes Hostwatch saw start that still run heavy (CPU or memory).
     private let vitals = ProcessVitals()
     private let heavyStrip = HeavyStripState()
+    /// Threat lists and exploited macOS vulnerabilities (downloaded daily, matched locally).
+    private let intel = ThreatIntel()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
     private lazy var ruleBook = RuleBook(store: signatures)
@@ -28,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
-        baseline: baseline, openBaseline: { [weak self] in self?.openBaselineReport() },
+        baseline: baseline, intel: intel, openBaseline: { [weak self] in self?.openBaselineReport() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -92,6 +94,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
         metrics.heavyProvider = { [weak self] in self?.vitals.snapshot ?? [] }      // recorded for Time Travel
         model.onEvent = { [weak self] event in if event.kind == .exec { self?.vitals.noteLaunch(event) } }
+        model.intel = intel
+        intel.seenDomains = { [weak self] in
+            let since = Date().addingTimeInterval(-30 * 86400)
+            return (self?.domains.records.values.filter { $0.lastSeen >= since } ?? []).map { ($0.domain, $0.programs) }
+        }
+        intel.onHit = { [weak self] hit, event in
+            guard let self else { return }
+            // A connection already carries the match into its story; a file (hashed later) and a past
+            // contact found by the retro-check join or start one here.
+            if hit.kind == .file, let event {
+                _ = self.stories.ingest(event, decidedSafe: false, extra: [(.knownBad, hit.summary)])
+            } else if hit.retro {
+                var past = ActivityEvent(kind: .net, time: "", pid: 0, ppid: 0, name: hit.process.isEmpty ? "?" : hit.process,
+                                         proc: hit.path, target: hit.indicator, extra: "TCP", parent: "", host: hit.indicator,
+                                         hostSource: "dns")
+                past.knownBad = hit.summary + " (contacted earlier)"
+                _ = self.stories.ingest(past, decidedSafe: false)
+            }
+        }
+        intel.start()
         vitals.onHeavyUntrusted = { [weak self] launch, tracked in
             guard let self else { return }
             let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))
@@ -241,7 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             backing: .buffered,
             defer: false
         )
-        let hud = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, actions: actions))
+        let hud = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, intel: intel, actions: actions))
         // The panel's size is set only by `resizeOverlay` (top-right corner fixed). Left to itself the hosting
         // view would resize the panel to its content first, from the bottom-left, so the right edge jumped.
         hud.sizingOptions = []
@@ -355,6 +377,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
+        let knownBad = intel.hits.filter { $0.date > Date().addingTimeInterval(-7 * 86400) }.count
+        if knownBad > 0 {
+            menu.addItem(item("\(knownBad) known-bad \(knownBad == 1 ? "match" : "matches") this week…", #selector(showOverview),
+                              symbol: "xmark.octagon.fill"))
+        }
+        if intel.vulnerabilitiesEnabled, intel.unfixedCount > 0 {
+            let n = intel.unfixedCount
+            let title = intel.pendingUpdate != nil ? "A macOS update fixes \(n) exploited \(n == 1 ? "flaw" : "flaws")…"
+                : "\(n) exploited macOS \(n == 1 ? "flaw" : "flaws") since your last update…"
+            menu.addItem(item(title, #selector(showOverview), symbol: "exclamationmark.shield.fill"))
+        }
         if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
             learning.image = symbol("hourglass")
@@ -445,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         ])
 
         // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
-        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
+        let tabs = [("Overview", 5), ("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
             tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
@@ -620,13 +653,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func showBaselineReport() { openBaselineReport() }
 
+    @objc private func showOverview() {
+        model.windowTab = 5
+        openActivityWindow(fullScreen: false)
+    }
+
     /// A domain's details: risk score, programs, connections, Ask AI.
     private func openDomainDetails(_ domain: String) {
         guard let record = domains.records[domain] else { return }
         let connections = model.history.filter {
             $0.kind == .net && ($0.registrableDomain == domain || $0.host == domain || $0.host.hasSuffix("." + domain))
         }
-        let details = DomainDetails(record: record, connections: Array(connections.prefix(200)))
+        let details = DomainDetails(record: record, connections: Array(connections.prefix(200)),
+                                    knownBad: intel.reason(forDomain: domain))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 820),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Domain: \(domain)"
@@ -868,7 +907,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
