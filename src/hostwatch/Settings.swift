@@ -652,7 +652,9 @@ private struct ThreatSections: View {
                     } else {
                         HStack(spacing: 8) {
                             SecureField("Paste your key", text: $ui.abuseKeyDraft)
-                                .frame(width: 200)
+                                .textFieldStyle(.roundedBorder)          // a visible field (forms draw them borderless)
+                                .labelsHidden()
+                                .frame(width: 220)
                                 .onSubmit(saveKey)
                             Button("Save", action: saveKey)
                                 .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -664,11 +666,10 @@ private struct ThreatSections: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("abuse.ch key")
-                        HStack(spacing: 4) {
-                            Text("Free · adds ThreatFox and MalwareBazaar ·")
-                            Link("Get a free key", destination: URL(string: "https://auth.abuse.ch/")!)
-                        }
-                        .font(.caption).foregroundStyle(.secondary)
+                        // One sentence with an inline link, so it wraps as a paragraph.
+                        Text("Free, adds ThreatFox and MalwareBazaar. [Get a free key](https://auth.abuse.ch/)")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 LabeledContent("Lists") {
