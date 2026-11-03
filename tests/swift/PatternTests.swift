@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Hostwatch
 
@@ -171,5 +172,59 @@ import Testing
     @Test func appSpawningAShellIsStillHighRisk() {
         let e = exec("/bin/sh", pid: 9, ppid: 0, parent: "/Applications/Slack.app/Contents/MacOS/Slack", args: "sh -c 'id'")
         #expect(e.signatureRisk == .high && e.signaturePattern == "/bin/sh -c ‹id›")
+    }
+}
+
+/// Combine similar patterns into one shared pattern (and undo it).
+@MainActor @Suite(.serialized) struct CombinePatterns {
+    let tool = "/Applications/Tool.app/Contents/MacOS/Tool"
+
+    @Test func proposesTheCommonShape() {
+        #expect(SignatureBuilder.commonGlob(["r ~/Documents/work/alpha/*", "r ~/Documents/work/beta/*"]) == "r ~/Documents/work/*/*")
+        #expect(SignatureBuilder.commonGlob(["TCP 45.1.2.3:443", "TCP 45.1.2.9:443"]) == "TCP 45.1.2.*:443")
+        #expect(SignatureBuilder.commonGlob(["/usr/bin/ditto -x -k ~/Downloads/a.zip ~/Downloads",
+                                             "/usr/bin/ditto -x -k ~/Downloads/b.zip ~/Downloads"])
+                == "/usr/bin/ditto -x -k ~/Downloads/*.zip ~/Downloads")
+    }
+
+    @Test func combinesAndLaterActivityJoins() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-combine-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        defer { _ = SignatureStore(directory: dir.appendingPathComponent("empty")) }   // resets the shared table
+        let events = ["alpha", "beta", "gamma", "delta", "epsilon"].map { file(tool, pid: 1, "r", "\(home)/Documents/work/\($0)/notes.txt") }
+        events.forEach { _ = store.observe($0) }
+        store.set(.safe, keys: [events[0].signatureKey])
+        let keys = events.map(\.signatureKey)
+        let process = SignatureBuilder.commonGlob(keys.compactMap { store.entry($0)?.process })
+        let pattern = SignatureBuilder.commonGlob(keys.compactMap { store.entry($0)?.pattern })
+        #expect(pattern == "r ~/Documents/work/*/*")
+        #expect(store.combineProblems(keys: keys, process: process, pattern: pattern).isEmpty)
+        let merged = try #require(store.combine(keys: keys, process: process, pattern: pattern))
+        #expect(store.allEntries.count == 1 && store.entry(merged)?.count == 5)
+        #expect(store.status(forKey: merged) == .unclassified)                    // Safe and New mixed: New
+        #expect(store.entry(keys[2])?.id == merged)                               // old rows follow it
+        let later = file(tool, pid: 2, "r", "\(home)/Documents/work/zeta/plan.md")
+        #expect(later.signatureKey == merged)                                      // joins instead of a new pattern
+        _ = store.observe(later)
+        #expect(store.allEntries.count == 1 && store.entry(merged)?.count == 6)
+        store.separate(merged)
+        #expect(store.allEntries.isEmpty)
+        #expect(file(tool, pid: 3, "r", "\(home)/Documents/work/eta/x.md").signatureKey != merged)
+    }
+
+    @Test func refusesAWideOne() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-combine-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        let a = file(tool, pid: 1, "r", "\(home)/Documents/a.txt"), b = file(tool, pid: 1, "r", "\(home)/Documents/b.txt")
+        _ = store.observe(a); _ = store.observe(b)
+        let pattern = SignatureBuilder.commonGlob([a.signaturePattern, b.signaturePattern])
+        #expect(pattern == "r ~/Documents/*.txt")
+        #expect(store.combineProblems(keys: [a.signatureKey, b.signatureKey], process: a.signatureProcess, pattern: pattern)
+                .contains { $0.contains("too wide") })
+        #expect(store.combine(keys: [a.signatureKey, b.signatureKey], process: a.signatureProcess, pattern: pattern) == nil)
     }
 }

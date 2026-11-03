@@ -91,6 +91,15 @@ patterns, mostly routine (auto Safe); patterns to decide 150 → 227. Labelled p
 - **an app's own data folder**: `~/Library/Application Support/<App>` or `~/.<app>`, when the
   name matches the actor. These are tagged `[own data]`.
 
+**Combining patterns.** Select two or more patterns of one kind in Patterns, then right-click (or *Mark Selected*)
+▸ *Combine… into One Pattern*. A sheet proposes the shared pattern: their common shape, token by token, with `*`
+where they differ (`r ~/Documents/work/alpha/*` + `…/beta/*` → `r ~/Documents/work/*/*`), editable for the
+program and the pattern. It must cover every chosen pattern and stay specific (the general rule above; bare
+wildcards refused). Every existing pattern it covers is merged too: counts add up, first and last seen span them,
+the most serious status wins (Dangerous, Suspicious; New when Safe and New are mixed). From then on, activity
+whose own pattern it matches joins it instead of creating a new one, and rows already on screen follow it.
+*Separate Combined Pattern* undoes it (new activity makes its own patterns again).
+
 **Connections:** public IPs on web ports (80/443/53/853/123) become `internet`. Other ports keep the /16.
 Loopback, LAN, link-local, CGNAT and multicast are named. Ports ≥ 49152 become `ephemeral`.
 

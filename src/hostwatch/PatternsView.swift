@@ -87,12 +87,14 @@ struct PatternsView: View {
     @ObservedObject var classifier: PatternClassifier
     let actions: HUDActions
     @Binding var filter: SignatureFilter
+    @StateObject private var combine = CombineState()
 
     var body: some View {
         let _ = signatures.revision
         let rows = signatures.patternItems(filter: filter)
         VStack(spacing: 0) {
             toolbar(count: rows.count)
+                .sheet(isPresented: $combine.show) { CombineSheet(state: combine, signatures: signatures) }
             Divider()
             Table(rows, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
@@ -206,6 +208,8 @@ struct PatternsView: View {
                     }
                 }
                 Divider()
+                Button("Combine Into One Pattern…") { combine.start(Array(signatures.selection), signatures) }
+                    .disabled(signatures.selection.count < 2)
                 Button("Delete Selected Patterns") { signatures.delete(keys: Array(signatures.selection)) }
             }
             .disabled(signatures.selection.isEmpty)
@@ -247,6 +251,12 @@ struct PatternsView: View {
         let keys = signatures.selection.contains(entry.id) ? Array(signatures.selection) : [entry.id]
         Button("Ask AI About This Pattern…") { actions.askAI(entry.exampleEvent) }
         Divider()
+        if keys.count > 1 {
+            Button("Combine \(keys.count) Patterns into One…") { combine.start(keys, signatures) }
+        }
+        if signatures.isCombined(entry.id) {
+            Button("Separate Combined Pattern") { signatures.separate(entry.id) }
+        }
         trustMenu(for: entry)
         ForEach(SignatureStatus.allCases, id: \.self) { status in
             Button("Mark \(keys.count > 1 ? "\(keys.count) Patterns" : "Pattern") \(status.title)") {
@@ -267,5 +277,78 @@ struct PatternsView: View {
             NSPasteboard.general.setString("\(entry.process) → \(entry.pattern)", forType: .string)
         }
         Button("Delete Pattern") { signatures.delete(keys: keys) }
+    }
+}
+
+// MARK: - Combine patterns
+
+final class CombineState: ObservableObject {
+    @Published var show = false
+    @Published var keys: [String] = []
+    @Published var process = ""
+    @Published var pattern = ""
+
+    /// Proposes the shared pattern: the chosen ones' common shape.
+    @MainActor func start(_ keys: [String], _ signatures: SignatureStore) {
+        let chosen = keys.compactMap { signatures.entry($0) }
+        guard chosen.count > 1 else { return }
+        self.keys = chosen.map(\.id)
+        process = SignatureBuilder.commonGlob(chosen.map(\.process))
+        pattern = SignatureBuilder.commonGlob(chosen.map(\.pattern))
+        show = true
+    }
+}
+
+/// "Combine into One Pattern": the proposed shared pattern (editable), what it covers, why not if it can't.
+private struct CombineSheet: View {
+    @ObservedObject var state: CombineState
+    @ObservedObject var signatures: SignatureStore
+
+    var body: some View {
+        let chosen = state.keys.compactMap { signatures.entry($0) }
+        let problems = signatures.combineProblems(keys: state.keys, process: state.process, pattern: state.pattern)
+        let kind = chosen.first?.kind ?? .file
+        let covered = signatures.covered(kind: kind, process: state.process, pattern: state.pattern)
+        let others = covered.filter { !state.keys.contains($0.id) }
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Combine \(chosen.count) Patterns into One").font(.headline)
+            Text("One shared pattern replaces them; later activity that matches it joins it instead of making new patterns.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(chosen.prefix(6)) { e in
+                    Text("\((e.process as NSString).lastPathComponent)  \(e.pattern)")
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                if chosen.count > 6 { Text("and \(chosen.count - 6) more").font(.caption).foregroundStyle(.tertiary) }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.secondary.opacity(0.08)))
+            Form {
+                TextField("Program", text: $state.process).font(.system(.body, design: .monospaced))
+                TextField("Pattern", text: $state.pattern).font(.system(.body, design: .monospaced))
+            }
+            .formStyle(.columns)
+            Text("* stands for anything there. Edit to make it narrower or wider.").font(.caption).foregroundStyle(.secondary)
+            if problems.isEmpty {
+                Label(others.isEmpty ? "Covers the \(chosen.count) chosen patterns."
+                      : "Covers the \(chosen.count) chosen patterns and \(others.count) more that look the same.",
+                      systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
+            } else {
+                ForEach(problems, id: \.self) { Label($0, systemImage: "xmark.octagon.fill").foregroundStyle(.red).font(.callout) }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { state.show = false }.keyboardShortcut(.cancelAction)
+                Button("Combine") {
+                    signatures.combine(keys: state.keys, process: state.process, pattern: state.pattern)
+                    state.show = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!problems.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
     }
 }
