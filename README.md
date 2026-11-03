@@ -46,7 +46,6 @@ It detects and explains. It never deletes anything.
 - **Time Travel** – scrub back through recorded activity, resources and heavy processes.
 - **Network signals** – hostnames, first-seen domains, beaconing, raw-IP connections.
 - **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
-- **Overview** – the first tab: is my Mac OK, what needs you, in ten seconds.
 - **Ask AI / MCP** – ask about any event, or let Claude Code investigate your history (read-only).
 
 ## Install

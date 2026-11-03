@@ -232,7 +232,8 @@ import Testing
     }
 
     @Test func needsYouIsLiveAndSaysWhy() async throws {
-        let (learner, store, _) = try makeLearner()
+        let (learner, store, defaults) = try makeLearner()
+        defaults.set(false, forKey: "baselineAutoRules")
         store.observe(net(slack, pid: 70, to: "3.68.170.153:443", host: "app.slack.com"))
         await learner.buildNow()
         let zoomNet = net(zoom, pid: 71, to: "170.114.52.2:443", host: "zoom.us")       // after learning
@@ -308,7 +309,8 @@ import Testing
     }
 
     @Test func newDevelopersAfterLearningWaitForYou() async throws {
-        let (learner, store, _) = try makeLearner()
+        let (learner, store, defaults) = try makeLearner()
+        defaults.set(false, forKey: "baselineAutoRules")                       // the setting off
         store.observe(net(slack, pid: 40, to: "3.68.170.153:443", host: "app.slack.com"))
         await learner.buildNow()
         let zoomNet = net(zoom, pid: 41, to: "170.114.52.2:443", host: "zoom.us")   // trusted developer, no rule yet
@@ -350,4 +352,88 @@ import Testing
         await learner.buildNow()
         #expect(store.status(for: slackNet) == .suspicious)
     }
+
+    // MARK: Fewer decisions
+
+    @Test func appleToolsStartedByTrustedAppsAreMacOS() {
+        let rm = entry(.exec, pattern: "/bin/rm", proc: slack, target: "/bin/rm", parent: slack)
+        #expect(key(BaselinePolicy.decide(rm, identify: identify)) == "system")
+    }
+
+    @Test func trustedDevelopersNewAppsGetARuleByThemselves() async throws {
+        let (learner, store, _) = try makeLearner()
+        store.observe(net(slack, pid: 80, to: "3.68.170.153:443", host: "app.slack.com"))
+        await learner.buildNow()
+        let zoomNet = net(zoom, pid: 81, to: "170.114.52.2:443", host: "zoom.us")   // installed after learning
+        store.observe(zoomNet)
+        await learner.applyRules()
+        #expect(store.status(for: zoomNet) == .safe)
+        let rule = try #require(learner.rules.first { $0.name == "zoom.us" })
+        #expect(rule.automatic && rule.profile == ["connects to the web"])
+        await learner.refreshReview()
+        #expect(learner.report?.review.isEmpty == true)
+    }
+
+    @Test func aRuleYouDeletedIsntMadeAgainByItself() async throws {
+        let (learner, store, _) = try makeLearner()
+        store.observe(net(zoom, pid: 82, to: "170.114.52.2:443", host: "zoom.us"))
+        await learner.buildNow()
+        let rule = try #require(learner.rules.first { $0.name == "zoom.us" })
+        learner.delete(rule)
+        await learner.applyRules()
+        #expect(!learner.rules.contains { $0.name == "zoom.us" })
+        await learner.refreshReview()
+        #expect(learner.report?.review.first?.reasons.first?.contains("no rule yet") == true)
+        await learner.buildNow()                                                // Update Baseline: on purpose
+        #expect(learner.rules.contains { $0.name == "zoom.us" })
+    }
+
+    @Test func somethingNewForATrustedAppComesToYou() async throws {
+        let (learner, store, _) = try makeLearner()
+        learner.now = { Date().addingTimeInterval(-8 * 86400) }                 // the rule was made 8 days ago…
+        store.observe(net(slack, pid: 83, to: "3.68.170.153:443", host: "app.slack.com"))
+        await learner.buildNow()                                                // …and learned: connects to the web
+        learner.now = { Date().addingTimeInterval(-5 * 86400) }                 // in its first week
+        let documents = file(slack, pid: 83, "r", "\(home)/Documents/finance/2026/q3.xlsx")
+        store.observe(documents)
+        await learner.applyRules()
+        #expect(store.status(for: documents) == .safe)                          // learned: reads ~/Documents
+        learner.now = { Date() }                                                // the first week is over
+        let web = net(slack, pid: 83, to: "52.1.1.1:80", host: "files.slack.com")
+        let documents2 = file(slack, pid: 83, "r", "\(home)/Documents/taxes/2026/return.pdf")
+        let movies = file(slack, pid: 83, "w", "\(home)/Movies/clips/a.mov")
+        store.observe(web)
+        store.observe(documents2)
+        store.observe(movies)
+        await learner.applyRules()
+        #expect(store.status(for: web) == .safe && store.status(for: documents2) == .safe)   // known kinds
+        #expect(store.status(for: movies) == .unclassified)                     // a new kind for Slack
+        await learner.refreshReview()
+        let group = try #require(learner.report?.review.first { $0.app == "Slack" })
+        #expect(group.reasons == ["new for Slack: writes ~/Movies"])
+    }
+
+    @Test func onlyRecentActivityIsListed() async throws {
+        let (learner, store, _) = try makeLearner(fresh: false)
+        store.observe(net(dropper, pid: 84, to: "45.1.1.1:443"))
+        await learner.refreshReview()
+        #expect(learner.report?.review.count == 1)
+        learner.now = { Date().addingTimeInterval(8 * 86400) }                  // not seen again for a week
+        await learner.refreshReview()
+        #expect(learner.report?.review.isEmpty == true)
+    }
+
+    @Test func homebrewToolsAreOneRow() async throws {
+        let (learner, store, _) = try makeLearner(fresh: false)
+        learner.identify = { path in
+            path.hasPrefix("/opt/homebrew/") ? (CodeIdentity(signed: true, adhoc: true), false) : self.identify(path)
+        }
+        for (i, tool) in ["mysql", "oras", "flux"].enumerated() {
+            store.observe(net("/opt/homebrew/Cellar/\(tool)/1.0/bin/\(tool)", pid: 90 + i, to: "9.9.9.\(i):443"))
+        }
+        await learner.refreshReview()
+        let review = try #require(learner.report?.review)
+        #expect(review.count == 1 && review[0].app == "Homebrew tools" && review[0].keys.count == 3)
+    }
 }
+

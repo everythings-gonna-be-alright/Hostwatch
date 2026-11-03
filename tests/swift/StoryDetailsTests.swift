@@ -66,35 +66,3 @@ import Testing
             .appendingPathComponent("full-disk-access.png"))
     }
 }
-
-/// HOSTWATCH_RENDER=<dir> writes overview.png there (to look at the layout).
-@MainActor @Suite struct OverviewRender {
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"] != nil))
-    func render() throws {
-        _ = TestEnv.ready
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-ov-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let store = SignatureStore(directory: dir)
-        let stories = StoryEngine(persistent: false)
-        var bad = net("/opt/homebrew/bin/python3.12", pid: 4411, to: "45.1.2.3:443", host: "c2.evil-cdn.xyz")
-        bad.knownBad = "ThreatFox: AsyncRAT command server, reported Nov 1"
-        _ = stories.ingest(bad, decidedSafe: false)
-        let domains = DomainRegistry(replayLearningUntil: Date())
-        let model = HUDModel(signatures: store, stories: stories, domains: domains)
-        let intel = ThreatIntel(directory: dir.appendingPathComponent("intel"), defaults: scratchDefaults("hw-ov"))
-        let view = OverviewView(model: model, collector: Collector(), stories: stories, domains: domains,
-                                rules: RuleBook(store: store, fileURL: dir.appendingPathComponent("rules.json")),
-                                baseline: BaselineLearner(store: store, classifier: nil, defaults: scratchDefaults("hw-ov"), freshInstall: false),
-                                signatures: store, vitals: ProcessVitals(defaults: scratchDefaults("hw-ov")), history: HistoryRecorder(),
-                                metrics: MetricsStore(directory: { dir }), intel: intel,
-                                actions: HUDActions(openFullScreen: {}, openExclusions: {}, toggleCollector: {}, quit: {}, askAI: { _ in }),
-                                openNeedsYou: {}, scrollable: false)
-            .frame(width: 960)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 2
-        let image = try #require(renderer.nsImage)
-        let tiff = try #require(image.tiffRepresentation)
-        let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
-        try png.write(to: URL(fileURLWithPath: ProcessInfo.processInfo.environment["HOSTWATCH_RENDER"]!).appendingPathComponent("overview.png"))
-    }
-}

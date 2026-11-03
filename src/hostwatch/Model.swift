@@ -348,7 +348,7 @@ final class HUDModel: ObservableObject {
     @Published var searchText = ""
     /// "Show Only These" in the heavy-process strip: only events of these processes.
     @Published var onlyPids: Set<Int>?
-    @Published var windowTab = 5          // 0 events, 1 patterns, 2 stories, 3 domains, 4 rules, 5 overview
+    @Published var windowTab = 0          // 0 events, 1 patterns, 2 stories, 3 domains, 4 rules
     @Published var eventSelection = Set<UUID>()
     /// Events table sort (click a column header); newest first by default.
     @Published var eventOrder: [KeyPathComparator<EventItem>] {
