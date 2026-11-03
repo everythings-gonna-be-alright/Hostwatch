@@ -2,10 +2,9 @@
 
 ## Unreleased
 
-- **Show filter as a scope bar** (Events and Patterns): All · Not Safe · New · Important · Suspicious as capsules
-  with their counts, one selected, a tooltip each (titles only when narrow, a pop-up when narrowest); it replaces
-  the pop-up menu and the separate counts beside it.
-
+- **Show filter as a scope bar** (Events and Patterns): **All · New · Important**, each with how many rows it shows
+  in that tab (events on Events, patterns on Patterns), one selected, a tooltip each. "Not Safe" (New + Important)
+  and "Suspicious" (inside Important) are gone; a saved choice moves to New or Important.
 - **Tab bar with icons** and count badges (icons only when narrow); event-kind counters only on Events. A slim
   banner shows exploited macOS flaws that aren't fixed yet (Details, Software Update).
 - **Far fewer decisions:** macOS's own tools are always trusted (one rule, made by itself); new apps from

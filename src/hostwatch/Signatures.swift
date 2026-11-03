@@ -37,47 +37,49 @@ enum SignatureStatus: String, Codable, CaseIterable {
 }
 
 /// The one "Show" filter: the HUD, the Events tab and the Patterns tab all use it.
+/// Show: three questions. All; New (not decided yet); Important (Suspicious and Dangerous, plus new
+/// high-risk). The earlier "Not Safe" (New + Important) and "Suspicious" (inside Important) map onto them.
 enum SignatureFilter: String, CaseIterable {
-    case all, hideSafe, unclassified, important, flagged
+    case all, unclassified, important
+
+    init?(stored: String) {
+        switch stored {
+        case "hideSafe": self = .unclassified
+        case "flagged": self = .important
+        default: self.init(rawValue: stored)
+        }
+    }
 
     var title: String {
         switch self {
         case .all: return "All Activity"
-        case .hideSafe: return "Hide Safe"
         case .unclassified: return "Only New (not reviewed)"
         case .important: return "Only Important (flagged + new high-risk)"
-        case .flagged: return "Only Suspicious & Dangerous"
         }
     }
 
-    /// Short name for the scope bar ("Not Safe", "New"…); `title` stays the menu's full name.
+    /// Short name for the scope bar.
     var short: String {
         switch self {
         case .all: return "All"
-        case .hideSafe: return "Not Safe"
         case .unclassified: return "New"
         case .important: return "Important"
-        case .flagged: return "Suspicious"
         }
     }
 
     var symbol: String {
         switch self {
         case .all: return "square.stack"
-        case .hideSafe: return "eye.slash"
         case .unclassified: return "questionmark.circle"
         case .important: return "exclamationmark.triangle"
-        case .flagged: return "flag"
         }
     }
 
     var explanation: String {
         switch self {
         case .all: return "Everything, decided or not"
-        case .hideSafe: return "Everything except what's Safe"
-        case .unclassified: return "Patterns you haven't reviewed yet"
+        case .unclassified: return "What hasn't been decided yet"
         case .important: return "Suspicious and Dangerous, plus new high-risk patterns"
-        case .flagged: return "Only Suspicious and Dangerous patterns"
         }
     }
 
@@ -87,10 +89,8 @@ enum SignatureFilter: String, CaseIterable {
         let flagged = status == .suspicious || status == .dangerous
         switch self {
         case .all: return true
-        case .hideSafe: return status != .safe
         case .unclassified: return status == .unclassified || flagged && !reviewed
         case .important: return flagged || status == .unclassified && risk == .high
-        case .flagged: return flagged
         }
     }
 }
@@ -973,6 +973,18 @@ final class SignatureStore: ObservableObject {
     }
 
     // MARK: Queries for views
+
+    /// How many rows the Patterns table shows for a Show choice (same search and scope, no sorting).
+    func patternCount(filter: SignatureFilter) -> Int {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let scope = self.scope
+        return entries.values.reduce(0) { n, e in
+            guard scope.map({ $0.keys.contains(e.id) }) ?? true,
+                  q.isEmpty || e.process.lowercased().contains(q) || e.pattern.lowercased().contains(q)
+                    || e.exampleName.lowercased().contains(q) else { return n }
+            return scope != nil || filter.admits(status(forKey: e.id), risk: e.risk, reviewed: reviewedByYou(e.id)) ? n + 1 : n
+        }
+    }
 
     /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
     func patternItems(filter: SignatureFilter) -> [PatternItem] {

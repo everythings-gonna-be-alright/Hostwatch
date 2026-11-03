@@ -468,7 +468,7 @@ final class HUDModel: ObservableObject {
         eventOrder = SortMemory.load(key: "eventTableSort", columns: EventItem.sortColumns,
                                      fallback: KeyPathComparator(\.seq, order: .reverse))
         signatureFilter = UserDefaults.standard.string(forKey: "signatureFilter")
-            .flatMap(SignatureFilter.init(rawValue:)) ?? .all
+            .flatMap(SignatureFilter.init(stored:)) ?? .all
         let defaults = UserDefaults.standard
         let text = defaults.string(forKey: Keys.exclusions) ?? defaultExclusions
         exclusionText = text
@@ -499,13 +499,22 @@ final class HUDModel: ObservableObject {
         overlayScale = CGFloat(defaults.object(forKey: Keys.overlayScale) as? Double ?? 1.0)
     }
 
-    private func passesSignatureFilter(_ e: ActivityEvent) -> Bool {
-        if signatureFilter == .all { return true }
-        // New domains, beacons and raw-IP connections count as new and important on their own.
-        if e.networkSignal, signatureFilter == .important || signatureFilter == .unclassified
-            || signatureFilter == .hideSafe { return true }
-        return signatureFilter.admits(signatures.status(for: e), risk: e.signatureRisk,
-                                      reviewed: signatures.reviewedByYou(e.signatureKey))
+    private func passesSignatureFilter(_ e: ActivityEvent) -> Bool { passes(e, signatureFilter) }
+
+    func passes(_ e: ActivityEvent, _ filter: SignatureFilter) -> Bool {
+        if filter == .all { return true }
+        // New domains, beacons, raw-IP connections and known-bad matches count as new and important on their own.
+        if e.networkSignal || !e.knownBad.isEmpty { return true }
+        return filter.admits(signatures.status(for: e), risk: e.signatureRisk, reviewed: signatures.reviewedByYou(e.signatureKey))
+    }
+
+    /// How many of these events each Show choice would list (with the other filters as they are).
+    func showCounts(_ events: [ActivityEvent], applyExclusions: Bool = false) -> [SignatureFilter: Int] {
+        var out: [SignatureFilter: Int] = [:]
+        for f in SignatureFilter.allCases where f != .all {
+            out[f] = filtered(events, applyExclusions: applyExclusions, show: f).count
+        }
+        return out
     }
 
     var overlayEvents: [ActivityEvent] {
@@ -520,11 +529,12 @@ final class HUDModel: ObservableObject {
     var searchResults: [ActivityEvent] { filtered(history) }
 
     /// The Show filter, kind toggles, exclusions and search, applied to any list (live or history).
-    func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false) -> [ActivityEvent] {
+    func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false, show: SignatureFilter? = nil) -> [ActivityEvent] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let only = onlyPids
+        let filter = show ?? signatureFilter
         let visible = events.filter { e in
-            visibleKinds.contains(e.kind) && passesSignatureFilter(e) && !(applyExclusions && rules.excludes(e))
+            visibleKinds.contains(e.kind) && passes(e, filter) && !(applyExclusions && rules.excludes(e))
                 && (only?.contains(e.pid) ?? true)
         }
         guard !q.isEmpty else { return visible }
