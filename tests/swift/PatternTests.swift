@@ -320,4 +320,29 @@ import Testing
         _ = store.observe(shot)
         #expect(store.status(for: shot) == .safe && store.entry(shot.signatureKey)?.source == "auto")
     }
+
+    @Test func reassessLeavesPatternsItCantRebuildAlone() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-reassess-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        // A specific launch pattern needs the command line, which the stored example doesn't keep.
+        let build = exec("/usr/bin/perl", pid: 9, ppid: 1, parent: "/bin/bash", args: "perl \(home)/bin/build.pl --all")
+        _ = store.observe(build)
+        store.set(.safe, keys: [build.signatureKey])
+        // A binary that's gone since (an old app version) can't be judged again either: an Apple-signed
+        // copy is routine while it exists, and its auto-Safe pattern must stay Safe once it's deleted.
+        let tool = dir.appendingPathComponent("Tool").path
+        try FileManager.default.copyItem(atPath: "/usr/bin/true", toPath: tool)
+        let gone = file(tool, pid: 10, "r", "\(home)/Projects/demo/src/main.c")
+        _ = store.observe(gone)
+        #expect(store.entry(gone.signatureKey)?.risk == .routine && store.status(for: gone) == .safe)
+        try FileManager.default.removeItem(atPath: tool)
+        let before = [build, gone].map { store.entry($0.signatureKey) }
+        store.reassess()
+        for (e, old) in zip([build, gone], before) {
+            let now = store.entry(e.signatureKey)
+            #expect(now?.status == .safe && now?.risk == old?.risk && now?.reopened == nil)
+        }
+    }
 }

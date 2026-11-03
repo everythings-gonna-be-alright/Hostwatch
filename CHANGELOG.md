@@ -6,6 +6,10 @@
   `~/.CFUserTextEncoding`, networksetup backing up network settings, the `tmp_cleaner` script, and screenshots
   started by SystemUIServer. Exact patterns only, and a named parent must be that program on the sealed system
   volume; signing and stories still apply.
+- **Fix:** re-checking patterns (after you trust or untrust a developer, or on first launch) could send
+  automatically-Safe patterns back to New when their program had since been deleted (an old app version, a
+  removed installer). Patterns are now re-checked only while their program exists and its example still
+  rebuilds the same pattern.
 
 - **Tidying, routine noise only:** at launch and daily, routine Safe patterns not seen for 30 days are removed
   (they come back if they happen again), and those of one program that differ only in random parts (cache hashes,
