@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- **Overview tab** (first, ⌘1): protection status, what needs you, known-bad matches, stories, exploited macOS
-  flaws, heavy processes and the last 24 hours. The tab bar shows icons and count badges; event-kind counters
+- **Overview tab** (first, ⌘1), in the style of System Settings' status pages: a status header, four tiles,
+  *Needs attention* (only what needs action, one row each with its button), *Protection* as grouped rows with
+  their state, and the last 24 hours. The tab bar shows icons and count badges; event-kind counters
   only on Events.
 - **Known threats:** HaGeZi Threat Intelligence and Feodo Tracker (no key), ThreatFox and MalwareBazaar (free
   abuse.ch key) downloaded daily and matched locally against every connection and every untrusted program's
