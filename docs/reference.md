@@ -558,7 +558,18 @@ on this Mac; nothing about the Mac is sent:
   --no-scan`). CISA doesn't name fixed versions, so a flaw listed before your last update is *likely fixed*;
   later ones are *fixed by the waiting update* or *not fixed by your last update*. Overview shows the card and a
   list (CVE, component, ransomware use, Apple advisory); the tray says when an update fixes exploited flaws.
-- The abuse.ch key is kept in the Keychain. Lists are cached in `~/Library/Application Support/Hostwatch/intel`.
+- The abuse.ch key is kept in the Keychain. Lists are cached in `~/Library/Application Support/Hostwatch/intel`
+  (readable only by you, never executable).
+- **A download can't become anything but a list.** Lists are only read (never run), over HTTPS, with no cookies
+  or cache, and redirects only within the same server. Before a download replaces the previous copy it must be
+  text (not a program, archive, document or script: Mach-O, ELF, PE, zip, gzip, PDF, xar and `#!` are
+  refused), within a plausible size, and the right shape line by line (≥ 95% valid domains or IPs; the CISA list
+  needs ≥ 500 entries). A list that suddenly shrinks by half or grows five-fold is refused too. A refused update
+  keeps the previous list and shows why in Settings ▸ Threat Intelligence.
+- **Poisoning can't flag the platforms everything uses:** Apple, Google, Microsoft, GitHub, AWS, Cloudflare,
+  Akamai and a few others are never flagged by their own domain (nor by a parent-domain match). A phishing page
+  on a shared host is still flagged by its full name (`login-apple.github.io`). A list can only raise alerts:
+  it can never make Hostwatch trust anything.
 
 ## Reset Hostwatch
 

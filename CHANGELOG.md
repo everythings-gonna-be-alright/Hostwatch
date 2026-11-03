@@ -12,6 +12,9 @@
 - **Exploited macOS vulnerabilities:** CISA's list of Apple flaws exploited in the wild, compared with your last
   macOS update and any waiting update; in Overview, a list sheet and the tray.
 - **Settings ▸ Threat Intelligence:** lists with counts and freshness, the abuse.ch key (Keychain), Update Now.
+- **Safe downloads of the lists:** only text of the right shape and plausible size replaces a list (programs,
+  archives and scripts are refused), no sudden collapse or explosion, HTTPS without redirects to other hosts,
+  files private and never executable, and major platforms' core domains are never flagged (anti-poisoning).
 - **Connections that close too fast show their address:** the collector's nettop backstop now reads each
   process's connections, so an inferred event names the real IP and port (and a hostname when known) instead
   of `TCP ?:?`. IPv6 connection lines are no longer mistaken for processes.
