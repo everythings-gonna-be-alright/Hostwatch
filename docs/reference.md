@@ -18,7 +18,7 @@ Each kind of control has one home:
   badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
   **Settings…** (⌘,) and Quit.
 - **App menu bar** (while a Hostwatch window is open):
-  - *View*: Overview ⌘1 · Events ⌘2 · Patterns ⌘3 · Rules ⌘4 · Stories ⌘5 · Domains ⌘6, the **Show** filter
+  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, the **Show** filter
     (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
   - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
     Dangerous, Exclude Selection…, Start/Stop Collector.
@@ -487,6 +487,19 @@ apps among them.
   - Click *N patterns ›* to list them in the row. *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**, which
     opens exactly those patterns (a removable chip replaces the Show filter).
 - Existing installs don't start learning by themselves: **Update Baseline** (Rules tab or Settings ▸ Detection).
+- **Fewer decisions for you:**
+  - **macOS itself is always trusted:** Apple tools on the sealed system volume (also when a trusted app starts
+    them: Cursor running `/bin/rm`) fall under the one *macOS system* rule, made by itself, from the first minute.
+  - **New apps from developers you trust get a rule by themselves** (*Settings ▸ Detection ▸ Trust new apps from
+    developers you trust*, on), marked *Automatic*. A rule you delete isn't made again by itself (Update Baseline
+    still can).
+  - **A rule trusts only what its app normally does:** in its first week it learns the app's kinds of behaviour
+    (`launches node`, `connects to the web`, `reads ~/Documents`, `writes its own data`…); after that a pattern of a
+    new kind isn't trusted and comes to Needs You as *new for Slack: writes ~/Movies*. Rules from before this keep
+    what they already trusted as their profile. macOS's own rule doesn't learn a profile.
+  - **Needs You lists only what's active:** a pattern not seen for 7 days leaves it (it stays New in Patterns
+    and comes back if it happens again). **Homebrew tools share one row.**
+  - Rules ▸ Rules shows *Trusted automatically in the last 24 hours: N new patterns (Docker 12, …)* with Show.
 - Baselines from the first version (one rule per developer) are undone once and sorted again.
 
 ## Heavy processes
@@ -525,22 +538,11 @@ already running when it started aren't followed, or Xcode and browsers would be 
 - double-click or right-click a step to ask AI about it, show it in the timeline, or copy it; *Ask AI About This
   Story*, *Show in Timeline*, *Dismiss* and *Always Ignore This Chain* at the bottom.
 
-## Overview
+## Window tabs
 
-The first tab (it opens with the window): *is my Mac OK?* in ten seconds, in the style of System Settings'
-status pages, centred at a readable width:
-- **Header:** a shield (green, orange or red) and one sentence: *Your Mac looks fine*, *A few things to check*,
-  *Something needs a look* or *Hostwatch isn't watching*.
-- **Four tiles** leading to their tab: Needs You, Stories, Known Bad, Heavy Now (tinted only when not zero).
-- **Needs attention:** only what needs action, one row each with its button: the collector off, a known-bad
-  match or dangerous story (Open Story), exploited macOS flaws (Software Update · Details), things to decide
-  (Review), an untrusted heavy process. Empty: *Nothing needs your attention*.
-- **Protection:** grouped rows with a state (On, Off, Starting, Check): collector, baseline, known threats (entries,
-  lists, freshness), macOS (version, waiting update, exploited flaws; Details) and history.
-- **Last 24 hours:** new patterns, how many were decided for you, new domains, stories.
-
-The tab bar shows each tab's icon, with counts as badges (icons only when the window is narrow); the
-event-kind counters appear on Events only.
+Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, each with its icon and its count as a badge (icons
+only when the window is narrow); the event-kind counters appear on Events only. When exploited macOS flaws aren't
+fixed yet, a slim banner at the top says so (*Details*, *Software Update*, ✕ until another flaw is listed).
 
 ## Known threats and exploited macOS vulnerabilities
 
@@ -565,8 +567,8 @@ on this Mac; nothing about the Mac is sent:
 - **macOS vulnerabilities:** CISA's Apple entries for macOS (or several Apple systems including it) are compared
   with the date of your last macOS update and any update waiting in Software Update (`softwareupdate --list
   --no-scan`). CISA doesn't name fixed versions, so a flaw listed before your last update is *likely fixed*;
-  later ones are *fixed by the waiting update* or *not fixed by your last update*. Overview shows the card and a
-  list (CVE, component, ransomware use, Apple advisory); the tray says when an update fixes exploited flaws.
+  later ones are *fixed by the waiting update* or *not fixed by your last update*. A banner in the window and a list
+  (CVE, component, ransomware use, Apple advisory) show them; the tray says when an update fixes exploited flaws.
 - The abuse.ch key is kept in the Keychain. Lists are cached in `~/Library/Application Support/Hostwatch/intel`
   (readable only by you, never executable).
 - **A download can't become anything but a list.** Lists are only read (never run), over HTTPS, with no cookies

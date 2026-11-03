@@ -160,10 +160,23 @@ struct RulesView: View {
                     .help("Remove every baseline rule; what they trusted goes back to New")
             }
             .controlSize(.small)
-            Text("One rule per app (its developer's signature must match), plus one for macOS services. A rule "
-                 + "trusts the app's normal-risk activity, now and later. Never high-risk, unsigned or downloaded "
-                 + "code, interpreters or shells; sensitive places only for apps you trusted yourself.")
+            Text("One rule per app (its developer's signature must match), plus one for macOS itself. A rule trusts "
+                 + "the kinds of normal-risk behaviour the app showed in its first week; something new for it comes to "
+                 + "Needs You. Never high-risk, unsigned or downloaded code, interpreters or shells.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            let recent = recentlyTrusted
+            if !recent.isEmpty {
+                let total = recent.reduce(0) { $0 + $1.keys.count }
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.badge.checkmark").foregroundStyle(.green)
+                    Text("Trusted automatically in the last 24 hours: \(total) new pattern\(total == 1 ? "" : "s") ("
+                         + recent.prefix(4).map { "\($0.name) \($0.keys.count)" }.joined(separator: ", ") + (recent.count > 4 ? "…" : "") + ")")
+                        .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+                    Spacer()
+                    Button("Show") { showKeys("Trusted automatically, last 24 hours", recent.flatMap(\.keys)) }
+                        .buttonStyle(.link).font(.system(size: 12))
+                }
+            }
             if !baseline.rules.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
@@ -175,6 +188,18 @@ struct RulesView: View {
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.06)))
             }
         }
+    }
+
+    /// New patterns that baseline rules trusted in the last 24 hours, by rule (busiest first).
+    private var recentlyTrusted: [(name: String, keys: [String])] {
+        let since = Date().addingTimeInterval(-24 * 3600)
+        let fresh = signatures.allEntries.filter { $0.source == "baseline" && $0.firstSeen >= since }
+        return Dictionary(grouping: fresh, by: { $0.note ?? "" })
+            .map { note, entries in
+                (name: baseline.rules.first { $0.note == note }?.name ?? note.replacingOccurrences(of: "Baseline: ", with: ""),
+                 keys: entries.map(\.id))
+            }
+            .sorted { $0.keys.count > $1.keys.count }
     }
 
     private var learnedSection: some View {
@@ -329,6 +354,14 @@ private struct BaselineRuleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(rule.name).fontWeight(.semibold)
+                    if rule.automatic && !rule.approvedByYou {
+                        Text("Automatic")
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .foregroundStyle(.secondary)
+                            .background(Capsule().fill(Color.secondary.opacity(0.14)))
+                            .help("Made by itself: \(rule.id == "system" ? "macOS's own tools" : "a new app from a developer you trust")")
+                    }
                     if rule.approvedByYou {
                         Text("Trusted by you")
                             .font(.system(size: 10, weight: .semibold))

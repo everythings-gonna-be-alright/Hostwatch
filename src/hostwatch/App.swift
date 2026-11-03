@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let heavyStrip = HeavyStripState()
     /// Threat lists and exploited macOS vulnerabilities (downloaded daily, matched locally).
     private let intel = ThreatIntel()
+    private let sheets = WindowSheetState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
     private lazy var ruleBook = RuleBook(store: signatures)
@@ -379,14 +380,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         let knownBad = intel.hits.filter { $0.date > Date().addingTimeInterval(-7 * 86400) }.count
         if knownBad > 0 {
-            menu.addItem(item("\(knownBad) known-bad \(knownBad == 1 ? "match" : "matches") this week…", #selector(showOverview),
+            menu.addItem(item("\(knownBad) known-bad \(knownBad == 1 ? "match" : "matches") this week…", #selector(openStories),
                               symbol: "xmark.octagon.fill"))
         }
         if intel.vulnerabilitiesEnabled, intel.unfixedCount > 0 {
             let n = intel.unfixedCount
             let title = intel.pendingUpdate != nil ? "A macOS update fixes \(n) exploited \(n == 1 ? "flaw" : "flaws")…"
                 : "\(n) exploited macOS \(n == 1 ? "flaw" : "flaws") since your last update…"
-            menu.addItem(item(title, #selector(showOverview), symbol: "exclamationmark.shield.fill"))
+            menu.addItem(item(title, #selector(showVulnerabilities), symbol: "exclamationmark.shield.fill"))
         }
         if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
@@ -478,7 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         ])
 
         // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
-        let tabs = [("Overview", 5), ("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
+        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
             tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
@@ -653,9 +654,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func showBaselineReport() { openBaselineReport() }
 
-    @objc private func showOverview() {
-        model.windowTab = 5
+    @objc private func showVulnerabilities() {
         openActivityWindow(fullScreen: false)
+        sheets.showVulns = true
     }
 
     /// A domain's details: risk score, programs, connections, Ask AI.
@@ -907,7 +908,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's

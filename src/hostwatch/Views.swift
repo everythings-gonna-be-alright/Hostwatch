@@ -563,6 +563,7 @@ struct ActivityWindowView: View {
     @ObservedObject var vitals: ProcessVitals
     @ObservedObject var heavyStrip: HeavyStripState
     @ObservedObject var intel: ThreatIntel
+    @ObservedObject var sheets: WindowSheetState
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
@@ -578,17 +579,11 @@ struct ActivityWindowView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
+            VulnerabilityBanner(intel: intel, sheets: sheets)
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 { heavySection }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
-            case 5: OverviewView(model: model, collector: collector, stories: stories, domains: domains, rules: rules,
-                                 baseline: baseline, signatures: signatures, vitals: vitals, history: history,
-                                 metrics: metrics, intel: intel, actions: actions, openNeedsYou: {
-                                     rulesTab.segment = .needsYou
-                                     rulesTab.chosen = true
-                                     model.windowTab = 4
-                                 })
             case 0: eventsList
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
@@ -609,6 +604,7 @@ struct ActivityWindowView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 480)
+        .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
@@ -633,7 +629,6 @@ struct ActivityWindowView: View {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
         switch model.windowTab {
-        case 5: return state
         case 0: return "\(state) · \(model.history.count) events"
         case 1: return "\(state) · \(signatures.total) patterns"
         case 2: return "\(state) · \(stories.activeCount) open stories"
@@ -642,12 +637,11 @@ struct ActivityWindowView: View {
         }
     }
 
-    /// Overview first; the order here is the ⌘1–⌘6 order (the View menu matches).
+    /// The order here is the ⌘1–⌘5 order (the View menu matches).
     private var windowTabs: [WindowTabBar.Tab] {
         let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
         let dangerous = stories.stories.contains { !$0.dismissed && $0.severity == .dangerous }
         return [
-            .init(id: 5, title: "Overview", symbol: "gauge.with.dots.needle.33percent"),
             .init(id: 0, title: "Events", symbol: "list.bullet.rectangle"),
             .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up"),
             .init(id: 4, title: "Rules", symbol: "checklist",

@@ -73,7 +73,10 @@ enum BaselinePolicy {
             if !trusted { allTrusted = false }
             if path == subject { subjectID = id }
         }
-        if system { return .trust(BaselineKey(id: "system", name: "macOS system", signer: "Apple (sealed system volume)")) }
+        // macOS itself: all of it sealed, or an Apple tool from the sealed volume started by a trusted program
+        // (Cursor running /bin/rm is macOS's rm, not a rule of its own).
+        let appleTool = SignatureBuilder.isSealedSystem(subject) && subjectID?.apple == true && allTrusted
+        if system || appleTool { return .trust(BaselineKey(id: "system", name: "macOS system", signer: "Apple (sealed system volume)")) }
         guard allTrusted, let id = subjectID ?? paths.first.flatMap({ identify($0).identity }),
               let signer = signerKey(id) else { return .onDevice(app: app) }
         let root = appRoot(subject.isEmpty ? (paths.first ?? "") : subject)
@@ -86,6 +89,33 @@ enum BaselinePolicy {
 
     static func isHomebrew(_ path: String) -> Bool {
         path.hasPrefix("/opt/homebrew/") || path.hasPrefix("/usr/local/Cellar/") || path.hasPrefix("/usr/local/opt/")
+    }
+
+    /// The kind of behaviour a pattern is, for an app's profile: "launches node", "connects to the web",
+    /// "reads ~/Documents", "writes own data". More of the same kind is ordinary; a new kind is worth a look.
+    static func behaviour(_ e: SignatureEntry) -> String {
+        switch e.kind {
+        case .exec:
+            return "launches " + (SignatureStore.subjectPath(e) as NSString).lastPathComponent
+        case .net:
+            let port = e.pattern.split(separator: ":").last.map(String.init) ?? ""
+            let proto = e.pattern.split(separator: " ").first.map(String.init) ?? "TCP"
+            if e.pattern.contains("loopback") || e.pattern.contains(" lan:") { return "connects locally" }
+            switch port {
+            case "443", "80": return "connects to the web"
+            case "53", "853": return "uses DNS"
+            default: return "connects on \(proto) port \(port)"
+            }
+        case .file:
+            let mode = e.pattern.hasPrefix("rw ") ? "reads and writes" : e.pattern.hasPrefix("w ") ? "writes" : "reads"
+            if e.pattern.hasSuffix("[own data]") { return "\(mode) its own data" }
+            if e.pattern.hasSuffix("]"), let open = e.pattern.range(of: "[", options: .backwards) {
+                return "\(mode) \(e.pattern[open.upperBound...].dropLast())"
+            }
+            let path = e.pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
+            let parts = path.split(separator: "/").prefix(path.hasPrefix("~") ? 2 : 2)
+            return "\(mode) " + (path.hasPrefix("/") ? "/" : "") + parts.joined(separator: "/")
+        }
     }
 
     /// "reads keychains" from a pattern like "r ~/Library/Keychains/*  [keychain]".
@@ -160,6 +190,33 @@ struct BaselineRule: Codable, Identifiable, Equatable {
     var approvedByYou = false   // made with Trust: also covers the app's own sensitive reads
     var paused = false
     var created = Date()
+    /// Made by itself (a trusted developer's new app, or macOS itself), not in a learning wave or by you.
+    var automatic = false
+    /// The kinds of behaviour the app showed in its first week (`BaselinePolicy.behaviour`); after that a
+    /// new kind isn't trusted by the rule.
+    var profile: Set<String> = []
+
+    static let learningPeriod: TimeInterval = 7 * 24 * 3600
+    /// macOS itself can't be modified: its rule trusts every normal-risk kind of behaviour.
+    var learnsProfile: Bool { id != "system" }
+
+    init(id: String, name: String, signer: String, approvedByYou: Bool = false, paused: Bool = false,
+         created: Date = Date(), automatic: Bool = false, profile: Set<String> = []) {
+        (self.id, self.name, self.signer, self.approvedByYou, self.paused) = (id, name, signer, approvedByYou, paused)
+        (self.created, self.automatic, self.profile) = (created, automatic, profile)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        signer = try c.decode(String.self, forKey: .signer)
+        approvedByYou = try c.decodeIfPresent(Bool.self, forKey: .approvedByYou) ?? false
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        created = try c.decodeIfPresent(Date.self, forKey: .created) ?? Date()
+        automatic = try c.decodeIfPresent(Bool.self, forKey: .automatic) ?? false
+        profile = try c.decodeIfPresent(Set<String>.self, forKey: .profile) ?? []
+    }
 
     /// The note on patterns this rule trusted (also how they're found again).
     var note: String { "Baseline: \(name) (\(signer))" }
@@ -212,6 +269,11 @@ final class BaselineLearner: ObservableObject {
         if let data = defaults.data(forKey: "baselineRules2") {
             rules = (try? JSONDecoder().decode([BaselineRule].self, from: data)) ?? []
         }
+        // Rules from before profiles: what they already trust is their profile (nothing floods in).
+        for i in rules.indices where rules[i].learnsProfile && rules[i].profile.isEmpty {
+            let note = rules[i].note
+            rules[i].profile = Set(store.allEntries.filter { $0.note == note }.map(BaselinePolicy.behaviour))
+        }
         // The first version kept one rule per developer and a report per reason: undo it and sort again.
         if defaults.object(forKey: "baselineRules") != nil || defaults.object(forKey: "baselineReport") != nil {
             defaults.removeObject(forKey: "baselineRules")
@@ -227,6 +289,16 @@ final class BaselineLearner: ObservableObject {
         revisionWatch = store.$revision.dropFirst().sink { [weak self] _ in self?.scheduleRefresh() }
         scheduleRefresh()
     }
+
+    /// Rules you deleted: never made again by themselves (Update Baseline still can).
+    private var deleted: Set<String> {
+        get { Set(defaults.stringArray(forKey: "baselineDeletedRules") ?? []) }
+        set { defaults.set(Array(newValue).sorted(), forKey: "baselineDeletedRules") }
+    }
+    /// New apps from developers you trust get a rule by themselves (Settings ▸ Detection).
+    var autoRules: Bool { defaults.object(forKey: "baselineAutoRules") as? Bool ?? true }
+    /// Needs You lists only what happened recently.
+    static let activeWindow: TimeInterval = 7 * 24 * 3600
 
     private var startedAt: Date? { defaults.object(forKey: "baselineStartedAt") as? Date }
     private var wavesDone: Int { defaults.integer(forKey: "baselineWavesDone") }
@@ -298,25 +370,53 @@ final class BaselineLearner: ObservableObject {
     /// Rebuilds Needs You from every New pattern. Ones an active rule will trust on its next pass aren't listed.
     func refreshReview() async {
         var report = BaselineReport(dismissed: self.report?.dismissed ?? [])
-        for (entry, decision) in await decide(newPatterns) {
+        // Only what happened lately: something seen once a week ago stays New in Patterns, not here.
+        let active = newPatterns.filter { now().timeIntervalSince($0.lastSeen) < Self.activeWindow }
+        for (entry, decision) in await decide(active) {
             switch decision {
             case .ignore: continue
             case .trust(let key):
                 if let rule = rules.first(where: { $0.id == key.id }) {
-                    if !rule.paused { continue }
-                    report.add(app: key.name, reason: "its baseline rule is paused", key: entry.id)
-                } else {
+                    if rule.paused {
+                        report.add(app: key.name, reason: "its baseline rule is paused", key: entry.id)
+                    } else if !admit(entry, ruleID: key.id, record: false) {
+                        report.add(app: key.name, reason: "new for \(key.name): \(BaselinePolicy.behaviour(entry))", key: entry.id)
+                    }
+                } else if !makesItself(key) {
                     report.add(app: key.name, reason: "signed by \(key.signer) (trusted developer, no rule yet)", key: entry.id)
                 }
             case .onDevice(let app):
                 let signer = identify(SignatureStore.subjectPath(entry)).identity?.label ?? "unknown developer"
                 report.add(app: app, reason: "signed by \(signer), a developer you haven't trusted", key: entry.id)
             case .review(let app, let reason):
-                report.add(app: app, reason: reason, key: entry.id)
+                // Homebrew's tools are one decision, not one row each.
+                if BaselinePolicy.isHomebrew(SignatureStore.subjectPath(entry)) {
+                    report.add(app: "Homebrew tools", reason: "\(app): ad-hoc signed by Homebrew", key: entry.id)
+                } else {
+                    report.add(app: app, reason: reason, key: entry.id)
+                }
             }
         }
         report.sort()
         if report != self.report { self.report = report }
+    }
+
+    /// May this rule trust this pattern? During the rule's first week it learns the kind of behaviour; after
+    /// that only known kinds pass (`record: false` only asks).
+    @discardableResult
+    private func admit(_ entry: SignatureEntry, ruleID: String, record: Bool = true) -> Bool {
+        guard let i = rules.firstIndex(where: { $0.id == ruleID }), !rules[i].paused else { return false }
+        guard rules[i].learnsProfile else { return true }
+        let kind = BaselinePolicy.behaviour(entry)
+        if rules[i].profile.contains(kind) { return true }
+        guard now().timeIntervalSince(rules[i].created) < BaselineRule.learningPeriod else { return false }
+        if record { rules[i].profile.insert(kind) }
+        return true
+    }
+
+    /// Would a rule be made by itself for this key (macOS itself, or a trusted developer's app)?
+    private func makesItself(_ key: BaselineKey) -> Bool {
+        !deleted.contains(key.id) && (key.id == "system" || autoRules)
     }
 
     private func trust(_ keys: [String], by rule: BaselineRule) {
@@ -324,12 +424,15 @@ final class BaselineLearner: ObservableObject {
     }
 
     @discardableResult
-    private func ensureRule(_ key: BaselineKey, approved: Bool = false) -> BaselineRule {
+    private func ensureRule(_ key: BaselineKey, approved: Bool = false, automatic: Bool = false) -> BaselineRule {
         if let i = rules.firstIndex(where: { $0.id == key.id }) {
             if approved { rules[i].approvedByYou = true; rules[i].paused = false }
             return rules[i]
         }
-        let rule = BaselineRule(id: key.id, name: key.name, signer: key.signer, approvedByYou: approved, created: now())
+        var gone = deleted
+        if gone.remove(key.id) != nil { deleted = gone }               // made again on purpose
+        let rule = BaselineRule(id: key.id, name: key.name, signer: key.signer, approvedByYou: approved, created: now(),
+                                automatic: automatic)
         rules.append(rule)
         rules.sort { $0.id == "system" ? true : $1.id == "system" ? false : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return rule
@@ -346,7 +449,8 @@ final class BaselineLearner: ObservableObject {
         for (entry, decision) in decisions {
             switch decision {
             case .trust(let key):
-                if !ensureRule(key).paused { byRule[key.id, default: []].append(entry.id) }
+                ensureRule(key)
+                if admit(entry, ruleID: key.id) { byRule[key.id, default: []].append(entry.id) }
             case .onDevice: onDeviceKeys.append(entry.id)
             case .review, .ignore: break
             }
@@ -360,19 +464,26 @@ final class BaselineLearner: ObservableObject {
         await refreshReview()
     }
 
-    /// Between waves and after learning: active rules trust new patterns of their apps. No new rules here
-    /// (new apps wait for you, or for Update Baseline).
+    /// Between waves and after learning: rules trust new patterns of their apps (only kinds of behaviour the
+    /// app showed in its first week). macOS itself, and new apps from developers you trust (Settings ▸
+    /// Detection), get a rule by themselves; a rule you deleted doesn't come back.
     func applyRules() async {
-        guard !running, rules.contains(where: { !$0.paused }) else { return }
+        guard !running else { return }
         let candidates = newPatterns
         guard !candidates.isEmpty else { return }
         var byRule: [String: [String]] = [:]
+        var changed = false
         for (entry, decision) in await decide(candidates) {
-            if case .trust(let key) = decision, rules.contains(where: { $0.id == key.id && !$0.paused }) {
-                byRule[key.id, default: []].append(entry.id)
+            guard case .trust(let key) = decision else { continue }
+            if !rules.contains(where: { $0.id == key.id }) {
+                guard makesItself(key) else { continue }
+                ensureRule(key, automatic: true)
+                changed = true
             }
+            if admit(entry, ruleID: key.id) { byRule[key.id, default: []].append(entry.id); changed = true }
         }
         for (id, keys) in byRule { if let rule = rules.first(where: { $0.id == id }) { trust(keys, by: rule) } }
+        if changed { save() }
         await applyApproved()
     }
 
@@ -384,7 +495,7 @@ final class BaselineLearner: ObservableObject {
         guard !candidates.isEmpty else { return }
         var byRule: [String: [String]] = [:]
         for (entry, decision) in await decide(candidates, allowSensitive: true) {
-            if case .trust(let key) = decision, approved.contains(where: { $0.id == key.id }) {
+            if case .trust(let key) = decision, approved.contains(where: { $0.id == key.id }), admit(entry, ruleID: key.id) {
                 byRule[key.id, default: []].append(entry.id)
             }
         }
@@ -417,6 +528,7 @@ final class BaselineLearner: ObservableObject {
     func delete(_ rule: BaselineRule) {
         revert(rule)
         rules.removeAll { $0.id == rule.id }
+        deleted.insert(rule.id)
         save()
         scheduleRefresh()
     }
@@ -425,6 +537,7 @@ final class BaselineLearner: ObservableObject {
     func undo() {
         let keys = store.allEntries.filter { $0.source == "baseline" }.map(\.id)
         store.set(.unclassified, keys: keys)
+        deleted.formUnion(rules.map(\.id))
         rules = []
         save()
         scheduleRefresh()

@@ -2,16 +2,18 @@
 
 ## Unreleased
 
-- **Overview tab** (first, ⌘1), in the style of System Settings' status pages: a status header, four tiles,
-  *Needs attention* (only what needs action, one row each with its button), *Protection* as grouped rows with
-  their state, and the last 24 hours. The tab bar shows icons and count badges; event-kind counters
-  only on Events.
+- **Tab bar with icons** and count badges (icons only when narrow); event-kind counters only on Events. A slim
+  banner shows exploited macOS flaws that aren't fixed yet (Details, Software Update).
+- **Far fewer decisions:** macOS's own tools are always trusted (one rule, made by itself); new apps from
+  developers you trust get an *Automatic* rule (setting, on); each rule trusts only the kinds of behaviour its app
+  showed in its first week, and anything new for it comes to Needs You; Needs You lists only what was active in the
+  last 7 days; Homebrew tools share one row; Rules shows what was trusted automatically in the last 24 hours.
 - **Known threats:** HaGeZi Threat Intelligence and Feodo Tracker (no key), ThreatFox and MalwareBazaar (free
   abuse.ch key) downloaded daily and matched locally against every connection and every untrusted program's
   SHA-256. A match is a Dangerous *Known malware* story, a red KNOWN BAD tag, risk 100 for the domain; recent
   history is re-checked after each update.
 - **Exploited macOS vulnerabilities:** CISA's list of Apple flaws exploited in the wild, compared with your last
-  macOS update and any waiting update; in Overview, a list sheet and the tray.
+  macOS update and any waiting update; a banner, a list sheet and the tray.
 - **Settings ▸ Threat Intelligence:** lists with counts and freshness, the abuse.ch key (Keychain), Update Now.
 - **Safe downloads of the lists:** only text of the right shape and plausible size replaces a list (programs,
   archives and scripts are refused), no sudden collapse or explosion, HTTPS without redirects to other hosts,

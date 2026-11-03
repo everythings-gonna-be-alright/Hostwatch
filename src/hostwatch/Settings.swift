@@ -48,6 +48,9 @@ final class SettingsState: ObservableObject {
     }
     @Published var resetPlan = ResetPlan()
     @Published var abuseKeyDraft = ""
+    @Published var baselineAutoRules = UserDefaults.standard.object(forKey: "baselineAutoRules") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(baselineAutoRules, forKey: "baselineAutoRules") }
+    }
 }
 
 enum SettingsPane: Int, CaseIterable {
@@ -365,6 +368,16 @@ private struct DetectionPane: View {
                          + "passwords, installs a login item or removes the download quarantine, and asks you. "
                          + "Best effort: very quick commands can finish first. If Hostwatch quits, held "
                          + "processes continue.")
+            }
+            Section {
+                Toggle("Trust new apps from developers you trust", isOn: $ui.baselineAutoRules)
+            } header: {
+                Text("Baseline")
+            } footer: {
+                Footnote("A new app signed by a developer you already trust (valid, not quarantined, not in Downloads) "
+                         + "gets its own baseline rule by itself. Each rule trusts only the kinds of behaviour the app "
+                         + "showed in its first week; anything new for it comes to Needs You. macOS's own tools are always "
+                         + "trusted. A rule you delete isn't made again by itself.")
             }
             Section {
                 Toggle("Highlight heavy processes in Events", isOn: $ui.heavyHighlight)
