@@ -278,3 +278,46 @@ import Testing
         #expect(s.entry(routine.signatureKey) == nil && s.entry(new.signatureKey) != nil)   // New is never pruned
     }
 }
+
+/// Built-in safe: macOS's own behaviour, decided out of the box; look-alikes elsewhere aren't.
+@MainActor @Suite struct BuiltInSafePatterns {
+    let systemUI = "/System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer"
+
+    @Test func macOSOwnBehaviourIsRoutine() {
+        let encoding = file("/Applications/Tool.app/Contents/MacOS/Tool", pid: 1, "r", "\(home)/.CFUserTextEncoding")
+        #expect(encoding.signatureRisk == .routine && encoding.signatureReason.hasPrefix("macOS:"))
+        let backup = exec("/bin/sh", pid: 2, ppid: 1, parent: "/usr/sbin/networksetup",
+                          args: "sh -c '/bin/cp /Library/Preferences/SystemConfiguration/preferences.plist /Library/Preferences/SystemConfiguration/preferences.plist.old'")
+        #expect(backup.signatureRisk == .routine)
+        let cleaner = exec("/bin/bash", pid: 3, ppid: 1, parent: "/bin/sh", args: "bash /usr/libexec/tmp_cleaner")
+        #expect(cleaner.signatureRisk == .routine)
+        let shot = exec("/usr/sbin/screencapture", pid: 4, ppid: 1, parent: systemUI,
+                        args: "screencapture -zsuis_msg-com.apple.screenshot.launcher -uUpi")
+        #expect(shot.signatureRisk == .routine && shot.signatureReason.contains("screenshot"))
+    }
+
+    @Test func lookAlikesDontCount() {
+        // The same command from another parent, or a copy of the program elsewhere.
+        let fakeParent = exec("/bin/sh", pid: 5, ppid: 1, parent: "/tmp/networksetup",
+                              args: "sh -c '/bin/cp /Library/Preferences/SystemConfiguration/preferences.plist /tmp/x'")
+        #expect(fakeParent.signatureRisk != .routine)
+        let fromTerminal = exec("/usr/sbin/screencapture", pid: 6, ppid: 1, parent: "/bin/zsh",
+                                args: "screencapture -zsuis_msg-com.apple.screenshot.launcher -x /tmp/s.png")
+        #expect(fromTerminal.signatureRisk != .routine)
+        let otherScript = exec("/bin/bash", pid: 7, ppid: 1, parent: "/bin/sh", args: "bash /usr/libexec/tmp_cleaner_evil")
+        #expect(otherScript.signatureRisk != .routine)
+        let writing = file("/Applications/Tool.app/Contents/MacOS/Tool", pid: 8, "w", "\(home)/.CFUserTextEncoding")
+        #expect(writing.signatureRisk != .routine)                                  // reading only
+    }
+
+    @Test func existingNewPatternsBecomeRoutineOnReassess() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-builtin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        let shot = exec("/usr/sbin/screencapture", pid: 4, ppid: 1, parent: systemUI,
+                        args: "screencapture -zsuis_msg-com.apple.screenshot.launcher -uUpi")
+        _ = store.observe(shot)
+        #expect(store.status(for: shot) == .safe && store.entry(shot.signatureKey)?.source == "auto")
+    }
+}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Built-in safe patterns:** macOS's own behaviour is decided out of the box: any app reading
+  `~/.CFUserTextEncoding`, networksetup backing up network settings, the `tmp_cleaner` script, and screenshots
+  started by SystemUIServer. Exact patterns only, and a named parent must be that program on the sealed system
+  volume; signing and stories still apply.
+
 - **Tidying, routine noise only:** at launch and daily, routine Safe patterns not seen for 30 days are removed
   (they come back if they happen again), and those of one program that differ only in random parts (cache hashes,
   temp and version names) are folded into one, never too wide and never touching anything you, a rule or an AI
