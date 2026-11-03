@@ -546,11 +546,10 @@ struct EventRow: View {
 /// the narrowest falls back to a pop-up menu. View ▸ Show has the same choices.
 struct ShowFilterPicker: View {
     @Binding var filter: SignatureFilter
-    @ObservedObject var signatures: SignatureStore
+    /// How many rows each choice would show in this tab (events on Events, patterns on Patterns).
+    let counts: [SignatureFilter: Int]
 
     var body: some View {
-        let _ = signatures.revision
-        let counts = self.counts
         ViewThatFits(in: .horizontal) {
             bar(counts, icons: true)
             bar(counts, icons: false)
@@ -560,14 +559,6 @@ struct ShowFilterPicker: View {
             .fixedSize()
         }
         .help("Show: filter by how patterns are decided (Events, Patterns and the HUD)")
-    }
-
-    /// How many patterns each choice shows ("All" has no count).
-    private var counts: [SignatureFilter: Int] {
-        let safe = signatures.count(.safe), new = signatures.count(.unclassified)
-        let flagged = signatures.count(.suspicious) + signatures.count(.dangerous)
-        return [.hideSafe: signatures.total - safe, .unclassified: new,
-                .important: flagged + signatures.newHighRiskCount(), .flagged: flagged]
     }
 
     private func bar(_ counts: [SignatureFilter: Int], icons: Bool) -> some View {
@@ -767,7 +758,8 @@ struct ActivityWindowView: View {
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
     private var filterBar: some View {
         HStack(spacing: 12) {
-            ShowFilterPicker(filter: $model.signatureFilter, signatures: signatures)
+            ShowFilterPicker(filter: $model.signatureFilter,
+                             counts: model.showCounts(traveling ? travel.events : model.history, applyExclusions: traveling))
             Spacer(minLength: 0)
         }
         .controlSize(.small)

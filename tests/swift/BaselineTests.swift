@@ -220,7 +220,7 @@ import Testing
         #expect(store.patternItems(filter: .all).count == 2)
         store.search = ""
         store.scope = .init(title: group.app, keys: Set(group.keys))
-        #expect(store.patternItems(filter: .flagged).map(\.entry.id) == [py312.signatureKey])
+        #expect(store.patternItems(filter: .important).map(\.entry.id) == [py312.signatureKey])
         #expect(learner.entries(group).map(\.id) == [py312.signatureKey])
     }
 

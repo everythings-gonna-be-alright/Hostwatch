@@ -80,3 +80,26 @@ import Testing
         #expect(model.history.isEmpty && model.restoredCount == 0)
     }
 }
+
+/// Show: three choices; the count on each is what that tab would list.
+@MainActor @Suite struct ShowFilterChoices {
+    @Test func earlierChoicesMapOntoTheThree() {
+        #expect(SignatureFilter.allCases.map(\.short) == ["All", "New", "Important"])
+        #expect(SignatureFilter(stored: "hideSafe") == .unclassified)
+        #expect(SignatureFilter(stored: "flagged") == .important)
+    }
+
+    @Test func aCountIsWhatTheListShows() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-show-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let model = HUDModel(signatures: SignatureStore(directory: dir), stories: StoryEngine(persistent: false),
+                             domains: DomainRegistry(replayLearningUntil: Date()))
+        let events = [exec("/bin/sh", pid: 1, ppid: 0, parent: "/Applications/Slack.app/Contents/MacOS/Slack", args: "sh -c id"),
+                      net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 2, to: "45.1.2.3:443")]
+        for f in SignatureFilter.allCases where f != .all {
+            #expect(model.showCounts(events)[f] == model.filtered(events, show: f).count)
+        }
+        #expect(model.showCounts(events)[.important] == 1)                       // the app's shell: high risk
+    }
+}

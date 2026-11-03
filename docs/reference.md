@@ -540,9 +540,10 @@ already running when it started aren't followed, or Xcode and browsers would be 
 
 ## Window tabs
 
-**Show** (Events and Patterns, also *View ▸ Show*) is a scope bar: **All · Not Safe · New · Important ·
-Suspicious**, each with how many patterns it shows (New: not reviewed yet; Important: Suspicious and Dangerous
-plus new high-risk; Suspicious: Suspicious and Dangerous). It applies to the HUD, Events and Patterns.
+**Show** (Events and Patterns, also *View ▸ Show*) is a scope bar: **All · New · Important**. New: not
+decided yet; Important: Suspicious and Dangerous plus new high-risk (new domains, beacons, raw IPs and known-bad
+matches count as both). Each choice shows how many rows it would list in that tab: events on Events (with the
+kind toggles, search and *Only These* as they are), patterns on Patterns. It applies to the HUD, Events and Patterns.
 
 Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, each with its icon and its count as a badge (icons
 only when the window is narrow); the event-kind counters appear on Events only. When exploited macOS flaws aren't
