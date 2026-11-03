@@ -1024,7 +1024,7 @@ final class SignatureStore: ObservableObject {
     /// Makes one shared pattern from similar ones (and any other it covers): counts added up, the most serious
     /// status kept (New when Safe and New are mixed), future events matching it join it.
     @discardableResult
-    func combine(keys: [String], process: String, pattern: String) -> String? {
+    func combine(keys: [String], process: String, pattern: String, automatic: Bool = false) -> String? {
         guard combineProblems(keys: keys, process: process, pattern: pattern).isEmpty,
               let kind = keys.compactMap({ entries[$0] }).first?.kind else { return nil }
         let key = "\(kind.rawValue)|\(process)|\(pattern)"
@@ -1045,7 +1045,7 @@ final class SignatureStore: ObservableObject {
         merged.risk = group.map(\.risk).max() ?? latest.risk
         merged.status = status
         merged.source = status == .unclassified ? nil : sources.contains("you") ? "you" : sources.first
-        merged.note = "Combined from \(group.count) patterns"
+        merged.note = automatic ? (merged.note ?? "routine") : "Combined from \(group.count) patterns"
         merged.suggestion = nil
         for e in group where e.id != key {
             entries[e.id] = nil
@@ -1055,10 +1055,88 @@ final class SignatureStore: ObservableObject {
         for (old, target) in aliases where seen.contains(target) { aliases[old] = key }
         entries[key] = merged
         merges.removeAll { $0.key == key }
-        merges.append(PatternMerge(kind: kind, process: process, pattern: pattern))
+        merges.append(PatternMerge(kind: kind, process: process, pattern: pattern, automatic: automatic))
         PatternMerges.shared.set(merges)
-        changedNow()
+        if !automatic { changedNow() }
         return key
+    }
+
+    // MARK: Tidying (routine Safe noise only)
+
+    static let pruneAfter: TimeInterval = 30 * 24 * 3600
+    static let foldMinimum = 3
+    /// "Tidied: removed 1,204 old routine patterns, folded 3,410 into 212."
+    @Published private(set) var tidySummary = ""
+    private var lastTidy: Date?
+
+    /// Decided automatically as ordinary (system reads, caches, scratch writes), and nothing since.
+    private func isRoutineNoise(_ e: SignatureEntry) -> Bool {
+        e.status == .safe && e.source == "auto" && e.risk == .routine && e.reopened == nil
+    }
+
+    /// A part that's random from one run to the next: a cache hash, a temp name ("tmp.aB#dE#", "<hex>").
+    static func looksRandom(_ token: String) -> Bool {
+        if token.contains("<hex>") || token.contains("<uuid>") { return true }
+        let letters = token.filter(\.isLetter).count
+        if token.contains("#"), letters > 0 { return true }
+        guard token.count >= 10, !token.contains(where: { !$0.isLetter && !$0.isNumber }) else { return false }
+        let upper = token.filter(\.isUppercase).count, lower = token.filter(\.isLowercase).count
+        let vowels = token.lowercased().filter { "aeiou".contains($0) }.count
+        return upper >= 2 && lower >= 2 && Double(vowels) / Double(token.count) < 0.25
+    }
+
+    /// The pattern with its random parts as `*` (token by token, split at / . : and spaces).
+    static func shape(_ pattern: String) -> String {
+        var out = "", cur = ""
+        func flush() { out += looksRandom(cur) ? "*" : cur; cur = "" }
+        for c in pattern {
+            if "/.: ".contains(c) { flush(); out.append(c) } else { cur.append(c) }
+        }
+        flush()
+        return out
+    }
+
+    /// Housekeeping, at launch and daily: routine Safe patterns not seen for 30 days are removed (they come
+    /// back if they happen again), and those of one program that differ only in random parts are folded into
+    /// one (only when the fold covers nothing but routine Safe patterns and isn't too wide). Nothing you, a
+    /// rule or an AI decided, nothing New and nothing reopened is touched.
+    @discardableResult
+    func tidy(now: Date = Date()) -> (pruned: Int, folded: Int, into: Int) {
+        lastTidy = now
+        var pruned = 0
+        for (key, e) in entries where isRoutineNoise(e) && now.timeIntervalSince(e.lastSeen) > Self.pruneAfter && !isCombined(key) {
+            entries[key] = nil
+            pruned += 1
+        }
+        if pruned > 0 { aliases = aliases.filter { entries[$0.value] != nil } }
+        var groups: [String: [SignatureEntry]] = [:]
+        for e in entries.values where isRoutineNoise(e) && !isCombined(e.id) {
+            let shaped = Self.shape(e.pattern)
+            guard shaped != e.pattern else { continue }
+            groups["\(e.kind.rawValue)|\(e.process)|\(shaped)", default: []].append(e)
+        }
+        var folded = 0, into = 0
+        for (_, group) in groups where group.count >= Self.foldMinimum {
+            let first = group[0]
+            let pattern = Self.shape(first.pattern)
+            let keys = group.map(\.id)
+            guard combineProblems(keys: keys, process: first.process, pattern: pattern).isEmpty,
+                  covered(kind: first.kind, process: first.process, pattern: pattern).allSatisfy(isRoutineNoise),
+                  combine(keys: keys, process: first.process, pattern: pattern, automatic: true) != nil else { continue }
+            folded += group.count
+            into += 1
+        }
+        if pruned + folded > 0 {
+            tidySummary = "Tidied: removed \(pruned.formatted()) old routine pattern\(pruned == 1 ? "" : "s"), folded "
+                + "\(folded.formatted()) into \(into.formatted())."
+            changedNow()
+        }
+        return (pruned, folded, into)
+    }
+
+    /// Once a day (checked by the store's timer).
+    private func tidyIfDue() {
+        if lastTidy.map({ Date().timeIntervalSince($0) > 24 * 3600 }) ?? true { tidy() }
     }
 
     /// Undoes a combined pattern: future events make their own patterns again.
@@ -1257,6 +1335,7 @@ final class SignatureStore: ObservableObject {
         if pendingRevision { pendingRevision = false; revision += 1 }
         ticks += 1
         if ticks % 10 == 0 { save() }
+        if ticks % 3600 == 30 { tidyIfDue() }        // 30 s after launch, then hourly checks for "a day passed"
     }
 
     /// Drops the oldest unclassified patterns when the store is full.
@@ -1639,6 +1718,20 @@ struct PatternMerge: Codable, Equatable {
     var process: String          // glob
     var pattern: String          // glob
     var created = Date()
+    var automatic = false        // folded by tidying (routine Safe noise), not by you
+
+    init(kind: EventKind, process: String, pattern: String, created: Date = Date(), automatic: Bool = false) {
+        (self.kind, self.process, self.pattern, self.created, self.automatic) = (kind, process, pattern, created, automatic)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(EventKind.self, forKey: .kind)
+        process = try c.decode(String.self, forKey: .process)
+        pattern = try c.decode(String.self, forKey: .pattern)
+        created = try c.decodeIfPresent(Date.self, forKey: .created) ?? Date()
+        automatic = try c.decodeIfPresent(Bool.self, forKey: .automatic) ?? false
+    }
 
     var key: String { "\(kind.rawValue)|\(process)|\(pattern)" }
 }
@@ -1647,16 +1740,24 @@ struct PatternMerge: Codable, Equatable {
 final class PatternMerges: @unchecked Sendable {
     static let shared = PatternMerges()
     private let lock = NSLock()
-    private var merges: [PatternMerge] = []
+    /// By "kind|program" for an exact program (most, and every fold); the rest scanned.
+    private var exact: [String: [PatternMerge]] = [:]
+    private var wild: [PatternMerge] = []
 
     func set(_ merges: [PatternMerge]) {
-        lock.lock(); self.merges = merges; lock.unlock()
+        var exact: [String: [PatternMerge]] = [:], wild: [PatternMerge] = []
+        for m in merges {
+            if m.process.contains("*") || m.process.contains("?") { wild.append(m) }
+            else { exact["\(m.kind.rawValue)|\(m.process.lowercased())", default: []].append(m) }
+        }
+        lock.lock(); (self.exact, self.wild) = (exact, wild); lock.unlock()
     }
 
     func apply(kind: EventKind, process: String, pattern: String) -> (String, String)? {
         lock.lock(); defer { lock.unlock() }
-        guard !merges.isEmpty else { return nil }
-        return merges.first { $0.kind == kind && Glob.match($0.process, process) && Glob.match($0.pattern, pattern) }
+        if exact.isEmpty && wild.isEmpty { return nil }
+        let candidates = (exact["\(kind.rawValue)|\(process.lowercased())"] ?? []) + wild
+        return candidates.first { $0.kind == kind && Glob.match($0.process, process) && Glob.match($0.pattern, pattern) }
             .map { ($0.process, $0.pattern) }
     }
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Tidying, routine noise only:** at launch and daily, routine Safe patterns not seen for 30 days are removed
+  (they come back if they happen again), and those of one program that differ only in random parts (cache hashes,
+  temp and version names) are folded into one, never too wide and never touching anything you, a rule or an AI
+  decided, New or reopened. If later activity joining a fold isn't routine, the fold goes back to New.
+
 - **Decided patterns reopen when something changes:** a Safe pattern goes back to Needs You, with why, when its
   step is part of a story that fires, when its program contacts known malware infrastructure or is a known malware
   file (all of that program's Safe patterns), or when it becomes high-risk (a swapped or quarantined binary, code
