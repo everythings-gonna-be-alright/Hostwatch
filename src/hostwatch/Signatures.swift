@@ -1139,7 +1139,19 @@ func runSignatureReport(_ path: String) -> Never {
 
 @MainActor
 final class PatternClassifier: ObservableObject {
-    @Published private(set) var running = false
+    @Published private(set) var running = false {
+        didSet { if oldValue && !running { DispatchQueue.main.async { [weak self] in self?.continueAll() } } }
+    }
+
+    /// "Classify with AI" for every New pattern: batches one after another, with progress.
+    struct BulkRun: Equatable {
+        var total: Int
+        var done = 0
+        var apply: Bool                 // apply the verdicts (never Safe for high risk or interpreters), or keep suggestions
+        var attempted: Set<String> = []
+        var batch: [String] = []
+    }
+    @Published private(set) var bulk: BulkRun?
     @Published private(set) var lastMessage = ""
     @Published private(set) var totalCost: Double = 0
     @Published var autoClassify: Bool {
@@ -1201,6 +1213,49 @@ final class PatternClassifier: ObservableObject {
     Output ONLY a JSON array, no prose, no code fences:
     [{"id": <number>, "verdict": "SAFE|SUSPICIOUS|DANGEROUS|UNKNOWN", "reason": "<= 20 words"}]
     """
+
+    /// New patterns nobody decided and no AI has looked at yet.
+    var classifiable: [SignatureEntry] {
+        store.allEntries.filter { store.status(forKey: $0.id) == .unclassified && $0.suggestion == nil && !leftForYou.contains($0.id) }
+    }
+
+    /// Classifies every New pattern, `batchSize` at a time (high-risk first, then most recent).
+    func classifyAll(apply: Bool) {
+        guard bulk == nil, !running else { return }
+        let todo = classifiable
+        guard !todo.isEmpty else { lastMessage = "Nothing to classify."; return }
+        bulk = BulkRun(total: todo.count, apply: apply)
+        continueAll()
+    }
+
+    func cancelAll() {
+        bulk = nil
+        cancel()
+    }
+
+    private func continueAll() {
+        guard var run = bulk, !running else { return }
+        if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch) }
+        // Claude unavailable or failing: stop rather than fail every remaining batch.
+        if ["failed", "Cannot start", "not found", "Could not parse", "Cancelled"].contains(where: lastMessage.contains) {
+            bulk = nil
+            return
+        }
+        run.done = min(run.total, run.attempted.count)
+        let next = classifiable.filter { !run.attempted.contains($0.id) }
+            .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
+            .prefix(batchSize)
+        guard !next.isEmpty else {
+            lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? "; verdicts applied (not to high-risk)." : "; see Rules ▸ Needs You.")
+            bulk = nil
+            return
+        }
+        run.batch = next.map(\.id)
+        run.attempted.formUnion(run.batch)
+        bulk = run
+        classify(Array(next))
+        if !running { bulk = nil }       // nothing could run (no engine): stop instead of looping
+    }
 
     func classifyNow() {
         leftForYou.removeAll()   // an explicit request retries everything

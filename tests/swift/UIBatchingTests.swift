@@ -103,3 +103,53 @@ import Testing
         #expect(model.showCounts(events)[.important] == 1)                       // the app's shell: high risk
     }
 }
+
+/// Classify with AI: every New pattern in batches, verdicts applied (never Safe for high risk) or kept as suggestions.
+@MainActor @Suite(.serialized) struct ClassifyEverything {
+    struct FakeModel: LocalTriageModel {
+        func status() -> LocalModelStatus { .ready }
+        func triage(_ prompt: String) async throws -> LocalVerdict {
+            LocalVerdict(verdict: .safe, confidence: .high, reason: "ordinary")
+        }
+    }
+
+    func make() throws -> (PatternClassifier, SignatureStore) {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-classify-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        func name(_ i: Int) -> String {                                         // letters only: digits normalise to #
+            String(UnicodeScalar(65 + i / 26)!) + String(UnicodeScalar(97 + i % 26)!) + "app"
+        }
+        for i in 0..<95 { store.observe(net("/Applications/\(name(i)).app/Contents/MacOS/\(name(i))", pid: i, to: "45.1.2.3:443")) }
+        store.observe(exec("/bin/sh", pid: 500, ppid: 0, parent: "/Applications/Slack.app/Contents/MacOS/Slack", args: "sh -c id"))  // high risk
+        let classifier = PatternClassifier(store: store, localModel: FakeModel())
+        classifier.engine = .onDevice
+        return (classifier, store)
+    }
+
+    func waitUntilDone(_ c: PatternClassifier) async throws {
+        for _ in 0..<300 where c.bulk != nil || c.running { try await Task.sleep(nanoseconds: 20_000_000) }
+    }
+
+    @Test func allBatchesAndVerdictsAppliedButNeverSafeForHighRisk() async throws {
+        let (classifier, store) = try make()
+        let total = classifier.classifiable.count
+        #expect(total == 96)
+        classifier.classifyAll(apply: true)
+        #expect(classifier.bulk?.total == 96)
+        try await waitUntilDone(classifier)
+        #expect(classifier.bulk == nil)
+        #expect(store.count(.safe) >= 95)                                          // three batches of 40
+        let shell = try #require(store.allEntries.first { $0.risk == .high })
+        #expect(store.status(forKey: shell.id) == .unclassified)                  // high risk stays yours
+    }
+
+    @Test func orKeptAsSuggestions() async throws {
+        let (classifier, store) = try make()
+        classifier.classifyAll(apply: false)
+        try await waitUntilDone(classifier)
+        #expect(store.count(.safe) == 0)
+        #expect(store.allEntries.filter { $0.suggestion?.status == .safe }.count >= 95)
+    }
+}

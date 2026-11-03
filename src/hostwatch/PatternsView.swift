@@ -211,6 +211,7 @@ struct PatternsView: View {
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
             Spacer()
+            ClassifyAllButton(classifier: classifier, signatures: signatures)
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")

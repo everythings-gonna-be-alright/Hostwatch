@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Classify with AI** (Events and Patterns): every New pattern, 40 at a time, with a progress bar and Cancel.
+  A popover says how many, which AI (Settings ▸ AI) and the rough cost, and whether to apply the verdicts (never
+  Safe for high-risk patterns or interpreters) or keep them as suggestions. Stops if Claude fails.
+
 - **Show filter as a scope bar** (Events and Patterns): **All · New · Important**, each with how many rows it shows
   in that tab (events on Events, patterns on Patterns), one selected, a tooltip each. "Not Safe" (New + Important)
   and "Suspicious" (inside Important) are gone; a saved choice moves to New or Important.
