@@ -48,6 +48,7 @@ final class SettingsState: ObservableObject {
     }
     @Published var resetPlan = ResetPlan()
     @Published var abuseKeyDraft = ""
+    @Published var replacingKey = false
     @Published var baselineAutoRules = UserDefaults.standard.object(forKey: "baselineAutoRules") as? Bool ?? true {
         didSet { UserDefaults.standard.set(baselineAutoRules, forKey: "baselineAutoRules") }
     }
@@ -625,34 +626,56 @@ private struct ThreatSections: View {
     @ObservedObject var intel: ThreatIntel
     @ObservedObject var ui: SettingsState
 
+    private func saveKey() {
+        let key = ui.abuseKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        intel.apiKey = key
+        ui.abuseKeyDraft = ""
+        ui.replacingKey = false
+        Task { await intel.update() }
+    }
+
     var body: some View {
         let _ = intel.revision
         Group {
             Section {
                 Toggle("Check against known threats", isOn: $intel.enabled)
                 ForEach([ThreatIntel.Feed.hagezi, .feodo, .threatfox, .bazaar]) { feed in feedRow(feed) }
-                LabeledContent("abuse.ch key") {
-                    HStack {
-                        SecureField(intel.apiKey == nil ? "Free key, for ThreatFox and MalwareBazaar" : "Saved in the Keychain",
-                                    text: $ui.abuseKeyDraft)
-                            .frame(width: 230)
-                        Button(intel.apiKey == nil ? "Save" : "Replace") {
-                            intel.apiKey = ui.abuseKeyDraft
-                            ui.abuseKeyDraft = ""
-                            Task { await intel.update() }
+                LabeledContent {
+                    if intel.apiKey != nil && !ui.replacingKey {
+                        HStack(spacing: 8) {
+                            Label("Saved in the Keychain", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Button("Replace…") { ui.replacingKey = true }
+                            Button("Remove", role: .destructive) { intel.apiKey = nil }
                         }
-                        .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                        if intel.apiKey != nil {
-                            Button("Remove") { intel.apiKey = nil }
+                    } else {
+                        HStack(spacing: 8) {
+                            SecureField("Paste your key", text: $ui.abuseKeyDraft)
+                                .frame(width: 200)
+                                .onSubmit(saveKey)
+                            Button("Save", action: saveKey)
+                                .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                            if ui.replacingKey {
+                                Button("Cancel") { ui.replacingKey = false; ui.abuseKeyDraft = "" }
+                            }
                         }
                     }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("abuse.ch key")
+                        HStack(spacing: 4) {
+                            Text("Free · adds ThreatFox and MalwareBazaar ·")
+                            Link("Get a free key", destination: URL(string: "https://auth.abuse.ch/")!)
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                LabeledContent("") {
-                    HStack {
-                        Link("Get a free key ↗", destination: URL(string: "https://auth.abuse.ch/")!)
-                        Spacer()
+                LabeledContent("Lists") {
+                    HStack(spacing: 8) {
                         if intel.updating { ProgressView().controlSize(.small) }
-                        Button("Update Now") { Task { await intel.update() } }.disabled(intel.updating)
+                        Button(intel.updating ? "Updating…" : "Update Now") { Task { await intel.update() } }
+                            .disabled(intel.updating)
                     }
                 }
             } header: {
