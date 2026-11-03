@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Decided patterns reopen when something changes:** a Safe pattern goes back to Needs You, with why, when its
+  step is part of a story that fires, when its program contacts known malware infrastructure or is a known malware
+  file (all of that program's Safe patterns), or when it becomes high-risk (a swapped or quarantined binary, code
+  from a download), whoever decided it. Until you decide again, no baseline, learned rule or AI run decides it;
+  Decided By shows *Reopened*.
+
 - **Combine similar patterns into one** (Patterns: select 2+ ▸ right-click or Mark Selected ▸ *Combine…*): a
   sheet proposes the shared pattern (a `*` where they differ), editable, shows what it covers and refuses one
   that's too wide; counts add up, the most serious status wins, later matching activity joins it. *Separate

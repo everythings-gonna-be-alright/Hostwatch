@@ -437,3 +437,50 @@ import Testing
     }
 }
 
+
+/// A decided pattern goes back to you when something about it changes, and nothing automatic decides it again.
+@MainActor @Suite(.serialized) struct ReopenDecided {
+    let slack = "/Applications/Slack.app/Contents/MacOS/Slack"
+
+    func make() throws -> (BaselineLearner, SignatureStore) {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-reopen-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        let learner = BaselineLearner(store: store, classifier: nil, defaults: scratchDefaults("hw-reopen"), freshInstall: false)
+        learner.identify = { path in
+            path == self.slack ? (CodeIdentity(signed: true, teamID: "BQR82RBBHL", organization: "Slack Technologies"), true) : (nil, false)
+        }
+        return (learner, store)
+    }
+
+    @Test func aStoryReopensItsStepsAndNoRuleRetrustsThem() async throws {
+        let (learner, store) = try make()
+        let e = net(slack, pid: 1, to: "3.68.170.153:443", host: "app.slack.com")
+        store.observe(e)
+        await learner.buildNow()
+        #expect(store.status(for: e) == .safe)                                    // the baseline trusted it
+        #expect(store.reopen(keys: [e.signatureKey], reason: "part of a story: Slack → sh → curl") == 1)
+        #expect(store.status(for: e) == .unclassified && store.decidedBy(e.signatureKey) == "Reopened")
+        await learner.applyRules()
+        #expect(store.status(for: e) == .unclassified)                            // not re-trusted
+        await learner.refreshReview()
+        #expect(learner.report?.review.first?.reasons == ["Reopened: part of a story: Slack → sh → curl"])
+        store.suggest(.safe, key: e.signatureKey, source: "claude", note: nil)
+        #expect(store.acceptSuggestions(keys: [e.signatureKey], yours: false) == 0)   // an AI run leaves it to you
+        store.set(.safe, keys: [e.signatureKey])                                  // your decision
+        #expect(store.entry(e.signatureKey)?.reopened == nil)
+    }
+
+    @Test func aKnownBadProgramReopensEverythingItWasTrustedToDo() throws {
+        let (_, store) = try make()
+        let a = net(slack, pid: 2, to: "3.68.170.153:443", host: "app.slack.com")
+        let b = file(slack, pid: 2, "r", "\(home)/Documents/work/notes/a.txt")
+        store.observe(a); store.observe(b)
+        store.set(.safe, keys: [a.signatureKey, b.signatureKey])
+        let keys = store.safeKeys(program: slack)
+        #expect(Set(keys) == [a.signatureKey, b.signatureKey])
+        #expect(store.reopen(keys: keys, reason: "Slack contacted evil.example (ThreatFox)") == 2)
+        #expect(store.count(.safe) == 0)
+    }
+}

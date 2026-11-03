@@ -235,6 +235,9 @@ final class StoryEngine: ObservableObject {
 
     // MARK: Ingest
 
+    /// A story that just fired (its steps' patterns are reopened if they were decided Safe).
+    var onFired: ((Story) -> Void)?
+
     /// Adds the event to its story; returns the stages it added (with notes), for the process hold.
     @discardableResult
     /// `extra`: stages found outside the event itself (a launched process that later runs heavy); the
@@ -561,6 +564,7 @@ final class StoryEngine: ObservableObject {
             stories.insert(story, at: 0)
         }
         if !wasFired, persistent { NSSound(named: "Funk")?.play() }
+        if !wasFired { onFired?(story) }
         dirty = true
         revision += 1
     }

@@ -118,6 +118,9 @@ struct SignatureEntry: Codable, Identifiable {
     var exampleHostSource: String?
     /// What an AI (on-device or Claude) suggests for this New pattern; you accept it or decide yourself.
     var suggestion: AISuggestion? = nil
+    /// A decided pattern sent back to you because something about it changed ("part of a story: …"). Until you
+    /// decide again, no rule, baseline or AI decides it for you.
+    var reopened: String? = nil
 
     var exampleEvent: ActivityEvent {
         ActivityEvent(kind: kind, time: "", pid: examplePid, ppid: 0, name: exampleName,
@@ -765,7 +768,8 @@ final class SignatureStore: ObservableObject {
     }
 
     private func applyRule(to e: inout SignatureEntry) {
-        guard Self.ruleOverridable.contains(e.source), let rule = learnedRules.first(where: { $0.matches(e) }) else { return }
+        guard e.reopened == nil, Self.ruleOverridable.contains(e.source),
+              let rule = learnedRules.first(where: { $0.matches(e) }) else { return }
         e.status = rule.action
         e.source = "rule"
         e.note = rule.name
@@ -816,8 +820,41 @@ final class SignatureStore: ObservableObject {
             entry.status = .unclassified
             entry.source = nil
             entry.note = reason.isEmpty ? nil : "⚠︎ " + reason
+        } else if entry.status == .safe, risk == .high {
+            // Decided Safe (by anyone, you included) and now high-risk: a swapped or quarantined binary, code
+            // from a download… back to you.
+            reopen(&entry, "now high-risk" + (reason.isEmpty ? "" : ": " + reason))
         }
         pendingRevision = true
+    }
+
+    private func reopen(_ e: inout SignatureEntry, _ reason: String) {
+        e.status = .unclassified
+        e.source = nil
+        e.suggestion = nil
+        e.reopened = reason
+        e.note = "Reopened: " + reason
+    }
+
+    /// Sends decided-Safe patterns back to you, with why (a story, a known-bad match, an untrusted binary).
+    /// Returns how many were reopened.
+    @discardableResult
+    func reopen(keys: [String], reason: String) -> Int {
+        var n = 0
+        for key in keys {
+            let k = resolve(key)
+            guard var e = entries[k], e.status == .safe else { continue }
+            reopen(&e, reason)
+            entries[k] = e
+            n += 1
+        }
+        if n > 0 { changedNow() }
+        return n
+    }
+
+    /// Every decided-Safe pattern of a program (what runs for a launch, what acts otherwise).
+    func safeKeys(program path: String) -> [String] {
+        entries.values.filter { $0.status == .safe && Self.subjectPath($0) == path }.map(\.id)
     }
 
     /// Re-scores patterns after signing facts or trusted developers change. Auto-Safe patterns
@@ -886,6 +923,7 @@ final class SignatureStore: ObservableObject {
             guard var e = entries[key] else { continue }
             e.status = status
             e.source = status == .unclassified ? nil : source
+            if status != .unclassified { e.reopened = nil }      // decided again
             if let note { e.note = note } else if status == .unclassified { e.note = nil }
             if status == .unclassified { applyRule(to: &e) }   // cleared by you: your rules apply again
             entries[key] = e
@@ -905,7 +943,7 @@ final class SignatureStore: ObservableObject {
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
         guard status != .unclassified, self.status(forKey: key) == .unclassified, var e = entries[key] else { return }
         if status == .safe, e.risk == .high || SignatureBuilder.runsAnyCode(e) { return }
-        if autoAcceptAI, e.risk != .high {
+        if autoAcceptAI, e.risk != .high, e.reopened == nil {
             set(status, keys: [key], source: source, note: note)
             return
         }
@@ -916,10 +954,11 @@ final class SignatureStore: ObservableObject {
 
     /// Your decision: applies the AI's suggestions for these patterns (where still New). Returns how many.
     @discardableResult
-    func acceptSuggestions(keys: [String]) -> Int {
+    func acceptSuggestions(keys: [String], yours: Bool = true) -> Int {
         var n = 0
         for key in keys {
-            guard status(forKey: key) == .unclassified, let e = entries[key], let s = e.suggestion,
+            // Automatic runs (`yours: false`) leave reopened patterns to you.
+            guard status(forKey: key) == .unclassified, let e = entries[resolve(key)], yours || e.reopened == nil, let s = e.suggestion,
                   !(s.status == .safe && (e.risk == .high || SignatureBuilder.runsAnyCode(e))) else { continue }
             set(s.status, keys: [key], source: s.source, note: s.note)
             n += 1
@@ -932,6 +971,7 @@ final class SignatureStore: ObservableObject {
         guard let e = entries[key] else { return "" }
         let status = status(forKey: key)
         if status == .unclassified {
+            if e.reopened != nil { return "Reopened" }
             if let s = e.suggestion { return "AI suggests \(s.status.title)" }
             return "New"
         }
@@ -1346,7 +1386,8 @@ final class PatternClassifier: ObservableObject {
 
     /// New patterns nobody decided and no AI has looked at yet.
     var classifiable: [SignatureEntry] {
-        store.allEntries.filter { store.status(forKey: $0.id) == .unclassified && $0.suggestion == nil && !leftForYou.contains($0.id) }
+        store.allEntries.filter { store.status(forKey: $0.id) == .unclassified && $0.suggestion == nil && $0.reopened == nil
+            && !leftForYou.contains($0.id) }
     }
 
     /// Classifies every New pattern, `batchSize` at a time (high-risk first, then most recent).
@@ -1365,7 +1406,7 @@ final class PatternClassifier: ObservableObject {
 
     private func continueAll() {
         guard var run = bulk, !running else { return }
-        if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch) }
+        if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch, yours: false) }
         // Claude unavailable or failing: stop rather than fail every remaining batch.
         if ["failed", "Cannot start", "not found", "Could not parse", "Cancelled"].contains(where: lastMessage.contains) {
             bulk = nil
