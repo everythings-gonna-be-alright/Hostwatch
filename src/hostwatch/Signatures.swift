@@ -548,7 +548,43 @@ enum SignatureBuilder {
 
     // MARK: Signature
 
+    /// The pattern for an event, after combined patterns (`PatternMerges`) have their say.
     static func signature(for e: ActivityEvent) -> Signature {
+        var sig = baseSignature(for: e)
+        if let (process, pattern) = PatternMerges.shared.apply(kind: e.kind, process: sig.process, pattern: sig.pattern) {
+            sig.process = process
+            sig.pattern = pattern
+            sig.key = "\(e.kind.rawValue)|\(process)|\(pattern)"
+        }
+        return sig
+    }
+
+    /// "r ~/Documents/work/a/*" + "r ~/Documents/work/b/*" → "r ~/Documents/work/*/*": the patterns' common
+    /// shape, a `*` where they differ (token by token, split at / . : and spaces), or their common start + `*`.
+    static func commonGlob(_ texts: [String]) -> String {
+        guard let first = texts.first else { return "" }
+        guard texts.count > 1 else { return first }
+        func tokens(_ s: String) -> [String] {
+            var out: [String] = [], cur = ""
+            for c in s {
+                if "/.: ".contains(c) { if !cur.isEmpty { out.append(cur) }; out.append(String(c)); cur = "" } else { cur.append(c) }
+            }
+            if !cur.isEmpty { out.append(cur) }
+            return out
+        }
+        let all = texts.map(tokens)
+        if Set(all.map(\.count)).count == 1 {
+            return (0..<all[0].count).map { i in Set(all.map { $0[i] }).count == 1 ? all[0][i] : "*" }.joined()
+        }
+        var prefix: [String] = []
+        for i in 0..<(all.map(\.count).min() ?? 0) {
+            guard Set(all.map { $0[i] }).count == 1 else { break }
+            prefix.append(all[0][i])
+        }
+        return prefix.joined() + "*"
+    }
+
+    static func baseSignature(for e: ActivityEvent) -> Signature {
         let rawActor = e.proc
         let actor = e.proc.isEmpty ? e.name : normalizeExecutable(e.proc)
         switch e.kind {
@@ -691,6 +727,7 @@ final class SignatureStore: ObservableObject {
         // v2: zone-based patterns with risk; the old per-folder format is not migrated.
         fileURL = dir.appendingPathComponent("signatures-v2.json")
         load()
+        PatternMerges.shared.set(merges)                 // this store's combined patterns (none for a new one)
         dropInterpreterTrust()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -806,7 +843,11 @@ final class SignatureStore: ObservableObject {
     nonisolated static func subjectPath(_ e: SignatureEntry) -> String { e.kind == .exec ? e.exampleTarget : e.exampleProc }
 
     /// Pattern status, falling back to a whole-process rule.
+    /// A pattern combined into a shared one answers for it (rows already on screen keep their status).
+    func resolve(_ key: String) -> String { entries[key] == nil ? aliases[key] ?? key : key }
+
     func status(forKey key: String) -> SignatureStatus {
+        let key = resolve(key)
         if let entry = entries[key], entry.status != .unclassified { return entry.status }
         if let entry = entries[key] {
             return processRules[SignatureBuilder.processRuleKey(kind: entry.kind, process: entry.process)]?.status ?? .unclassified
@@ -815,16 +856,16 @@ final class SignatureStore: ObservableObject {
     }
 
     func status(for e: ActivityEvent) -> SignatureStatus {
-        if let s = entries[e.signatureKey]?.status, s != .unclassified { return s }
+        if let s = entries[resolve(e.signatureKey)]?.status, s != .unclassified { return s }
         return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.signatureProcess)]?.status ?? .unclassified
     }
 
-    func entry(_ key: String) -> SignatureEntry? { entries[key] }
+    func entry(_ key: String) -> SignatureEntry? { entries[resolve(key)] }
 
     /// Safe because *you* said so (pattern or whole-process rule). Claude/baseline/auto verdicts
     /// judge one pattern alone, which is exactly what stories look past.
     func markedSafeByYou(_ e: ActivityEvent) -> Bool {
-        if let entry = entries[e.signatureKey], entry.status != .unclassified {
+        if let entry = entries[resolve(e.signatureKey)], entry.status != .unclassified {
             // A rule you approved counts as your decision.
             return entry.status == .safe && (entry.source == "you" || entry.source == "rule")
         }
@@ -832,7 +873,7 @@ final class SignatureStore: ObservableObject {
     }
 
     func note(forKey key: String) -> (source: String?, note: String?) {
-        guard let e = entries[key] else { return (nil, nil) }
+        guard let e = entries[resolve(key)] else { return (nil, nil) }
         if e.status != .unclassified { return (e.source, e.note) }
         let rule = processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.process)]
         return (rule.map { "\($0.source ?? "you"), whole process" }, rule?.note)
@@ -907,6 +948,89 @@ final class SignatureStore: ObservableObject {
     }
 
     /// "Everything python does is Safe" would trust any script: not allowed for interpreters and shells.
+    // MARK: Combined patterns
+
+    /// Shared patterns you made from similar ones, and the old keys they now answer for.
+    private(set) var merges: [PatternMerge] = []
+    private var aliases: [String: String] = [:]
+
+    func isCombined(_ key: String) -> Bool { merges.contains { $0.key == key } }
+
+    /// Every existing pattern a shared one would cover.
+    func covered(kind: EventKind, process: String, pattern: String) -> [SignatureEntry] {
+        entries.values.filter { $0.kind == kind && Glob.match(process, $0.process) && Glob.match(pattern, $0.pattern) }
+    }
+
+    /// Why a shared pattern can't be made, or nothing: it must cover all the chosen patterns and stay specific
+    /// (the general rule: no whole areas, no bare wildcards).
+    func combineProblems(keys: [String], process: String, pattern: String) -> [String] {
+        let chosen = keys.compactMap { entries[$0] }
+        guard let kind = chosen.first?.kind else { return ["nothing chosen"] }
+        var problems: [String] = []
+        if Set(chosen.map(\.kind)).count > 1 { problems.append("they must all be the same kind (launch, connection or file)") }
+        if !chosen.allSatisfy({ Glob.match(process, $0.process) && Glob.match(pattern, $0.pattern) }) {
+            problems.append("it must cover every chosen pattern")
+        }
+        if Glob.literalCount(pattern) < 4 || pattern.trimmingCharacters(in: .whitespaces) == "*" {
+            problems.append("too general: the pattern must name something specific")
+        }
+        if kind == .file, SignatureBuilder.isTooWide(filePattern: pattern) {
+            problems.append("too wide: it would cover a whole folder area")
+        }
+        if process.contains("*"), Glob.literalCount(process) < 4 { problems.append("the program must name something specific") }
+        return problems
+    }
+
+    /// Makes one shared pattern from similar ones (and any other it covers): counts added up, the most serious
+    /// status kept (New when Safe and New are mixed), future events matching it join it.
+    @discardableResult
+    func combine(keys: [String], process: String, pattern: String) -> String? {
+        guard combineProblems(keys: keys, process: process, pattern: pattern).isEmpty,
+              let kind = keys.compactMap({ entries[$0] }).first?.kind else { return nil }
+        let key = "\(kind.rawValue)|\(process)|\(pattern)"
+        let parts = covered(kind: kind, process: process, pattern: pattern) + keys.compactMap { entries[$0] }
+        var seen = Set<String>(), group: [SignatureEntry] = []
+        for e in parts where seen.insert(e.id).inserted { group.append(e) }
+        guard let latest = group.max(by: { $0.lastSeen < $1.lastSeen }) else { return nil }
+        let statuses = Set(group.map(\.status))
+        let status: SignatureStatus = statuses.contains(.dangerous) ? .dangerous : statuses.contains(.suspicious) ? .suspicious
+            : statuses == [.safe] ? .safe : .unclassified
+        let sources = Set(group.filter { $0.status == status }.compactMap(\.source))
+        var merged = latest
+        merged.id = key
+        merged.process = process
+        merged.pattern = pattern
+        merged.count = group.reduce(0) { $0 + $1.count }
+        merged.firstSeen = group.map(\.firstSeen).min() ?? latest.firstSeen
+        merged.risk = group.map(\.risk).max() ?? latest.risk
+        merged.status = status
+        merged.source = status == .unclassified ? nil : sources.contains("you") ? "you" : sources.first
+        merged.note = "Combined from \(group.count) patterns"
+        merged.suggestion = nil
+        for e in group where e.id != key {
+            entries[e.id] = nil
+            aliases[e.id] = key
+            selection.remove(e.id)
+        }
+        for (old, target) in aliases where seen.contains(target) { aliases[old] = key }
+        entries[key] = merged
+        merges.removeAll { $0.key == key }
+        merges.append(PatternMerge(kind: kind, process: process, pattern: pattern))
+        PatternMerges.shared.set(merges)
+        changedNow()
+        return key
+    }
+
+    /// Undoes a combined pattern: future events make their own patterns again.
+    func separate(_ key: String) {
+        merges.removeAll { $0.key == key }
+        PatternMerges.shared.set(merges)
+        aliases = aliases.filter { $0.value != key }
+        entries[key] = nil
+        selection.remove(key)
+        changedNow()
+    }
+
     /// "Everything this program does is Safe" is the widest pattern there is: never for any program
     /// (Suspicious or Dangerous for a whole program is fine: that only flags more).
     static func canTrustWholeProcess(_ process: String) -> Bool { false }
@@ -1006,7 +1130,7 @@ final class SignatureStore: ObservableObject {
 
     /// You decided this pattern: on the pattern itself, or through a whole-process rule you set.
     func reviewedByYou(_ key: String) -> Bool {
-        guard let e = entries[key] else { return false }
+        guard let e = entries[resolve(key)] else { return false }
         if e.status != .unclassified { return e.source == "you" || e.source == "rule" }
         return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.process)] != nil
     }
@@ -1044,6 +1168,8 @@ final class SignatureStore: ObservableObject {
     private struct Snapshot: Codable {
         var entries: [SignatureEntry]
         var processRules: [SignatureEntry]
+        var merges: [PatternMerge]?
+        var aliases: [String: String]?
     }
 
     private func load() {
@@ -1053,6 +1179,9 @@ final class SignatureStore: ObservableObject {
         guard let snap = try? decoder.decode(Snapshot.self, from: data) else { return }
         entries = Dictionary(snap.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         processRules = Dictionary(snap.processRules.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        merges = snap.merges ?? []
+        aliases = snap.aliases ?? [:]
+        PatternMerges.shared.set(merges)
     }
 
     /// Writes signatures.json; `sync` is used at quit so the write finishes before exit.
@@ -1060,7 +1189,8 @@ final class SignatureStore: ObservableObject {
         SigningCache.shared.save()
         guard dirty else { return }
         dirty = false
-        let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values))
+        let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values),
+                            merges: merges, aliases: aliases)
         let url = fileURL
         let write = {
             let encoder = JSONEncoder()
@@ -1457,5 +1587,35 @@ final class PatternClassifier: ObservableObject {
         let adhoc = lines.contains { $0.contains("adhoc") }
         if adhoc { return "ad-hoc signed (no identity)" }
         return [authority, team.map { "team \($0)" }].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+// MARK: - Combined patterns
+
+/// A shared pattern you made from similar ones: events whose own pattern it matches use it instead.
+struct PatternMerge: Codable, Equatable {
+    var kind: EventKind
+    var process: String          // glob
+    var pattern: String          // glob
+    var created = Date()
+
+    var key: String { "\(kind.rawValue)|\(process)|\(pattern)" }
+}
+
+/// The combined patterns, readable from any thread (events get their pattern as they're decoded).
+final class PatternMerges: @unchecked Sendable {
+    static let shared = PatternMerges()
+    private let lock = NSLock()
+    private var merges: [PatternMerge] = []
+
+    func set(_ merges: [PatternMerge]) {
+        lock.lock(); self.merges = merges; lock.unlock()
+    }
+
+    func apply(kind: EventKind, process: String, pattern: String) -> (String, String)? {
+        lock.lock(); defer { lock.unlock() }
+        guard !merges.isEmpty else { return nil }
+        return merges.first { $0.kind == kind && Glob.match($0.process, process) && Glob.match($0.pattern, pattern) }
+            .map { ($0.process, $0.pattern) }
     }
 }

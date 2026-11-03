@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Combine similar patterns into one** (Patterns: select 2+ ▸ right-click or Mark Selected ▸ *Combine…*): a
+  sheet proposes the shared pattern (a `*` where they differ), editable, shows what it covers and refuses one
+  that's too wide; counts add up, the most serious status wins, later matching activity joins it. *Separate
+  Combined Pattern* undoes it.
+
 - **Classify with AI** (Events and Patterns): every New pattern, 40 at a time, with a progress bar and Cancel.
   A popover says how many, which AI (Settings ▸ AI) and the rough cost, and whether to apply the verdicts (never
   Safe for high-risk patterns or interpreters) or keep them as suggestions. Stops if Claude fails.
