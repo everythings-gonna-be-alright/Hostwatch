@@ -540,6 +540,10 @@ already running when it started aren't followed, or Xcode and browsers would be 
 
 ## Window tabs
 
+**Show** (Events and Patterns, also *View ▸ Show*) is a scope bar: **All · Not Safe · New · Important ·
+Suspicious**, each with how many patterns it shows (New: not reviewed yet; Important: Suspicious and Dangerous
+plus new high-risk; Suspicious: Suspicious and Dangerous). It applies to the HUD, Events and Patterns.
+
 Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Domains ⌘5, each with its icon and its count as a badge (icons
 only when the window is narrow); the event-kind counters appear on Events only. When exploited macOS flaws aren't
 fixed yet, a slim banner at the top says so (*Details*, *Software Update*, ✕ until another flaw is listed).

@@ -196,7 +196,7 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
-                ShowFilterPicker(filter: $filter)
+                ShowFilterPicker(filter: $filter, signatures: signatures)
             }
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in

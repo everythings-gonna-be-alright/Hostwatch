@@ -50,6 +50,37 @@ enum SignatureFilter: String, CaseIterable {
         }
     }
 
+    /// Short name for the scope bar ("Not Safe", "New"…); `title` stays the menu's full name.
+    var short: String {
+        switch self {
+        case .all: return "All"
+        case .hideSafe: return "Not Safe"
+        case .unclassified: return "New"
+        case .important: return "Important"
+        case .flagged: return "Suspicious"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: return "square.stack"
+        case .hideSafe: return "eye.slash"
+        case .unclassified: return "questionmark.circle"
+        case .important: return "exclamationmark.triangle"
+        case .flagged: return "flag"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .all: return "Everything, decided or not"
+        case .hideSafe: return "Everything except what's Safe"
+        case .unclassified: return "Patterns you haven't reviewed yet"
+        case .important: return "Suspicious and Dangerous, plus new high-risk patterns"
+        case .flagged: return "Only Suspicious and Dangerous patterns"
+        }
+    }
+
     /// `reviewed`: you decided it (the pattern or a whole-process rule). "New" = not reviewed by
     /// you: unclassified, plus Suspicious/Dangerous that only Claude or the baseline decided.
     func admits(_ status: SignatureStatus, risk: PatternRisk, reviewed: Bool) -> Bool {
