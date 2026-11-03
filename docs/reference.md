@@ -562,7 +562,7 @@ on this Mac; nothing about the Mac is sent:
   temp folder) is hashed (SHA-256, once per file version) and checked against the file lists (with the key).
 - **A match** is the story stage *Known malware*: a story and **Dangerous** on its own, even for a pattern you
   marked Safe. The row gets a red `KNOWN BAD` tag (Events, HUD), the domain a red badge and risk score 100 with
-  the reason, Overview a *Known bad* card and the tray a line. After each update the last 30 days of domains (and
+  the reason, and the tray a line. After each update the last 30 days of domains (and
   programs already hashed) are checked again (*contacted earlier*).
 - **macOS vulnerabilities:** CISA's Apple entries for macOS (or several Apple systems including it) are compared
   with the date of your last macOS update and any update waiting in Software Update (`softwareupdate --list
