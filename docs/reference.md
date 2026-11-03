@@ -91,6 +91,16 @@ patterns, mostly routine (auto Safe); patterns to decide 150 → 227. Labelled p
 - **an app's own data folder**: `~/Library/Application Support/<App>` or `~/.<app>`, when the
   name matches the actor. These are tagged `[own data]`.
 
+**Built-in safe patterns.** macOS's own behaviour, the same on every Mac, is decided as routine out of the box
+(`BuiltInSafe`): any program *reading* `~/.CFUserTextEncoding` (CoreFoundation's text-encoding preference);
+`/usr/sbin/networksetup` running `/bin/sh -c ‹/bin/cp …/SystemConfiguration/preferences.plist …›` (its settings
+backup); `sh`/`bash /usr/libexec/tmp_cleaner` (Apple's temp clean-up script); and SystemUIServer running
+`screencapture …com.apple.screenshot.launcher…` (a screenshot you took). Only exact patterns; when a parent is named
+it must be that program on the sealed, read-only system volume, so a copy elsewhere or the same command from
+another program doesn't count. Signing still applies (a swapped binary is high-risk) and stories ignore automatic
+decisions. Existing New patterns that match are decided at the next launch. Your own developer activity (scripts,
+hooks, `kubectl`, `codesign`…) isn't universal, so it's not built in: mark it, combine it or let rules learn it.
+
 **Combining patterns.** Select two or more patterns of one kind in Patterns, then right-click (or *Mark Selected*)
 ▸ *Combine… into One Pattern*. A sheet proposes the shared pattern: their common shape, token by token, with `*`
 where they differ (`r ~/Documents/work/alpha/*` + `…/beta/*` → `r ~/Documents/work/*/*`), editable for the

@@ -612,6 +612,9 @@ enum SignatureBuilder {
             } else if isSealedSystem(e.parent), isSealedSystem(e.target), !isLolbin(e.target) {
                 risk = .routine; reason = "system binary started by system binary"
             }
+            if risk != .high, let why = BuiltInSafe.reason(kind: .exec, parent: e.parent, pattern: pattern) {
+                risk = .routine; reason = why
+            }
             return withSigning(make(e.kind, parent, pattern, risk, reason), e)
 
         case .net:
@@ -640,7 +643,10 @@ enum SignatureBuilder {
             return withSigning(make(e.kind, actor, pattern, risk, reason), e)
 
         case .file:
-            let (pattern, risk, reason) = fileTarget(e.target, mode: e.extra, actor: rawActor)
+            var (pattern, risk, reason) = fileTarget(e.target, mode: e.extra, actor: rawActor)
+            if risk != .high, let why = BuiltInSafe.reason(kind: .file, parent: rawActor, pattern: pattern) {
+                risk = .routine; reason = why
+            }
             return withSigning(make(e.kind, actor, pattern, risk, reason), e)
         }
     }
@@ -861,6 +867,13 @@ final class SignatureStore: ObservableObject {
     /// that are no longer routine become New; New patterns that became routine are auto-Safe.
     func reassess(where matches: (SignatureEntry) -> Bool = { _ in true }) {
         for (key, var e) in entries where matches(e) {
+            // Built-in safe, by the stored pattern itself (the stored example has no command line).
+            if e.status == .unclassified, e.source == nil, e.reopened == nil, e.risk != .high,
+               let why = BuiltInSafe.reason(kind: e.kind, parent: e.kind == .exec ? e.exampleParent : e.exampleProc, pattern: e.pattern) {
+                e.risk = .routine; e.status = .safe; e.source = "auto"; e.note = why
+                entries[key] = e
+                continue
+            }
             let sig = SignatureBuilder.signature(for: e.exampleEvent)
             if sig.risk == e.risk { continue }
             if sig.risk > e.risk {
@@ -1759,5 +1772,45 @@ final class PatternMerges: @unchecked Sendable {
         let candidates = (exact["\(kind.rawValue)|\(process.lowercased())"] ?? []) + wild
         return candidates.first { $0.kind == kind && Glob.match($0.process, process) && Glob.match($0.pattern, pattern) }
             .map { ($0.process, $0.pattern) }
+    }
+}
+
+// MARK: - Built-in safe patterns
+
+/// macOS's own behaviour, the same on every Mac and impossible to fake: decided as routine (Safe) out of the box.
+/// Only exact patterns, and when a parent is named it must be that program on the sealed, read-only system
+/// volume (a copy elsewhere doesn't count). Signing still applies on top (a swapped binary is high-risk), and
+/// stories ignore automatic decisions, so a chain through one of these still alerts.
+enum BuiltInSafe {
+    struct Item {
+        let kind: EventKind
+        /// The exact program that must start it (exec) or do it (file); nil: any program.
+        let parent: String?
+        /// Glob over the pattern text.
+        let pattern: String
+        let reason: String
+    }
+
+    static let items: [Item] = [
+        Item(kind: .file, parent: nil, pattern: "r ~/.CFUserTextEncoding",
+             reason: "macOS: every app reads its text-encoding preference"),
+        Item(kind: .exec, parent: "/usr/sbin/networksetup",
+             pattern: "/bin/sh -c ‹/bin/cp /Library/Preferences/SystemConfiguration/preferences.plist *",
+             reason: "macOS: networksetup backs up the network settings"),
+        Item(kind: .exec, parent: nil, pattern: "/bin/bash /usr/libexec/tmp_cleaner",
+             reason: "macOS: its own temporary-files clean-up script"),
+        Item(kind: .exec, parent: nil, pattern: "/bin/sh /usr/libexec/tmp_cleaner",
+             reason: "macOS: its own temporary-files clean-up script"),
+        Item(kind: .exec, parent: "/System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer",
+             pattern: "/usr/sbin/screencapture *com.apple.screenshot.launcher*",
+             reason: "macOS: a screenshot you took (⇧⌘3, ⇧⌘4, ⇧⌘5)"),
+    ]
+
+    /// Why this is macOS's own ordinary behaviour, or nil.
+    static func reason(kind: EventKind, parent: String, pattern: String) -> String? {
+        items.first { item in
+            item.kind == kind && Glob.match(item.pattern, pattern)
+                && (item.parent.map { $0 == parent && SignatureBuilder.isSealedSystem(parent) } ?? true)
+        }?.reason
     }
 }
