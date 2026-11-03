@@ -354,7 +354,8 @@ final class BaselineLearner: ObservableObject {
     }
 
     private var newPatterns: [SignatureEntry] {
-        store.allEntries.filter { $0.status == .unclassified && $0.source == nil && store.status(forKey: $0.id) == .unclassified }
+        store.allEntries.filter { $0.status == .unclassified && $0.source == nil && $0.reopened == nil
+            && store.status(forKey: $0.id) == .unclassified }
     }
 
     private func scheduleRefresh() {
@@ -370,6 +371,11 @@ final class BaselineLearner: ObservableObject {
     /// Rebuilds Needs You from every New pattern. Ones an active rule will trust on its next pass aren't listed.
     func refreshReview() async {
         var report = BaselineReport(dismissed: self.report?.dismissed ?? [])
+        // Decided patterns sent back because something changed: always listed, with why.
+        for e in store.allEntries where e.reopened != nil && store.status(forKey: e.id) == .unclassified {
+            let path = SignatureStore.subjectPath(e)
+            report.add(app: BaselinePolicy.appName(path.isEmpty ? e.process : path), reason: "Reopened: " + (e.reopened ?? ""), key: e.id)
+        }
         // Only what happened lately: something seen once a week ago stays New in Patterns, not here.
         let active = newPatterns.filter { now().timeIntervalSince($0.lastSeen) < Self.activeWindow }
         for (entry, decision) in await decide(active) {

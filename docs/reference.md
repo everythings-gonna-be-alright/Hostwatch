@@ -486,6 +486,16 @@ apps among them.
 
 - **Pause** a rule: its patterns go back to New and it stops applying (kept, so Update Baseline won't recreate
   it). **Delete** does the same and removes it; *⋯ ▸ Remove All Baseline Rules* removes every baseline rule.
+- **Decided isn't forever.** A Safe pattern, whoever decided it (you included), is **reopened**, back to New and
+  listed first in Needs You as *Reopened: …*, when:
+  - one of its steps is part of a story that fires (*part of a story: Slack → sh → curl*);
+  - its program contacts known malware infrastructure or is a known malware file (every Safe pattern of that
+    program);
+  - it becomes high-risk: the binary was swapped or modified, is quarantined or runs from a download/temp folder.
+
+  A reopened pattern is never decided again by a baseline rule, a learned rule, *Accept AI suggestions without
+  asking* or *Classify with AI*; your own decision (Mark, Trust, Accept) closes it. Decided By shows *Reopened*.
+  New kinds of behaviour from a trusted app reach you through its rule's profile (above).
 - **Low weight:** your markings and learned rules win over baseline rules, and stories ignore baseline
   trust (they count only your decisions and learned rules), so a chain still alerts.
 - **Needs You** has one row per app with all its reasons (for example *signed by Zoom (trusted developer, no

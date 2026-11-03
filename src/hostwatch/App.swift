@@ -100,8 +100,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let since = Date().addingTimeInterval(-30 * 86400)
             return (self?.domains.records.values.filter { $0.lastSeen >= since } ?? []).map { ($0.domain, $0.programs) }
         }
+        stories.onFired = { [weak self] story in
+            self?.signatures.reopen(keys: story.steps.map(\.event.signatureKey), reason: "part of a story: \(story.title)")
+        }
         intel.onHit = { [weak self] hit, event in
             guard let self else { return }
+            // A program that contacted known malware infrastructure, or is a known malware file: everything it
+            // was trusted to do goes back to you.
+            if !hit.path.isEmpty {
+                self.signatures.reopen(keys: self.signatures.safeKeys(program: hit.path),
+                                       reason: "\(hit.process) \(hit.kind == .file ? "is known malware" : "contacted \(hit.indicator)") (\(hit.source))")
+            }
             // A connection already carries the match into its story; a file (hashed later) and a past
             // contact found by the retro-check join or start one here.
             if hit.kind == .file, let event {
