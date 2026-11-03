@@ -541,16 +541,66 @@ struct EventRow: View {
 
 // MARK: - Full-screen activity window
 
-/// The one "Show" filter control, identical on the Events and Patterns tabs (and the menu).
+/// The one "Show" filter, identical on the Events and Patterns tabs: a scope bar (like Finder's search or
+/// Mail's filters) with every choice visible and its count, one selected. Narrow windows drop the icons;
+/// the narrowest falls back to a pop-up menu. View ▸ Show has the same choices.
 struct ShowFilterPicker: View {
     @Binding var filter: SignatureFilter
+    @ObservedObject var signatures: SignatureStore
 
     var body: some View {
-        Picker("Show", selection: $filter) {
-            ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+        let _ = signatures.revision
+        let counts = self.counts
+        ViewThatFits(in: .horizontal) {
+            bar(counts, icons: true)
+            bar(counts, icons: false)
+            Picker("Show", selection: $filter) {
+                ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .fixedSize()
+        }
+        .help("Show: filter by how patterns are decided (Events, Patterns and the HUD)")
+    }
+
+    /// How many patterns each choice shows ("All" has no count).
+    private var counts: [SignatureFilter: Int] {
+        let safe = signatures.count(.safe), new = signatures.count(.unclassified)
+        let flagged = signatures.count(.suspicious) + signatures.count(.dangerous)
+        return [.hideSafe: signatures.total - safe, .unclassified: new,
+                .important: flagged + signatures.newHighRiskCount(), .flagged: flagged]
+    }
+
+    private func bar(_ counts: [SignatureFilter: Int], icons: Bool) -> some View {
+        HStack(spacing: 4) {
+            ForEach(SignatureFilter.allCases, id: \.self) { option in
+                let selected = filter == option
+                Button { filter = option } label: {
+                    HStack(spacing: 5) {
+                        if icons {
+                            Image(systemName: option.symbol)
+                                .symbolVariant(selected ? .fill : .none)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        Text(option.short).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        if let n = counts[option] {
+                            Text(n.formatted())
+                                .font(.system(size: 11).monospacedDigit())
+                                .foregroundStyle(selected ? Color.accentColor.opacity(0.85) : Color.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.8))
+                    .background(Capsule().fill(selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05)))
+                    .overlay(Capsule().strokeBorder(selected ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 0.5))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(option.explanation)
+                .accessibilityLabel("\(option.short)\(counts[option].map { ", \($0)" } ?? "")")
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            }
         }
         .fixedSize()
-        .help("Filter by how patterns are classified. Applies to the HUD, Events and Patterns.")
     }
 }
 
@@ -717,9 +767,8 @@ struct ActivityWindowView: View {
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
     private var filterBar: some View {
         HStack(spacing: 12) {
-            ShowFilterPicker(filter: $model.signatureFilter)
-            Spacer()
-            PatternTally(signatures: signatures)
+            ShowFilterPicker(filter: $model.signatureFilter, signatures: signatures)
+            Spacer(minLength: 0)
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
