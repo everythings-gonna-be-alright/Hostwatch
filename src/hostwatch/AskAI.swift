@@ -387,7 +387,8 @@ final class AIAnalysis: ObservableObject {
         case .text(let delta):
             answer += delta
             updateVerdict()
-        case .result(let text, let isError, let seconds, let cost):
+        case .result(let text, let isError, let seconds, let cost, let run):
+            MainActor.assumeIsolated { ClaudeUsage.shared.add(run, .ask) }
             if answer.isEmpty, let text { answer = text; updateVerdict() }
             if isError { state = .failed(text ?? "Claude returned an error.") }
             var parts: [String] = []
@@ -428,7 +429,7 @@ final class AIAnalysis: ObservableObject {
 final class StreamParser: @unchecked Sendable {
     enum Update {
         case text(String)
-        case result(text: String?, isError: Bool, seconds: Double?, cost: Double?)
+        case result(text: String?, isError: Bool, seconds: Double?, cost: Double?, run: ClaudeRun?)
     }
 
     private var buffer = Data()
@@ -466,7 +467,8 @@ final class StreamParser: @unchecked Sendable {
             emit(.result(text: obj["result"] as? String,
                          isError: obj["is_error"] as? Bool ?? false,
                          seconds: ms.map { $0 / 1000 },
-                         cost: obj["total_cost_usd"] as? Double))
+                         cost: obj["total_cost_usd"] as? Double,
+                         run: ClaudeRun(result: obj)))
         default:
             break
         }

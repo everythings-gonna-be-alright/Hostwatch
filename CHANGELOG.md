@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Claude usage counter** in Settings ▸ AI: all-time Claude tokens and cost Hostwatch used (Ask AI, classifying,
+  Suggest Rules), kept across launches; per feature in the tooltip, with Reset.
+
 - **Built-in safe patterns:** macOS's own behaviour is decided out of the box: any app reading
   `~/.CFUserTextEncoding`, networksetup backing up network settings, the `tmp_cleaner` script, and screenshots
   started by SystemUIServer. Exact patterns only, and a named parent must be that program on the sealed system

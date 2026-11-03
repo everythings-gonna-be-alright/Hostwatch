@@ -350,7 +350,9 @@ final class RuleBook: ObservableObject {
         process = nil
         startedAt = nil
         defer { lastResult = message }
-        guard status == 0, let obj = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any],
+        let parsed = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any]
+        if let parsed { ClaudeUsage.shared.add(result: parsed, .rules) }   // a failed run can still use tokens
+        guard status == 0, let obj = parsed,
               let text = obj["result"] as? String else {
             message = "Claude failed: " + String(err.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200))
             return
