@@ -14,7 +14,8 @@
   history is re-checked after each update.
 - **Exploited macOS vulnerabilities:** CISA's list of Apple flaws exploited in the wild, compared with your last
   macOS update and any waiting update; a banner, a list sheet and the tray.
-- **Settings ▸ Threat Intelligence:** lists with counts and freshness, the abuse.ch key (Keychain), Update Now.
+- **Settings ▸ Detection ▸ Known threats and macOS vulnerabilities:** lists with counts and freshness, the
+  abuse.ch key (Keychain), Update Now (the Detection pane scrolls).
 - **Safe downloads of the lists:** only text of the right shape and plausible size replaces a list (programs,
   archives and scripts are refused), no sudden collapse or explosion, HTTPS without redirects to other hosts,
   files private and never executable, and major platforms' core domains are never flagged (anti-poisoning).
