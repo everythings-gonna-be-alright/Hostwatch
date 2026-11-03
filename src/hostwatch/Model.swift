@@ -60,6 +60,7 @@ struct ActivityEvent: Identifiable, Decodable {
     var newDomain = ""           // net: registrable domain first seen within the last hour
     var beacon = ""              // net: "every ~60s" when part of a worrying beacon
     var rawIP = false            // net: public IP, unusual port, no DNS, untrusted program
+    var knownBad = ""            // on a threat list: "ThreatFox: AsyncRAT command server, reported …"
 
     /// Any per-connection network signal that deserves attention.
     var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }
@@ -347,7 +348,7 @@ final class HUDModel: ObservableObject {
     @Published var searchText = ""
     /// "Show Only These" in the heavy-process strip: only events of these processes.
     @Published var onlyPids: Set<Int>?
-    @Published var windowTab = 0          // 0 = events, 1 = patterns, 2 = stories, 3 = domains
+    @Published var windowTab = 5          // 0 events, 1 patterns, 2 stories, 3 domains, 4 rules, 5 overview
     @Published var eventSelection = Set<UUID>()
     /// Events table sort (click a column header); newest first by default.
     @Published var eventOrder: [KeyPathComparator<EventItem>] {
@@ -365,6 +366,8 @@ final class HUDModel: ObservableObject {
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
+    /// Threat lists: a connection to a listed domain or IP carries `knownBad` into stories and the rows.
+    var intel: ThreatIntel?
     /// The collector's 5-second "top processes" samples (procs, disk read B/s, disk write B/s).
     var onTop: (([TopProcess], Double, Double) -> Void)?
     /// Every process above the collector's floor (CPU or memory), every 5 s.
@@ -684,6 +687,9 @@ final class HUDModel: ObservableObject {
                 if let domain = domains.observe(event) { event.newDomain = domain }
                 if let beacon = beacons.observe(event) { event.beacon = beacon }
                 event.rawIP = NetSignals.isRawIP(event)
+                if let hit = intel?.check(event) { event.knownBad = hit.summary }
+            } else if event.kind == .exec {
+                intel?.checkLaunch(event)       // untrusted programs: SHA-256 against the file lists
             }
             let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
             hold?.consider(event, stages: stages, status: signatures.status(for: event))

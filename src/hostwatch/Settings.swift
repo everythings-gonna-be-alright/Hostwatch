@@ -15,6 +15,7 @@ struct SettingsContext {
     let editorDraft: EditorDraft
     let updates: UpdateChecker
     let baseline: BaselineLearner
+    let intel: ThreatIntel
     let openBaseline: () -> Void
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
@@ -46,16 +47,18 @@ final class SettingsState: ObservableObject {
         didSet { UserDefaults.standard.set(heavyMemory, forKey: "heavyMemoryGB") }
     }
     @Published var resetPlan = ResetPlan()
+    @Published var abuseKeyDraft = ""
 }
 
 enum SettingsPane: Int, CaseIterable {
-    case general, hud, detection, ai, exclusions, history
+    case general, hud, detection, threats, ai, exclusions, history
 
     var title: String {
         switch self {
         case .general: return "General"
         case .hud: return "HUD"
         case .detection: return "Detection"
+        case .threats: return "Threat Intelligence"
         case .ai: return "AI"
         case .exclusions: return "Exclusions"
         case .history: return "History"
@@ -67,6 +70,7 @@ enum SettingsPane: Int, CaseIterable {
         case .general: return "gearshape"
         case .hud: return "rectangle.inset.topright.filled"
         case .detection: return "shield.lefthalf.filled"
+        case .threats: return "xmark.shield"
         case .ai: return "sparkles"
         case .exclusions: return "eye.slash"
         case .history: return "clock.arrow.circlepath"
@@ -91,6 +95,7 @@ final class SettingsWindowController: NSWindowController {
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline,
                                                           openBaseline: c.openBaseline, ui: state))
+            case .threats: view = AnyView(ThreatPane(intel: c.intel, ui: state))
             case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
@@ -593,6 +598,89 @@ private struct HistoryPane: View {
                     Spacer()
                     Button("Clear History…", role: .destructive, action: clear)
                 }
+            }
+        }
+    }
+}
+
+/// Threat lists (downloaded daily, matched on this Mac) and the exploited-vulnerabilities check.
+private struct ThreatPane: View {
+    @ObservedObject var intel: ThreatIntel
+    @ObservedObject var ui: SettingsState
+
+    var body: some View {
+        let _ = intel.revision
+        Pane {
+            Section {
+                Toggle("Check against known threats", isOn: $intel.enabled)
+                ForEach([ThreatIntel.Feed.hagezi, .feodo, .threatfox, .bazaar]) { feed in feedRow(feed) }
+                LabeledContent("abuse.ch key") {
+                    HStack {
+                        SecureField(intel.apiKey == nil ? "Free key, for ThreatFox and MalwareBazaar" : "Saved in the Keychain",
+                                    text: $ui.abuseKeyDraft)
+                            .frame(width: 230)
+                        Button(intel.apiKey == nil ? "Save" : "Replace") {
+                            intel.apiKey = ui.abuseKeyDraft
+                            ui.abuseKeyDraft = ""
+                            Task { await intel.update() }
+                        }
+                        .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                        if intel.apiKey != nil {
+                            Button("Remove") { intel.apiKey = nil }
+                        }
+                    }
+                }
+                LabeledContent("") {
+                    HStack {
+                        Link("Get a free key ↗", destination: URL(string: "https://auth.abuse.ch/")!)
+                        Spacer()
+                        if intel.updating { ProgressView().controlSize(.small) }
+                        Button("Update Now") { Task { await intel.update() } }.disabled(intel.updating)
+                    }
+                }
+            } header: {
+                Text("Known threats")
+            } footer: {
+                Footnote("Lists are downloaded once a day and every connection's domain and IP, and the SHA-256 of new "
+                         + "unsigned or downloaded programs (with the key), are checked on this Mac. Nothing about your Mac "
+                         + "is sent. A match is a Dangerous story, a red KNOWN BAD tag and risk 100 for the domain.")
+            }
+            Section {
+                Toggle("Watch for exploited macOS vulnerabilities", isOn: $intel.vulnerabilitiesEnabled)
+                feedRow(.kev)
+                LabeledContent("This Mac") {
+                    Text(intel.pendingUpdate.map { "\(intel.osVersion) · \($0) is waiting" } ?? intel.osVersion)
+                        .foregroundStyle(.secondary).lineLimit(1)
+                }
+            } header: {
+                Text("macOS vulnerabilities")
+            } footer: {
+                Footnote("Apple flaws that CISA lists as exploited in the wild, compared with your last macOS update and "
+                         + "any update waiting in Software Update. Shown in Overview.")
+            }
+        }
+    }
+
+    private func feedRow(_ feed: ThreatIntel.Feed) -> some View {
+        let state = intel.states[feed.rawValue]
+        let missingKey = feed.needsKey && intel.apiKey == nil
+        return LabeledContent {
+            Group {
+                if missingKey {
+                    Text("needs the free abuse.ch key").foregroundStyle(.secondary)
+                } else if let error = state?.error {
+                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).lineLimit(1)
+                } else if let updated = state?.updated {
+                    Text("\((state?.count ?? 0).formatted()) · \(StoryEngine.ago(updated))").foregroundStyle(.secondary)
+                } else {
+                    Text("not downloaded yet").foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(feed.title)
+                Text(feed.detail).font(.caption).foregroundStyle(.secondary)
             }
         }
     }

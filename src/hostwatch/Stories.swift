@@ -11,7 +11,7 @@ import SwiftUI
 
 enum StoryStage: String, Codable, CaseIterable, Comparable {
     case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
-    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted
+    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad
 
     static func < (a: StoryStage, b: StoryStage) -> Bool {
         allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -24,12 +24,13 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted: return 3
         case .persistence: return 4
         case .swappedBinary: return 5
+        case .knownBad: return 8
         }
     }
 
     /// Strong enough to make activity started from your own terminal/IDE worth a story.
     var isStrong: Bool {
-        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted]
+        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad]
             .contains(self)
     }
 
@@ -50,6 +51,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .beaconing: return "Beaconing"
         case .rawIP: return "Raw-IP connection"
         case .heavyUntrusted: return "Heavy untrusted process"
+        case .knownBad: return "Known malware"
         }
     }
 
@@ -70,6 +72,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .beaconing: return "dot.radiowaves.right"
         case .rawIP: return "number"
         case .heavyUntrusted: return "flame"
+        case .knownBad: return "xmark.octagon"
         }
     }
 }
@@ -248,7 +251,8 @@ final class StoryEngine: ObservableObject {
         }
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
-        guard !decidedSafe, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
+        // (On a threat list it counts even if you marked the pattern Safe.)
+        guard !decidedSafe || !e.knownBad.isEmpty || !extra.isEmpty, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
 
         if e.kind == .file, e.extra.contains("w") { rememberWrite(e) }
         var found = extra.isEmpty ? stages(for: e) : extra
@@ -535,13 +539,15 @@ final class StoryEngine: ObservableObject {
     /// is everyday behaviour on its own. Your own terminal/IDE needs even more.
     private func evaluate(_ story: inout Story) {
         let stages = Set(story.stages)
-        guard stages.count >= 2 else { return }
+        // On a threat list: a story and Dangerous on its own, whoever started it.
+        let knownBad = stages.contains(.knownBad)
+        guard stages.count >= 2 || knownBad else { return }
         let score = story.score
-        let fires = story.origin == .developer
+        let fires = knownBad || story.origin == .developer
             ? score >= 6 && stages.contains(where: \.isStrong)
             : score >= 5 && (stages.contains(where: \.isStrong) || stages.contains(.appShell))
         guard fires, !ignored.contains(story.signature) else { return }
-        let dangerous = score >= 8
+        let dangerous = knownBad || score >= 8
             || stages.isSuperset(of: [.persistence, .network])
             || stages.isSuperset(of: [.runFromDrop, .persistence])
             || stages.isSuperset(of: [.unquarantine, .runFromDrop])
@@ -602,6 +608,7 @@ final class StoryEngine: ObservableObject {
 
     private func stages(for e: ActivityEvent) -> [(StoryStage, String)] {
         var out: [(StoryStage, String)] = []
+        if !e.knownBad.isEmpty { out.append((.knownBad, e.knownBad)) }
         let sealedActor = SignatureBuilder.isSealedSystem(e.kind == .exec ? e.parent : e.proc)
         // Signing facts about the binary that runs (exec) or acts (file/net).
         let subject = e.kind == .exec ? e.target : e.proc

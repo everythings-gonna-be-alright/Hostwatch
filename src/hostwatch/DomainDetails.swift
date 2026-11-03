@@ -21,9 +21,12 @@ enum DomainRisk {
                                           "work", "rest", "cam", "icu", "lol", "quest", "sbs", "cfd", "bond", "buzz"]
 
     static func assess(_ record: DomainRecord, connections: [ActivityEvent], now: Date = Date(),
+                       knownBad: String? = nil,
                        untrusted: (String) -> Bool = DomainRegistry.untrustedProgram) -> Assessment {
         var reasons: [Reason] = []
         func add(_ text: String, _ points: Int) { reasons.append(Reason(text: text, points: points)) }
+        // On a threat list: that settles it, whatever else is true.
+        if let knownBad { add("On a threat list: \(knownBad)", 100) }
 
         if record.known {
             add("You marked it known", -30)
@@ -48,7 +51,7 @@ enum DomainRisk {
         }
         let programCount = max(programs.count, record.programs.count)
         if programCount >= 3 { add("Used by \(programCount) different programs", -10) }
-        let score = min(100, max(0, reasons.reduce(0) { $0 + $1.points }))
+        let score = knownBad != nil ? 100 : min(100, max(0, reasons.reduce(0) { $0 + $1.points }))
         return Assessment(score: score, reasons: reasons.sorted { $0.points > $1.points })
     }
 
@@ -134,10 +137,10 @@ final class DomainDetails: ObservableObject {
     @Published private(set) var addresses: [String] = []
     @Published private(set) var signers: [String: (label: String, trusted: Bool, bad: Bool)] = [:]
 
-    init(record: DomainRecord, connections: [ActivityEvent]) {
+    init(record: DomainRecord, connections: [ActivityEvent], knownBad: String? = nil) {
         self.record = record
         self.connections = connections
-        let risk = DomainRisk.assess(record, connections: connections)
+        let risk = DomainRisk.assess(record, connections: connections, knownBad: knownBad)
         self.risk = risk
         // The analysis needs an event; a stand-in naming the domain (only its name is shown).
         let subject = ActivityEvent(kind: .net, time: "", pid: 0, ppid: 0, name: record.domain, proc: "",

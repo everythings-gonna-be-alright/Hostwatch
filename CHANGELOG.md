@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+- **Overview tab** (first, ⌘1): protection status, what needs you, known-bad matches, stories, exploited macOS
+  flaws, heavy processes and the last 24 hours. The tab bar shows icons and count badges; event-kind counters
+  only on Events.
+- **Known threats:** HaGeZi Threat Intelligence and Feodo Tracker (no key), ThreatFox and MalwareBazaar (free
+  abuse.ch key) downloaded daily and matched locally against every connection and every untrusted program's
+  SHA-256. A match is a Dangerous *Known malware* story, a red KNOWN BAD tag, risk 100 for the domain; recent
+  history is re-checked after each update.
+- **Exploited macOS vulnerabilities:** CISA's list of Apple flaws exploited in the wild, compared with your last
+  macOS update and any waiting update; in Overview, a list sheet and the tray.
+- **Settings ▸ Threat Intelligence:** lists with counts and freshness, the abuse.ch key (Keychain), Update Now.
 - **Connections that close too fast show their address:** the collector's nettop backstop now reads each
   process's connections, so an inferred event names the real IP and port (and a hostname when known) instead
   of `TCP ?:?`. IPv6 connection lines are no longer mistaken for processes.
-
 - **"First seen" isn't a second "New":** the yellow NEW tag next to the New status became a ✦ sparkle in
   Events and FIRST in the HUD (the first time a pattern was ever seen); "New" now only means undecided.
 
