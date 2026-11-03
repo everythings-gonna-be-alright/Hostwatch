@@ -228,3 +228,53 @@ import Testing
         #expect(store.combine(keys: [a.signatureKey, b.signatureKey], process: a.signatureProcess, pattern: pattern) == nil)
     }
 }
+
+/// Tidying: only routine Safe noise is folded (random parts) or pruned (30 days unseen).
+@MainActor @Suite(.serialized) struct TidyPatterns {
+    let logd = "/usr/libexec/logd"
+
+    func store() throws -> (SignatureStore, URL) {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-tidy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (SignatureStore(directory: dir), dir)
+    }
+
+    @Test func findsRandomParts() {
+        #expect(SignatureStore.looksRandom("cache-aB#dE#"))
+        #expect(SignatureStore.looksRandom("<hex>"))
+        #expect(SignatureStore.looksRandom("xQzTrPkWmB"))
+        #expect(!SignatureStore.looksRandom("Application"))
+        #expect(!SignatureStore.looksRandom("CrashReporter"))
+        #expect(SignatureStore.shape("r /Library/Application Support/Apple/cache-aB#dE#/*") == "r /Library/Application Support/Apple/*/*")
+    }
+
+    @Test func foldsRoutineVariantsButNotYourDecisions() throws {
+        let (s, dir) = try store()
+        defer { _ = SignatureStore(directory: dir.appendingPathComponent("reset")) }
+        let names = ["cache-aB1dE2", "cache-xY3zW4", "cache-qR5sT6"]
+        let events = names.map { file(logd, pid: 1, "r", "/Library/Application Support/Apple/\($0)/data.db") }
+        events.forEach { _ = s.observe($0) }
+        #expect(events.allSatisfy { s.entry($0.signatureKey)?.source == "auto" })   // routine
+        let r = s.tidy()
+        #expect(r.folded == 3 && r.into == 1 && s.allEntries.count == 1)
+        #expect(file(logd, pid: 2, "r", "/Library/Application Support/Apple/cache-zZ9yY8/data.db").signatureKey == s.allEntries[0].id)
+
+        let (t, dir2) = try store()
+        defer { _ = SignatureStore(directory: dir2.appendingPathComponent("reset")) }
+        events.forEach { _ = t.observe($0) }
+        t.set(.safe, keys: [events[0].signatureKey])                               // your decision
+        #expect(t.tidy().folded == 0 && t.allEntries.count == 3)                  // nothing of yours is folded
+    }
+
+    @Test func prunesOnlyOldRoutinePatterns() throws {
+        let (s, dir) = try store()
+        defer { _ = SignatureStore(directory: dir.appendingPathComponent("reset")) }
+        let routine = file(logd, pid: 1, "r", "/Library/Application Support/Apple/logs/a.log")
+        let new = net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 2, to: "45.1.2.3:443")
+        _ = s.observe(routine); _ = s.observe(new)
+        #expect(s.tidy(now: Date().addingTimeInterval(10 * 86400)).pruned == 0)
+        #expect(s.tidy(now: Date().addingTimeInterval(31 * 86400)).pruned == 1)
+        #expect(s.entry(routine.signatureKey) == nil && s.entry(new.signatureKey) != nil)   // New is never pruned
+    }
+}

@@ -166,9 +166,9 @@ struct PatternsView: View {
             }
             Divider()
             HStack {
-                Text(classifier.lastMessage.isEmpty
-                     ? "Patterns are fingerprints: the same process doing the same kind of thing is one pattern."
-                     : classifier.lastMessage)
+                Text(!classifier.lastMessage.isEmpty ? classifier.lastMessage
+                     : !signatures.tidySummary.isEmpty ? signatures.tidySummary
+                     : "Patterns are fingerprints: the same process doing the same kind of thing is one pattern.")
                     .lineLimit(1)
                 Spacer()
                 PatternTally(signatures: signatures)

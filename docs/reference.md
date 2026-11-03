@@ -100,6 +100,15 @@ the most serious status wins (Dangerous, Suspicious; New when Safe and New are m
 whose own pattern it matches joins it instead of creating a new one, and rows already on screen follow it.
 *Separate Combined Pattern* undoes it (new activity makes its own patterns again).
 
+**Tidying (routine noise only).** 30 seconds after launch and then daily, Hostwatch removes routine Safe patterns
+(decided automatically as ordinary: system reads, caches, scratch writes) not seen for 30 days (they come back if
+they happen again), and folds routine Safe patterns of one program that differ only in random parts (a token with
+digits and letters such as `cache-aB#dE#`, `<hex>`, `<uuid>`, or a long mixed-case code) into one combined pattern,
+marked automatic. A fold needs at least 3 patterns, must pass the not-too-wide rule and may cover nothing but
+routine Safe patterns. Nothing New, reopened or decided by you, a rule, the baseline or an AI is touched; and if
+activity that joins a fold later isn't routine, the fold goes back to New. On a real store: 16,490 → 15,963 on the
+first run (62 folded into 14), pruning grows as patterns age. The Patterns footer shows the last result.
+
 **Connections:** public IPs on web ports (80/443/53/853/123) become `internet`. Other ports keep the /16.
 Loopback, LAN, link-local, CGNAT and multicast are named. Ports ≥ 49152 become `ephemeral`.
 
