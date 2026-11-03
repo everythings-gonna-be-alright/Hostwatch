@@ -761,6 +761,7 @@ struct ActivityWindowView: View {
             ShowFilterPicker(filter: $model.signatureFilter,
                              counts: model.showCounts(traveling ? travel.events : model.history, applyExclusions: traveling))
             Spacer(minLength: 0)
+            ClassifyAllButton(classifier: classifier, signatures: signatures)
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -1029,4 +1030,72 @@ struct KnownBadTag: View {
             .help(detail)
             .accessibilityLabel("Known bad: \(detail)")
     }
+}
+
+/// "Classify with AI": every New pattern, in batches, with progress. A popover says how many, which AI and
+/// roughly what it costs, and whether to apply the verdicts or keep them as suggestions.
+struct ClassifyAllButton: View {
+    @ObservedObject var classifier: PatternClassifier
+    @ObservedObject var signatures: SignatureStore
+    @StateObject private var ui = ClassifyAllState()
+
+    var body: some View {
+        if let run = classifier.bulk {
+            HStack(spacing: 8) {
+                ProgressView(value: Double(run.done), total: Double(max(run.total, 1))).frame(width: 110)
+                Text("Classifying \(run.done.formatted()) of \(run.total.formatted())").font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Button("Cancel") { classifier.cancelAll() }.buttonStyle(.glass)
+            }
+        } else {
+            Button { ui.show = true } label: { Label("Classify with AI", systemImage: "sparkles") }
+                .buttonStyle(.glass)
+                .disabled(classifier.running)
+                .help("Ask AI about every New pattern")
+                .popover(isPresented: $ui.show, arrowEdge: .bottom) { confirm }
+        }
+    }
+
+    private var confirm: some View {
+        let _ = signatures.revision
+        let count = classifier.classifiable.count
+        let batches = (count + classifier.batchSize - 1) / classifier.batchSize
+        let engine = classifier.engine
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s") with AI").font(.headline)
+            Label(engine.title, systemImage: engine == .onDevice ? "lock.laptopcomputer" : "sparkles")
+                .font(.callout)
+            Text(engine == .onDevice ? "Free and private: nothing leaves this Mac. What it can't settle stays New."
+                 : engine == .claude ? "About $\(String(format: "%.2f", Double(batches) * 0.03)) with Claude (\(batches) batches of \(classifier.batchSize)). Pattern summaries are sent, secrets masked."
+                 : "On-device first (free, private); only what it can't settle goes to Claude, at most about $\(String(format: "%.2f", Double(batches) * 0.03)).")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Picker("", selection: $ui.apply) {
+                Text("Apply the verdicts").tag(true)
+                Text("Keep them as suggestions").tag(false)
+            }
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            Text(ui.apply ? "Never Safe for high-risk patterns, python, bash and the like: those stay for you."
+                 : "You accept them in Rules ▸ Needs You.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("Engine: Settings ▸ AI").font(.caption).foregroundStyle(.tertiary)
+                Spacer()
+                Button("Cancel") { ui.show = false }.keyboardShortcut(.cancelAction)
+                Button("Classify") {
+                    ui.show = false
+                    classifier.classifyAll(apply: ui.apply)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(count == 0)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
+    }
+}
+
+final class ClassifyAllState: ObservableObject {
+    @Published var show = false
+    @Published var apply = true
 }

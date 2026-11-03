@@ -151,6 +151,10 @@ migrated and can be deleted.
   nothing changes until you **Accept** it. *Suggest for new patterns automatically* (Settings ▸ AI) repeats this
   every 90 s for patterns older than a minute. *Accept AI suggestions without asking* applies them by
   themselves, except for high-risk patterns.
+- **Classify with AI** (Events and Patterns toolbars) does it for every New pattern that no AI has looked at:
+  batches of 40, high-risk first, with a progress bar and Cancel. The popover shows the count, the engine and the
+  rough cost (on-device free; Claude about $0.03 per batch), and whether to **apply the verdicts** or **keep them
+  as suggestions**. A failing Claude (offline, not installed) stops the run.
 - No AI overrides a decision you made, suggests Safe for a high-risk pattern, or trusts an interpreter, shell
   or similar tool (python, bash, node, curl, osascript…: they run whatever they're told). A single **Ask AI**
   verdict also becomes a suggestion for that event's pattern.
