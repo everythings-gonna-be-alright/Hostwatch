@@ -874,7 +874,13 @@ final class SignatureStore: ObservableObject {
                 entries[key] = e
                 continue
             }
+            // A binary that's gone (an updated app's old version, a deleted installer) can't be judged again.
+            let subject = Self.subjectPath(e)
+            guard subject.hasPrefix("/"), FileManager.default.fileExists(atPath: subject) else { continue }
             let sig = SignatureBuilder.signature(for: e.exampleEvent)
+            // The stored example lacks the command line and may predate today's pattern rules: when it no
+            // longer rebuilds this exact pattern, its risk says nothing about this entry, so leave it alone.
+            guard sig.key == key else { continue }
             if sig.risk == e.risk { continue }
             if sig.risk > e.risk {
                 raise(&e, to: sig.risk, reason: sig.reason)
