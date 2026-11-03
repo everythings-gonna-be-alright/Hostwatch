@@ -123,9 +123,7 @@ struct FullDiskAccessView: View {
         if !setup.granted {
             VStack(alignment: .leading, spacing: 12) {
                 StepRow(number: 1, done: setup.openedSettings, title: "Turn on Hostwatch in Privacy & Security ▸ Full Disk Access") {
-                    Button("Open System Settings") { setup.openSettings() }
-                        .buttonStyle(.glassProminent)
-                        .controlSize(.small)
+                    EmptyView()                                   // the window's main button opens it
                 }
                 StepRow(number: 2, done: false, title: "Come back here: Hostwatch notices by itself") {
                     ProgressView().controlSize(.small)
