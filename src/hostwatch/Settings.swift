@@ -48,7 +48,7 @@ final class SettingsState: ObservableObject {
     }
     @Published var resetPlan = ResetPlan()
     @Published var abuseKeyDraft = ""
-    @Published var replacingKey = false
+    @Published var showKeySheet = false
     @Published var baselineAutoRules = UserDefaults.standard.object(forKey: "baselineAutoRules") as? Bool ?? true {
         didSet { UserDefaults.standard.set(baselineAutoRules, forKey: "baselineAutoRules") }
     }
@@ -626,57 +626,18 @@ private struct ThreatSections: View {
     @ObservedObject var intel: ThreatIntel
     @ObservedObject var ui: SettingsState
 
-    private func saveKey() {
-        let key = ui.abuseKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        intel.apiKey = key
-        ui.abuseKeyDraft = ""
-        ui.replacingKey = false
-        Task { await intel.update() }
-    }
-
     var body: some View {
         let _ = intel.revision
         Group {
             Section {
                 Toggle("Check against known threats", isOn: $intel.enabled)
-                ForEach([ThreatIntel.Feed.hagezi, .feodo, .threatfox, .bazaar]) { feed in feedRow(feed) }
-                LabeledContent {
-                    if intel.apiKey != nil && !ui.replacingKey {
-                        HStack(spacing: 8) {
-                            Label("Saved in the Keychain", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Button("Replace…") { ui.replacingKey = true }
-                            Button("Remove", role: .destructive) { intel.apiKey = nil }
-                        }
-                    } else {
-                        HStack(spacing: 8) {
-                            SecureField("Paste your key", text: $ui.abuseKeyDraft)
-                                .textFieldStyle(.roundedBorder)          // a visible field (forms draw them borderless)
-                                .labelsHidden()
-                                .frame(width: 220)
-                                .onSubmit(saveKey)
-                            Button("Save", action: saveKey)
-                                .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                            if ui.replacingKey {
-                                Button("Cancel") { ui.replacingKey = false; ui.abuseKeyDraft = "" }
-                            }
-                        }
-                    }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("abuse.ch key")
-                        // One sentence with an inline link, so it wraps as a paragraph.
-                        Text("Free, adds ThreatFox and MalwareBazaar. [Get a free key](https://auth.abuse.ch/)")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                ForEach([ThreatIntel.Feed.hagezi, .feodo]) { feed in feedRow(feed) }
+                keyedListsRow
                 LabeledContent("Lists") {
                     HStack(spacing: 8) {
+                        Text(updatedText).foregroundStyle(.secondary)
                         if intel.updating { ProgressView().controlSize(.small) }
-                        Button(intel.updating ? "Updating…" : "Update Now") { Task { await intel.update() } }
-                            .disabled(intel.updating)
+                        Button("Update Now") { Task { await intel.update() } }.disabled(intel.updating)
                     }
                 }
             } header: {
@@ -702,6 +663,50 @@ private struct ThreatSections: View {
         }
     }
 
+    /// ThreatFox and MalwareBazaar share the one abuse.ch key: one row, with Add Key… (a sheet, like
+    /// System Settings' "Set Password…") or, once added, their status and a menu.
+    private var keyedListsRow: some View {
+        let states = [ThreatIntel.Feed.threatfox, .bazaar].compactMap { intel.states[$0.rawValue] }
+        let error = states.compactMap(\.error).first
+        let updated = states.compactMap(\.updated).max()
+        let count = states.reduce(0) { $0 + $1.count }
+        return LabeledContent {
+            HStack(spacing: 8) {
+                if intel.apiKey == nil {
+                    Button("Add Key…") { ui.showKeySheet = true }
+                } else {
+                    if let error {
+                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).lineLimit(1)
+                    } else if let updated {
+                        Text("\(count.formatted()) entries · \(StoryEngine.ago(updated))").foregroundStyle(.secondary)
+                    } else {
+                        Text("not downloaded yet").foregroundStyle(.secondary)
+                    }
+                    Menu {
+                        Button("Replace Key…") { ui.showKeySheet = true }
+                        Button("Remove Key", role: .destructive) { intel.apiKey = nil }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .help("abuse.ch key")
+                }
+            }
+            .font(.callout)
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("ThreatFox and MalwareBazaar")
+                Text(intel.apiKey == nil ? "Malware families, C2 servers and file hashes · needs a free abuse.ch key"
+                     : "Malware families, C2 servers and file hashes · abuse.ch key in the Keychain")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $ui.showKeySheet) { AbuseKeySheet(intel: intel, ui: ui) }
+    }
+
+    private var updatedText: String {
+        let dates = ThreatIntel.Feed.allCases.compactMap { intel.states[$0.rawValue]?.updated }
+        return intel.updating ? "Updating…" : dates.max().map { "Updated \(StoryEngine.ago($0))" } ?? "Not downloaded yet"
+    }
+
     private func feedRow(_ feed: ThreatIntel.Feed) -> some View {
         let state = intel.states[feed.rawValue]
         let missingKey = feed.needsKey && intel.apiKey == nil
@@ -712,7 +717,8 @@ private struct ThreatSections: View {
                 } else if let error = state?.error {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).lineLimit(1)
                 } else if let updated = state?.updated {
-                    Text("\((state?.count ?? 0).formatted()) · \(StoryEngine.ago(updated))").foregroundStyle(.secondary)
+                    Text("\((state?.count ?? 0).formatted()) \(feed == .kev ? "Apple flaws" : "entries") · \(StoryEngine.ago(updated))")
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("not downloaded yet").foregroundStyle(.secondary)
                 }
@@ -724,5 +730,47 @@ private struct ThreatSections: View {
                 Text(feed.detail).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// "Add Key…": the abuse.ch key in a small sheet (Return saves, Esc cancels).
+private struct AbuseKeySheet: View {
+    @ObservedObject var intel: ThreatIntel
+    @ObservedObject var ui: SettingsState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(intel.apiKey == nil ? "Add abuse.ch Key" : "Replace abuse.ch Key").font(.headline)
+            Text("A free key adds ThreatFox and MalwareBazaar: malware families, C2 servers and file hashes. It's kept "
+                 + "in your Keychain and only sent to abuse.ch to download the lists.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            SecureField("Key", text: $ui.abuseKeyDraft, prompt: Text("Paste your key"))
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .onSubmit(save)
+            HStack {
+                Link("Get a free key", destination: URL(string: "https://auth.abuse.ch/")!)
+                Spacer()
+                Button("Cancel", role: .cancel) { close() }.keyboardShortcut(.cancelAction)
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(ui.abuseKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+
+    private func save() {
+        let key = ui.abuseKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        intel.apiKey = key
+        close()
+        Task { await intel.update() }
+    }
+
+    private func close() {
+        ui.abuseKeyDraft = ""
+        ui.showKeySheet = false
     }
 }
