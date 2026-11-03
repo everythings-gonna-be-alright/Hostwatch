@@ -527,11 +527,20 @@ already running when it started aren't followed, or Xcode and browsers would be 
 
 ## Overview
 
-The first tab (it opens with the window): *is my Mac OK?* in ten seconds. A headline (fine / something needs a
-look), then cards that lead to their tab: **Protection** (collector, baseline, history, threat lists, CPU and
-memory), **Needs you**, **Known bad**, **Stories**, **macOS vulnerabilities**, **Heavy processes** and **Last
-24 hours** (new patterns and domains, how many were decided, stories). The tab bar shows each tab's icon, with
-counts as badges (icons only when the window is narrow); the event-kind counters appear on Events only.
+The first tab (it opens with the window): *is my Mac OK?* in ten seconds, in the style of System Settings'
+status pages, centred at a readable width:
+- **Header:** a shield (green, orange or red) and one sentence: *Your Mac looks fine*, *A few things to check*,
+  *Something needs a look* or *Hostwatch isn't watching*.
+- **Four tiles** leading to their tab: Needs You, Stories, Known Bad, Heavy Now (tinted only when not zero).
+- **Needs attention:** only what needs action, one row each with its button: the collector off, a known-bad
+  match or dangerous story (Open Story), exploited macOS flaws (Software Update · Details), things to decide
+  (Review), an untrusted heavy process. Empty: *Nothing needs your attention*.
+- **Protection:** grouped rows with a state (On, Off, Starting, Check): collector, baseline, known threats (entries,
+  lists, freshness), macOS (version, waiting update, exploited flaws; Details) and history.
+- **Last 24 hours:** new patterns, how many were decided for you, new domains, stories.
+
+The tab bar shows each tab's icon, with counts as badges (icons only when the window is narrow); the
+event-kind counters appear on Events only.
 
 ## Known threats and exploited macOS vulnerabilities
 
