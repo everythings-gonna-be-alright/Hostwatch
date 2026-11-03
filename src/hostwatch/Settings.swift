@@ -54,14 +54,13 @@ final class SettingsState: ObservableObject {
 }
 
 enum SettingsPane: Int, CaseIterable {
-    case general, hud, detection, threats, ai, exclusions, history
+    case general, hud, detection, ai, exclusions, history
 
     var title: String {
         switch self {
         case .general: return "General"
         case .hud: return "HUD"
         case .detection: return "Detection"
-        case .threats: return "Threat Intelligence"
         case .ai: return "AI"
         case .exclusions: return "Exclusions"
         case .history: return "History"
@@ -73,7 +72,6 @@ enum SettingsPane: Int, CaseIterable {
         case .general: return "gearshape"
         case .hud: return "rectangle.inset.topright.filled"
         case .detection: return "shield.lefthalf.filled"
-        case .threats: return "xmark.shield"
         case .ai: return "sparkles"
         case .exclusions: return "eye.slash"
         case .history: return "clock.arrow.circlepath"
@@ -96,9 +94,8 @@ final class SettingsWindowController: NSWindowController {
                                                       toggleCollector: c.toggleCollector, reset: c.reset))
             case .hud: view = AnyView(HUDPane(model: c.model, reset: c.resetOverlayFrame))
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
-                                                          signatures: c.signatures, baseline: c.baseline,
+                                                          signatures: c.signatures, baseline: c.baseline, intel: c.intel,
                                                           openBaseline: c.openBaseline, ui: state))
-            case .threats: view = AnyView(ThreatPane(intel: c.intel, ui: state))
             case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
@@ -144,13 +141,17 @@ final class SettingsTabs: NSTabViewController {
 
 // MARK: - Panes
 
-/// Shared look: a grouped form, sized to its content.
+/// Shared look: a grouped form, sized to its content; a long one (`height`) scrolls at a fixed height instead
+/// of growing past the screen.
 private struct Pane<Content: View>: View {
+    var height: CGFloat? = nil
     @ViewBuilder var content: Content
     var body: some View {
-        Form { content }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
+        if let height {
+            Form { content }.formStyle(.grouped).frame(height: height)
+        } else {
+            Form { content }.formStyle(.grouped).scrollDisabled(true)
+        }
     }
 }
 
@@ -349,12 +350,13 @@ private struct DetectionPane: View {
     @ObservedObject var stories: StoryEngine
     let signatures: SignatureStore
     @ObservedObject var baseline: BaselineLearner
+    @ObservedObject var intel: ThreatIntel
     let openBaseline: () -> Void
     @ObservedObject var ui: SettingsState
 
     var body: some View {
         let _ = ui.refresh
-        Pane {
+        Pane(height: 640) {
             Section {
                 Toggle("Hold suspicious processes", isOn: $hold.enabled)
                 Picker("If you don't answer in \(Int(hold.timeout)) s", selection: $hold.timeoutAction) {
@@ -429,6 +431,7 @@ private struct DetectionPane: View {
                          + "what trusted software reaches becomes usual instead of new. "
                          + "Ignored stories are chains you chose to never be alerted about again.")
             }
+            ThreatSections(intel: intel, ui: ui)
         }
     }
 }
@@ -616,14 +619,15 @@ private struct HistoryPane: View {
     }
 }
 
-/// Threat lists (downloaded daily, matched on this Mac) and the exploited-vulnerabilities check.
-private struct ThreatPane: View {
+/// Threat lists (downloaded daily, matched on this Mac) and the exploited-vulnerabilities check: sections
+/// of Settings ▸ Detection.
+private struct ThreatSections: View {
     @ObservedObject var intel: ThreatIntel
     @ObservedObject var ui: SettingsState
 
     var body: some View {
         let _ = intel.revision
-        Pane {
+        Group {
             Section {
                 Toggle("Check against known threats", isOn: $intel.enabled)
                 ForEach([ThreatIntel.Feed.hagezi, .feodo, .threatfox, .bazaar]) { feed in feedRow(feed) }

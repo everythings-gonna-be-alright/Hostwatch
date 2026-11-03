@@ -546,7 +546,7 @@ fixed yet, a slim banner at the top says so (*Details*, *Software Update*, ✕ u
 
 ## Known threats and exploited macOS vulnerabilities
 
-Once a day (and *Update Now* in Settings ▸ Threat Intelligence) Hostwatch downloads public lists and matches them
+Once a day (and *Update Now* in Settings ▸ Detection) Hostwatch downloads public lists and matches them
 on this Mac; nothing about the Mac is sent:
 
 | List | What | Key |
@@ -576,7 +576,7 @@ on this Mac; nothing about the Mac is sent:
   text (not a program, archive, document or script: Mach-O, ELF, PE, zip, gzip, PDF, xar and `#!` are
   refused), within a plausible size, and the right shape line by line (≥ 95% valid domains or IPs; the CISA list
   needs ≥ 500 entries). A list that suddenly shrinks by half or grows five-fold is refused too. A refused update
-  keeps the previous list and shows why in Settings ▸ Threat Intelligence.
+  keeps the previous list and shows why in Settings ▸ Detection.
 - **Poisoning can't flag the platforms everything uses:** Apple, Google, Microsoft, GitHub, AWS, Cloudflare,
   Akamai and a few others are never flagged by their own domain (nor by a parent-domain match). A phishing page
   on a shared host is still flagged by its full name (`login-apple.github.io`). A list can only raise alerts:
