@@ -42,9 +42,15 @@ struct WindowTabBar: View {
                     }
                     .padding(.horizontal, showTitles ? 10 : 8)
                     .padding(.vertical, 5)
-                    .foregroundStyle(selected ? Color.primary : Color.secondary)
+                    // Selected: an accent-tinted capsule with a hairline edge and accent text, clearly
+                    // distinct in light and dark (a plain grey was too faint).
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     .background {
-                        if selected { Capsule().fill(Color.primary.opacity(0.12)) }
+                        if selected {
+                            Capsule().fill(Color.accentColor.opacity(0.22))
+                                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 0.75))
+                                .shadow(color: .black.opacity(0.12), radius: 1.5, y: 0.5)
+                        }
                     }
                     .contentShape(Capsule())
                 }
