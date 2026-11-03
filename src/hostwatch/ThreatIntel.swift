@@ -121,7 +121,13 @@ final class ThreatIntel: ObservableObject {
 
     let directory: URL
     private let defaults: UserDefaults
-    var session: URLSession = .shared
+    /// Ephemeral (no cookies or cache), and redirects only within the same host.
+    var session: URLSession = URLSession(configuration: {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForRequest = 60
+        c.timeoutIntervalForResource = 300
+        return c
+    }(), delegate: SameHostRedirects(), delegateQueue: nil)
     var now: () -> Date = { Date() }
     /// A match on a connection or a program: the app adds the story stage.
     var onHit: ((ThreatHit, ActivityEvent?) -> Void)?
@@ -230,7 +236,10 @@ final class ThreatIntel: ObservableObject {
         var state = states[feed.rawValue] ?? FeedState()
         do {
             let data = try await download()
-            guard !data.isEmpty, data.count < 200_000_000 else { throw URLError(.cannotDecodeContentData) }
+            // Only what really looks like this list is kept; otherwise the previous copy stays.
+            if let problem = FeedCheck.validate(feed, data, previousCount: states[feed.rawValue]?.count ?? 0) {
+                throw ThreatError.rejected(problem)
+            }
             let file = directory.appendingPathComponent(feed.rawValue)
             switch feed {
             case .threatfox, .bazaar:
@@ -245,6 +254,8 @@ final class ThreatIntel: ObservableObject {
             default:
                 try data.write(to: file, options: .atomic)
             }
+            // Readable only by you, never executable.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
             state.updated = now()
             state.error = nil
         } catch {
@@ -289,7 +300,7 @@ final class ThreatIntel: ObservableObject {
                     guard let first = line.first, first != "#", first != "!" else { continue }
                     var entry = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     if entry.hasPrefix("*.") { entry.removeFirst(2) }
-                    if inIPs { ips.insert(entry) } else { domains.insert(entry) }
+                    if inIPs { ips.insert(entry) } else if !FeedCheck.neverFlag(entry) { domains.insert(entry) }
                 }
                 counts[Feed.hagezi.rawValue] = domains.count + ips.count
             }
@@ -307,7 +318,8 @@ final class ThreatIntel: ObservableObject {
                 guard let data = try? Data(contentsOf: dir.appendingPathComponent(feed.rawValue)),
                       let all = try? JSONDecoder().decode([String: Indicator].self, from: data) else { continue }
                 for (k, v) in all {
-                    if v.type == "sha256" { hashes[k] = "\(feed.title): \(v.detail)" } else { c2[k] = "\(feed.title): \(v.detail)" }
+                    if v.type == "sha256" { hashes[k] = "\(feed.title): \(v.detail)" }
+                    else if !FeedCheck.neverFlag(k) { c2[k] = "\(feed.title): \(v.detail)" }
                 }
                 counts[feed.rawValue] = all.count
             }
@@ -413,6 +425,7 @@ final class ThreatIntel: ObservableObject {
     func listedDomain(_ host: String) -> (domain: String, detail: String)? {
         var h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".~≈"))
         while h.contains(".") {
+            if FeedCheck.neverFlag(h) { return nil }      // a major provider's own domain: never by a parent match
             if let d = c2[h] { return (h, d) }
             if domains.contains(h) { return (h, "HaGeZi Threat Intelligence: malware or phishing domain") }
             h = String(h.drop { $0 != "." }.dropFirst())
@@ -558,5 +571,130 @@ final class ThreatIntel: ObservableObject {
             if title.hasPrefix("macOS") { return title }
         }
         return nil
+    }
+}
+
+// MARK: - Feed safety
+
+/// Refuses redirects to another host (a feed may move within its own server, not elsewhere).
+final class SameHostRedirects: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        let same = request.url?.scheme == "https" && request.url?.host == task.originalRequest?.url?.host
+        completionHandler(same ? request : nil)
+    }
+}
+
+/// Checks a downloaded list before it replaces the previous one: text (not a program, archive or document),
+/// the right shape line by line, a plausible size, and no sudden collapse or explosion in size. Lists only
+/// ever raise alerts and are never run, but a bad file must not silently become the list.
+enum FeedCheck {
+    /// Size bounds per list (bytes).
+    static func sizeRange(_ feed: ThreatIntel.Feed) -> ClosedRange<Int> {
+        switch feed {
+        case .hagezi: return 50_000...80_000_000
+        case .feodo: return 1...2_000_000
+        case .threatfox: return 10...60_000_000
+        case .bazaar: return 10...60_000_000
+        case .kev: return 50_000...30_000_000
+        }
+    }
+
+    /// Program, archive and document signatures: never a list.
+    static let binaryMagics: [[UInt8]] = [
+        [0xCF, 0xFA, 0xED, 0xFE], [0xCE, 0xFA, 0xED, 0xFE], [0xFE, 0xED, 0xFA, 0xCF], [0xFE, 0xED, 0xFA, 0xCE],  // Mach-O
+        [0xCA, 0xFE, 0xBA, 0xBE],                     // universal binary
+        [0x4D, 0x5A],                                 // Windows executable
+        [0x7F, 0x45, 0x4C, 0x46],                     // ELF
+        [0x50, 0x4B, 0x03, 0x04],                     // zip
+        [0x1F, 0x8B],                                 // gzip
+        [0x25, 0x50, 0x44, 0x46],                     // PDF
+        [0x78, 0x61, 0x72, 0x21],                     // xar (pkg)
+        [0x23, 0x21],                                 // script with a shebang
+    ]
+
+    static func validate(_ feed: ThreatIntel.Feed, _ data: Data, previousCount: Int) -> String? {
+        guard sizeRange(feed).contains(data.count) else { return "unexpected size (\(data.count) bytes)" }
+        let head = Array(data.prefix(4))
+        if binaryMagics.contains(where: { head.starts(with: $0) }) { return "not a list (looks like a program or archive)" }
+        if data.contains(0) { return "not text (contains binary data)" }
+        guard let text = String(data: data, encoding: .utf8) else { return "not UTF-8 text" }
+        let count: Int
+        switch feed {
+        case .hagezi:
+            let parts = text.components(separatedBy: "\n#ips\n")
+            guard parts.count == 2 else { return "domain and IP parts missing" }
+            guard let domains = share(parts[0], valid: isDomainEntry), domains.share >= 0.95, domains.count >= 10_000 else {
+                return "domain list doesn't look like domains"
+            }
+            guard let ips = share(parts[1], valid: isIPv4), ips.share >= 0.95 else { return "IP list doesn't look like IPs" }
+            count = domains.count + ips.count
+        case .feodo:
+            if let ips = share(text, valid: isIPv4) {
+                guard ips.share >= 0.95 else { return "doesn't look like an IP list" }
+                count = ips.count
+            } else { count = 0 }                                  // an empty list is possible
+        case .threatfox, .kev:
+            guard (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { return "not the expected JSON" }
+            if feed == .kev {
+                let n = ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["vulnerabilities"] as? [Any])?.count ?? 0
+                guard n >= 500 else { return "too few vulnerabilities (\(n))" }
+                count = -1                                        // the stored count is Apple's only: not comparable
+            } else { count = -1 }                                 // accumulates: no size comparison
+        case .bazaar:
+            count = -1
+        }
+        // A sudden collapse or explosion is more likely an error (or tampering) than reality.
+        if count >= 0, previousCount >= 1_000 {
+            if count < previousCount / 2 { return "shrank from \(previousCount) to \(count) entries" }
+            if count > previousCount * 5 { return "grew from \(previousCount) to \(count) entries" }
+        }
+        return nil
+    }
+
+    /// Share of non-comment lines that pass `valid`, or nil when there are none.
+    static func share(_ text: String, valid: (String) -> Bool) -> (share: Double, count: Int)? {
+        var good = 0, total = 0
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("#"), !line.hasPrefix("!") else { continue }
+            total += 1
+            if valid(line) { good += 1 }
+        }
+        return total == 0 ? nil : (Double(good) / Double(total), good)
+    }
+
+    static func isDomainEntry(_ line: String) -> Bool {
+        var d = Substring(line.lowercased())
+        if d.hasPrefix("*.") { d = d.dropFirst(2) }
+        let labels = d.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2, d.count <= 253 else { return false }
+        return labels.allSatisfy { l in
+            !l.isEmpty && l.count <= 63 && l.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+        }
+    }
+
+    static func isIPv4(_ line: String) -> Bool {
+        let parts = line.split(separator: ".")
+        return parts.count == 4 && parts.allSatisfy { p in Int(p).map { (0...255).contains($0) && String($0) == p } ?? false }
+    }
+
+    /// Core domains of the platforms everything depends on: a list naming them (or a parent match reaching
+    /// them) is wrong or poisoned, so they are never flagged. Their customers' subdomains still can be
+    /// (phishing on a shared host is listed by its full name).
+    static let neverFlagDomains: Set<String> = [
+        "apple.com", "icloud.com", "mzstatic.com", "apple-cloudkit.com", "cdn-apple.com", "aaplimg.com",
+        "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com", "gmail.com", "youtube.com",
+        "microsoft.com", "windows.net", "live.com", "office.com", "azure.com", "msftconnecttest.com",
+        "github.com", "githubusercontent.com", "github.io", "githubassets.com",
+        "amazonaws.com", "amazon.com", "cloudfront.net", "cloudflare.com", "akamaihd.net", "akamaiedge.net",
+        "fastly.net", "digicert.com", "letsencrypt.org", "anthropic.com", "claude.ai", "abuse.ch", "cisa.gov",
+        "jsdelivr.net", "slack.com", "zoom.us",
+    ]
+
+    static func neverFlag(_ entry: String) -> Bool {
+        var d = entry.lowercased()
+        if d.hasPrefix("*.") { d.removeFirst(2) }
+        return neverFlagDomains.contains(d)
     }
 }
