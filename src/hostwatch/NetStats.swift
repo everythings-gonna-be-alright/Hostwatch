@@ -10,6 +10,10 @@ import Foundation
 final class NetStats: @unchecked Sendable {
     struct Flow: Equatable { var pid: Int; var name: String; var tcp: Bool; var local: String; var remote: String }
 
+    /// Every socket as soon as it has a local port, connected or not (who owns a local port, for the firewall's
+    /// relay when a socket closes before it can look). Called on the private queue; set before `start`.
+    var onSocket: ((_ owner: RecentSockets.Owner, _ tcp: Bool, _ localPort: UInt16) -> Void)?
+
     private typealias Create = @convention(c) (CFAllocator?, DispatchQueue,
                                                @escaping @convention(block) (OpaquePointer?, OpaquePointer?) -> Void) -> OpaquePointer?
     private typealias ManagerCall = @convention(c) (OpaquePointer?) -> Void
@@ -69,7 +73,11 @@ final class NetStats: @unchecked Sendable {
             nextID += 1
             let id = nextID
             api.setDescription(source) { [weak self] dict in
-                guard let self, let dict = dict as? [String: Any], let flow = flow(dict) else { return }
+                guard let self, let dict = dict as? [String: Any] else { return }
+                if let onSocket, let s = Self.socket(dict, keys: (api.pid, api.name, api.provider, api.local, api.remote)) {
+                    onSocket(s.owner, s.tcp, s.port)
+                }
+                guard let flow = flow(dict) else { return }
                 guard reported[id] != flow.remote else { return }
                 reported[id] = flow.remote
                 onFlow(flow, existing)
@@ -95,6 +103,16 @@ final class NetStats: @unchecked Sendable {
         Self.flow(d, keys: (api.pid, api.name, api.provider, api.local, api.remote))
     }
 
+    /// Who has which local port: (owner, TCP?, port); nil without a process or a port.
+    static func socket(_ d: [String: Any], keys k: (pid: String, name: String, provider: String, local: String, remote: String))
+        -> (owner: RecentSockets.Owner, tcp: Bool, port: UInt16)? {
+        guard let pid = (d[k.pid] as? NSNumber)?.intValue, pid > 0,
+              let local = (d[k.local] as? Data).flatMap({ NetAddress.text(sockaddr: $0) }),
+              let port = local.split(separator: ":").last.flatMap({ UInt16($0) }), port != 0 else { return nil }
+        let provider = (d[k.provider] as? String ?? "").uppercased()
+        return (RecentSockets.Owner(pid: Int32(pid), name: d[k.name] as? String ?? ""), provider != "UDP", port)
+    }
+
     static func flow(_ d: [String: Any], keys k: (pid: String, name: String, provider: String, local: String, remote: String)) -> Flow? {
         guard let pid = (d[k.pid] as? NSNumber)?.intValue, pid > 0,
               let remoteData = d[k.remote] as? Data, let remote = NetAddress.text(sockaddr: remoteData),
@@ -102,5 +120,38 @@ final class NetStats: @unchecked Sendable {
         let local = (d[k.local] as? Data).flatMap { NetAddress.text(sockaddr: $0) } ?? ""
         let provider = (d[k.provider] as? String ?? "").uppercased()
         return Flow(pid: pid, name: d[k.name] as? String ?? "", tcp: provider != "UDP", local: local, remote: remote)
+    }
+}
+
+/// Who recently had which local port, from macOS's connection statistics: the firewall's relay asks when a socket
+/// has already closed by the time it looks (a DNS query over UDP lasts a few milliseconds).
+final class RecentSockets: @unchecked Sendable {
+    struct Owner: Equatable, Sendable { var pid: Int32; var name: String }
+
+    private let lock = NSLock()
+    private var owners: [String: (owner: Owner, at: TimeInterval)] = [:]
+    let keep: TimeInterval
+
+    init(keep: TimeInterval = 120) { self.keep = keep }
+
+    private static func key(_ tcp: Bool, _ port: UInt16) -> String { "\(tcp ? "T" : "U")\(port)" }
+
+    func note(_ owner: Owner, tcp: Bool, port: UInt16, now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        lock.lock(); defer { lock.unlock() }
+        owners[Self.key(tcp, port)] = (owner, now)
+        if owners.count > 20_000 { owners = owners.filter { now - $0.value.at < keep } }
+    }
+
+    /// The last owner of that port, if seen within `keep` seconds. Waits up to `wait` for the statistics to arrive.
+    func owner(tcp: Bool, port: UInt16, wait: TimeInterval = 0, now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) -> Owner? {
+        let until = now() + wait
+        while true {
+            lock.lock()
+            let hit = owners[Self.key(tcp, port)]
+            lock.unlock()
+            if let hit, now() - hit.at < keep { return hit.owner }
+            if now() >= until { return nil }
+            usleep(10_000)
+        }
     }
 }

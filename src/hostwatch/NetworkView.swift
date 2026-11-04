@@ -89,7 +89,8 @@ struct NetworkRow: Identifiable {
                 state = d.verdict == .block ? (byYou(e) ? .blockedByYou : .blocks) : d.verdict == .ask ? .undecided : .passes
             }
             if waiting.contains(e.facts.patternKey), state != .blockedByYou { state = .waiting }
-            let name = SignatureBuilder.vmGateway(e.facts.program) ?? (e.name.isEmpty ? (e.facts.program as NSString).lastPathComponent : e.name)
+            let base = e.name.isEmpty || e.name == "?" ? (e.facts.program as NSString).lastPathComponent : e.name
+            let name = SignatureBuilder.vmGateway(e.facts.program) ?? (base.isEmpty ? "Unknown program" : base)
             return NetworkRow(id: "c:" + e.id, destination: name,
                               detail: "\(e.facts.proto) \(e.destination):\(e.facts.port)", entry: e,
                               reason: d.map { $0.reason.prefix(1).uppercased() + $0.reason.dropFirst() } ?? "",

@@ -234,6 +234,8 @@ final class Agent: @unchecked Sendable {
 
     let recentOpens = RecentSet<PidKey>()
     let seenConns = RecentSet<PidKey>(ttl: 600)
+    /// Who had which local port lately (connection statistics), for the firewall's relay.
+    let recentSockets = RecentSockets()
 
     private let clientsLock = NSLock()
     private var clients: [ObjectIdentifier: AgentClient] = [:]

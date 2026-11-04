@@ -6,6 +6,7 @@ struct RelayFlow: Sendable {
     let id: Int
     let tcp: Bool
     var program: String = ""
+    var name: String = ""         // the process's name, when its path couldn't be read (it had quit)
     var pid: Int32 = 0
     var client: IPEndpoint
     var original: IPEndpoint?
@@ -34,6 +35,8 @@ final class FirewallRelay: @unchecked Sendable {
     var peekTimeout: TimeInterval = 0.3
     /// Where a redirected connection was going (pf; replaceable in tests).
     var findOriginal: @Sendable (_ tcp: Bool, _ client: IPEndpoint, _ local: IPEndpoint) -> (IPEndpoint, String)? = PFRedirect.original
+    /// Who had a local port recently, when its socket is already gone by the time the relay looks.
+    var recentOwner: (@Sendable (_ tcp: Bool, _ port: UInt16) -> RecentSockets.Owner?)?
 
     private var listeners: [NWListener] = []
     private var tcpSockets: [Int32] = []
@@ -128,6 +131,10 @@ final class FirewallRelay: @unchecked Sendable {
         var flow = RelayFlow(id: id, tcp: tcp, client: client)
         if let owner = SocketOwner.find(tcp: tcp, localPort: client.port) {       // now, while it holds the port
             flow.program = owner.path; flow.pid = owner.pid
+        } else if let owner = recentOwner?(tcp, client.port) {                   // closed already: who it was
+            flow.pid = owner.pid
+            flow.name = owner.name
+            flow.program = ProcessList.path(Int(owner.pid))
         }
         return flow
     }

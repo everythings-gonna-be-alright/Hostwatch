@@ -145,3 +145,69 @@ import Testing
         return String(decoding: out, as: UTF8.self).split(separator: "\n").compactMap { pid_t($0) }
     }
 }
+
+/// The relay's fallback when a socket is gone before it can look (a DNS query over UDP lasts milliseconds):
+/// who had that local port, from macOS's connection statistics.
+@Suite(.serialized) struct RecentSocketOwners {
+    @Test func remembersTheLastOwnerOfAPortForAWhile() {
+        let s = RecentSockets(keep: 60)
+        var clock: TimeInterval = 1000
+        s.note(.init(pid: 42, name: "dig"), tcp: false, port: 53_000, now: clock)
+        #expect(s.owner(tcp: false, port: 53_000, now: { clock }) == .init(pid: 42, name: "dig"))
+        #expect(s.owner(tcp: true, port: 53_000, now: { clock }) == nil)          // same number, other protocol
+        clock += 61
+        #expect(s.owner(tcp: false, port: 53_000, now: { clock }) == nil)         // too old
+    }
+
+    @Test func waitsBrieflyForTheStatisticsToArrive() {
+        let s = RecentSockets()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { s.note(.init(pid: 7, name: "curl"), tcp: true, port: 50_001) }
+        #expect(s.owner(tcp: true, port: 50_001, wait: 0.5)?.pid == 7)
+        #expect(s.owner(tcp: true, port: 50_002, wait: 0.05) == nil)
+    }
+
+    @Test func statisticsDescribeEverySocketsLocalPort() {
+        let keys = (pid: "p", name: "n", provider: "v", local: "l", remote: "r")
+        var sin = sockaddr_in()
+        sin.sin_len = UInt8(MemoryLayout<sockaddr_in>.size); sin.sin_family = sa_family_t(AF_INET)
+        sin.sin_port = UInt16(61_234).bigEndian
+        let local = Data(bytes: &sin, count: MemoryLayout<sockaddr_in>.size)
+        let s = NetStats.socket(["p": NSNumber(value: 99), "n": "dig", "v": "UDP", "l": local], keys: keys)
+        #expect(s?.owner == RecentSockets.Owner(pid: 99, name: "dig") && s?.tcp == false && s?.port == 61_234)
+        #expect(NetStats.socket(["n": "dig", "v": "UDP", "l": local], keys: keys) == nil)            // no process
+    }
+
+    /// The real framework: a UDP socket that sends one datagram and closes at once is still known by its port.
+    @Test func aOneShotUDPSocketIsKnownByItsPort() throws {
+        let stats = try #require(NetStats.load())
+        let recent = RecentSockets()
+        stats.onSocket = { owner, tcp, port in recent.note(owner, tcp: tcp, port: port) }
+        stats.start { _, _ in }
+        defer { stats.stop() }
+        Thread.sleep(forTimeInterval: 1.2)
+        let fd = socket(AF_INET, SOCK_DGRAM, 0)
+        var to = sockaddr_in()
+        to.sin_len = UInt8(MemoryLayout<sockaddr_in>.size); to.sin_family = sa_family_t(AF_INET)
+        to.sin_port = UInt16(9).bigEndian; inet_pton(AF_INET, "127.0.0.1", &to.sin_addr)
+        let byte: [UInt8] = [0]
+        _ = withUnsafePointer(to: &to) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { sendto(fd, byte, 1, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        var me = sockaddr_in(); var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &me) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &len) } }
+        close(fd)
+        let port = UInt16(bigEndian: me.sin_port)
+        #expect(recent.owner(tcp: false, port: port, wait: 2)?.pid == getpid())
+    }
+}
+
+@Suite struct RelayNames {
+    @Test func aFlowWithoutAPathUsesTheProcessName() {
+        var f = RelayFlow(id: 1, tcp: false, client: IPEndpoint(ip: [127, 0, 0, 1], port: 5000))
+        #expect(AgentFirewall.name(f) == "?")
+        f.name = "dig"
+        #expect(AgentFirewall.name(f) == "dig")
+        f.program = "/usr/bin/dig"
+        #expect(AgentFirewall.name(f) == "dig")
+        f.program = ""; f.original = IPEndpoint(ip: [8, 8, 8, 8], port: 53)
+        #expect(AgentFirewall.key(f) == "dig|UDP|8.8.8.8|53")
+    }
+}

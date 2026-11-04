@@ -14,6 +14,10 @@
   Docker's trusted signature, and one Allow covered every site. Connections of VM gateways (Docker, Podman,
   OrbStack, Lima, QEMU) are now judged per destination and asked about as "A Docker container wants to connect
   to pypi.org"; Block stops that destination for every container. Claude's advice is told it's a container.
+- **Fix: "?" instead of the program** for short connections through the firewall, UDP above all (a DNS query
+  closes in milliseconds). The relay keeps the program it found when the connection started (it was looked up
+  again at the end, after a short-lived program had quit), and when a socket is already gone it asks macOS's
+  connection statistics who had that port. When it really can't be known, it says "unknown program".
 - **No more `nettop` or `lsof`:** the collector reads macOS's own connection statistics (what `nettop` is built
   on) and every process's sockets directly. Every new TCP and UDP connection is seen with its real destination,
   even one that lasts milliseconds, with less CPU and no helper programs. On a macOS without that framework it
