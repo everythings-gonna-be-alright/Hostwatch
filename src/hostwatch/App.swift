@@ -710,7 +710,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func markSelection(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let status = SignatureStatus(rawValue: raw) else { return }
-        let keys = model.windowTab == 1 ? Array(signatures.selection) : selectedEvents.map(\.signatureKey)
+        let keys = model.windowTab == 1 ? signatures.keys(forSelection: signatures.selection) : selectedEvents.map(\.signatureKey)
         signatures.set(status, keys: Array(Set(keys)))
     }
 

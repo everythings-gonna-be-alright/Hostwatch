@@ -18,6 +18,9 @@
   closes in milliseconds). The relay keeps the program it found when the connection started (it was looked up
   again at the end, after a short-lived program had quit), and when a socket is already gone it asks macOS's
   connection statistics who had that port. When it really can't be known, it says "unknown program".
+- **Patterns grouped by program** (Group by Process, on by default): one row per program with its patterns under
+  it, showing the most serious status, how many are New and the total count. Marking a program's row marks all
+  its patterns.
 - **One-off patterns:** a command typed once (or a one-time connection) that you didn't decide and isn't risky is
   hidden in Patterns unless **Seen Once** is on, and forgotten after a week unless it happens again (if it's
   undecided or Safe only automatically). It's still

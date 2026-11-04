@@ -119,6 +119,11 @@ routine Safe patterns. Nothing New, reopened or decided by you, a rule, the base
 activity that joins a fold later isn't routine, the fold goes back to New. On a real store: 16,490 → 15,963 on the
 first run (62 folded into 14), pruning grows as patterns age. The Patterns footer shows the last result.
 
+**Group by Process** (on by default) shows one row per program (by name) with its patterns under it: the most
+serious status and risk among them, how many are New, the kinds of activity, the total count and first/last seen.
+A program with one pattern stays a plain row. Marking, deleting or asking about a program's row acts on all its
+listed patterns; right-click it for *Show Only* that program.
+
 **One-offs.** A pattern seen only once, not high risk, not Suspicious or Dangerous and not decided by you or your
 rules (a command typed once, a one-time connection) is recorded like any other: detection works the first time.
 The Patterns tab hides it unless **Seen Once** is on (search and scoped lists find it anyway). Tidying removes it

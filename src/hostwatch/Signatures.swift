@@ -1298,6 +1298,26 @@ final class SignatureStore: ObservableObject {
         }
     }
 
+    /// The Patterns tab groups patterns under their program.
+    @Published var groupByProcess = UserDefaults.standard.object(forKey: "patternsGroupByProcess") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(groupByProcess, forKey: "patternsGroupByProcess") }
+    }
+
+    /// A selection as pattern keys: a program's row (grouped) stands for its listed patterns.
+    func keys(forSelection ids: Set<String>) -> [String] {
+        var out: [String] = []
+        let searching = !search.trimmingCharacters(in: .whitespaces).isEmpty
+        for id in ids {
+            if id.hasPrefix(PatternItem.groupPrefix) {
+                let name = String(id.dropFirst(PatternItem.groupPrefix.count))
+                out += entries.values.filter { displayProcessName($0.process) == name && listed($0, searching: searching) }.map(\.id)
+            } else {
+                out.append(id)
+            }
+        }
+        return Array(Set(out)).sorted()
+    }
+
     /// One-offs are listed when asked for, or when you search or look at a scope.
     private func listed(_ e: SignatureEntry, searching: Bool) -> Bool {
         showSeenOnce || searching || scope != nil || !isOneOff(e)

@@ -11,8 +11,41 @@ struct PatternItem: Identifiable {
     let source: String?
     let note: String?
     let decidedBy: String
+    /// A program's row (grouped by process): its patterns.
+    var children: [PatternItem]? = nil
+    /// A program's row: the kinds of activity among its patterns, and how many are New.
+    var kinds: [EventKind] = []
+    var newCount = 0
 
     var id: String { entry.id }
+    var isGroup: Bool { children != nil }
+    static let groupPrefix = "group:"
+
+    /// One row per program (by name) with its patterns under it; a program with a single pattern stays a plain row.
+    /// The program's row shows the most serious status and risk among its patterns, the total count and the span.
+    static func grouped(_ items: [PatternItem], order: [KeyPathComparator<PatternItem>]) -> [PatternItem] {
+        let byName = Dictionary(grouping: items) { displayProcessName($0.entry.process) }
+        return byName.map { name, list -> PatternItem in
+            guard list.count > 1 else { return list[0] }
+            let children = list.sorted(using: order)
+            let worst = list.min { $0.statusRank != $1.statusRank ? $0.statusRank < $1.statusRank : $0.entry.risk > $1.entry.risk }!
+            let new = list.filter { $0.status == .unclassified }.count
+            var e = worst.entry
+            e.id = groupPrefix + name
+            e.pattern = "\(list.count) patterns" + (new > 0 ? " · \(new) New" : "")
+            e.count = list.reduce(0) { $0 + $1.entry.count }
+            e.firstSeen = list.map(\.entry.firstSeen).min() ?? e.firstSeen
+            e.lastSeen = list.map(\.entry.lastSeen).max() ?? e.lastSeen
+            e.risk = list.map(\.entry.risk).max() ?? e.risk
+            e.note = nil; e.suggestion = nil
+            let deciders = Set(list.map(\.decidedBy))
+            let kinds = EventKind.allCases.filter { k in list.contains { $0.entry.kind == k } }
+            return PatternItem(entry: e, status: worst.status, statusRank: worst.statusRank, source: nil, note: nil,
+                               decidedBy: deciders.count == 1 ? deciders.first! : "Mixed", children: children,
+                               kinds: kinds, newCount: new)
+        }
+        .sorted(using: order)
+    }
     /// Status, then high-risk first within it.
     var priority: Int { statusRank * 10 + (2 - entry.risk.rawValue) }
     var kind: String { entry.kind.rawValue }
