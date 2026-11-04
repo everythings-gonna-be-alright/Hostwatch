@@ -11,11 +11,21 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest"><img src="https://img.shields.io/github/v/release/everythings-gonna-be-alright/Hostwatch" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-26%2B-black" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/status-prototype-yellow" alt="Status: prototype">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
   <a href="https://vshymanskyy.github.io/StandWithUkraine/"><img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand With Ukraine"></a>
+</p>
+
+<p align="center">
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#new-in-090">What's new</a> ·
+  <a href="#what-it-does">Features</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="docs/reference.md">Reference</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 <p align="center">
@@ -37,6 +47,20 @@ what's normal on your Mac, and shows only what's new or suspicious, linked into 
 It detects and explains, and if you turn them on, its firewall and Claude Code guard stop what you didn't
 allow. It never deletes anything.
 
+## New in 0.9.0
+
+- **🔬 Watch Closely** – not sure what a program is up to? Right-click it (or ⌥⌘W) and Hostwatch records for a
+  minute everything it and its helpers do: files changed, connections, other processes, persistence, privileges.
+  You get it in plain words, what stands out first, and Claude or the on-device model explains whether it's dangerous.
+- **🌐 Network tab** – domains and the firewall on one timeline: every destination, who connected, and whether it
+  passes, waits for you or is blocked. *Forget* also resets the firewall's answer.
+- **🐳 Containers in the firewall** – Docker, Podman, OrbStack, Lima and QEMU connections are asked about per site
+  ("A Docker container wants to connect to pypi.org"), instead of passing on Docker's signature.
+- **🗂️ Calmer Patterns** – grouped by program, one-off commands hidden and forgotten after a week, and the list
+  stays smooth with thousands of patterns.
+- **⚡ No helper programs** – connections come straight from macOS's own statistics: every TCP and UDP connection,
+  even one lasting milliseconds, with its real program (no more "?") and less CPU.
+
 ## What it does
 
 **👀 See what happens**
@@ -46,25 +70,25 @@ allow. It never deletes anything.
 
 **🧠 Learn what's normal**
 - **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
-- **Patterns** – events grouped by behaviour; ordinary ones are decided automatically, so few need you.
+- **Patterns** – events grouped by behaviour and by program; ordinary ones are decided automatically, so few need you.
 - **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.
-- **Network signals** – hostnames, first-seen domains, beaconing, raw-IP connections.
+- **Network tab** – hostnames, first-seen domains, beaconing, raw-IP connections, and the firewall's verdict for each.
 - **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
 
 **🛡️ Stop what you didn't allow** (off until you turn it on)
 - **Firewall** – each app's new connections checked before they're made: allowed ones pass, unknown ones wait
   while a window asks **Allow / Block** (*Ask*), or are refused (*Strict*). *Watch* only shows what it would do.
+  Containers and VMs are judged per destination.
 - **Claude Code guard** – Claude Code's commands checked before they run: the dangerous blocked, the risky
   need your OK.
 
-**✨ Ask AI**
-- **AI suggests, you decide** – on-device model or Claude; it never trusts high-risk code, python or bash.
-- **Ask Claude** – about any event or domain, or right in a firewall question: what it is, the risks, what to do.
-- **Watch Closely** – record what one process really does for a minute (files, network, other processes, persistence),
-  in plain words; then Claude or the on-device model explains it.
+**✨ Ask AI** (Claude or Apple's on-device model, your choice)
+- **AI suggests, you decide** – it never trusts high-risk code, python or bash on its own.
+- **Ask about anything** – an event, a domain, a firewall question: what it is, the risks, what to do.
+- **Watch Closely** – a recording of what one process really does, explained.
 - **MCP** – let Claude Code investigate your history (read-only).
 
 ## Install
@@ -85,8 +109,9 @@ Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or th
 
 ```
 collector (root)                       Hostwatch.app (you)
-eslogger · tcpdump · NetworkStatistics ─► patterns · baseline · stories · domains
+eslogger · tcpdump · NetworkStatistics ─► patterns · baseline · stories · network
 firewall relay (pf)  ◄── Allow/Block ── HUD · window · Time Travel · Ask AI · MCP
+Watch Closely recorder ───────────────► Watch Closely window
           verified Unix socket
 ```
 
@@ -99,6 +124,7 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 - History, patterns and stories stay in `~/Library/Application Support/Hostwatch` and `~/Library/Logs/Hostwatch`.
 - Passwords and tokens are masked before they're recorded, and again before anything goes to an AI.
 - The firewall reads only which server an app asks for. It never decrypts traffic.
+- Watch Closely records only the process you pick, only while it runs, and keeps it on your Mac until you ask AI.
 - *Apple On-Device* AI keeps everything on the Mac; Claude is used only if you choose it.
 - The MCP server needs your permission and a token, and can't change anything.
 - *Settings ▸ General ▸ Reset Hostwatch…* erases it all.
