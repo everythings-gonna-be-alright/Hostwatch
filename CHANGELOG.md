@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 – known threats, far fewer decisions
 
 - **Claude usage counter** in Settings ▸ AI: all-time Claude tokens and cost Hostwatch used (Ask AI, classifying,
   Suggest Rules), kept across launches; per feature in the tooltip, with Reset.
