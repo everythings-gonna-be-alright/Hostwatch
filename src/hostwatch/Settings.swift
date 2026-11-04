@@ -39,6 +39,7 @@ final class SettingsState: ObservableObject {
     @Published var refresh = 0
     @Published var showReset = false
     @Published var showGuardLog = false
+    @Published var guardCopied = false
     @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
         didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
     }

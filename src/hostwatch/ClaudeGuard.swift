@@ -307,6 +307,14 @@ final class ClaudeGuard: ObservableObject {
 
     var hookCommand: String { ClaudeSettingsFile.command(executable: executable) }
 
+    /// The hook as a settings fragment, to paste into another Claude Code settings file.
+    var configFragment: String {
+        let json = ClaudeSettingsFile.adding(hookCommand, to: [:])
+        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        else { return "" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     // MARK: Installing
 
     func setEnabled(_ on: Bool) {
