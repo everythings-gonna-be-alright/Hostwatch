@@ -60,6 +60,21 @@ import Testing
         #expect(rig.fw.decide(flow(host: "evil.example")) == .block)
     }
 
+    @Test func aWaitingConnectionWaitsUntilTheModeChanges() async throws {
+        for (next, expected) in [("off", FirewallRelay.Decision.pass), ("strict", .block)] {
+            let rig = Rig(mode: "ask")
+            let box = Box()
+            Thread.detachNewThread { let d = rig.fw.decide(self.flow()); box.lock.lock(); box.results.append(d); box.lock.unlock() }
+            #expect(rig.asks().count == 1)
+            try await Task.sleep(nanoseconds: 300_000_000)
+            box.lock.lock(); let early = box.results.count; box.lock.unlock()
+            #expect(early == 0)                                          // still waiting for you
+            rig.fw.configure(["mode": next], from: rig.client)
+            for _ in 0..<100 { box.lock.lock(); let n = box.results.count; box.lock.unlock(); if n == 1 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+            #expect(box.results == [expected], "after switching to \(next)")
+        }
+    }
+
     @Test func strictWithoutTheAppBlocksAndAskWithoutItPasses() {
         let strict = Rig(mode: "strict")
         strict.fw.clientGone(strict.client)
@@ -105,9 +120,10 @@ import Testing
         #expect(fw.prompts.isEmpty && marked.map(\.1) == [.safe])
         #expect(Set(answers.suffix(2).map(\.0)) == ["k3", "k4"] && answers.suffix(2).allSatisfy { $0.1 && $0.2 == 300 })
 
-        fw.handleAsk(key: "k5", event: app)
-        fw.resolve(try #require(fw.prompts.first).id, allow: nil)        // no answer in time
-        #expect(answers.last?.0 == "k5" && answers.last?.1 == false && answers.last?.2 == 30 && marked.count == 1)
+        fw.handleAsk(key: "k5", event: app)                              // waits: no time limit
+        #expect(fw.prompts.count == 1 && answers.last?.0 != "k5")
+        fw.mode = .watch                                                 // leaving Ask: the collector decides
+        #expect(fw.prompts.isEmpty && answers.last?.0 != "k5")
     }
 
     @MainActor @Test func theModelReadsQuestionsAndStatusEvenWhenPaused() throws {

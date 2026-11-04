@@ -49,7 +49,11 @@ final class AgentFirewall: @unchecked Sendable {
         if cfg["flush"] as? Bool == true { answers = [:] }
         let previous = mode
         mode = wanted
+        // Leaving Ask: connections waiting for you are decided by the new mode (they read it when woken).
+        let release = wanted != .ask && previous == .ask ? waiting : [:]
+        if !release.isEmpty { waiting = [:] }
         lock.unlock()
+        for (_, e) in release { for _ in 0..<max(e.waiters, 1) { e.done.signal() } }
         guard wanted != previous else { return }
         if wanted == .off { disable(reason: "") } else if previous == .off { (turnOn ?? { $0.enable() })(self) } else { status("on") }
     }
@@ -174,14 +178,19 @@ final class AgentFirewall: @unchecked Sendable {
         }
         lock.unlock()
         if isNew { ask(entry.id, key: key, flow: flow, client: client) }
-        // Ask mode waits for you (the app's panel gives up after 30 s); Strict only for the app's quick answer.
-        let limit: TimeInterval = mode == .ask ? 40 : 5
-        _ = entry.done.wait(timeout: .now() + limit)
+        // Ask: the connection waits as long as it takes you to answer (switching modes or the app going away
+        // also ends the wait). Strict: only the app's quick answer.
+        _ = entry.done.wait(timeout: .now() + (mode == .ask ? 24 * 3600 : 5))
         lock.lock()
         defer { lock.unlock() }
         if let a = answers[key], a.until > now { return a.pass ? .pass : .block }
         if waiting[key]?.id == entry.id { waiting[key] = nil }
-        return .block                                                                  // no answer: not allowed
+        // No answer: switched off or to Watch → pass; Strict → blocked; Ask without the app → pass.
+        switch self.mode {
+        case .strict: return .block
+        case .off: return .pass
+        case .ask: return decider == nil ? .pass : .block
+        }
     }
 
     private func ask(_ id: Int, key: String, flow: RelayFlow, client: AgentClient) {
