@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Ask Claude in a firewall question:** the window has an *Ask Claude* button; Claude's advice appears inside it
+  (Allow or Block first, then what the program and the destination are, and the risks), with a verdict and risk
+  badge. Uses the same evidence as Ask AI; counted in the Claude usage counter.
 - **Firewall: Ask and Strict modes** (Settings ▸ Firewall). Your programs' new TCP and UDP connections go through a
   relay in the collector (pf on the loopback; nothing decrypted, only the TLS server name read), which checks each
   new program and destination with the firewall's rules. **Ask**: a new one waits, without a time limit, while its

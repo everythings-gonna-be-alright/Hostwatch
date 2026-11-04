@@ -83,7 +83,7 @@ extension FirewallPane {
 /// A question window in the style of macOS's own permission alerts: centered, no title bar, the program's icon,
 /// a bold question, two equal buttons (Allow is the default, Escape blocks). Non-activating: answering doesn't
 /// bring Hostwatch's other windows forward.
-enum QuestionPanel {
+@MainActor enum QuestionPanel {
     static func make<V: View>(_ view: V) -> NSPanel {
         // The content draws under the hidden title bar: no safe area, so it measures the same before and after.
         let host = NSHostingController(rootView: view.ignoresSafeArea())
@@ -104,6 +104,15 @@ enum QuestionPanel {
         panel.setFrame(NSRect(origin: .zero, size: host.view.fittingSize), display: false)
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {   // a question: answer it
             panel.standardWindowButton(button)?.isHidden = true
+        }
+        // Growing (Claude's advice coming in) keeps the window where it was centred.
+        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak panel] _ in
+            MainActor.assumeIsolated {
+                guard let panel, let centre = centres[ObjectIdentifier(panel)] else { return }
+                let f = panel.frame
+                let origin = NSPoint(x: (centre.x - f.width / 2).rounded(), y: (centre.y - f.height / 2).rounded())
+                if origin != f.origin { panel.setFrameOrigin(origin) }
+            }
         }
         return panel
     }
@@ -126,11 +135,15 @@ enum QuestionPanel {
         return view.fittingSize
     }
 
+    /// Where each question window is centred (kept when it grows).
+    private static var centres: [ObjectIdentifier: NSPoint] = [:]
+
     private static func place(_ panel: NSPanel, slot: Int) {
         let size = fitting(panel)
         let mouse = NSEvent.mouseLocation
         let screen = (NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main)?.visibleFrame ?? .zero
         let step = CGFloat(slot % 6)
+        centres[ObjectIdentifier(panel)] = NSPoint(x: screen.midX + step * 22, y: screen.midY - step * 22)
         panel.setFrame(NSRect(x: (screen.midX - size.width / 2 + step * 22).rounded(),
                               y: (screen.midY - size.height / 2 - step * 22).rounded(),
                               width: size.width, height: size.height), display: true)
@@ -177,6 +190,16 @@ struct FirewallPromptView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(prompt.event.proc)
+                if let analysis = firewall.advice[prompt.id] {
+                    FirewallAdviceView(analysis: analysis)
+                } else {
+                    Button { firewall.askClaude(prompt.id) } label: {
+                        Label("Ask Claude", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .help("Claude explains the program and the destination, the risks, and whether to allow it")
+                }
                 VStack(spacing: 8) {
                     HStack(spacing: 10) {
                         Button { firewall.resolve(prompt.id, allow: false) } label: {
@@ -202,13 +225,78 @@ struct FirewallPromptView: View {
             .padding(.horizontal, 22)
             .padding(.top, 26)
             .padding(.bottom, 16)
-            .frame(width: 340)
+            .frame(width: firewall.advice[prompt.id] == nil ? 340 : 420)     // room to read the advice
         }
     }
 
     static func waited(_ s: TimeInterval) -> String {
         let n = Int(s)
         return n < 60 ? "\(n) s" : "\(n / 60) min \(n % 60) s"
+    }
+}
+
+/// Claude's advice inside a firewall question: verdict and risk, then the answer as it streams in.
+struct FirewallAdviceView: View {
+    @ObservedObject var analysis: AIAnalysis
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                if let verdict = analysis.verdict {
+                    Text(verdict.rawValue.capitalized + (analysis.aiRisk.map { " · risk \($0)" } ?? ""))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Self.color(verdict)))
+                }
+            }
+            switch analysis.state {
+            case .gathering, .ready:
+                ProgressView("Collecting evidence…").controlSize(.small).frame(maxWidth: .infinity, alignment: .leading)
+            case .failed(let why):
+                Text(why).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            case .asking, .done:
+                if body(of: analysis.answer).isEmpty {
+                    ProgressView("Asking Claude…").controlSize(.small).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ScrollView {
+                        Text(rendered(body(of: analysis.answer)))
+                            .font(.callout)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 220)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
+    }
+
+    /// The answer without its VERDICT / RISK lines (shown as the badge).
+    private func body(of answer: String) -> String {
+        answer.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { let u = $0.uppercased().replacingOccurrences(of: "*", with: ""); return !u.hasPrefix("VERDICT:") && !u.hasPrefix("RISK:") && !u.hasPrefix("CONFIDENCE:") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rendered(_ markdown: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+    }
+
+    static func color(_ v: Verdict) -> Color {
+        switch v {
+        case .safe: .green
+        case .suspicious: .orange
+        case .dangerous: .red
+        case .unknown: .gray
+        }
     }
 }
 

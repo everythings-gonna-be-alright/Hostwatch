@@ -227,11 +227,11 @@ final class AIAnalysis: ObservableObject {
     /// Other recent activity from the same process (newest first), for the window.
     var relatedEvents: [ActivityEvent] { related }
 
-    init(event: ActivityEvent, related: [ActivityEvent], preface: String = "") {
+    init(event: ActivityEvent, related: [ActivityEvent], preface: String = "", instructions: String = AIAnalysis.systemPrompt) {
         self.event = event
         self.related = related
         self.preface = preface
-        self.instructions = Self.systemPrompt
+        self.instructions = instructions
         self.evidenceSource = nil
         gather()
     }
