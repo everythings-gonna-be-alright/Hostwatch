@@ -1055,6 +1055,7 @@ enum Entry {
         let args = CommandLine.arguments
         // Claude Code's PreToolUse hook: first, and before anything else loads (it runs for every tool call).
         if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
+        if args.contains(FirewallProbe.flag) { FirewallProbe.run() }
         if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
         if args.contains("--suggest-rules") { runRuleSuggestionDryRun() }
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
