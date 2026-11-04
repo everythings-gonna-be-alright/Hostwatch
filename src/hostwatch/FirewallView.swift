@@ -96,7 +96,7 @@ struct FirewallWaitingRow: View {
                 .resizable().frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(prompt.event.name).font(.callout.weight(.semibold))
+                    Text(prompt.who).font(.callout.weight(.semibold)).help(prompt.event.proc)
                     Text(prompt.event.extra).font(.system(size: 9, weight: .semibold))
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(Capsule().fill(Color.secondary.opacity(0.18)))
@@ -195,6 +195,7 @@ struct FirewallPromptView: View {
     var body: some View {
         if let prompt = firewall.prompts.first(where: { $0.id == id }) {
             let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
+            let gateway = SignatureBuilder.vmGateway(prompt.event.proc)
             VStack(spacing: 14) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
                     .resizable().frame(width: 64, height: 64)
@@ -208,7 +209,8 @@ struct FirewallPromptView: View {
                     }
                     .accessibilityHidden(true)
                 VStack(spacing: 5) {
-                    Text("“\(prompt.event.name)” wants to connect to \(prompt.destination)")
+                    Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
+                         ?? "“\(prompt.event.name)” wants to connect to \(prompt.destination)")
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -216,7 +218,9 @@ struct FirewallPromptView: View {
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                Text("Your answer decides \(prompt.event.name) → \(pattern) from now on. The connection waits until you answer.")
+                Text(gateway.map { "It comes through \(prompt.event.name), from inside its virtual machine; which program made it "
+                                   + "can't be seen. Your answer decides \($0)s → \(pattern) from now on." }
+                     ?? "Your answer decides \(prompt.event.name) → \(pattern) from now on. The connection waits until you answer.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

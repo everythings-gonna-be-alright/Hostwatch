@@ -379,6 +379,15 @@ which also switches the app back to Watch. Not covered: programs running as root
 network; Hostwatch itself always passes. Test tools (as root): `--firewall-probe` (two test destinations) and
 `--firewall-relay-test [s]` (your real traffic through the relay, blocking nothing).
 
+**Containers and virtual machines.** Docker Desktop runs containers in a Linux VM; on macOS, a container's
+connection is opened by Docker's backend (`com.docker.backend`), so the program inside (curl, pip…) can't be seen.
+Connections of these VM gateways (`SignatureBuilder.vmGateways`: Docker's backend and vpnkit, Podman's `gvproxy`,
+OrbStack's helper, `limactl`, QEMU) are judged **per destination** (pattern `TCP pypi.org:443`, not
+`TCP internet:443`) and never pass on the gateway's trusted signature: each new domain a container reaches is asked
+about once ("A Docker container wants to connect to pypi.org"), and Block stops it for every container. VMs with
+bridged or shared (NAT) networking send packets from the VM's own interface, not from a Mac process, so the relay
+never sees them.
+
 ### Claude Code guard
 
 *Settings ▸ AI ▸ Claude Code guard* (off by default) adds a `PreToolUse` hook to Claude Code's user settings
@@ -969,6 +978,8 @@ cat ~/.zshrc >/dev/null              # 📄 file
 
 ## Known limitations
 
+- The firewall can't tell containers apart or name the program inside one: a container's connections are Docker's
+  (or Podman's, OrbStack's…), judged per destination. VMs with bridged or NAT networking aren't covered at all.
 - Very short connections are caught by packet capture and by macOS's connection statistics. Only with
   the `nettop` fallback (a macOS without that framework) do they arrive ~2 s late with a destination
   inferred from the command line. UDP sent without connecting (`sendto`) has no destination to show,
