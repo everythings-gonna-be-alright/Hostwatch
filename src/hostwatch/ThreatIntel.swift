@@ -522,7 +522,7 @@ final class ThreatIntel: ObservableObject {
         }
     }
 
-    /// Is this domain listed (Domains tab, domain details)?
+    /// Is this domain listed (Network ▸ Domains, domain details)?
     func reason(forDomain domain: String) -> String? { enabled ? listedDomain(domain)?.detail : nil }
 
     /// A known-bad tag for an event row (its connection, or its program's file).

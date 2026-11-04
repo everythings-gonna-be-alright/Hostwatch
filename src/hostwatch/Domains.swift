@@ -5,7 +5,7 @@ import SwiftUI
 // First-seen domains: an inventory of every registrable domain programs connect to. After a
 // baseline (recorded history + a learning period), a domain never seen before is "new" and gets
 // extra attention: a badge on its connections, the Important/New filters, a Stories stage and
-// the Domains tab.
+// Network ▸ Domains.
 
 struct DomainRecord: Codable, Identifiable {
     var domain: String
@@ -29,7 +29,7 @@ final class DomainRegistry: ObservableObject {
     private var pendingRevision = false
     private var revisionTimer: Timer?
 
-    /// A domain counts as new for this long after its first sighting (Domains tab, menu badge).
+    /// A domain counts as new for this long after its first sighting (Network ▸ Domains, menu badge).
     let attentionWindow: TimeInterval = 24 * 3600
     /// Its connections carry the NEW DOMAIN badge for this long (the first burst).
     let badgeWindow: TimeInterval = 3600
@@ -236,11 +236,16 @@ struct DomainItem: Identifiable {
     ]
 }
 
-// MARK: - Domains tab
+// MARK: - Network tab ▸ Domains
 
-/// Holds the Domains tab's table state (avoids @State, which needs SwiftUI macro plugins).
+/// Holds the Network tab's state: which view, and the domains table (avoids @State, which needs SwiftUI macro plugins).
 @MainActor
 final class DomainsViewState: ObservableObject {
+    /// The Network tab shows the firewall or the domains.
+    enum Section: String, CaseIterable { case firewall, domains }
+    @Published var section = Section(rawValue: UserDefaults.standard.string(forKey: "networkSection") ?? "") ?? .firewall {
+        didSet { UserDefaults.standard.set(section.rawValue, forKey: "networkSection") }
+    }
     @Published var selection = Set<String>()
     @Published var onlyNew = UserDefaults.standard.object(forKey: "domainsOnlyNew") as? Bool ?? true {
         didSet { UserDefaults.standard.set(onlyNew, forKey: "domainsOnlyNew") }
