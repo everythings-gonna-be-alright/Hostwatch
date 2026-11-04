@@ -38,22 +38,31 @@ allow. It never deletes anything.
 
 ## What it does
 
+**👀 See what happens**
+- **Live HUD** – new processes, connections and file opens as they happen.
+- **Time Travel** – scrub back through recorded activity, resources and heavy processes.
+- **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
+
+**🧠 Learn what's normal**
+- **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
+- **Patterns** – events grouped by behaviour; ordinary ones are decided automatically, so few need you.
+- **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
+
+**🚨 Spot what's wrong**
+- **Stories** – related suspicious steps become one story you can open event by event.
+- **Network signals** – hostnames, first-seen domains, beaconing, raw-IP connections.
+- **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
+
+**🛡️ Stop what you didn't allow** (off until you turn it on)
 - **Firewall** – each app's new connections checked before they're made: allowed ones pass, unknown ones wait
   while a window asks **Allow / Block** (*Ask*), or are refused (*Strict*). *Watch* only shows what it would do.
 - **Claude Code guard** – Claude Code's commands checked before they run: the dangerous blocked, the risky
   need your OK.
-- **Ask Claude** – in any question window, Claude explains the program and the destination and suggests what to do.
-- **Live HUD** – new processes, connections and file opens as they happen.
-- **Patterns** – events grouped by behaviour; ordinary ones are decided automatically, so few need you.
-- **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
-- **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
+
+**✨ Ask AI**
 - **AI suggests, you decide** – on-device model or Claude; it never trusts high-risk code, python or bash.
-- **Stories** – related suspicious steps become one story you can open event by event.
-- **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
-- **Time Travel** – scrub back through recorded activity, resources and heavy processes.
-- **Network signals** – hostnames, first-seen domains, beaconing, raw-IP connections.
-- **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
-- **Ask AI / MCP** – ask about any event, or let Claude Code investigate your history (read-only).
+- **Ask Claude** – about any event or domain, or right in a firewall question: what it is, the risks, what to do.
+- **MCP** – let Claude Code investigate your history (read-only).
 
 ## Install
 
