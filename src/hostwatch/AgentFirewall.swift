@@ -36,7 +36,7 @@ final class AgentFirewall: @unchecked Sendable {
     init(agent: Agent) { self.agent = agent }
 
     static func key(_ f: RelayFlow) -> String {
-        "\(f.program)|\(f.tcp ? "TCP" : "UDP")|\(f.host.isEmpty ? (f.original?.address ?? "") : f.host)|\(f.original?.port ?? 0)"
+        "\(f.program.isEmpty ? f.name : f.program)|\(f.tcp ? "TCP" : "UDP")|\(f.host.isEmpty ? (f.original?.address ?? "") : f.host)|\(f.original?.port ?? 0)"
     }
 
     // MARK: Configuration from the app
@@ -90,6 +90,8 @@ final class AgentFirewall: @unchecked Sendable {
             let r = FirewallRelay(port: Self.port)
             r.decide = { [weak self] flow in self?.decide(flow) ?? .pass }
             r.onEnd = { [weak self] flow in self?.report(flow) }
+            let sockets = agent.recentSockets
+            r.recentOwner = { tcp, port in sockets.owner(tcp: tcp, port: port, wait: 0.15) }
             do { try r.start() } catch {
                 Agent.logError("firewall relay: \(error)")
                 status("failed", "The relay couldn't start: \(error)")
@@ -211,7 +213,7 @@ final class AgentFirewall: @unchecked Sendable {
         let target = dst.isV6 ? "[\(dst.address)]:\(dst.port)" : "\(dst.address):\(dst.port)"
         var ev = AgentEvent([("kind", .str("fw_ask")), ("id", .int(id)), ("key", .str(key)), ("time", .str(Agent.nowHMS())),
                              ("pid", .int(Int(flow.pid))), ("ppid", .int(agent.pidParent(Int(flow.pid)))),
-                             ("name", .str(Agent.base(flow.program).isEmpty ? "?" : Agent.base(flow.program))),
+                             ("name", .str(Self.name(flow))),
                              ("proc", .str(flow.program)), ("target", .str(target)), ("extra", .str(flow.tcp ? "TCP" : "UDP"))])
         if !flow.host.isEmpty { ev.set("host", .str(flow.host)); ev.set("host_src", .str("dns")) }
         else if let (host, source) = agent.resolveHosts([dst.address], budget: 0.2)[dst.address] {
@@ -227,8 +229,14 @@ final class AgentFirewall: @unchecked Sendable {
     private func report(_ flow: RelayFlow) {
         guard flow.pid > 0, let dst = flow.original, !agent.isOurs(Int(flow.pid)) else { return }
         let target = dst.isV6 ? "[\(dst.address)]:\(dst.port)" : "\(dst.address):\(dst.port)"
-        agent.publishConnection(pid: Int(flow.pid), remote: target, proto: flow.tcp ? "TCP" : "UDP",
-                                host: flow.host, budget: 0.2, blocked: flow.blocked)
+        // The program found when it connected: by the end of the flow a short-lived one has usually quit.
+        agent.publishConnection(pid: Int(flow.pid), remote: target, proto: flow.tcp ? "TCP" : "UDP", nameHint: flow.name,
+                                host: flow.host, budget: 0.2, blocked: flow.blocked, path: flow.program)
+    }
+
+    static func name(_ f: RelayFlow) -> String {
+        let base = Agent.base(f.program)
+        return !base.isEmpty ? base : !f.name.isEmpty ? f.name : "?"
     }
 
     private func status(_ state: String, _ detail: String = "") {

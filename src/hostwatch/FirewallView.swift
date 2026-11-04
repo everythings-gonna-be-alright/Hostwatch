@@ -210,7 +210,8 @@ struct FirewallPromptView: View {
                     .accessibilityHidden(true)
                 VStack(spacing: 5) {
                     Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
-                         ?? "“\(prompt.event.name)” wants to connect to \(prompt.destination)")
+                         ?? (prompt.who == "Unknown program" ? "An unknown program wants to connect to \(prompt.destination)"
+                             : "“\(prompt.event.name)” wants to connect to \(prompt.destination)"))
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)

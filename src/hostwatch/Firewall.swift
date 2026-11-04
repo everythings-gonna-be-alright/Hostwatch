@@ -80,7 +80,7 @@ struct FirewallPrompt: Identifiable {
     var patternKey: String { event.signatureKey }
     var destination: String { event.host.isEmpty ? (event.remoteHost ?? event.target) : event.host }
     /// "Docker container" when a VM gateway carries it, else the program's name.
-    var who: String { SignatureBuilder.vmGateway(event.proc) ?? event.name }
+    var who: String { SignatureBuilder.vmGateway(event.proc) ?? (event.name == "?" || event.name.isEmpty ? "Unknown program" : event.name) }
 }
 
 enum FirewallVerdict: Int, Codable, Comparable {

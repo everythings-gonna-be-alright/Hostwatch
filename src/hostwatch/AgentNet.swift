@@ -220,10 +220,11 @@ extension Agent {
 
     /// A net event, unless this (pid, remote) was already reported.
     func publishConnection(pid: Int, remote: String, proto: String, nameHint: String = "", host: String = "",
-                           budget: TimeInterval = 0.3, blocked: Bool = false) {
+                           budget: TimeInterval = 0.3, blocked: Bool = false, path: String = "") {
         guard !isOurs(pid), !seenConns.seen(PidKey(pid: pid, text: remote)) else { return }
         markNetPid(pid)
-        let exe = pidPath(pid)
+        if !path.isEmpty { rememberPid(pid, path: path) }
+        let exe = path.isEmpty ? pidPath(pid) : path
         let ip = AgentParse.stripHost(remote)
         let name = Agent.base(exe)
         var ev = AgentEvent([("kind", .str("net")), ("time", .str(Agent.nowHMS())), ("pid", .int(pid)),
@@ -313,6 +314,8 @@ extension Agent {
             runNettopBackstop()
             return
         }
+        let sockets = recentSockets
+        stats.onSocket = { owner, tcp, port in sockets.note(owner, tcp: tcp, port: port) }
         stats.start { [self] flow, existing in
             // Sockets open before we started were baseline; this Mac talking to itself isn't a destination.
             guard !existing, !NetAddress.isLocalOnly(flow.remote), !isOurs(flow.pid) else { return }
