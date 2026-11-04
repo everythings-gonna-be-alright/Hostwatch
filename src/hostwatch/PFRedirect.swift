@@ -113,19 +113,25 @@ enum PFRedirect {
 
     // MARK: Loading
 
-    struct Loaded { var token: String; var watchdog: Process? }
+    struct Loaded { var token: String; var watchdog: pid_t }
 
-    /// Enables pf (reference-counted token), loads the rules, and starts a watchdog that removes them after
-    /// `failsafe` seconds whatever happens to this process.
-    static func load(_ rules: String, failsafe: TimeInterval) -> (Loaded?, String) {
+    /// When the rules go away on their own: after a time, or when a process (the collector) is gone.
+    enum Failsafe { case after(TimeInterval), whenGone(pid_t) }
+
+    /// Enables pf (reference-counted token), loads the rules, and starts a watchdog in its own session (so it
+    /// outlives a crash of this process and of its launchd job) that removes them per `failsafe`.
+    static func load(_ rules: String, failsafe: Failsafe) -> (Loaded?, String) {
         let enable = run("/sbin/pfctl", ["-E"])
         let token = (enable.out + enable.err).split(separator: "\n").first { $0.contains("Token") }?
             .split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
-        let watchdog = Process()
-        watchdog.executableURL = URL(fileURLWithPath: "/bin/sh")
-        watchdog.arguments = ["-c", "trap '' INT HUP TERM; sleep \(Int(failsafe)); /sbin/pfctl -a '\(anchor)' -F all >/dev/null 2>&1; "
-                              + (token.isEmpty ? "true" : "/sbin/pfctl -X \(token) >/dev/null 2>&1")]
-        try? watchdog.run()
+        let wait: String
+        switch failsafe {
+        case .after(let seconds): wait = "sleep \(Int(seconds))"
+        case .whenGone(let pid): wait = "while /bin/kill -0 \(pid) 2>/dev/null; do sleep 2; done"
+        }
+        let script = "trap '' INT HUP TERM; \(wait); /sbin/pfctl -a '\(anchor)' -F all >/dev/null 2>&1; "
+            + (token.isEmpty ? "true" : "/sbin/pfctl -X \(token) >/dev/null 2>&1")
+        let watchdog = (try? Spawned.start("/bin/sh", ["-c", script], stdout: .null))?.pid ?? 0
         let load = run("/sbin/pfctl", ["-a", anchor, "-f", "-"], input: rules)
         let shown = run("/sbin/pfctl", ["-a", anchor, "-s", "rules"]).out
         guard load.status == 0, shown.contains("route-to") else {
@@ -138,8 +144,11 @@ enum PFRedirect {
     static func unload(_ l: Loaded) {
         _ = run("/sbin/pfctl", ["-a", anchor, "-F", "all"])
         if !l.token.isEmpty { _ = run("/sbin/pfctl", ["-X", l.token]) }
-        l.watchdog?.terminate()
+        if l.watchdog > 0 { kill(l.watchdog, SIGKILL); var st: Int32 = 0; waitpid(l.watchdog, &st, WNOHANG) }
     }
+
+    /// Rules left by a collector that crashed (its watchdog normally removes them).
+    static func clearStale() { _ = run("/sbin/pfctl", ["-a", anchor, "-F", "all"]) }
 
     static var isLoaded: Bool { !run("/sbin/pfctl", ["-a", anchor, "-s", "rules"]).out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 

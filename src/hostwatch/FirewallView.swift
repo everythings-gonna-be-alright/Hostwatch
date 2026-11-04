@@ -16,15 +16,19 @@ struct FirewallPane: View {
                     ForEach(FirewallMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
+                if firewall.mode == .ask || firewall.mode == .strict {
+                    LabeledContent("Status") { relayStatus }
+                }
             } header: {
                 Text("Firewall")
             } footer: {
-                Footnote("Watch judges every connection Hostwatch sees the way the firewall will, and lists what it would "
-                         + "block or ask about. Nothing is blocked yet: blocking comes with the next stage (a relay in the "
-                         + "collector), once Watch shows the rules fit your Mac.")
+                Footnote(footnote)
             }
             if firewall.mode != .off {
                 Section {
+                    if firewall.mode == .ask || firewall.mode == .strict {
+                        LabeledContent("Blocked") { Text("\(firewall.blockedCount) since Hostwatch started").monospacedDigit() }
+                    }
                     LabeledContent("Would block") {
                         Text("\(blocked)").foregroundStyle(blocked > 0 ? .red : .secondary).monospacedDigit()
                     }
@@ -48,6 +52,71 @@ struct FirewallPane: View {
         .scrollDisabled(true)
         .sheet(isPresented: $ui.showFirewallList) {
             FirewallListView(firewall: firewall, signatures: signatures) { ui.showFirewallList = false }
+        }
+    }
+}
+
+extension FirewallPane {
+    var footnote: String {
+        switch firewall.mode {
+        case .off: return "Off: connections aren't judged."
+        case .watch: return "Watch judges every connection Hostwatch sees the way Ask and Strict would, and lists what they "
+            + "would block or ask about. Nothing is blocked."
+        case .ask, .strict:
+            return "Your programs' new connections go through Hostwatch's relay (the collector), which checks each new "
+                + "program and destination. Nothing is decrypted. Not covered: programs running as root, macOS's own DNS "
+                + "lookups, the local network. If the relay fails its web check twice, the firewall turns itself off."
+        }
+    }
+
+    @ViewBuilder var relayStatus: some View {
+        switch firewall.relayState {
+        case "on": Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case "failed":
+            Label(firewall.relayDetail.isEmpty ? "Failed" : firewall.relayDetail, systemImage: "xmark.octagon.fill")
+                .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        default: Label("Waiting for the collector", systemImage: "hourglass").foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// "Google Chrome wants to connect to x.com": Allow or Block decides the pattern; no answer blocks it this time.
+struct FirewallPromptView: View {
+    @ObservedObject var firewall: FirewallMonitor
+
+    var body: some View {
+        if let prompt = firewall.prompts.first {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
+                        .resizable().frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(prompt.event.name) wants to connect to \(prompt.destination)").font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\(prompt.event.extra) port \(prompt.event.remotePort) · \(prompt.event.remoteHost ?? "")")
+                            .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                        Text(prompt.event.proc).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
+                Text("Allow or Block decides \(prompt.event.name) → \(pattern) from now on (in Patterns).")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let left = max(0, Int(prompt.deadline.timeIntervalSince(context.date).rounded()))
+                        Text("Blocked this time in \(left) s").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    if firewall.prompts.count > 1 {
+                        Text("· \(firewall.prompts.count - 1) more waiting").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Block") { firewall.resolve(prompt.id, allow: false) }
+                    Button("Allow") { firewall.resolve(prompt.id, allow: true) }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(18)
+            .frame(width: 500)
         }
     }
 }

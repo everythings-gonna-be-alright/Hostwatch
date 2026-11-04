@@ -1,18 +1,35 @@
 import Foundation
 
-// Firewall, stage 1: the rules and Watch mode. Every connection Hostwatch sees is judged as the firewall
-// would judge it (allow, ask, block) and what wouldn't simply pass is listed. Nothing is blocked yet:
-// blocking needs the relay in the collector (pf redirect), which comes next.
+// The firewall's rules and modes. Watch judges every connection Hostwatch sees and lists what it would block,
+// blocking nothing. Ask and Strict send your programs' new connections through the collector's relay
+// (AgentFirewall), which asks this app about each new destination: allowed ones pass, the rest are blocked
+// (Strict) or wait for your answer in a panel (Ask).
 
 enum FirewallMode: String, CaseIterable, Codable {
-    case off, watch
+    case off, watch, ask, strict
 
     var title: String {
         switch self {
         case .off: "Off"
-        case .watch: "Watch (block nothing, show what would be blocked)"
+        case .watch: "Watch: block nothing, show what would be blocked"
+        case .ask: "Ask: a new connection waits for your OK"
+        case .strict: "Strict: only what's allowed connects"
         }
     }
+
+    /// What the collector does: the relay runs in Ask and Strict.
+    var collector: String { self == .ask || self == .strict ? rawValue : "off" }
+}
+
+/// A connection waiting for your answer (Ask mode).
+struct FirewallPrompt: Identifiable {
+    let id = UUID()
+    let key: String                 // the collector's key: program, protocol, destination, port
+    let event: ActivityEvent
+    let reason: String
+    let deadline: Date
+    var patternKey: String { event.signatureKey }
+    var destination: String { event.host.isEmpty ? (event.remoteHost ?? event.target) : event.host }
 }
 
 enum FirewallVerdict: Int, Codable, Comparable {
@@ -87,7 +104,25 @@ struct FirewallEntry: Codable, Identifiable, Equatable {
 
 @MainActor
 final class FirewallMonitor: ObservableObject {
-    @Published var mode: FirewallMode { didSet { defaults.set(mode.rawValue, forKey: "firewallMode") } }
+    @Published var mode: FirewallMode {
+        didSet { defaults.set(mode.rawValue, forKey: "firewallMode"); onModeChange?(mode) }
+    }
+    /// The relay in the collector: "off", "on" or "failed", and why.
+    @Published private(set) var relayState = "off"
+    @Published private(set) var relayDetail = ""
+    @Published private(set) var prompts: [FirewallPrompt] = []
+    @Published private(set) var blockedCount = 0
+
+    // Set by the app.
+    var onModeChange: ((FirewallMode) -> Void)?
+    var onPromptsChange: (() -> Void)?
+    /// Tells the collector: (key, pass, for how many seconds).
+    var answer: ((String, Bool, TimeInterval) -> Void)?
+    var status: (ActivityEvent) -> SignatureStatus = { _ in .unclassified }
+    var knownBad: (ActivityEvent) -> String = { _ in "" }
+    /// Your answer becomes the pattern's status.
+    var markPattern: (String, SignatureStatus) -> Void = { _, _ in }
+    static let askSeconds: TimeInterval = 30
     /// Connections that wouldn't simply pass (would ask or block), newest first.
     @Published private(set) var entries: [String: FirewallEntry] = [:]
     @Published private(set) var allowedCount = 0
@@ -145,7 +180,56 @@ final class FirewallMonitor: ObservableObject {
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
 
-    func clear() { entries = [:]; allowedCount = 0; scheduleSave() }
+    func clear() { entries = [:]; allowedCount = 0; blockedCount = 0; scheduleSave() }
+
+    // MARK: Ask and Strict
+
+    func relayStatus(_ state: String, _ detail: String) {
+        relayState = state
+        relayDetail = detail
+        if state == "failed", mode == .ask || mode == .strict { mode = .watch }      // it turned itself off
+    }
+
+    /// The collector asks about a new connection: allowed ones pass at once, the rest are blocked (Strict) or
+    /// wait for you (Ask).
+    func handleAsk(key: String, event: ActivityEvent) {
+        var e = event
+        e.knownBad = knownBad(e)
+        guard let f = Self.facts(e) else { answer?(key, true, 60); return }
+        let d = FirewallPolicy.decide(f, status: status(e))
+        switch d.verdict {
+        case .allow:
+            answer?(key, true, 300)
+        case .block:
+            answer?(key, false, 60)
+            blockedCount += 1
+        case .ask where mode != .ask:
+            answer?(key, false, 60)
+            blockedCount += 1
+        case .ask:
+            guard !prompts.contains(where: { $0.key == key }) else { return }
+            let prompt = FirewallPrompt(key: key, event: e, reason: d.reason, deadline: Date().addingTimeInterval(Self.askSeconds))
+            prompts.append(prompt)
+            onPromptsChange?()
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.askSeconds) { [weak self] in
+                MainActor.assumeIsolated { self?.resolve(prompt.id, allow: nil) }
+            }
+        }
+    }
+
+    /// Your answer (nil: none in time, so blocked this once). Allow / Block decide the pattern, which answers
+    /// the other waiting connections of that pattern too.
+    func resolve(_ id: UUID, allow: Bool?) {
+        guard let prompt = prompts.first(where: { $0.id == id }) else { return }
+        let same = allow == nil ? [prompt] : prompts.filter { $0.patternKey == prompt.patternKey }
+        prompts.removeAll { p in same.contains { $0.id == p.id } }
+        if let allow { markPattern(prompt.patternKey, allow ? .safe : .suspicious) }
+        for p in same {
+            answer?(p.key, allow == true, allow == nil ? 30 : 300)
+            if allow != true { blockedCount += 1 }
+        }
+        onPromptsChange?()
+    }
 
     private func prune(now: Date) {
         entries = entries.filter { now.timeIntervalSince($0.value.lastSeen) < Self.keep }

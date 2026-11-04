@@ -37,7 +37,7 @@ enum FirewallRelayTest {
               + checks.names.map { "\($0) \(checks.baseline[$0] == true ? "ok" : "unavailable")" }.joined(separator: ", "))
         guard before else { print("The web doesn't work even without the relay; try again when online."); exit(1) }
 
-        let (loaded, problem) = PFRedirect.load(PFRedirect.rules(port: port, exemptUIDs: [0, mdns]), failsafe: TimeInterval(seconds + 30))
+        let (loaded, problem) = PFRedirect.load(PFRedirect.rules(port: port, exemptUIDs: [0, mdns]), failsafe: .after(TimeInterval(seconds + 30)))
         guard let loaded else { print("pf didn't accept the rules:\n\(problem)"); exit(1) }
         var removed = false
         func remove() { if !removed { removed = true; PFRedirect.unload(loaded) } }

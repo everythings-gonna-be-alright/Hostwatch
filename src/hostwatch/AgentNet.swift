@@ -240,7 +240,8 @@ extension Agent {
     }
 
     /// A net event, unless this (pid, remote) was already reported.
-    func publishConnection(pid: Int, remote: String, proto: String, nameHint: String = "", budget: TimeInterval = 0.3) {
+    func publishConnection(pid: Int, remote: String, proto: String, nameHint: String = "", host: String = "",
+                           budget: TimeInterval = 0.3, blocked: Bool = false) {
         guard !isOurs(pid), !seenConns.seen(PidKey(pid: pid, text: remote)) else { return }
         markNetPid(pid)
         let exe = pidPath(pid)
@@ -249,9 +250,12 @@ extension Agent {
         var ev = AgentEvent([("kind", .str("net")), ("time", .str(Agent.nowHMS())), ("pid", .int(pid)),
                              ("ppid", .int(pidParent(pid))), ("name", .str(name.isEmpty ? (nameHint.isEmpty ? "?" : nameHint) : name)),
                              ("proc", .str(exe)), ("target", .str(remote)), ("extra", .str(proto))])
-        if let (host, source) = resolveHosts([ip], budget: budget)[ip] {
+        if !host.isEmpty {
+            ev.set("host", .str(host)); ev.set("host_src", .str("dns"))          // the name it asked for (TLS)
+        } else if let (host, source) = resolveHosts([ip], budget: budget)[ip] {
             ev.set("host", .str(host)); ev.set("host_src", .str(source))
         }
+        if blocked { ev.set("note", .str("blocked by the firewall")) }
         publish(ev)
     }
 }
@@ -483,6 +487,8 @@ func runCollectorAgent(_ args: [String]) -> Never {
         Agent.logError("cannot create the collector socket: \(error)"); exit(1)
     }
     agent.onShutdown { unlink(socketPath) }
+    PFRedirect.clearStale()                                  // a firewall redirect left by a crashed collector
+    agent.onShutdown { agent.firewall.shutdown() }
     Thread.detachNewThread { agent.acceptClients(server, ownerPid: ownerPid, clientUID: clientUID) }
 
     agent.adoptOwnProcesses(ownerPid: ownerPid)              // before events flow: Hostwatch's own processes
