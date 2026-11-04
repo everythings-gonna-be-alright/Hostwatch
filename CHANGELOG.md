@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 – Watch Closely, and one Network tab
 
 - **Network tab** (⌘5, was Domains): domains and the firewall on one timeline, newest first. Each destination
   shows its domain status (New, Known…) and what the firewall does there (Passes, Asks, Blocks, Blocked by you);
