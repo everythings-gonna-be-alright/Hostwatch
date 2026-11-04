@@ -140,10 +140,10 @@ final class AgentFirewall: @unchecked Sendable {
             while !agent.wait(30) {
                 guard isOn else { failures = 0; continue }
                 lock.lock(); canaryUntil = now + 10; lock.unlock()
-                let r = PFRedirect.run("/usr/bin/sudo", ["-n", "-u", "nobody", "/usr/bin/curl", "-s", "-m", "8", "-o", "/dev/null",
-                                                         "-w", "%{http_code}", Self.canaryURL])
+                let out = runOurs("/usr/bin/sudo", ["-n", "-u", "nobody", "/usr/bin/curl", "-s", "-m", "8", "-o", "/dev/null",
+                                                    "-w", "%{http_code}", Self.canaryURL])
                 lock.lock(); canaryUntil = 0; lock.unlock()
-                let ok = r.out.hasPrefix("2") || r.out.hasPrefix("3")
+                let ok = out.hasPrefix("2") || out.hasPrefix("3")
                 failures = ok ? 0 : failures + 1
                 if failures >= 2 {
                     Agent.logError("firewall: web check through the relay failed twice; turning the redirect off")
@@ -153,6 +153,19 @@ final class AgentFirewall: @unchecked Sendable {
             }
             lock.lock(); healthRunning = false; lock.unlock()
         }
+    }
+
+    /// Runs a check as part of Hostwatch's own process tree, so its activity is never reported or judged.
+    private func runOurs(_ path: String, _ args: [String]) -> String {
+        guard let child = try? Spawned.start(path, args) else { return "" }
+        agent.addToOurTree(Int(child.pid))                   // sudo; the curl it starts joins through its exec event
+        var data = Data()
+        if let fd = child.stdout {
+            var buf = [UInt8](repeating: 0, count: 4096)
+            while true { let n = read(fd, &buf, buf.count); if n <= 0 { break }; data.append(contentsOf: buf[0..<n]) }
+        }
+        child.wait()
+        return String(decoding: data, as: UTF8.self)
     }
 
     // MARK: Deciding

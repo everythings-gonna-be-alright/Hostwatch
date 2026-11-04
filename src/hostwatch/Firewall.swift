@@ -153,8 +153,11 @@ final class FirewallMonitor: ObservableObject {
 
     private struct Saved: Codable { var entries: [String: FirewallEntry]; var allowed: Int }
 
+    /// nil for anything but a connection with a known destination (an inferred "?:?" can't be judged: the firewall
+    /// always knows where a connection goes).
     static func facts(_ e: ActivityEvent) -> FirewallFacts? {
-        guard e.kind == .net, let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")) else { return nil }
+        guard e.kind == .net, let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")),
+              !ip.isEmpty, ip != "?", e.remotePort != "?" else { return nil }
         return FirewallFacts(program: e.proc, proto: e.extra.uppercased(), ip: ip, port: e.remotePort, host: e.host,
                              risk: e.signatureRisk, riskReason: e.signatureReason, knownBad: e.knownBad, patternKey: e.signatureKey)
     }
@@ -179,7 +182,8 @@ final class FirewallMonitor: ObservableObject {
 
     /// Entries with today's verdict (a pattern you've allowed since drops out), most serious and newest first.
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
-        entries.values.map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey))) }
+        entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
+            .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
