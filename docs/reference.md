@@ -359,7 +359,10 @@ asks the app (`fw_ask`, one question per program, protocol, destination and port
 The app answers with the rules: allowed → pass (remembered 5 min), blocked → refused (1 min); something new is
 refused in Strict, and in Ask waits, with no time limit, while its own window asks **Allow / Block** (one window
 per question, in the middle of the screen; your answer marks the pattern Safe or Suspicious and answers its other
-waiting connections). Leaving Ask decides what still waits by the new mode (Off or Watch: pass; Strict: refused).
+waiting connections). *Ask Claude* in a question window gathers the same evidence as Ask AI (signature, location, parent, quarantine,
+the connection) with the firewall's question first, and shows Claude's short advice in the window: **Allow** or
+**Block** and why, then the program, the destination and the risks, with a verdict and 0–100 risk badge (it
+never answers for you). Leaving Ask decides what still waits by the new mode (Off or Watch: pass; Strict: refused).
 Without the app, Strict refuses and Ask passes. TCP is relayed with BSD sockets (half-closes passed on exactly), UDP as flows
 (ended after 60 s quiet, 10 s for DNS); relayed flows the other sources missed (UDP mostly) become net events.
 Fail-safes: the redirect is removed when the mode leaves Ask/Strict, when the collector stops, by a watchdog in
