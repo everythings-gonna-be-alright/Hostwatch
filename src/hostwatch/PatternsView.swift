@@ -60,13 +60,12 @@ struct StatusPill: View {
 
 /// "12 dangerous · 3 suspicious · 80 new · 900 safe"
 struct PatternTally: View {
-    @ObservedObject var signatures: SignatureStore
+    let counts: [SignatureStatus: Int]
 
     var body: some View {
-        let _ = signatures.revision
         HStack(spacing: 10) {
             ForEach([SignatureStatus.dangerous, .suspicious, .unclassified, .safe], id: \.self) { status in
-                let n = signatures.count(status)
+                let n = counts[status] ?? 0
                 Label("\(n)", systemImage: status.symbol)
                     .foregroundStyle(n > 0 ? Color(nsColor: status.nsColor) : .secondary)
                     .help("\(n) \(status == .unclassified ? "unclassified" : status.rawValue) patterns")
@@ -88,13 +87,12 @@ struct PatternsView: View {
     let actions: HUDActions
     @Binding var filter: SignatureFilter
     @StateObject private var combine = CombineState()
+    @StateObject private var list = PatternListModel()
 
     var body: some View {
-        let _ = signatures.revision
-        let items = signatures.patternItems(filter: filter)
-        let rows = signatures.groupByProcess ? PatternItem.grouped(items, order: signatures.patternOrder) : items
+        let rows = list.rows
         VStack(spacing: 0) {
-            toolbar(count: items.count)
+            toolbar(count: list.shown)
                 .sheet(isPresented: $combine.show) { CombineSheet(state: combine, signatures: signatures) }
             Divider()
             Table(rows, children: \.children, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
@@ -185,9 +183,9 @@ struct PatternsView: View {
                      : "Patterns are fingerprints: the same process doing the same kind of thing is one pattern.")
                     .lineLimit(1)
                 Spacer()
-                PatternTally(signatures: signatures)
+                PatternTally(counts: list.counts.byStatus)
                 Text("·")
-                Text("\(signatures.keys(forSelection: signatures.selection).count) selected · \(items.count) shown"
+                Text("\(signatures.keys(forSelection: signatures.selection).count) selected · \(list.shown) shown"
                      + (signatures.groupByProcess ? " · \(rows.count) programs" : ""))
                     .monospacedDigit()
             }
@@ -196,6 +194,10 @@ struct PatternsView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
+        // Rebuilt when something it shows changed, at most a few times a second; never on a redraw.
+        .onAppear { if !list.built { list.build(signatures, filter: filter, wait: true) } }
+        .onReceive(signatures.listChanges) { list.request(signatures) { filter } }
+        .onChange(of: filter) { list.request(signatures) { filter } }
     }
 
     private func toolbar(count: Int) -> some View {
@@ -213,9 +215,8 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
-                ShowFilterPicker(filter: $filter, counts: [.unclassified: signatures.patternCount(filter: .unclassified),
-                                                           .important: signatures.patternCount(filter: .important)])
-                let once = signatures.oneOffCount(filter: filter)
+                ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important])
+                let once = list.counts.oneOffs
                 Toggle(isOn: $signatures.showSeenOnce) {
                     Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
                 }
