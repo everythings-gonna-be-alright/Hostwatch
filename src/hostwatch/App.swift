@@ -244,29 +244,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         var added = false
         for prompt in firewall.prompts where firewallPanels[prompt.id] == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 190),
-                                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.title = "Firewall"
-            panel.titlebarAppearsTransparent = true
-            panel.level = .floating
-            panel.isReleasedWhenClosed = false
-            panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            let host = NSHostingController(rootView: FirewallPromptView(firewall: firewall, id: prompt.id))
-            host.sizingOptions = [.preferredContentSize]
-            panel.contentViewController = host
-            // In the middle of the screen; more questions cascade slightly down and right from there.
-            panel.contentViewController?.view.layoutSubtreeIfNeeded()
-            if let screen = NSScreen.main?.visibleFrame {
-                let slot = CGFloat(firewallPanels.count % 6)
-                let size = panel.frame.size
-                panel.setFrameOrigin(NSPoint(x: screen.midX - size.width / 2 + slot * 24,
-                                             y: screen.midY - size.height / 2 - slot * 34))
-            }
+            let panel = QuestionPanel.make(FirewallPromptView(firewall: firewall, id: prompt.id))
+            QuestionPanel.show(panel, slot: firewallPanels.count)
             firewallPanels[prompt.id] = panel
-            // Non-activating: answering doesn't switch you to Hostwatch's main window.
-            panel.orderFrontRegardless()
-            panel.makeKey()
             added = true
         }
         if added { NSSound(named: "Tink")?.play() }
@@ -292,26 +272,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             guardPanel?.orderOut(nil)
             return
         }
-        if guardPanel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 240),
-                                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
-                                backing: .buffered, defer: false)
-            panel.title = "Claude Code Guard"
-            panel.titlebarAppearsTransparent = true
-            panel.level = .floating
-            panel.isReleasedWhenClosed = false
-            panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            let host = NSHostingController(rootView: GuardPromptView(claudeGuard: claudeGuard))
-            host.sizingOptions = [.preferredContentSize]
-            panel.contentViewController = host
-            guardPanel = panel
-        }
+        if guardPanel == nil { guardPanel = QuestionPanel.make(GuardPromptView(claudeGuard: claudeGuard)) }
         guard let panel = guardPanel, !panel.isVisible else { return }
-        panel.center()
-        // In front and ready for Return, without bringing Hostwatch's other windows forward.
-        panel.orderFrontRegardless()
-        panel.makeKey()
+        QuestionPanel.show(panel, slot: 0)
         NSSound(named: "Funk")?.play()
     }
 

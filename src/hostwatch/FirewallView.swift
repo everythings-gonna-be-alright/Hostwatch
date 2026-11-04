@@ -80,42 +80,129 @@ extension FirewallPane {
     }
 }
 
-/// One question window: "Google Chrome wants to connect to x.com". The connection waits until you answer;
-/// Allow or Block decides the pattern.
+/// A question window in the style of macOS's own permission alerts: centered, no title bar, the program's icon,
+/// a bold question, two equal buttons (Allow is the default, Escape blocks). Non-activating: answering doesn't
+/// bring Hostwatch's other windows forward.
+enum QuestionPanel {
+    static func make<V: View>(_ view: V) -> NSPanel {
+        // The content draws under the hidden title bar: no safe area, so it measures the same before and after.
+        let host = NSHostingController(rootView: view.ignoresSafeArea())
+        host.sizingOptions = [.preferredContentSize]
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: host.view.fittingSize),
+                            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isMovableByWindowBackground = true
+        panel.level = .floating
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.contentViewController = host
+        // Sized before placing, so it's really centered. The content fills the whole frame (it draws under the
+        // hidden title bar), so the frame is the content's size; setContentSize would add a title bar's height.
+        panel.setFrame(NSRect(origin: .zero, size: host.view.fittingSize), display: false)
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {   // a question: answer it
+            panel.standardWindowButton(button)?.isHidden = true
+        }
+        return panel
+    }
+
+    /// In the middle of the screen you're working on; more questions step down and right from there.
+    static func show(_ panel: NSPanel, slot: Int) {
+        place(panel, slot: slot)
+        panel.orderFrontRegardless()
+        panel.makeKey()
+        // Text can settle to its final height a moment later: centre again once if it did.
+        let shown = panel.frame.size
+        DispatchQueue.main.async {
+            if fitting(panel) != shown { place(panel, slot: slot) }
+        }
+    }
+
+    private static func fitting(_ panel: NSPanel) -> NSSize {
+        guard let view = panel.contentViewController?.view else { return panel.frame.size }
+        view.layoutSubtreeIfNeeded()
+        return view.fittingSize
+    }
+
+    private static func place(_ panel: NSPanel, slot: Int) {
+        let size = fitting(panel)
+        let mouse = NSEvent.mouseLocation
+        let screen = (NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main)?.visibleFrame ?? .zero
+        let step = CGFloat(slot % 6)
+        panel.setFrame(NSRect(x: (screen.midX - size.width / 2 + step * 22).rounded(),
+                              y: (screen.midY - size.height / 2 - step * 22).rounded(),
+                              width: size.width, height: size.height), display: true)
+    }
+}
+
+/// "curl wants to connect to example.com": the connection waits until you answer; Allow or Block decides the pattern.
 struct FirewallPromptView: View {
     @ObservedObject var firewall: FirewallMonitor
     let id: UUID
 
     var body: some View {
         if let prompt = firewall.prompts.first(where: { $0.id == id }) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
-                        .resizable().frame(width: 40, height: 40)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("\(prompt.event.name) wants to connect to \(prompt.destination)").font(.headline)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("\(prompt.event.extra) port \(prompt.event.remotePort) · \(prompt.event.remoteHost ?? "")")
-                            .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                        Text(prompt.event.proc).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
+            VStack(spacing: 14) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
+                    .resizable().frame(width: 64, height: 64)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "network.badge.shield.half.filled")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(5)
+                            .background(Circle().fill(Color.accentColor))
+                            .offset(x: 6, y: 4)
                     }
+                    .accessibilityHidden(true)
+                VStack(spacing: 5) {
+                    Text("“\(prompt.event.name)” wants to connect to \(prompt.destination)")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(prompt.event.extra) · port \(prompt.event.remotePort) · \(prompt.event.remoteHost ?? "")")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
-                let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
-                Text("Allow or Block decides \(prompt.event.name) → \(pattern) from now on (in Patterns).")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text("The connection is waiting · \(Self.waited(context.date.timeIntervalSince(prompt.since)))")
-                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    Spacer()
-                    Button("Block") { firewall.resolve(prompt.id, allow: false) }
-                    Button("Allow") { firewall.resolve(prompt.id, allow: true) }
+                Text("Your answer decides \(prompt.event.name) → \(pattern) from now on. The connection waits until you answer.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(prompt.event.proc)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(prompt.event.proc)
+                VStack(spacing: 8) {
+                    HStack(spacing: 10) {
+                        Button { firewall.resolve(prompt.id, allow: false) } label: {
+                            Text("Block").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+                        .keyboardShortcut(.cancelAction)
+                        Button { firewall.resolve(prompt.id, allow: true) } label: {
+                            Text("Allow").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glassProminent)
                         .keyboardShortcut(.defaultAction)
+                    }
+                    .controlSize(.large)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("Waiting \(Self.waited(context.date.timeIntervalSince(prompt.since)))")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+                .padding(.top, 4)
             }
-            .padding(18)
-            .frame(width: 480)
+            .padding(.horizontal, 22)
+            .padding(.top, 26)
+            .padding(.bottom, 16)
+            .frame(width: 340)
         }
     }
 
