@@ -80,12 +80,14 @@ extension FirewallPane {
     }
 }
 
-/// "Google Chrome wants to connect to x.com": Allow or Block decides the pattern; no answer blocks it this time.
+/// One question window: "Google Chrome wants to connect to x.com". The connection waits until you answer;
+/// Allow or Block decides the pattern.
 struct FirewallPromptView: View {
     @ObservedObject var firewall: FirewallMonitor
+    let id: UUID
 
     var body: some View {
-        if let prompt = firewall.prompts.first {
+        if let prompt = firewall.prompts.first(where: { $0.id == id }) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
@@ -103,11 +105,8 @@ struct FirewallPromptView: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        let left = max(0, Int(prompt.deadline.timeIntervalSince(context.date).rounded()))
-                        Text("Blocked this time in \(left) s").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    if firewall.prompts.count > 1 {
-                        Text("· \(firewall.prompts.count - 1) more waiting").font(.caption).foregroundStyle(.secondary)
+                        Text("The connection is waiting · \(Self.waited(context.date.timeIntervalSince(prompt.since)))")
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     }
                     Spacer()
                     Button("Block") { firewall.resolve(prompt.id, allow: false) }
@@ -116,8 +115,13 @@ struct FirewallPromptView: View {
                 }
             }
             .padding(18)
-            .frame(width: 500)
+            .frame(width: 480)
         }
+    }
+
+    static func waited(_ s: TimeInterval) -> String {
+        let n = Int(s)
+        return n < 60 ? "\(n) s" : "\(n / 60) min \(n % 60) s"
     }
 }
 

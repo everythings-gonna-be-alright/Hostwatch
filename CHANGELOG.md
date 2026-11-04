@@ -4,8 +4,8 @@
 
 - **Firewall: Ask and Strict modes** (Settings ▸ Firewall). Your programs' new TCP and UDP connections go through a
   relay in the collector (pf on the loopback; nothing decrypted, only the TLS server name read), which checks each
-  new program and destination with the firewall's rules. **Ask**: a new one waits while a panel asks Allow / Block
-  (your answer decides the pattern; no answer in 30 s blocks it this time). **Strict**: anything not allowed is
+  new program and destination with the firewall's rules. **Ask**: a new one waits, without a time limit, while its
+  own window asks Allow / Block (your answer decides the pattern); one window per question, stacked top right. **Strict**: anything not allowed is
   blocked. Fail-safes: the redirect goes away when you switch off, when the collector stops, through a watchdog if
   it crashes, after a reboot, and if the web check through the relay fails twice. Not covered: root's programs,
   macOS's own DNS lookups, the local network. Test tools: `sudo Hostwatch --firewall-probe` and

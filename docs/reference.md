@@ -357,9 +357,10 @@ For each one the relay finds the original destination (`DIOCNATLOOK`, else pf's 
 process holding the client's port, `SocketOwner`) and, for TLS, the server name (peeked, nothing decrypted), then
 asks the app (`fw_ask`, one question per program, protocol, destination and port however many connections wait).
 The app answers with the rules: allowed → pass (remembered 5 min), blocked → refused (1 min); something new is
-refused in Strict, and in Ask waits while a panel asks **Allow / Block** (your answer marks the pattern Safe or
-Suspicious and answers its other waiting connections; no answer in 30 s refuses it this time). Without the app,
-Strict refuses and Ask passes. TCP is relayed with BSD sockets (half-closes passed on exactly), UDP as flows
+refused in Strict, and in Ask waits, with no time limit, while its own window asks **Allow / Block** (one window
+per question, stacked from the top right; your answer marks the pattern Safe or Suspicious and answers its other
+waiting connections). Leaving Ask decides what still waits by the new mode (Off or Watch: pass; Strict: refused).
+Without the app, Strict refuses and Ask passes. TCP is relayed with BSD sockets (half-closes passed on exactly), UDP as flows
 (ended after 60 s quiet, 10 s for DNS); relayed flows the other sources missed (UDP mostly) become net events.
 Fail-safes: the redirect is removed when the mode leaves Ask/Strict, when the collector stops, by a watchdog in
 its own session when the collector's process is gone, at the next collector start (stale rules), at reboot

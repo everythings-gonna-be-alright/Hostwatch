@@ -27,7 +27,7 @@ struct FirewallPrompt: Identifiable {
     let key: String                 // the collector's key: program, protocol, destination, port
     let event: ActivityEvent
     let reason: String
-    let deadline: Date
+    let since: Date
     var patternKey: String { event.signatureKey }
     var destination: String { event.host.isEmpty ? (event.remoteHost ?? event.target) : event.host }
 }
@@ -105,7 +105,12 @@ struct FirewallEntry: Codable, Identifiable, Equatable {
 @MainActor
 final class FirewallMonitor: ObservableObject {
     @Published var mode: FirewallMode {
-        didSet { defaults.set(mode.rawValue, forKey: "firewallMode"); onModeChange?(mode) }
+        didSet {
+            defaults.set(mode.rawValue, forKey: "firewallMode")
+            // Leaving Ask: the collector decides the waiting connections by the new mode; the questions go.
+            if mode != .ask, !prompts.isEmpty { prompts = []; onPromptsChange?() }
+            onModeChange?(mode)
+        }
     }
     /// The relay in the collector: "off", "on" or "failed", and why.
     @Published private(set) var relayState = "off"
@@ -122,7 +127,6 @@ final class FirewallMonitor: ObservableObject {
     var knownBad: (ActivityEvent) -> String = { _ in "" }
     /// Your answer becomes the pattern's status.
     var markPattern: (String, SignatureStatus) -> Void = { _, _ in }
-    static let askSeconds: TimeInterval = 30
     /// Connections that wouldn't simply pass (would ask or block), newest first.
     @Published private(set) var entries: [String: FirewallEntry] = [:]
     @Published private(set) var allowedCount = 0
@@ -208,25 +212,22 @@ final class FirewallMonitor: ObservableObject {
             blockedCount += 1
         case .ask:
             guard !prompts.contains(where: { $0.key == key }) else { return }
-            let prompt = FirewallPrompt(key: key, event: e, reason: d.reason, deadline: Date().addingTimeInterval(Self.askSeconds))
-            prompts.append(prompt)
+            // The connection waits until you answer: no time limit.
+            prompts.append(FirewallPrompt(key: key, event: e, reason: d.reason, since: Date()))
             onPromptsChange?()
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.askSeconds) { [weak self] in
-                MainActor.assumeIsolated { self?.resolve(prompt.id, allow: nil) }
-            }
         }
     }
 
-    /// Your answer (nil: none in time, so blocked this once). Allow / Block decide the pattern, which answers
-    /// the other waiting connections of that pattern too.
-    func resolve(_ id: UUID, allow: Bool?) {
+    /// Your answer. Allow / Block decide the pattern, which answers the other waiting connections of that
+    /// pattern too.
+    func resolve(_ id: UUID, allow: Bool) {
         guard let prompt = prompts.first(where: { $0.id == id }) else { return }
-        let same = allow == nil ? [prompt] : prompts.filter { $0.patternKey == prompt.patternKey }
+        let same = prompts.filter { $0.patternKey == prompt.patternKey }
         prompts.removeAll { p in same.contains { $0.id == p.id } }
-        if let allow { markPattern(prompt.patternKey, allow ? .safe : .suspicious) }
+        markPattern(prompt.patternKey, allow ? .safe : .suspicious)
         for p in same {
-            answer?(p.key, allow == true, allow == nil ? 30 : 300)
-            if allow != true { blockedCount += 1 }
+            answer?(p.key, allow, 300)
+            if !allow { blockedCount += 1 }
         }
         onPromptsChange?()
     }
