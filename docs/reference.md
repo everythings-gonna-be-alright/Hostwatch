@@ -286,8 +286,10 @@ Saved in `~/Library/Application Support/Hostwatch/domains.json`.
   what the firewall does there (Passes, Asks or Would ask, Blocks or Would block, Blocked by you, Waiting for you);
   open it for the programs that connected, with **Block** / **Allow** (they mark the pattern, as in Patterns).
   Connections held in Ask wait in a strip on top. Filters: All, New Domains (first seen in the last 24 h),
-  Blocked & Undecided; every column sorts. Right-click to **Mark Known**, mark as not known, **Forget** a domain,
-  Block or Allow, copy.
+  Blocked & Undecided; every column sorts. Right-click to **Mark Known**, mark as not known, Block or Allow, copy,
+  or **Forget**: the domain is new again next time, its connections leave the firewall list, and the Allow or
+  Block you gave them in the firewall (question, Network tab) is reset, so they're asked about again. Decisions
+  made in Patterns stay. A firewall decision is per pattern, so other destinations of that pattern are asked again too.
 - Test with a replay: `REPLAY_LEARN_MINUTES=30 Hostwatch --story-replay <history.jsonl>` lists the
   domains that would be flagged after that much learning.
 

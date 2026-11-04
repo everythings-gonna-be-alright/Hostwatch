@@ -231,6 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         firewall.answer = { [weak self] key, pass, ttl in self?.model.sendFirewallAnswer(key: key, pass: pass, ttl: ttl) }
         firewall.onPromptsChange = { [weak self] in self?.refreshFirewallPanels() }
+        firewall.flushAnswers = { [weak self] in self?.model.sendFirewall(flush: true) }
         firewall.onModeChange = { [weak self] mode in self?.model.firewallMode = mode.collector }
         model.onFirewallAsk = { [weak self] key, event in self?.firewall.handleAsk(key: key, event: event) }
         model.onFirewallStatus = { [weak self] state, detail in self?.firewall.relayStatus(state, detail) }

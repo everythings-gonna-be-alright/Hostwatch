@@ -239,6 +239,32 @@ final class FirewallMonitor: ObservableObject {
 
     func clear() { entries = [:]; allowedCount = 0; blockedCount = 0; scheduleSave() }
 
+    /// Your Allow or Block, given in a firewall question, the Network tab or this list (not in Patterns).
+    static func isFirewallDecision(_ note: String?) -> Bool {
+        guard let note else { return false }
+        return ["allowed in Firewall", "blocked in Firewall", "allowed in Network", "blocked in Network"].contains(note)
+    }
+
+    /// Forgets these listed connections and the firewall decisions you made for them: their patterns go back to
+    /// undecided (asked about again) unless you decided them in Patterns. The collector drops its cached answers.
+    /// Returns the patterns reset.
+    @discardableResult
+    func forget(_ ids: [String], signatures: SignatureStore) -> [String] {
+        let gone = ids.compactMap { entries[$0] }
+        guard !gone.isEmpty else { return [] }
+        for e in gone { entries[e.id] = nil }
+        let keys = Set(gone.map(\.facts.patternKey)).filter { key in
+            !key.isEmpty && signatures.entry(key)?.source == "you" && Self.isFirewallDecision(signatures.entry(key)?.note)
+        }
+        if !keys.isEmpty { signatures.set(.unclassified, keys: Array(keys).sorted()) }
+        scheduleSave()
+        flushAnswers()
+        return Array(keys).sorted()
+    }
+
+    /// Tells the collector to forget the answers it remembers (wired by the app).
+    var flushAnswers: () -> Void = {}
+
     // MARK: Ask and Strict
 
     func relayStatus(_ state: String, _ detail: String) {
