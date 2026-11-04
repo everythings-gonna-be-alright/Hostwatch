@@ -91,6 +91,28 @@ final class BehaviorRecorder {
         self.home = home
     }
 
+    /// Processes the watched one had already started (an app's helpers): followed too.
+    func adopt(_ children: [(pid: Int, ppid: Int, path: String)]) {
+        for c in children where !tree.contains(c.pid) {
+            tree.insert(c.pid)
+            profile.processes.append(.init(pid: c.pid, ppid: c.ppid, path: c.path))
+        }
+    }
+
+    /// Every running descendant of `pid` (children, their children…), from the process list.
+    static func descendants(of pid: Int, limit: Int = 200) -> [(pid: Int, ppid: Int, path: String)] {
+        let parents = Dictionary(ProcessList.allPids().map { ($0, ProcessList.parent($0)) }, uniquingKeysWith: { a, _ in a })
+        var out: [(Int, Int, String)] = []
+        var frontier = [pid]
+        while let p = frontier.popLast(), out.count < limit {
+            for (child, parent) in parents where parent == p && child != p {
+                out.append((child, p, ProcessList.path(child)))
+                frontier.append(child)
+            }
+        }
+        return out
+    }
+
     /// Is this pid part of the watched tree?
     func follows(_ pid: Int) -> Bool { tree.contains(pid) }
 

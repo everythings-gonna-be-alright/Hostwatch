@@ -160,3 +160,20 @@ import Testing
             .appendingPathComponent("watch.png"))
     }
 }
+
+/// A watch also follows the helpers the process already runs (an app's renderers, a shell's jobs).
+@Suite struct WatchExistingChildren {
+    @Test func findsRunningDescendants() throws {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "/bin/sleep 30 & /bin/sleep 30 & wait"]
+        try p.run()
+        defer { p.terminate(); _ = try? Spawned.run("/usr/bin/pkill", ["-P", "\(p.processIdentifier)"]) }
+        Thread.sleep(forTimeInterval: 0.4)
+        let found = BehaviorRecorder.descendants(of: Int(p.processIdentifier))
+        #expect(found.count == 2 && found.allSatisfy { $0.path == "/bin/sleep" && $0.ppid == Int(p.processIdentifier) })
+        let r = BehaviorRecorder(pid: Int(p.processIdentifier), name: "sh", path: "/bin/sh")
+        r.adopt(found)
+        #expect(r.tree.count == 3 && r.profile.processes.count == 3)
+    }
+}
