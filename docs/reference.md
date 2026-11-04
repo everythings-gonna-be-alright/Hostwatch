@@ -122,7 +122,8 @@ first run (62 folded into 14), pruning grows as patterns age. The Patterns foote
 **Group by Process** (on by default) shows one row per program (by name) with its patterns under it: the most
 serious status and risk among them, how many are New, the kinds of activity, the total count and first/last seen.
 A program with one pattern stays a plain row. Marking, deleting or asking about a program's row acts on all its
-listed patterns; right-click it for *Show Only* that program.
+listed patterns; right-click it for *Show Only* that program. Columns: Status, Kind, Process, Pattern, Decided By,
+Signer, Reason, Count, First Seen, Last Seen.
 
 **One-offs.** A pattern seen only once, not high risk, not Suspicious or Dangerous and not decided by you or your
 rules (a command typed once, a one-time connection) is recorded like any other: detection works the first time.
