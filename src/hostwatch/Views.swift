@@ -18,6 +18,8 @@ struct HUDActions {
     var openFirewallSettings: () -> Void = {}
     /// Watch Closely: record what this event's process does for a while.
     var watch: (ActivityEvent) -> Void = { _ in }
+    /// Running Now ▸ Show Spawn in Timeline: Time Travel at a process's launch.
+    var showSpawn: (_ pid: Int, _ start: Date) -> Void = { _, _ in }
     var openStory: (Story) -> Void = { _ in }
 }
 
@@ -618,19 +620,30 @@ struct ActivityWindowView: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var travel: TimeTravel
     @ObservedObject var metrics: MetricsStore
+    @ObservedObject var running: RunningProcesses
     let actions: HUDActions
 
     private var traveling: Bool { travel.active && model.windowTab == 0 }
+    /// Events ▸ Running Now instead of the event list.
+    private var runningNow: Bool { running.showing && model.windowTab == 0 && !traveling }
 
     var body: some View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             VulnerabilityBanner(intel: intel, sheets: sheets)
             if model.windowTab == 0 { filterBar; Divider() }
-            if model.windowTab == 0 { heavySection }
+            if model.windowTab == 0 && !runningNow { heavySection }
             if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
             switch model.windowTab {
-            case 0: eventsList
+            case 0:
+                if runningNow {
+                    RunningProcessesView(running: running, signatures: signatures, search: model.searchText,
+                                         history: model.history, showSpawn: { row in
+                                             if let start = row.started { actions.showSpawn(row.pid, start) }
+                                         }, actions: actions)
+                } else {
+                    eventsList
+                }
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
@@ -708,7 +721,7 @@ struct ActivityWindowView: View {
             WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
         }
         ToolbarItemGroup(placement: .principal) {
-          if model.windowTab == 0 {
+          if model.windowTab == 0 && !runningNow {
             ForEach(EventKind.allCases, id: \.self) { kind in
                 let on = model.visibleKinds.contains(kind)
                 Button { model.toggle(kind) } label: {
@@ -725,7 +738,7 @@ struct ActivityWindowView: View {
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
-                if on { model.windowTab = 0; travel.enter() } else { travel.exit() }
+                if on { model.windowTab = 0; running.showing = false; travel.enter() } else { travel.exit() }
             })) {
                 Label("Time Travel", systemImage: "clock.arrow.circlepath")
             }
@@ -734,10 +747,10 @@ struct ActivityWindowView: View {
                 Label(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play.fill" : "pause.fill")
             }
             .help(model.paused ? "Resume the live stream" : "Pause the live stream")
-            .disabled(traveling)
+            .disabled(traveling || runningNow)
             Button { model.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear the event list")
-                .disabled(traveling)
+                .disabled(traveling || runningNow)
             Toggle(isOn: $model.overlayEnabled) {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")
             }
@@ -766,10 +779,29 @@ struct ActivityWindowView: View {
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
     private var filterBar: some View {
         HStack(spacing: 12) {
-            ShowFilterPicker(filter: $model.signatureFilter,
-                             counts: model.showCounts(traveling ? travel.events : model.history, applyExclusions: traveling))
-            Spacer(minLength: 0)
-            ClassifyAllButton(classifier: classifier, signatures: signatures)
+            Picker("View", selection: $running.showing) {
+                Label("Events", systemImage: "list.bullet").tag(false)
+                Label("Running Now", systemImage: "cpu").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .disabled(traveling)
+            .help(traveling ? "Running Now shows the present: leave Time Travel first"
+                  : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
+            if runningNow {
+                if let updated = running.updated {
+                    Text("Updated \(updated.formatted(date: .omitted, time: .standard)) · every \(Int(RunningProcesses.interval)) s")
+                        .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                }
+                Spacer(minLength: 0)
+            } else {
+                Divider().frame(height: 16)
+                ShowFilterPicker(filter: $model.signatureFilter,
+                                 counts: model.showCounts(traveling ? travel.events : model.history, applyExclusions: traveling))
+                Spacer(minLength: 0)
+                ClassifyAllButton(classifier: classifier, signatures: signatures)
+            }
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -805,6 +837,15 @@ struct ActivityWindowView: View {
         }
     }
 
+    /// Show Spawn in Timeline: the launch selected, with whatever filter would hide it relaxed.
+    private func revealLaunch(_ event: ActivityEvent) {
+        model.searchText = ""
+        model.onlyPids = nil
+        if !model.visibleKinds.contains(.exec) { model.toggle(.exec) }
+        if !model.passes(event, model.signatureFilter) { model.signatureFilter = .all }
+        model.eventSelection = [event.id]
+    }
+
     private var eventsList: some View {
         let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
         let items = events.map { e -> EventItem in
@@ -816,6 +857,7 @@ struct ActivityWindowView: View {
             && model.eventOrder[0].order == .reverse
         let rows = newestFirst ? items : items.sorted(using: model.eventOrder)
         return VStack(spacing: 0) {
+          ScrollViewReader { proxy in
             Table(rows, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
                     Text(item.event.time).foregroundStyle(.secondary).monospacedDigit()
@@ -890,6 +932,12 @@ struct ActivityWindowView: View {
             } primaryAction: { ids in
                 if let id = ids.first, let event = model.history.first(where: { $0.id == id }) { actions.askAI(event) }
             }
+            .onChange(of: travel.focusID) { _, id in
+                guard let id, let event = travel.events.first(where: { $0.id == id }) else { return }
+                revealLaunch(event)
+                DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
+            }
+          }
             Divider()
             HStack {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)

@@ -380,6 +380,7 @@ final class HUDModel: ObservableObject {
     var onFirewallStatus: ((String, String) -> Void)?
     /// Watch Closely: the collector's recording of one process (progress and result).
     var onWatch: ((WatchMessage) -> Void)?
+    var onProcessList: (([RunningProcessInfo]) -> Void)?
     /// What the collector's firewall should do: "off", "ask" or "strict" (sent on every connect).
     var firewallMode = "off" { didSet { if firewallMode != oldValue { sendFirewall() } } }
 
@@ -656,6 +657,13 @@ final class HUDModel: ObservableObject {
         return true
     }
 
+    /// Asks for every running process (Events ▸ Running Now); false when the collector isn't connected.
+    func requestProcesses() -> Bool {
+        guard connected else { return false }
+        send(["processes": true])
+        return true
+    }
+
     func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
         send(["fw_answer": ["key": key, "pass": pass, "ttl": ttl]])
     }
@@ -689,6 +697,7 @@ final class HUDModel: ObservableObject {
     private static let askMarker = Data(#""kind":"fw_ask""#.utf8)
     private static let statusMarker = Data(#""kind":"fw_status""#.utf8)
     private static let watchMarker = Data(#""kind":"watch""#.utf8)
+    private static let processListMarker = Data(#""kind":"proc_list""#.utf8)
     private struct TopMessage: Decodable {
         var procs: [TopProcess]
         var disk_read: Double?
@@ -727,6 +736,12 @@ final class HUDModel: ObservableObject {
             // A watch is reported even while paused: you asked for it.
             if line.range(of: Self.watchMarker) != nil {
                 if let m = try? WatchMessage.decoder.decode(WatchMessage.self, from: Data(line)) { onWatch?(m) }
+                continue
+            }
+            // Asked for, so answered even while paused. The marker is the list's first key: an event's
+            // command line can't put it there.
+            if line.prefix(40).range(of: Self.processListMarker) != nil {
+                if let m = try? decoder.decode(ProcessListMessage.self, from: Data(line)) { onProcessList?(m.list) }
                 continue
             }
             if line.range(of: Self.statusMarker) != nil {
