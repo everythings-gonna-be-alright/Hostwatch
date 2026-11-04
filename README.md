@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="#install"><b>Install</b></a> ·
-  <a href="#new-in-090">What's new</a> ·
+  <a href="#whats-new">What's new</a> ·
   <a href="#what-it-does">Features</a> ·
   <a href="#privacy">Privacy</a> ·
   <a href="docs/reference.md">Reference</a> ·
@@ -47,8 +47,13 @@ what's normal on your Mac, and shows only what's new or suspicious, linked into 
 It detects and explains, and if you turn them on, its firewall and Claude Code guard stop what you didn't
 allow. It never deletes anything.
 
-## New in 0.9.0
+## What's new
 
+**0.10.0**
+- **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
+  parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
+
+**0.9.0**
 - **🔬 Watch Closely** – not sure what a program is up to? Right-click it (or ⌥⌘W) and Hostwatch records for a
   minute everything it and its helpers do: files changed, connections, other processes, persistence, privileges.
   You get it in plain words, what stands out first, and Claude or the on-device model explains whether it's dangerous.

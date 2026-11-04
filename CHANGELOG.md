@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 – Running Now
 
 - **Running Now** (Events tab ▸ *Running Now*, ⌥⌘R): every process running at this moment, with % CPU, CPU time,
   memory, threads, user, parent and how long it has been running, refreshed every 3 s. Select one for its details
