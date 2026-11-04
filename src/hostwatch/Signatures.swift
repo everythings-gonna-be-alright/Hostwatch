@@ -1109,10 +1109,18 @@ final class SignatureStore: ObservableObject {
         didSet { UserDefaults.standard.set(showSeenOnce, forKey: "patternsShowSeenOnce") }
     }
 
-    /// Seen once, decided by nobody (no rule, no AI, not you), not high risk: a command typed once, a one-time
-    /// connection. Recorded when it happens (detection works on the first time), but not worth keeping.
+    /// Seen once, not high risk, not Suspicious or Dangerous, not decided by you or a rule of yours: a command typed
+    /// once, a one-time connection. Recorded when it happens (detection works the first time); hidden in Patterns.
     func isOneOff(_ e: SignatureEntry) -> Bool {
-        e.count <= 1 && e.risk != .high && e.reopened == nil && status(forKey: e.id) == .unclassified && !isCombined(e.id)
+        guard e.count <= 1, e.risk != .high, e.reopened == nil, !isCombined(e.id), !reviewedByYou(e.id) else { return false }
+        let status = status(forKey: e.id)
+        return status == .unclassified || status == .safe
+    }
+
+    /// A one-off nobody decided, or decided Safe only automatically (routine): forgotten after a week. Ones an AI
+    /// or the baseline decided stay (deciding again would cost a model call).
+    func isForgettableOneOff(_ e: SignatureEntry) -> Bool {
+        isOneOff(e) && (e.status == .unclassified || e.source == "auto")
     }
     static let foldMinimum = 3
     /// "Tidied: removed 1,204 old routine patterns, folded 3,410 into 212."
@@ -1163,7 +1171,7 @@ final class SignatureStore: ObservableObject {
         // One-offs that didn't happen again within a week: if they do later, they're simply new again.
         let protected = inUse()
         var oneOffs = 0
-        for (key, e) in entries where isOneOff(e) && now.timeIntervalSince(e.lastSeen) > Self.oneOffAfter && !protected.contains(key) {
+        for (key, e) in entries where isForgettableOneOff(e) && now.timeIntervalSince(e.lastSeen) > Self.oneOffAfter && !protected.contains(key) {
             entries[key] = nil
             oneOffs += 1
         }

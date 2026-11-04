@@ -272,7 +272,7 @@ import Testing
         defer { _ = SignatureStore(directory: dir.appendingPathComponent("reset")) }
         let routine = file(logd, pid: 1, "r", "/Library/Application Support/Apple/logs/a.log")
         let new = net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 2, to: "45.1.2.3:443")
-        _ = s.observe(routine); _ = s.observe(new); _ = s.observe(new)          // seen twice: not a one-off
+        _ = s.observe(routine); _ = s.observe(routine); _ = s.observe(new); _ = s.observe(new)   // twice: not one-offs
         #expect(s.tidy(now: Date().addingTimeInterval(10 * 86400)).pruned == 0)
         #expect(s.tidy(now: Date().addingTimeInterval(31 * 86400)).pruned == 1)
         #expect(s.entry(routine.signatureKey) == nil && s.entry(new.signatureKey) != nil)   // New (seen again) is never pruned
