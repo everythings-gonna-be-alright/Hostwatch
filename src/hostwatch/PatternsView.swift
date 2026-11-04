@@ -107,10 +107,6 @@ struct PatternsView: View {
                     }
                 }
                 .width(min: 64, ideal: 84, max: 140)
-                TableColumn("Decided By", value: \.decidedBy) { item in
-                    DeciderLabel(text: item.decidedBy)
-                }
-                .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
                         HStack(spacing: 2) {
@@ -136,6 +132,10 @@ struct PatternsView: View {
                     }
                 }
                 .width(min: 160, ideal: 360)
+                TableColumn("Decided By", value: \.decidedBy) { item in
+                    DeciderLabel(text: item.decidedBy)
+                }
+                .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Signer", value: \.signer) { item in
                     let id = SigningCache.shared.cached(SignatureStore.subjectPath(item.entry))
                     HStack(spacing: 4) {
