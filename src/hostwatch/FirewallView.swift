@@ -193,12 +193,21 @@ struct FirewallPromptView: View {
                 if let analysis = firewall.advice[prompt.id] {
                     FirewallAdviceView(analysis: analysis)
                 } else {
+                    // A secondary action, as in macOS alerts ("Show Details", "Learn More"): a borderless,
+                    // tinted text button below the message, never competing with Block and Allow.
                     Button { firewall.askClaude(prompt.id) } label: {
-                        Label("Ask Claude", systemImage: "sparkles")
+                        HStack(spacing: 5) {
+                            Text("✱").font(.system(size: 14, weight: .bold))
+                            Text("Ask Claude")
+                        }
+                        .font(.callout.weight(.medium))
                     }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .help("Claude explains the program and the destination, the risks, and whether to allow it")
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.claude)
+                    .pointerStyle(.link)
+                    .keyboardShortcut("k", modifiers: .command)
+                    .help("Claude explains the program, the destination and the risks, and suggests Allow or Block (⌘K)")
+                    .accessibilityLabel("Ask Claude about this connection")
                 }
                 VStack(spacing: 8) {
                     HStack(spacing: 10) {
@@ -241,8 +250,8 @@ struct FirewallAdviceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                Text("✱").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.claude)
                 Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 if let verdict = analysis.verdict {
