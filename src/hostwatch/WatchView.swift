@@ -206,11 +206,11 @@ struct WatchView: View {
     }
 
     private func summary(_ p: BehaviorProfile) -> some View {
-        let written = p.files.values.filter { $0.ops.contains { ["write", "create", "read/write", "truncate"].contains($0) } }.count
+        let written = p.changedFiles
         let deleted = p.files.values.filter { $0.ops.contains("delete") }.count
         return FlowLayout(spacing: 8) {
             Chip(text: "\(p.processes.count) process\(p.processes.count == 1 ? "" : "es")", symbol: "gearshape.2", color: .blue)
-            Chip(text: "\(p.files.count) file\(p.files.count == 1 ? "" : "s") · \(written) changed · \(deleted) deleted", symbol: "doc", color: .teal)
+            Chip(text: "\(p.files.count - p.routineReads) file\(p.files.count - p.routineReads == 1 ? "" : "s") · \(written) changed · \(deleted) deleted", symbol: "doc", color: .teal)
             Chip(text: "\(p.network.count) destination\(p.network.count == 1 ? "" : "s")", symbol: "network", color: .green)
             if !p.targets.isEmpty { Chip(text: "\(p.targets.count) other process\(p.targets.count == 1 ? "" : "es")", symbol: "arrow.triangle.branch", color: .orange) }
             if !p.ipc.isEmpty { Chip(text: "\(p.ipc.count) service\(p.ipc.count == 1 ? "" : "s")", symbol: "point.3.connected.trianglepath.dotted", color: .purple) }
@@ -250,8 +250,13 @@ struct WatchView: View {
         list("System", "cpu", Self.pairs(p.system))
         list("Services it talked to", "point.3.connected.trianglepath.dotted", Self.pairs(p.ipc))
         if !p.files.isEmpty {
-            Card(title: "Files (\(p.files.count)\(p.filesDropped > 0 ? " + \(p.filesDropped) more" : ""))", symbol: "doc.on.doc") {
-                ForEach(FileGroup.groups(p.files).prefix(40)) { group in
+            let routine = FileGroup.groups(p.files, home: p.home, routine: true)
+            Card(title: "Files (\(p.files.count - p.routineReads)\(p.filesDropped > 0 ? " + \(p.filesDropped) more" : ""))", symbol: "doc.on.doc") {
+                if p.routineReads > 0 {
+                    Text("Plus \(p.routineReads) routine system reads (libraries, locale, certificates, preferences), listed last.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach((FileGroup.groups(p.files, home: p.home).prefix(40) + routine.prefix(20)).map { $0 }) { group in
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(group.files.prefix(100), id: \.path) { f in

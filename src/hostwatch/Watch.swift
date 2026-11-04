@@ -49,6 +49,8 @@ struct BehaviorProfile: Codable, Equatable, Sendable {
     var persistence: [String: Int] = [:]       // "login item: ~/Library/LaunchAgents/x.plist"
     var system: [String: Int] = [:]            // "kernel extension: …", "privacy permission (TCC) changed: …"
     var execMemory = 0                         // memory made executable (mmap/mprotect with execute)
+    /// The user's home folder, for ~ in paths (the collector runs as root).
+    var home = NSHomeDirectory()
     /// Endpoint Security events by type (exec, open, write…), and in total.
     var counts: [String: Int] = [:]
     var events = 0
@@ -56,6 +58,32 @@ struct BehaviorProfile: Codable, Equatable, Sendable {
     static let maxFiles = 400
 
     var isEmpty: Bool { events == 0 && network.isEmpty }
+
+    /// How a path is shown: ~ for the home folder, /tmp, /var and /etc without macOS's /private.
+    static func display(_ p: String, home: String) -> String {
+        if p.hasPrefix(home + "/") || p == home { return "~" + p.dropFirst(home.count) }
+        for alias in ["/private/tmp", "/private/var", "/private/etc"] where p == alias || p.hasPrefix(alias + "/") {
+            return String(p.dropFirst("/private".count))
+        }
+        return p
+    }
+
+    /// Reading the system's own files (libraries, locale, certificates, preferences, devices): what every program
+    /// does to run, shown as one line instead of a list.
+    static func isRoutineRead(_ p: String, _ use: FileUse) -> Bool {
+        guard use.ops.allSatisfy({ $0 == "read" || $0 == "loaded as code" }) || p.hasPrefix("/dev/") else { return false }
+        if p == "/" || p.split(separator: "/").count <= 1 { return true }            // "/", "/bin": looking a path up
+        let roots = ["/System/", "/usr/", "/bin/", "/sbin/", "/dev/", "/Library/Preferences/", "/private/var/db/",
+                     "/private/etc/", "/private/var/folders/", "/Library/Apple/", "/Applications/Xcode.app/"]
+        return roots.contains { p.hasPrefix($0) }
+    }
+
+    /// Files written, created or changed (not devices).
+    var changedFiles: Int {
+        files.filter { !$0.key.hasPrefix("/dev/") && $0.value.ops.contains { ["write", "create", "read/write", "truncate"].contains($0) } }.count
+    }
+
+    var routineReads: Int { files.filter { Self.isRoutineRead($0.key, $0.value) }.count }
 }
 
 // MARK: - Recording
@@ -86,6 +114,7 @@ final class BehaviorRecorder {
     init(pid: Int, name: String, path: String, args: String = "", ppid: Int = 0, limit: Double = 60,
          home: String = NSHomeDirectory()) {
         profile = BehaviorProfile(pid: pid, name: name, path: path, limit: limit)
+        profile.home = home
         profile.processes = [.init(pid: pid, ppid: ppid, path: path, args: args)]
         tree = [pid]
         self.home = home
@@ -298,9 +327,7 @@ final class BehaviorRecorder {
         }
     }
 
-    private func abbreviate(_ p: String) -> String {
-        p.hasPrefix(home + "/") ? "~" + p.dropFirst(home.count) : p
-    }
+    private func abbreviate(_ p: String) -> String { BehaviorProfile.display(p, home: home) }
 
     static func signalName(_ sig: Int) -> String {
         let names = [1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 6: "SIGABRT", 9: "SIGKILL", 15: "SIGTERM", 17: "SIGSTOP",
@@ -324,10 +351,11 @@ struct BehaviorHighlight: Equatable, Sendable, Identifiable {
 
 extension BehaviorProfile {
     /// What stands out, most serious first. Local rules only: the AI explains, this flags.
-    func highlights(home: String = NSHomeDirectory()) -> [BehaviorHighlight] {
+    func highlights(home: String? = nil) -> [BehaviorHighlight] {
+        let home = home ?? self.home
         var out: [BehaviorHighlight] = []
         func add(_ level: BehaviorHighlight.Level, _ text: String) { out.append(.init(level: level, text: text)) }
-        func short(_ p: String) -> String { p.hasPrefix(home + "/") ? "~" + p.dropFirst(home.count) : p }
+        func short(_ p: String) -> String { Self.display(p, home: home) }
 
         for t in targets {
             let name = t.path.isEmpty ? "process \(t.pid)" : (t.path as NSString).lastPathComponent
@@ -366,7 +394,7 @@ extension BehaviorProfile {
                 + (shells.isEmpty ? "" : ", including \(Set(shells.map { ($0.path as NSString).lastPathComponent }).sorted().joined(separator: ", "))"))
         }
         if !network.isEmpty { add(.info, "Connected to \(network.count) destination\(network.count == 1 ? "" : "s")") }
-        let written = files.values.filter { $0.ops.contains { ["write", "create", "read/write"].contains($0) } }.count
+        let written = changedFiles
         let deleted = files.values.filter { $0.ops.contains("delete") }.count
         if written > 0 || deleted > 0 {
             add(deleted > 50 ? .notable : .info, "Wrote \(written) file\(written == 1 ? "" : "s"), deleted \(deleted)")
@@ -405,8 +433,9 @@ extension BehaviorProfile {
     }
 
     /// The profile as text for the AI, most telling first (an on-device model may only get the start of it).
-    func evidence(signer: String = "", parentChain: String = "", home: String = NSHomeDirectory(), limit: Int = 12_000) -> String {
-        func short(_ p: String) -> String { p.hasPrefix(home + "/") ? "~" + p.dropFirst(home.count) : p }
+    func evidence(signer: String = "", parentChain: String = "", home: String? = nil, limit: Int = 12_000) -> String {
+        let home = home ?? self.home
+        func short(_ p: String) -> String { Self.display(p, home: home) }
         var s = "## Event: watched process\n"
         s += "\(name) (pid \(pid)) · \(short(path))\n"
         if !signer.isEmpty { s += "Signed by: \(signer)\n" }
@@ -419,7 +448,7 @@ extension BehaviorProfile {
         }
         if processes.count > 1 || !(processes.first?.args.isEmpty ?? true) {
             s += "\n## Processes\n" + processes.prefix(40).map {
-                "- \($0.pid) ← \($0.ppid) \(short($0.path))\($0.args.isEmpty ? "" : "  · " + String($0.args.prefix(200)))"
+                "- \($0.pid) ← \($0.ppid) \(short($0.path))\($0.args.isEmpty ? "" : "  · " + short(String($0.args.prefix(200))))"
             }.joined(separator: "\n") + (processes.count > 40 ? "\n- … \(processes.count - 40) more" : "") + "\n"
         }
         func section(_ title: String, _ dict: [String: Int], max: Int = 40) {
@@ -439,7 +468,9 @@ extension BehaviorProfile {
         section("Talked to (IPC)", ipc, max: 30)
         if !files.isEmpty {
             let groups = FileGroup.groups(files, home: home)
-            s += "\n## Files (\(files.count)\(filesDropped > 0 ? " + \(filesDropped) more" : ""))\n"
+            let routine = routineReads
+            s += "\n## Files (\(files.count - routine)\(filesDropped > 0 ? " + \(filesDropped) more" : "")"
+                + "\(routine > 0 ? ", plus \(routine) routine system reads: libraries, locale, certificates, preferences" : ""))\n"
             for g in groups.prefix(30) {
                 s += "- \(g.folder)/ — \(g.summary)\n"
                 for f in g.files.prefix(6) {
@@ -469,11 +500,11 @@ struct FileGroup: Identifiable, Sendable {
     }
 
     /// Busiest folders first; changes before reads.
-    static func groups(_ files: [String: BehaviorProfile.FileUse], home: String = NSHomeDirectory()) -> [FileGroup] {
+    /// Routine system reads are left out (`routine: true` lists only them).
+    static func groups(_ files: [String: BehaviorProfile.FileUse], home: String = NSHomeDirectory(), routine: Bool = false) -> [FileGroup] {
         var byFolder: [String: [Item]] = [:]
-        for (p, use) in files {
-            var folder = (p as NSString).deletingLastPathComponent
-            if folder.hasPrefix(home) { folder = "~" + folder.dropFirst(home.count) }
+        for (p, use) in files where BehaviorProfile.isRoutineRead(p, use) == routine {
+            let folder = BehaviorProfile.display((p as NSString).deletingLastPathComponent, home: home)
             byFolder[folder, default: []].append(Item(name: (p as NSString).lastPathComponent, path: p, use: use))
         }
         func changes(_ i: Item) -> Bool { i.use.ops.contains { $0 != "read" && $0 != "loaded as code" } }

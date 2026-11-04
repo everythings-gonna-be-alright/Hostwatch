@@ -177,3 +177,25 @@ import Testing
         #expect(r.tree.count == 3 && r.profile.processes.count == 3)
     }
 }
+
+/// What every program reads to run is one line, not a list; paths read as you'd type them.
+@Suite struct WatchReadability {
+    @Test func routineSystemReadsAreFoldedAway() {
+        var p = BehaviorProfile(pid: 1, name: "bash", path: "/bin/bash")
+        p.home = "/Users/someone"
+        func use(_ ops: [String]) -> BehaviorProfile.FileUse { .init(ops: ops, count: 1) }
+        p.files = ["/usr/share/locale/en_US.UTF-8/LC_TIME": use(["read"]), "/private/etc/ssl/cert.pem": use(["read"]),
+                   "/dev/null": use(["write"]), "/": use(["read"]), "/bin": use(["read"]),
+                   "/System/Volumes/Preboot/Cryptexes/OS": use(["read"]),
+                   "/private/tmp/x": use(["create", "made executable", "delete"]),
+                   "/Users/someone/Library/LaunchAgents": use(["read"]), "/usr/local/bin/tool": use(["write"])]
+        #expect(p.routineReads == 6)
+        #expect(p.changedFiles == 2)                                            // not /dev/null
+        let groups = FileGroup.groups(p.files, home: p.home)
+        #expect(Set(groups.map(\.folder)) == ["/tmp", "~/Library", "/usr/local/bin"])
+        #expect(p.evidence().contains("## Files (3, plus 6 routine system reads"))
+        #expect(p.highlights().contains { $0.text == "Made /tmp/x executable" })
+        #expect(BehaviorProfile.display("/private/var/folders/x", home: p.home) == "/var/folders/x")
+        #expect(BehaviorProfile.display("/Users/someone/.ssh/id", home: p.home) == "~/.ssh/id")
+    }
+}
