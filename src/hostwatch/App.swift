@@ -235,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.firewallMode = firewall.mode.collector
     }
 
-    /// A window per question, stacked from the top-right corner; each closes when answered.
+    /// A window per question, in the middle of the screen; each closes when answered.
     private func refreshFirewallPanels() {
         let live = Set(firewall.prompts.map(\.id))
         for (id, panel) in firewallPanels where !live.contains(id) {
@@ -255,10 +255,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let host = NSHostingController(rootView: FirewallPromptView(firewall: firewall, id: prompt.id))
             host.sizingOptions = [.preferredContentSize]
             panel.contentViewController = host
+            // In the middle of the screen; more questions cascade slightly down and right from there.
+            panel.contentViewController?.view.layoutSubtreeIfNeeded()
             if let screen = NSScreen.main?.visibleFrame {
                 let slot = CGFloat(firewallPanels.count % 6)
-                panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 20 - slot * 24,
-                                                   y: screen.maxY - 20 - slot * 34))
+                let size = panel.frame.size
+                panel.setFrameOrigin(NSPoint(x: screen.midX - size.width / 2 + slot * 24,
+                                             y: screen.midY - size.height / 2 - slot * 34))
             }
             firewallPanels[prompt.id] = panel
             panel.orderFrontRegardless()
