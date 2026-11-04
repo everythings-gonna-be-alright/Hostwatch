@@ -339,6 +339,18 @@ patterns, Suggest Rules), counted across launches from each `claude -p` result (
 tooltip. Failed runs that still reached Claude count too. **Reset** starts from zero; *Reset Hostwatch* with
 settings clears it. The on-device model is free and isn't counted.
 
+### Firewall (stage 1: Watch)
+
+*Settings ▸ Firewall*: **Off** or **Watch**. Watch judges every connection Hostwatch sees (TCP and UDP) with the
+firewall's rules (`FirewallPolicy`), first match wins: local network (loopback, LAN, link-local, multicast) and
+Hostwatch itself pass; a known malware address blocks (even if Safe); a pattern marked Suspicious or Dangerous
+blocks; Safe passes; then by risk: high-risk blocks, routine (macOS, trusted developers) passes; a sealed macOS
+binary that isn't a shell or tool passes; anything else new is asked about. What wouldn't simply pass is listed
+(*Show Connections…*, last 7 days, at most 500, in `firewall-watch.json`), judged again with each pattern's current
+status; Allow / Block mark the pattern Safe / Suspicious. Nothing is blocked yet: the next stages add a relay in
+the collector (a pf redirect on the loopback, the original destination from pf, the program from the socket),
+then Ask and Strict modes.
+
 ### Claude Code guard
 
 *Settings ▸ AI ▸ Claude Code guard* (off by default) adds a `PreToolUse` hook to Claude Code's user settings
