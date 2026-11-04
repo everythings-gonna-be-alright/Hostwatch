@@ -15,6 +15,7 @@ struct HUDActions {
     var showInTimeline: (Date) -> Void = { _ in }
     var openBaseline: () -> Void = {}
     var openDomain: (String) -> Void = { _ in }
+    var openFirewallSettings: () -> Void = {}
     var openStory: (Story) -> Void = { _ in }
 }
 
@@ -599,7 +600,8 @@ struct ActivityWindowView: View {
     @ObservedObject var model: HUDModel
     @ObservedObject var stories: StoryEngine
     @ObservedObject var domains: DomainRegistry
-    let domainsState: DomainsViewState
+    @ObservedObject var networkState: NetworkViewState
+    @ObservedObject var firewall: FirewallMonitor
     let rulesTab: RulesTabState
     @ObservedObject var vitals: ProcessVitals
     @ObservedObject var heavyStrip: HeavyStripState
@@ -629,8 +631,9 @@ struct ActivityWindowView: View {
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
                                  filter: $model.signatureFilter)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
-            case 3: DomainsView(domains: domains, state: domainsState, search: model.searchText, openDetails: actions.openDomain,
-                                knownBad: { intel.reason(forDomain: $0) })
+            case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
+                                search: model.searchText, openDetails: actions.openDomain,
+                                openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
                                showPatterns: { app in
                                    signatures.scope = nil
@@ -673,7 +676,8 @@ struct ActivityWindowView: View {
         case 0: return "\(state) · \(model.history.count) events"
         case 1: return "\(state) · \(signatures.total) patterns"
         case 2: return "\(state) · \(stories.activeCount) open stories"
-        case 3: return "\(state) · \(domains.newCount) new domains"
+        case 3:
+            return "\(state) · \(domains.newCount) new domains" + (firewall.prompts.isEmpty ? "" : " · \(firewall.prompts.count) waiting")
         default: return "\(state) · \(rules.activeCount) active rules"
         }
     }
@@ -689,8 +693,9 @@ struct ActivityWindowView: View {
                   badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .accentColor),
             .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
                   badge: stories.activeCount > 0 ? "\(stories.activeCount)" : nil, badgeTint: dangerous ? .red : .orange),
-            .init(id: 3, title: "Domains", symbol: "globe",
-                  badge: domains.newCount > 0 ? "\(domains.newCount)" : nil, badgeTint: .purple),
+            .init(id: 3, title: "Network", symbol: "network.badge.shield.half.filled",
+                  badge: !firewall.prompts.isEmpty ? "\(firewall.prompts.count)" : domains.newCount > 0 ? "\(domains.newCount)" : nil,
+                  badgeTint: !firewall.prompts.isEmpty ? .orange : .purple),
         ]
     }
 

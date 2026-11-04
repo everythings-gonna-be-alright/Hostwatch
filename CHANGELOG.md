@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Network tab** (⌘5, was Domains): domains and the firewall on one timeline, newest first. Each destination
+  shows its domain status (New, Known…) and what the firewall does there (Passes, Asks, Blocks, Blocked by you);
+  open it for the programs that connected, with Block and Allow. Connections waiting for your answer sit on top.
+  Filters: All, New Domains, Blocked & Undecided. The firewall's mode stays in Settings ▸ Firewall (a button in
+  the tab opens it); Settings shows the counts, Clear List and *Show in Network…*.
 - **No more `nettop` or `lsof`:** the collector reads macOS's own connection statistics (what `nettop` is built
   on) and every process's sockets directly. Every new TCP and UDP connection is seen with its real destination,
   even one that lasts milliseconds, with less CPU and no helper programs. On a macOS without that framework it

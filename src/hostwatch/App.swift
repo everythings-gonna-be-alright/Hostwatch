@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let signatures = SignatureStore()
     private let stories = StoryEngine()
     private let domains = DomainRegistry()
-    private let domainsState = DomainsViewState()
+    private let networkState = NetworkViewState()
     private let rulesTab = RulesTabState()
     /// Processes Hostwatch saw start that still run heavy (CPU or memory).
     private let vitals = ProcessVitals()
@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
         baseline: baseline, intel: intel, claudeGuard: claudeGuard, firewall: firewall, openBaseline: { [weak self] in self?.openBaselineReport() },
+        showNetwork: { [weak self] in self?.openDomains() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
         openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
+        openFirewallSettings: { [weak self] in self?.openSettings(.firewall) },
         openStory: { [weak self] story in self?.openStoryDetails(story) }
     )
     private var askWindows: [NSWindow] = []
@@ -510,8 +512,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let unreviewed = signatures.count(.unclassified)
         if unreviewed > 0 { patterns.badge = NSMenuItemBadge(count: unreviewed) }
         menu.addItem(patterns)
-        let domainsItem = item("Domains", #selector(openDomains), symbol: "globe")
-        if domains.newCount > 0 { domainsItem.badge = NSMenuItemBadge(count: domains.newCount) }
+        let domainsItem = item("Network", #selector(openDomains), symbol: "network.badge.shield.half.filled")
+        domainsItem.toolTip = "Firewall and domains"
+        let waiting = firewall.prompts.count
+        if waiting + domains.newCount > 0 { domainsItem.badge = NSMenuItemBadge(count: waiting > 0 ? waiting : domains.newCount) }
         menu.addItem(domainsItem)
         menu.addItem(.separator())
 
@@ -575,7 +579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         ])
 
         // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
-        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Domains", 3)].enumerated().map { i, tab in
+        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Network", 3)].enumerated().map { i, tab in
             tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
@@ -1004,7 +1008,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, networkState: networkState, firewall: firewall, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's

@@ -18,6 +18,15 @@ enum FirewallMode: String, CaseIterable, Codable {
         }
     }
 
+    var short: String {
+        switch self {
+        case .off: "Off"
+        case .watch: "Watch"
+        case .ask: "Ask"
+        case .strict: "Strict"
+        }
+    }
+
     /// What the collector does: the relay runs in Ask and Strict.
     var collector: String { self == .ask || self == .strict ? rawValue : "off" }
 }

@@ -19,6 +19,7 @@ struct SettingsContext {
     let claudeGuard: ClaudeGuard
     let firewall: FirewallMonitor
     let openBaseline: () -> Void
+    let showNetwork: () -> Void
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
     let resetOverlayFrame: () -> Void
@@ -41,7 +42,6 @@ final class SettingsState: ObservableObject {
     @Published var showReset = false
     @Published var showGuardLog = false
     @Published var guardCopied = false
-    @Published var showFirewallList = false
     @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
         didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
     }
@@ -104,7 +104,7 @@ final class SettingsWindowController: NSWindowController {
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline, intel: c.intel,
                                                           openBaseline: c.openBaseline, ui: state))
-            case .firewall: view = AnyView(FirewallPane(firewall: c.firewall, signatures: c.signatures, ui: state))
+            case .firewall: view = AnyView(FirewallPane(firewall: c.firewall, signatures: c.signatures, showNetwork: c.showNetwork))
             case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, claudeGuard: c.claudeGuard, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
