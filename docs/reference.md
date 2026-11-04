@@ -119,10 +119,11 @@ routine Safe patterns. Nothing New, reopened or decided by you, a rule, the base
 activity that joins a fold later isn't routine, the fold goes back to New. On a real store: 16,490 → 15,963 on the
 first run (62 folded into 14), pruning grows as patterns age. The Patterns footer shows the last result.
 
-**One-offs.** A pattern seen only once, decided by nobody (no rule, AI, baseline or you) and not high risk (a
-command typed once, a one-time connection) is recorded like any other: detection works the first time. The
-Patterns tab hides it unless **Seen Once** is on (search and scoped lists find it anyway), and tidying removes it
-when it hasn't happened again for 7 days, unless an open story uses it. If it happens later, it's simply new again.
+**One-offs.** A pattern seen only once, not high risk, not Suspicious or Dangerous and not decided by you or your
+rules (a command typed once, a one-time connection) is recorded like any other: detection works the first time.
+The Patterns tab hides it unless **Seen Once** is on (search and scoped lists find it anyway). Tidying removes it
+when it hasn't happened again for 7 days, if it's undecided or Safe only automatically (routine), unless an open
+story uses it; ones an AI or the baseline decided stay. If it happens later, it's simply new again.
 
 **Connections:** public IPs on web ports (80/443/53/853/123) become `internet`. Other ports keep the /16.
 Loopback, LAN, link-local, CGNAT and multicast are named. Ports ≥ 49152 become `ephemeral`.

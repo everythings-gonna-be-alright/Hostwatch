@@ -55,6 +55,21 @@ import Testing
         #expect(s.entry(once)?.status == .unclassified)               // it happens again: simply new again
     }
 
+    /// Seen once and Safe only because it's routine: hidden and forgotten too. Your decision: always shown, kept.
+    @Test func automaticSafeOneOffsAreHiddenButYoursShow() throws {
+        let s = store()
+        defer { s.showSeenOnce = false }
+        let logd = "/usr/libexec/logd"
+        let routine = seen(s, file(logd, pid: 1, "r", "/Library/Application Support/Apple/logs/one.log"))
+        let mine = seen(s, net("/usr/bin/curl", pid: 50, to: "142.250.1.1:443", host: "google.us"))
+        s.set(.safe, keys: [mine], note: "allowed in Firewall")
+        let r = try #require(s.entry(routine)), m = try #require(s.entry(mine))
+        #expect(r.source == "auto" && s.isOneOff(r) && s.isForgettableOneOff(r))
+        #expect(!s.isOneOff(m))
+        s.tidy()
+        #expect(s.entry(routine) == nil && s.entry(mine) != nil)
+    }
+
     @Test func riskyOneOffsStay() {
         let s = store()
         let risky = seen(s, net("\(home)/Downloads/x/updater", pid: 70, to: "203.0.113.9:8443"))
