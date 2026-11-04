@@ -339,6 +339,29 @@ patterns, Suggest Rules), counted across launches from each `claude -p` result (
 tooltip. Failed runs that still reached Claude count too. **Reset** starts from zero; *Reset Hostwatch* with
 settings clears it. The on-device model is free and isn't counted.
 
+### Claude Code guard
+
+*Settings ▸ AI ▸ Claude Code guard* (off by default) adds a `PreToolUse` hook to Claude Code's user settings
+(`~/.claude/settings.json`, original kept as `settings.json.before-hostwatch`): matcher
+`Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep|WebFetch`, command `'<Hostwatch>' --claude-hook`, timeout 90 s.
+The hook (about 15 ms) passes the call to the app over a private Unix socket
+(`~/Library/Application Support/Hostwatch/guard/claude.sock`, 0600, same user only); if the app isn't running it
+judges the call itself with the same rules, without the threat lists.
+
+| Verdict | Examples | What happens |
+|---|---|---|
+| **Block** | `rm -rf ~`, `/`, `~/Documents`; `find ~ -delete`; `/dev/tcp`, `nc -e`; `diskutil eraseDisk`, `dd of=/dev/…`; a fork bomb; `csrutil disable`, `spctl --master-disable`; editing TCC.db; a secret sent to a paste or webhook site; a known malware domain or IP; deleting or changing Hostwatch's files | `deny`: it doesn't run; Claude is told why and to ask you to run it yourself |
+| **Ask** | `curl … \| sh`, `bash <(curl …)`, `base64 -d \| sh`; `sudo`; `osascript`; launch agents, shell startup files, `authorized_keys`, `/etc`, Claude Code's own settings; `launchctl load`, `crontab`; `security find-generic-password -w`, SSH keys, AWS/GitHub/Docker/Kubernetes credentials, browser data (also via Read/Grep, whose content would go to Claude); `xattr -d com.apple.quarantine`; recursive deletes outside the project; `$VAR/` deletes; a bare public IP; `pkill Hostwatch`; scripts run with `bash x.sh` or written by Claude that do any of this | `ask`: Claude Code asks you, with the reason |
+| **Nothing** | everything else | Claude Code's normal permissions |
+
+Hostwatch never answers `allow`, so it can only make Claude Code stricter. When Claude Code won't ask
+(`bypassPermissions`, `dontAsk`), a Hostwatch panel asks instead (Block is the default; no answer in 60 s
+blocks). In `claude -p` runs Claude Code turns `ask` into a refusal by itself. Hostwatch's own Claude runs
+don't load user settings, so they aren't checked. The log (*Show Log…*) keeps the last 300 blocked or asked
+calls (secrets masked); the tray shows blocks in the last 24 hours. The hook's state is checked every 30 s:
+removed from the settings (*Restore*), or all hooks switched off by `disableAllHooks`. Limits: it judges the
+text of a call, so well-hidden code can get through; Hostwatch's monitoring still sees what then runs.
+
 Classification steps:
 
 1. **On-device pass** (engines with on-device): Apple's on-device model (`SystemLanguageModel`, never Private

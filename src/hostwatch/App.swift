@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let heavyStrip = HeavyStripState()
     /// Threat lists and exploited macOS vulnerabilities (downloaded daily, matched locally).
     private let intel = ThreatIntel()
+    /// Claude Code's actions, checked before they run (a PreToolUse hook asks this app).
+    private let claudeGuard = ClaudeGuard()
+    private var guardPanel: NSPanel?
     private let sheets = WindowSheetState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
@@ -31,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
-        baseline: baseline, intel: intel, openBaseline: { [weak self] in self?.openBaselineReport() },
+        baseline: baseline, intel: intel, claudeGuard: claudeGuard, openBaseline: { [weak self] in self?.openBaselineReport() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -124,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             }
         }
         intel.start()
+        setUpClaudeGuard()
         vitals.onHeavyUntrusted = { [weak self] launch, tracked in
             guard let self else { return }
             let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))
@@ -205,6 +209,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func toggleHold() { hold.enabled.toggle() }
+
+    // MARK: Claude Code guard
+
+    private func setUpClaudeGuard() {
+        claudeGuard.listed = { [weak self] host in
+            MainActor.assumeIsolated {
+                guard let intel = self?.intel, intel.enabled else { return nil }
+                if host.first?.isNumber == true { return intel.listedIP(host, port: "") }
+                return intel.listedDomain(host)?.detail
+            }
+        }
+        claudeGuard.onPromptsChange = { [weak self] in self?.refreshGuardPanel() }
+        claudeGuard.start()
+    }
+
+    /// "Claude Code wants to run a command": in front of everything while Hostwatch is asking.
+    private func refreshGuardPanel() {
+        guard !claudeGuard.prompts.isEmpty else {
+            guardPanel?.orderOut(nil)
+            return
+        }
+        if guardPanel == nil {
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 240),
+                                styleMask: [.titled, .fullSizeContentView],
+                                backing: .buffered, defer: false)
+            panel.title = "Claude Code Guard"
+            panel.titlebarAppearsTransparent = true
+            panel.level = .floating
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            let host = NSHostingController(rootView: GuardPromptView(claudeGuard: claudeGuard))
+            host.sizingOptions = [.preferredContentSize]
+            panel.contentViewController = host
+            guardPanel = panel
+        }
+        guard let panel = guardPanel, !panel.isVisible else { return }
+        panel.center()
+        NSApp.activate()
+        panel.makeKeyAndOrderFront(nil)
+        NSSound(named: "Funk")?.play()
+    }
+
+    @objc private func openGuardLog() {
+        settings.showGuardLog()
+    }
+
+    @objc private func restoreClaudeGuard() { claudeGuard.setEnabled(true) }
 
     // MARK: History
 
@@ -397,6 +449,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let title = intel.pendingUpdate != nil ? "A macOS update fixes \(n) exploited \(n == 1 ? "flaw" : "flaws")…"
                 : "\(n) exploited macOS \(n == 1 ? "flaw" : "flaws") since your last update…"
             menu.addItem(item(title, #selector(showVulnerabilities), symbol: "exclamationmark.shield.fill"))
+        }
+        if claudeGuard.enabled, claudeGuard.status == .missing {
+            menu.addItem(item("Claude Code guard was removed — Restore", #selector(restoreClaudeGuard),
+                              symbol: "exclamationmark.shield.fill"))
+        }
+        if claudeGuard.recentBlocked > 0 {
+            let n = claudeGuard.recentBlocked
+            menu.addItem(item("Claude Code: \(n) \(n == 1 ? "action" : "actions") blocked today…", #selector(openGuardLog),
+                              symbol: "xmark.shield.fill"))
         }
         if case .learning(let wave, _) = baseline.phase {
             let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
@@ -985,6 +1046,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 enum Entry {
     static func main() {
         let args = CommandLine.arguments
+        // Claude Code's PreToolUse hook: first, and before anything else loads (it runs for every tool call).
+        if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
         if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
         if args.contains("--suggest-rules") { runRuleSuggestionDryRun() }
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
