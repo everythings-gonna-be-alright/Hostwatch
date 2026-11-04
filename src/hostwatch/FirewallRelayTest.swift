@@ -61,9 +61,20 @@ enum FirewallRelayTest {
                          bytes(f.reduce(0) { $0 + $1.up + $1.down }), errors, ok ? "ok" : "FAILED"))
             if failures >= 2 { stoppedEarly = "the web check failed twice"; break }
         }
+        let counters = PFRedirect.run("/sbin/pfctl", ["-a", PFRedirect.anchor, "-v", "-s", "rules"]).out
+        let natCounters = PFRedirect.run("/sbin/pfctl", ["-a", PFRedirect.anchor, "-v", "-s", "nat"]).out
+        let v6States = PFRedirect.run("/sbin/pfctl", ["-s", "state"]).out.split(separator: "\n").filter { $0.contains("[") }
         remove()
         report(log.all, relay: relay, seconds: seconds, stoppedEarly: stoppedEarly)
         print("Checks through the relay: " + checks.summary)
+        print("\npf counters (redirect rules):")
+        for line in (natCounters + counters).split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("rdr") || t.hasPrefix("pass") { print("  " + String(t.prefix(110))) }
+            if t.hasPrefix("[ Evaluations") { print("     " + t) }
+        }
+        print("IPv6 states in pf: \(v6States.count)")
+        for line in v6States.prefix(6) { print("  " + String(line.prefix(150))) }
         exit(stoppedEarly.isEmpty ? 0 : 2)
     }
 
