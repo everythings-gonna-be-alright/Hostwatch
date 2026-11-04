@@ -91,12 +91,13 @@ struct PatternsView: View {
 
     var body: some View {
         let _ = signatures.revision
-        let rows = signatures.patternItems(filter: filter)
+        let items = signatures.patternItems(filter: filter)
+        let rows = signatures.groupByProcess ? PatternItem.grouped(items, order: signatures.patternOrder) : items
         VStack(spacing: 0) {
-            toolbar(count: rows.count)
+            toolbar(count: items.count)
                 .sheet(isPresented: $combine.show) { CombineSheet(state: combine, signatures: signatures) }
             Divider()
-            Table(rows, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
+            Table(rows, children: \.children, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
@@ -111,9 +112,16 @@ struct PatternsView: View {
                 }
                 .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Kind", value: \.kind) { item in
-                    Image(systemName: item.entry.kind.symbol)
-                        .foregroundStyle(item.entry.kind.color)
-                        .help(item.entry.kind.title)
+                    if item.isGroup {
+                        HStack(spacing: 2) {
+                            ForEach(item.kinds, id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
+                        }
+                        .help(item.kinds.map(\.title).joined(separator: ", "))
+                    } else {
+                        Image(systemName: item.entry.kind.symbol)
+                            .foregroundStyle(item.entry.kind.color)
+                            .help(item.entry.kind.title)
+                    }
                 }
                 .width(min: 20, ideal: 24, max: 32)
                 TableColumn("Process", value: \.processName) { item in
@@ -121,7 +129,11 @@ struct PatternsView: View {
                 }
                 .width(min: 60, ideal: 110)
                 TableColumn("Pattern", value: \.pattern) { item in
-                    Text(item.pattern).truncationMode(.middle).help(item.pattern)
+                    if item.isGroup {
+                        Text(item.pattern).foregroundStyle(item.newCount > 0 ? .primary : .secondary)
+                    } else {
+                        Text(item.pattern).truncationMode(.middle).help(item.pattern)
+                    }
                 }
                 .width(min: 160, ideal: 360)
                 TableColumn("Signer", value: \.signer) { item in
@@ -160,7 +172,9 @@ struct PatternsView: View {
             .font(.system(size: 12, design: .monospaced))
             // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
-                if let id = ids.first, let entry = signatures.entry(id) { menu(for: entry) }
+                if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) {
+                    groupMenu(ids)
+                } else if let id = ids.first, let entry = signatures.entry(id) { menu(for: entry) }
             } primaryAction: { ids in
                 if let id = ids.first, let entry = signatures.entry(id) { actions.askAI(entry.exampleEvent) }
             }
@@ -173,7 +187,8 @@ struct PatternsView: View {
                 Spacer()
                 PatternTally(signatures: signatures)
                 Text("·")
-                Text("\(signatures.selection.count) selected · \(rows.count) shown")
+                Text("\(signatures.keys(forSelection: signatures.selection).count) selected · \(items.count) shown"
+                     + (signatures.groupByProcess ? " · \(rows.count) programs" : ""))
                     .monospacedDigit()
             }
             .font(.system(size: 11))
@@ -206,19 +221,25 @@ struct PatternsView: View {
                 }
                 .toggleStyle(.button)
                 .fixedSize()
-                .help("Patterns seen only once, that nobody decided and aren't risky: hidden unless this is on (search "
+                .help("Patterns seen only once, that you didn't decide and aren't risky: hidden unless this is on (search "
                       + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
+            Toggle(isOn: $signatures.groupByProcess) {
+                Label("Group by Process", systemImage: "rectangle.3.group")
+            }
+            .toggleStyle(.button)
+            .fixedSize()
+            .help("One row per program, with its patterns under it")
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
-                        signatures.set(status, keys: Array(signatures.selection))
+                        signatures.set(status, keys: signatures.keys(forSelection: signatures.selection))
                     }
                 }
                 Divider()
-                Button("Combine Into One Pattern…") { combine.start(Array(signatures.selection), signatures) }
-                    .disabled(signatures.selection.count < 2)
-                Button("Delete Selected Patterns") { signatures.delete(keys: Array(signatures.selection)) }
+                Button("Combine Into One Pattern…") { combine.start(signatures.keys(forSelection: signatures.selection), signatures) }
+                    .disabled(signatures.keys(forSelection: signatures.selection).count < 2)
+                Button("Delete Selected Patterns") { signatures.delete(keys: signatures.keys(forSelection: signatures.selection)) }
             }
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
@@ -256,7 +277,7 @@ struct PatternsView: View {
     @ViewBuilder
     private func menu(for entry: SignatureEntry) -> some View {
         // Act on the whole selection when right-clicking inside it.
-        let keys = signatures.selection.contains(entry.id) ? Array(signatures.selection) : [entry.id]
+        let keys = signatures.selection.contains(entry.id) ? signatures.keys(forSelection: signatures.selection) : [entry.id]
         Button("Ask AI About This Pattern…") { actions.askAI(entry.exampleEvent) }
         Divider()
         if keys.count > 1 {
@@ -285,6 +306,29 @@ struct PatternsView: View {
             NSPasteboard.general.setString("\(entry.process) → \(entry.pattern)", forType: .string)
         }
         Button("Delete Pattern") { signatures.delete(keys: keys) }
+    }
+}
+
+extension PatternsView {
+    /// Right-click on a program's row (grouped): acts on all its listed patterns.
+    @ViewBuilder
+    func groupMenu(_ ids: Set<String>) -> some View {
+        let all = ids.union(signatures.selection.filter { $0.hasPrefix(PatternItem.groupPrefix) && ids.contains($0) })
+        let keys = signatures.keys(forSelection: signatures.selection.isSuperset(of: ids) ? signatures.selection : all)
+        let names = all.filter { $0.hasPrefix(PatternItem.groupPrefix) }.map { String($0.dropFirst(PatternItem.groupPrefix.count)) }.sorted()
+        ForEach(SignatureStatus.allCases, id: \.self) { status in
+            Button("Mark All \(keys.count) Patterns \(status.title)") { signatures.set(status, keys: keys) }
+        }
+        Divider()
+        if names.count == 1, let name = names.first {
+            Button("Show Only \(name)") { signatures.search = name }
+        }
+        Button("Copy Program Name\(names.count > 1 ? "s" : "")") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)
+        }
+        Divider()
+        Button("Delete All \(keys.count) Patterns") { signatures.delete(keys: keys) }
     }
 }
 
