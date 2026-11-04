@@ -2,8 +2,8 @@ import Darwin
 import Foundation
 
 // `Hostwatch --collector`: the root collector, run by the collector launcher (launchd job).
-// Sources: eslogger exec/exit/open, tcpdump pktap (DNS answers, SYNs), an lsof diff, a nettop
-// backstop and libproc (busiest processes). Events go out as JSON lines on a Unix socket that only
+// Sources: eslogger exec/exit/open, tcpdump pktap (DNS answers, SYNs), macOS's connection statistics
+// (nettop as fallback), and libproc (a socket-list diff, busiest processes). Events go out as JSON lines on a Unix socket that only
 // the verified app may use. Details: docs/reference.md, "How the collector works".
 
 let collectorFlag = "--collector"

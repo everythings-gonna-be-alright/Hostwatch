@@ -56,7 +56,13 @@ struct Spawned {
         var attr: posix_spawnattr_t?
         posix_spawnattr_init(&attr)
         defer { posix_spawnattr_destroy(&attr) }
-        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT))
+        // Default signal handling: the collector ignores SIGTERM/SIGINT (it handles them itself), and an ignored
+        // signal is inherited, so without this a helper could never be stopped with terminate().
+        var all = sigset_t(), none = sigset_t()
+        sigfillset(&all); sigemptyset(&none)
+        posix_spawnattr_setsigdefault(&attr, &all)
+        posix_spawnattr_setsigmask(&attr, &none)
+        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
 
         var inPipe: [Int32] = [-1, -1], outPipe: [Int32] = [-1, -1]
         switch stdin {

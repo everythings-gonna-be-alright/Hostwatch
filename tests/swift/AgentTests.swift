@@ -140,14 +140,6 @@ import Testing
                 && !AgentParse.isPublic("fe80::1") && !AgentParse.isPublic("198.51.100.7") && !AgentParse.isPublic("::1"))
     }
 
-    @Test func lsofSnapshot() {
-        let text = "p812\ncSlack Helper\nR1\nPTCP\nn192.168.1.5:50000->3.68.170.153:443\nn*:5353\np900\nccurl\nR812\nPUDP\nn[::1]:1->[::1]:53\n"
-        let conns = AgentParse.lsof(text)
-        #expect(conns.count == 2)
-        let slack = LsofConnection(pid: 812, proto: "TCP", local: "192.168.1.5:50000", remote: "3.68.170.153:443")
-        #expect(conns[slack]?.command == "Slack Helper" && conns[slack]?.ppid == 1)
-    }
-
     // MARK: JSON output, as the Python collector wrote it (history files stay the same format)
 
     @Test func jsonLinesMatchThePythonFormat() {

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **No more `nettop` or `lsof`:** the collector reads macOS's own connection statistics (what `nettop` is built
+  on) and every process's sockets directly. Every new TCP and UDP connection is seen with its real destination,
+  even one that lasts milliseconds, with less CPU and no helper programs. On a macOS without that framework it
+  falls back to `nettop`.
+- **Fix:** a `nettop` left behind by a collector that was killed could spin at over 100% CPU. The fallback now
+  stops when the collector is gone, a leftover one is stopped when the collector starts, and the collector's
+  helpers can be stopped again (they had inherited its ignored SIGTERM).
+
 ## 0.8.0 – a firewall, and a guard for Claude Code
 
 - **Firewall** (Settings ▸ Firewall: Off, Watch, Ask, Strict). Each program's new TCP and UDP connections are

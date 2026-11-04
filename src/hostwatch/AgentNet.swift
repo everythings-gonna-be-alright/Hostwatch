@@ -131,30 +131,9 @@ enum AgentParse {
         }
         return (remote, (Int(parts[4]) ?? 0) + (Int(parts[5]) ?? 0))
     }
-
-    /// `lsof -F pcRPn` output -> {(pid, proto, local, remote): (ppid, command)}.
-    static func lsof(_ text: String) -> [LsofConnection: (ppid: Int, command: String)] {
-        var out: [LsofConnection: (Int, String)] = [:]
-        var pid = 0, ppid = 0, cmd = "", proto = ""
-        for line in text.split(separator: "\n") {
-            guard let tag = line.first else { continue }
-            let value = String(line.dropFirst())
-            switch tag {
-            case "p": pid = Int(value) ?? 0; ppid = 0; cmd = ""; proto = ""
-            case "c": cmd = value
-            case "R": ppid = Int(value) ?? 0
-            case "P": proto = value
-            case "n":
-                guard let arrow = value.range(of: "->") else { continue }
-                out[LsofConnection(pid: pid, proto: proto, local: String(value[..<arrow.lowerBound]),
-                                   remote: String(value[arrow.upperBound...]))] = (ppid, cmd)
-            default: break
-            }
-        }
-        return out
-    }
 }
 
+/// A connected socket, as the collector compares them between looks.
 struct LsofConnection: Hashable { let pid: Int; let proto: String; let local: String; let remote: String }
 
 // MARK: - Names for addresses
@@ -306,7 +285,7 @@ extension Agent {
                     unparsedLogged += 1
                     Agent.log("packet capture: unattributed SYN; header=\(header.prefix(300)) line=\(line.prefix(200))")
                 }
-                if let syn, syn.outgoing {                   // incoming is left to lsof
+                if let syn, syn.outgoing {                   // incoming is left to the socket list
                     publishConnection(pid: syn.pid, remote: syn.remote, proto: "TCP", nameHint: syn.hint)
                 }
             }
@@ -325,23 +304,62 @@ extension Agent {
         }
     }
 
-    /// Security products that take over TCP flows in the kernel can hide a short connection from
-    /// packet capture and lsof; nettop's statistics still count its traffic, so a new process with
-    /// TCP traffic nobody reported gets an inferred event.
+    /// Connections that close before packet capture or the socket list can see them (or that a security product
+    /// hides from both): macOS's connection statistics report every TCP and UDP socket with its process and real
+    /// destination. Without that framework, `nettop` (built on it) is the fallback.
+    func runConnectionStats(settle: TimeInterval = 0.5) {
+        guard let stats = NetStats.load() else {
+            Agent.log("network statistics unavailable on this macOS; using nettop")
+            runNettopBackstop()
+            return
+        }
+        stats.start { [self] flow, existing in
+            // Sockets open before we started were baseline; this Mac talking to itself isn't a destination.
+            guard !existing, !NetAddress.isLocalOnly(flow.remote), !isOurs(flow.pid) else { return }
+            // A moment for packet capture to report it first (it knows the DNS name that led to it).
+            DispatchQueue.global().asyncAfter(deadline: .now() + settle) { [self] in
+                publishConnection(pid: flow.pid, remote: flow.remote, proto: flow.tcp ? "TCP" : "UDP", nameHint: flow.name)
+            }
+        }
+        onShutdown { stats.stop() }
+        Agent.log("network statistics: watching every TCP and UDP connection")
+    }
+
+    static let nettopArgs = ["-L", "0", "-s", "1", "-m", "tcp", "-n", "-x"]
+
+    /// A nettop left running by a collector that was killed (it spins on its closed input): stopped at start.
+    static func stopStrayNettop() {
+        _ = try? Spawned.run("/usr/bin/pkill", ["-P", "1", "-x", "-f", (["/usr/bin/nettop"] + nettopArgs).joined(separator: " ")])
+    }
+
+    /// A shell script that runs `command` (with the shell's stdin) for as long as `owner` lives, then stops it.
+    static func whileAlive(_ command: String, owner: pid_t, every seconds: Int = 3) -> String {
+        """
+        exec 3<&0
+        \(command) <&3 &
+        n=$!
+        while kill -0 \(owner) 2>/dev/null && kill -0 $n 2>/dev/null; do sleep \(seconds); done
+        kill $n 2>/dev/null
+        """
+    }
+
+    /// The fallback: nettop's statistics count a short connection's traffic, so a new process with TCP traffic
+    /// nobody reported gets an inferred event.
     func runNettopBackstop(settle: TimeInterval = 1.5) {
         let child: Spawned
         do {
-            // stdin must be a pipe that stays open: nettop polls stdin for key presses, and with
-            // /dev/null every poll returns at once (~1.4 cores busy instead of ~1%).
+            // stdin must be a pipe that stays open: nettop polls stdin for key presses, and with /dev/null (or a
+            // closed pipe) every poll returns at once (~1.4 cores busy instead of ~1%). So a small shell watches
+            // the collector and stops nettop as soon as the collector is gone, however it ended.
             // Per connection (no -P): each process line is followed by its connections and their addresses.
-            child = try Spawned.start("/usr/bin/nettop", ["-L", "0", "-s", "1", "-m", "tcp", "-n", "-x"],
-                                      stdin: .pipe)
+            let command = (["/usr/bin/nettop"] + Self.nettopArgs).joined(separator: " ")
+            child = try Spawned.start("/bin/sh", ["-c", Self.whileAlive(command, owner: getpid())], stdin: .pipe)
         } catch {
             Agent.logError("nettop backstop disabled: \(error)")
             return
         }
         ignore(Int(child.pid))
-        onShutdown { child.terminate() }
+        onShutdown { kill(-child.pid, SIGTERM) }             // the shell and nettop (its own process group)
         Agent.log("nettop backstop: watching for connections that close before they can be seen")
         let started = ProcessInfo.processInfo.systemUptime
         var known = Set<Int>()
@@ -365,7 +383,7 @@ extension Agent {
                 known.insert(p.pid)
                 if now - started > 3, !isOurs(p.pid) { pending[p.pid] = (now, p.name, p.rx, p.tx) }   // first samples = baseline
             }
-            // Anything lsof or packet capture did not report within `settle` seconds gets inferred.
+            // Anything the socket list or packet capture did not report within `settle` seconds gets inferred.
             for (pid, info) in pending where now - info.seen >= settle {
                 pending[pid] = nil
                 netLock.lock()
@@ -400,19 +418,11 @@ extension Agent {
         child.wait()
     }
 
-    /// `lsof -i` every `interval` s: new connections since the previous snapshot.
+    /// Every process's connected sockets every `interval` s (libproc, like `lsof -i`): new ones since the previous look.
     func pollNetwork(interval: TimeInterval) {
         var previous: [LsofConnection: (ppid: Int, command: String)]?
         while !isStopped {
-            let current: [LsofConnection: (ppid: Int, command: String)]
-            do {
-                let out = try Spawned.run("/usr/sbin/lsof", ["-nP", "-i", "-R", "+c", "0", "-F", "pcRPn"])
-                current = AgentParse.lsof(String(decoding: out, as: UTF8.self))
-            } catch {
-                Agent.logError("lsof failed: \(error)")
-                if wait(interval * 4) { return }
-                continue
-            }
+            let current = SocketOwner.connections()
             if let previous {
                 let new = current.keys.filter {
                     previous[$0] == nil && !isOurs($0.pid) && !seenConns.seen(PidKey(pid: $0.pid, text: $0.remote))
@@ -488,6 +498,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
     }
     agent.onShutdown { unlink(socketPath) }
     PFRedirect.clearStale()                                  // a firewall redirect left by a crashed collector
+    Agent.stopStrayNettop()                                  // and its nettop, from versions before 0.9
     agent.onShutdown { agent.firewall.shutdown() }
     Thread.detachNewThread { agent.acceptClients(server, ownerPid: ownerPid, clientUID: clientUID) }
 
@@ -507,7 +518,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
     Thread.detachNewThread { agent.runTopSampler() }
     if kinds.contains("net") {
         Thread.detachNewThread { agent.runPacketSniffer() }
-        Thread.detachNewThread { agent.runNettopBackstop() }
+        Thread.detachNewThread { agent.runConnectionStats() }
         Thread.detachNewThread { agent.pollNetwork(interval: netInterval) }
     }
     Agent.log("Hostwatch agent listening on \(socketPath) for \(ownerPid > 0 ? "pid \(ownerPid)" : "uid \(clientUID ?? 0)") "
