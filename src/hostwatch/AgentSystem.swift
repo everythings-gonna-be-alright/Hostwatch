@@ -278,6 +278,7 @@ extension Agent {
                 }
                 if let fw = cfg["firewall"] as? [String: Any] { firewall.configure(fw, from: client) }
                 if let answer = cfg["fw_answer"] as? [String: Any] { firewall.answer(answer) }
+                if let w = cfg["watch"] as? [String: Any] { watch.handle(w, from: client) }
                 client.lock.lock()
                 client.configure(cfg)
                 client.lock.unlock()

@@ -16,6 +16,8 @@ struct HUDActions {
     var openBaseline: () -> Void = {}
     var openDomain: (String) -> Void = { _ in }
     var openFirewallSettings: () -> Void = {}
+    /// Watch Closely: record what this event's process does for a while.
+    var watch: (ActivityEvent) -> Void = { _ in }
     var openStory: (Story) -> Void = { _ in }
 }
 
@@ -70,6 +72,7 @@ struct HUDView: View {
                             .onTapGesture(count: 2) { actions.askAI(event) }
                             .contextMenu {
                                 Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
+                                Button("Watch \(event.name) Closely…") { actions.watch(event) }
                                 Menu("Exclude") {
                                     ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
                                         Button(title) { actions.exclude(pattern) }
@@ -913,6 +916,7 @@ struct ActivityWindowView: View {
     @ViewBuilder
     private func rowMenu(_ event: ActivityEvent) -> some View {
         Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
+        Button("Watch \(event.name) Closely…") { actions.watch(event) }
         Divider()
         Text("Pattern: \(event.signatureProcess) → \(event.signaturePattern)")
         ForEach(SignatureStatus.allCases, id: \.self) { status in

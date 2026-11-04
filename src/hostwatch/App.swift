@@ -70,9 +70,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         openBaseline: { [weak self] in self?.openBaselineReport() },
         openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
         openFirewallSettings: { [weak self] in self?.openSettings(.firewall) },
+        watch: { [weak self] event in self?.openWatch(for: event) },
         openStory: { [weak self] story in self?.openStoryDetails(story) }
     )
     private var askWindows: [NSWindow] = []
+    /// Watch Closely windows, by session id.
+    private var watches: [String: (session: WatchSession, window: NSWindow)] = [:]
     /// Learns this Mac's normal behaviour in waves after the first launch (a fresh pattern store).
     private lazy var baseline = BaselineLearner(store: signatures, classifier: classifier,
                                                 freshInstall: signatures.total == 0)
@@ -239,6 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         firewall.onModeChange = { [weak self] mode in self?.model.firewallMode = mode.collector }
         model.onFirewallAsk = { [weak self] key, event in self?.firewall.handleAsk(key: key, event: event) }
         model.onFirewallStatus = { [weak self] state, detail in self?.firewall.relayStatus(state, detail) }
+        model.onWatch = { [weak self] message in self?.watches[message.id]?.session.receive(message) }
         model.firewallMode = firewall.mode.collector
     }
 
@@ -611,6 +615,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             item("Clear Events", #selector(clearEvents), key: "k"),
             .separator(),
             item("Ask AI About Selection…", #selector(askAboutSelection), key: "\r"),
+            item("Watch Selected Process Closely…", #selector(watchSelection), key: "w", modifiers: [.command, .option]),
         ] + marks + [
             item("Exclude Selection…", #selector(excludeSelection)),
             .separator(),
@@ -672,7 +677,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return !hold.held.isEmpty
         case #selector(checkForUpdates):
             return !updates.checking
-        case #selector(askAboutSelection), #selector(markSelection(_:)), #selector(excludeSelection):
+        case #selector(askAboutSelection), #selector(markSelection(_:)), #selector(excludeSelection), #selector(watchSelection):
             return !selectedEvents.isEmpty || (model.windowTab == 1 && !signatures.selection.isEmpty
                                                && mi.action == #selector(markSelection(_:)))
         default:
@@ -706,6 +711,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     @objc private func askAboutSelection() {
         guard let first = selectedEvents.first else { return }
         openAskAI(for: first)
+    }
+
+    @objc private func watchSelection() {
+        guard let first = selectedEvents.first else { return }
+        openWatch(for: first)
     }
 
     @objc private func markSelection(_ sender: NSMenuItem) {
@@ -988,6 +998,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Watch Closely: records what the event's process (and what it starts) does, in its own window.
+    func openWatch(for event: ActivityEvent, seconds: Double = 60) {
+        let path = event.kind == .exec ? event.target : event.proc
+        let session = WatchSession(pid: event.pid, name: event.name, path: path.isEmpty ? ProcessList.path(event.pid) : path,
+                                   seconds: seconds)
+        session.send = { [weak self] watch in self?.model.sendWatch(watch) ?? false }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 860),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Watch Closely: \(event.name)"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: WatchView(session: session))
+        window.center()
+        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        let id = session.id
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let w = self.watches.removeValue(forKey: id) else { return }
+                if w.session.isRecording { w.session.stop() }
+                w.session.analysis?.cancel()
+            }
+        }
+        watches[id] = (session, window)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        session.start()
+    }
+
     private func openActivityWindow(fullScreen: Bool) {
         let window = activityWindow ?? makeActivityWindow()
         activityWindow = window
@@ -1086,6 +1123,7 @@ enum Entry {
         if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
         if args.contains(FirewallProbe.flag) { FirewallProbe.run() }
         if let i = args.firstIndex(of: FirewallRelayTest.flag) { FirewallRelayTest.run(Array(args[(i + 1)...])) }
+        if let i = args.firstIndex(of: AgentWatch.testFlag) { AgentWatch.runTest(Array(args[(i + 1)...])) }
         if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
         if args.contains("--suggest-rules") { runRuleSuggestionDryRun() }
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {

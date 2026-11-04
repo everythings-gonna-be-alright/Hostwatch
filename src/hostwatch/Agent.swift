@@ -242,6 +242,7 @@ final class Agent: @unchecked Sendable {
 
     /// The firewall (Ask and Strict modes): the relay and pf redirect, decisions from the app.
     lazy var firewall = AgentFirewall(agent: self)
+    lazy var watch = AgentWatch(agent: self)
 
     init() { ignoredPids = [selfPid] }
 
@@ -353,7 +354,7 @@ final class Agent: @unchecked Sendable {
         clientsLock.lock()
         let had = clients.removeValue(forKey: ObjectIdentifier(client)) != nil
         clientsLock.unlock()
-        if had { close(client.fd); firewall.clientGone(client) }
+        if had { close(client.fd); firewall.clientGone(client); watch.clientGone(client) }
     }
 
     var clientCount: Int { clientsLock.lock(); defer { clientsLock.unlock() }; return clients.count }
@@ -366,6 +367,7 @@ final class Agent: @unchecked Sendable {
     }
 
     func publish(_ ev: AgentEvent) {
+        if ev.kind == "net" { watch.noteConnection(ev) }                    // part of a watched process's profile
         let payload = ev.jsonLine()
         clientsLock.lock()
         let targets = Array(clients.values)

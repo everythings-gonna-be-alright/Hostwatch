@@ -63,6 +63,8 @@ allow. It never deletes anything.
 **✨ Ask AI**
 - **AI suggests, you decide** – on-device model or Claude; it never trusts high-risk code, python or bash.
 - **Ask Claude** – about any event or domain, or right in a firewall question: what it is, the risks, what to do.
+- **Watch Closely** – record what one process really does for a minute (files, network, other processes, persistence),
+  in plain words; then Claude or the on-device model explains it.
 - **MCP** – let Claude Code investigate your history (read-only).
 
 ## Install
