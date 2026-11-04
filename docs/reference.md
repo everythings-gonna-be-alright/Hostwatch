@@ -274,22 +274,26 @@ Saved in `~/Library/Application Support/Hostwatch/domains.json`.
 - **Not counted:** reverse-DNS provider names, IP-only connections, `.local`/`.arpa` names, and
   macOS system daemons (they talk to Apple constantly).
 - **Baseline:** on first launch, every domain in recorded history counts as known, and the next
-  **hour** is a learning period (Network ▸ Domains → *End Learning Now* to stop early). A domain first reached
+  **hour** is a learning period (Network tab → *End Learning Now* to stop early). A domain first reached
   during learning by unsigned, ad-hoc or quarantined code, or a program in Downloads / Shared / a volume,
   is not learned: it stays new.
 - **New domain:** first contacted after the baseline. For **1 hour** its connections carry a
   purple **NEW DOMAIN** badge in the HUD and the Events list. They pass *Only Important*,
   *Only New* and *Hide Safe*, and add a **New domain** stage (weight 2) to Stories. Example:
   *Slack → sh → curl* fetching from a never-seen domain is Dangerous.
-- **Network ▸ Domains** (the toolbar switch on the Network tab; *Network* in the menu, with a badge): new domains (first seen in the last
-  24 h) or all of them, sortable by first/last seen, connections, programs. Right-click to
-  **Mark Known**, mark as not known, copy, or **Forget** a domain.
+- **Network tab** (⌘5; *Network* in the menu, with a badge): one timeline of destinations, newest first. Each row is
+  a domain (or an address without a name) with its domain status (New, Seen, Known, Baseline, on a threat list) and
+  what the firewall does there (Passes, Asks or Would ask, Blocks or Would block, Blocked by you, Waiting for you);
+  open it for the programs that connected, with **Block** / **Allow** (they mark the pattern, as in Patterns).
+  Connections held in Ask wait in a strip on top. Filters: All, New Domains (first seen in the last 24 h),
+  Blocked & Undecided; every column sorts. Right-click to **Mark Known**, mark as not known, **Forget** a domain,
+  Block or Allow, copy.
 - Test with a replay: `REPLAY_LEARN_MINUTES=30 Hostwatch --story-replay <history.jsonl>` lists the
   domains that would be flagged after that much learning.
 
 ### Domain details and risk score
 
-Double-click a domain in Network ▸ Domains (or right-click ▸ *Details & Ask AI…*). The window shows the domain
+Double-click a domain in the Network tab (or right-click ▸ *Details & Ask AI…*). The window shows the domain
 with New / Usual / Known, beaconing and untrusted-program chips, and a **local risk score (0–100)** with
 each reason and its points: not usual on this Mac +20 (first seen in the last 24 h +10), reached by unsigned,
 ad-hoc, quarantined or downloaded software +30, beaconing +25, an often-abused top-level domain (.xyz, .top,
@@ -341,15 +345,13 @@ settings clears it. The on-device model is free and isn't counted.
 
 ### Firewall
 
-**Network ▸ Firewall** (the Network tab, ⌘5; *Firewall* in its toolbar switch): **Off**, **Watch**, **Ask** or
-**Strict**, picked at the top. Connections waiting for you in Ask are listed first, with Block and Allow (their
-question windows close too). Watch judges every connection Hostwatch sees (TCP and UDP) with the
+*Settings ▸ Firewall*: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
+**Network** tab (⌘5), next to the domains (see below). Watch judges every connection Hostwatch sees (TCP and UDP) with the
 firewall's rules (`FirewallPolicy`), first match wins: local network (loopback, LAN, link-local, multicast) and
 Hostwatch itself pass; a known malware address blocks (even if Safe); a pattern marked Suspicious or Dangerous
 blocks; Safe passes; then by risk: high-risk blocks, routine (macOS, trusted developers) passes; a sealed macOS
 binary that isn't a shell or tool passes; anything else new is asked about. What wouldn't simply pass is listed
-(Blocked by you, Blocked by rules or Would block, Not decided yet; searchable; right-click for the domain's
-details; last 7 days, at most 500, in `firewall-watch.json`), judged again with each pattern's current
+(Network tab, last 7 days, at most 500, in `firewall-watch.json`), judged again with each pattern's current
 status; Allow / Block mark the pattern Safe / Suspicious. Watch blocks nothing.
 
 **Ask and Strict** turn on the relay in the collector (`AgentFirewall`, `FirewallRelay`, `PFRedirect`). pf rules in
@@ -652,7 +654,7 @@ decided yet; Important: Suspicious and Dangerous plus new high-risk (new domains
 matches count as both). Each choice shows how many rows it would list in that tab: events on Events (with the
 kind toggles, search and *Only These* as they are), patterns on Patterns. It applies to the HUD, Events and Patterns.
 
-Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5 (Firewall and Domains), each with its icon and its count as a badge (icons
+Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5 (domains and the firewall), each with its icon and its count as a badge (icons
 only when the window is narrow); the event-kind counters appear on Events only. When exploited macOS flaws aren't
 fixed yet, a slim banner at the top says so (*Details*, *Software Update*, ✕ until another flaw is listed).
 

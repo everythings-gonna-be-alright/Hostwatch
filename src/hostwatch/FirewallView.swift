@@ -1,145 +1,76 @@
 import AppKit
 import SwiftUI
 
-/// Network ▸ Firewall: the mode, the relay's state, connections waiting for you, and what the firewall blocks or
-/// would block or ask about, with Allow and Block for each pattern.
-struct FirewallTabView: View {
+/// Settings ▸ Firewall: the mode, the relay, what it would do (the connections themselves are in the Network tab).
+struct FirewallPane: View {
     @ObservedObject var firewall: FirewallMonitor
     @ObservedObject var signatures: SignatureStore
-    let search: String
-    /// Opens a domain's details window (risk score, programs, Ask AI).
-    var openDomain: (String) -> Void = { _ in }
+    var showNetwork: () -> Void = {}
 
     var body: some View {
-        let all = firewall.list(status: { signatures.status(forKey: $0) })
-        let rows = filtered(all)
-        let prompts = firewall.prompts.filter { matches(search, $0.event.name, $0.event.proc, $0.destination) }
-        VStack(spacing: 0) {
-            bar
-            Divider()
-            Group {
-                if firewall.mode == .off && all.isEmpty && prompts.isEmpty {
-                    ContentUnavailableView {
-                        Label("Firewall Is Off", systemImage: "shield.slash")
-                    } description: {
-                        Text("Watch shows what the firewall would block or ask about, without blocking anything. "
-                             + "Ask holds each new connection until you answer; Strict blocks anything not allowed.")
-                    } actions: {
-                        Button("Start Watching") { firewall.mode = .watch }.buttonStyle(.glassProminent)
-                    }
-                } else if rows.isEmpty && prompts.isEmpty {
-                    ContentUnavailableView {
-                        Label(search.isEmpty ? "Nothing Would Be Blocked" : "No Matches", systemImage: "checkmark.shield")
-                    } description: {
-                        Text(search.isEmpty ? "Every connection seen in the last 7 days passes: the local network, macOS, "
-                             + "Safe patterns and trusted developers." : "No connection matches “\(search)”.")
-                    }
-                } else {
-                    list(rows, prompts: prompts)
+        let list = firewall.list(status: { signatures.status(forKey: $0) })
+        let blocked = list.filter { $0.1.verdict == .block }.count
+        Form {
+            Section {
+                Picker("Mode", selection: $firewall.mode) {
+                    ForEach(FirewallMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            HStack(spacing: 12) {
-                Text(explanation).lineLimit(1).truncationMode(.tail).help(explanation)
-                Spacer()
-                Text(counts(all)).monospacedDigit()
-            }
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-        }
-    }
-
-    private var bar: some View {
-        HStack(spacing: 12) {
-            Picker("Firewall", selection: $firewall.mode) {
-                ForEach(FirewallMode.allCases, id: \.self) { Text($0.short).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .help("Firewall: Off · Watch: block nothing, show what would be blocked · Ask: a new connection waits for your OK · "
-                  + "Strict: only what's allowed connects")
-            if firewall.mode == .ask || firewall.mode == .strict { relayStatus }
-            Spacer()
-            Button("Clear List") { firewall.clear() }
-                .buttonStyle(.glass)
-                .disabled(firewall.entries.isEmpty)
-                .help("Forget the connections listed here (your Allow and Block decisions stay, in Patterns)")
-        }
-        .controlSize(.small)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-    }
-
-    private func list(_ rows: [(FirewallEntry, FirewallDecision)], prompts: [FirewallPrompt]) -> some View {
-        let byYou = rows.filter { $0.1.verdict == .block && signatures.entry($0.0.facts.patternKey)?.source == "you" }
-        let byRules = rows.filter { $0.1.verdict == .block && signatures.entry($0.0.facts.patternKey)?.source != "you" }
-        let asked = rows.filter { $0.1.verdict == .ask }
-        let blocking = firewall.mode == .ask || firewall.mode == .strict
-        let sections = [("Blocked by you", byYou), (blocking ? "Blocked by rules" : "Would block", byRules),
-                        (firewall.mode == .strict ? "Blocked: not decided yet" : "Not decided yet", asked)]
-        return List {
-            if !prompts.isEmpty {
-                Section("Waiting for you (\(prompts.count))") {
-                    ForEach(prompts) { FirewallWaitingRow(prompt: $0, firewall: firewall) }
+                .pickerStyle(.radioGroup)
+                if firewall.mode == .ask || firewall.mode == .strict {
+                    LabeledContent("Status") { relayStatus }
                 }
+            } header: {
+                Text("Firewall")
+            } footer: {
+                Footnote(footnote)
             }
-            ForEach(sections, id: \.0) { title, rows in
-                if !rows.isEmpty {
-                    Section("\(title) (\(rows.count))") {
-                        ForEach(rows, id: \.0.id) { entry, decision in
-                            FirewallRow(entry: entry, decision: decision, signatures: signatures)
-                                .contextMenu { menu(entry) }
+            if firewall.mode != .off {
+                Section {
+                    if firewall.mode == .ask || firewall.mode == .strict {
+                        LabeledContent("Blocked") { Text("\(firewall.blockedCount) since Hostwatch started").monospacedDigit() }
+                    }
+                    LabeledContent("Would block") {
+                        Text("\(blocked)").foregroundStyle(blocked > 0 ? .red : .secondary).monospacedDigit()
+                    }
+                    LabeledContent("Would ask about") { Text("\(list.count - blocked)").monospacedDigit() }
+                    LabeledContent("Connections listed") {
+                        HStack(spacing: 8) {
+                            Text("\(firewall.entries.count)").foregroundStyle(.secondary).monospacedDigit()
+                            Button("Clear List") { firewall.clear() }.controlSize(.small).disabled(firewall.entries.isEmpty)
+                                .help("Forget the connections seen so far (your Allow and Block decisions stay, in Patterns)")
                         }
                     }
+                    LabeledContent("Would pass") {
+                        HStack(spacing: 8) {
+                            Text("\(firewall.allowedCount) connections").foregroundStyle(.secondary).monospacedDigit()
+                            Button("Show in Network…", action: showNetwork).controlSize(.small)
+                                .help("The Network tab: every destination, what the firewall does with it, Block and Allow")
+                        }
+                    }
+                } header: {
+                    Text("Last 7 days")
+                } footer: {
+                    Footnote("Passes: the local network, macOS itself, Hostwatch, patterns that are Safe, trusted "
+                             + "developers. Blocks: known malware addresses, patterns marked Suspicious or Dangerous, and "
+                             + "high-risk ones (such as programs from Downloads). Asks: everything else that's new.")
                 }
             }
         }
+        .formStyle(.grouped)
+        .scrollDisabled(true)
     }
+}
 
-    @ViewBuilder private func menu(_ entry: FirewallEntry) -> some View {
-        if let domain = DomainRegistry.registrable(entry.facts.host) {
-            Button("\(domain): Details & Ask AI…") { openDomain(domain) }
-            Divider()
-        }
-        Button("Copy Destination") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString("\(entry.destination):\(entry.facts.port)", forType: .string)
-        }
-        Button("Copy Program Path") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(entry.facts.program, forType: .string)
-        }
-        Button("Show in Finder") { NSWorkspace.shared.selectFile(entry.facts.program, inFileViewerRootedAtPath: "") }
-    }
-
-    private func filtered(_ all: [(FirewallEntry, FirewallDecision)]) -> [(FirewallEntry, FirewallDecision)] {
-        all.filter { matches(search, $0.0.name, $0.0.facts.program, $0.0.facts.host, $0.0.facts.ip) }
-    }
-
-    private func matches(_ search: String, _ fields: String...) -> Bool {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty || fields.contains { $0.lowercased().contains(q) }
-    }
-
-    private func counts(_ all: [(FirewallEntry, FirewallDecision)]) -> String {
-        let block = all.filter { $0.1.verdict == .block }.count
-        var parts: [String] = []
-        if firewall.mode == .ask || firewall.mode == .strict { parts.append("\(firewall.blockedCount) blocked since start") }
-        parts.append("\(block) block · \(all.count - block) ask · \(firewall.allowedCount) passed · last 7 days")
-        return parts.joined(separator: " · ")
-    }
-
-    var explanation: String {
+extension FirewallPane {
+    var footnote: String {
         switch firewall.mode {
         case .off: return "Off: connections aren't judged."
-        case .watch: return "Watch: nothing is blocked; this shows what Ask and Strict would do."
+        case .watch: return "Watch judges every connection Hostwatch sees the way Ask and Strict would, and lists what they "
+            + "would block or ask about. Nothing is blocked."
         case .ask, .strict:
-            return "Through Hostwatch's relay; nothing is decrypted. Not covered: programs running as root, macOS's DNS, the "
-                + "local network. If the relay fails its web check twice, the firewall turns itself off."
+            return "Your programs' new connections go through Hostwatch's relay (the collector), which checks each new "
+                + "program and destination. Nothing is decrypted. Not covered: programs running as root, macOS's own DNS "
+                + "lookups, the local network. If the relay fails its web check twice, the firewall turns itself off."
         }
     }
 
@@ -148,14 +79,14 @@ struct FirewallTabView: View {
         case "on": Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         case "failed":
             Label(firewall.relayDetail.isEmpty ? "Failed" : firewall.relayDetail, systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.red).lineLimit(1).help(firewall.relayDetail)
+                .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
         default: Label("Waiting for the collector", systemImage: "hourglass").foregroundStyle(.secondary)
         }
     }
 }
 
-/// A connection held in Ask mode, also answerable here (its question window closes too).
-private struct FirewallWaitingRow: View {
+/// A connection held in Ask mode, also answerable in the Network tab (its question window closes too).
+struct FirewallWaitingRow: View {
     let prompt: FirewallPrompt
     @ObservedObject var firewall: FirewallMonitor
 
@@ -412,51 +343,5 @@ struct FirewallAdviceView: View {
         case .dangerous: .red
         case .unknown: .gray
         }
-    }
-}
-
-private struct FirewallRow: View {
-    let entry: FirewallEntry
-    let decision: FirewallDecision
-    let signatures: SignatureStore
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: entry.facts.program))
-                .resizable().frame(width: 22, height: 22)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(entry.name).font(.callout.weight(.semibold))
-                    Text(entry.facts.proto).font(.system(size: 9, weight: .semibold))
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.secondary.opacity(0.18)))
-                    Text("\(entry.destination):\(entry.facts.port)").font(.system(size: 12, design: .monospaced))
-                        .lineLimit(1).truncationMode(.middle)
-                        .help(entry.facts.host.isEmpty ? entry.facts.ip : "\(entry.facts.host) (\(entry.facts.ip))")
-                }
-                Text(decision.reason.prefix(1).uppercased() + decision.reason.dropFirst())
-                    .font(.caption).foregroundStyle(decision.verdict == .block ? .red : .secondary)
-                Text("\(entry.count)× · last \(entry.lastSeen.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            }
-            Spacer()
-            if !entry.facts.patternKey.isEmpty, entry.facts.knownBad.isEmpty {
-                let pattern = entry.facts.patternKey.split(separator: "|").last.map(String.init) ?? ""
-                let mine = signatures.entry(entry.facts.patternKey)
-                if mine?.source == "you", mine?.status == .suspicious || mine?.status == .dangerous {
-                    // Your decision already: say so, and offer the other one.
-                    Label("Blocked by you", systemImage: "hand.raised.fill").foregroundStyle(.secondary).font(.callout)
-                    Button("Allow Instead") { signatures.set(.safe, keys: [entry.facts.patternKey], note: "allowed in Firewall") }
-                        .help("Mark Safe: \(entry.name) → \(pattern)")
-                } else {
-                    Button("Block") { signatures.set(.suspicious, keys: [entry.facts.patternKey], note: "blocked in Firewall") }
-                        .help("Mark Suspicious: \(entry.name) → \(pattern)")
-                    Button("Allow") { signatures.set(.safe, keys: [entry.facts.patternKey], note: "allowed in Firewall") }
-                        .help("Mark Safe: \(entry.name) → \(pattern)")
-                }
-            }
-        }
-        .controlSize(.small)
-        .padding(.vertical, 3)
     }
 }

@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let signatures = SignatureStore()
     private let stories = StoryEngine()
     private let domains = DomainRegistry()
-    private let domainsState = DomainsViewState()
+    private let networkState = NetworkViewState()
     private let rulesTab = RulesTabState()
     /// Processes Hostwatch saw start that still run heavy (CPU or memory).
     private let vitals = ProcessVitals()
@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
         baseline: baseline, intel: intel, claudeGuard: claudeGuard, firewall: firewall, openBaseline: { [weak self] in self?.openBaselineReport() },
+        showNetwork: { [weak self] in self?.openDomains() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
         openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
+        openFirewallSettings: { [weak self] in self?.openSettings(.firewall) },
         openStory: { [weak self] story in self?.openStoryDetails(story) }
     )
     private var askWindows: [NSWindow] = []
@@ -1006,7 +1008,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         window.collectionBehavior = [.fullScreenPrimary]
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
-        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, domainsState: domainsState, firewall: firewall, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, history: history,
+        let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, networkState: networkState, firewall: firewall, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, history: history,
                                                                    signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, actions: actions))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
