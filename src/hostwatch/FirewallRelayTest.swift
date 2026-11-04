@@ -32,7 +32,9 @@ enum FirewallRelayTest {
         guard relay.ready else { print("The relay couldn't listen on port \(port) (in use?)."); exit(1) }
 
         let before = canary(uid)
-        print("Hostwatch relay test · \(seconds) s · web check before: \(before ? "ok" : "FAILED")")
+        let checks = Checks(uid: uid)
+        print("Hostwatch relay test · \(seconds) s · web check before: \(before ? "ok" : "FAILED") · without the relay: "
+              + checks.names.map { "\($0) \(checks.baseline[$0] == true ? "ok" : "unavailable")" }.joined(separator: ", "))
         guard before else { print("The web doesn't work even without the relay; try again when online."); exit(1) }
 
         let (loaded, problem) = PFRedirect.load(PFRedirect.rules(port: port, exemptUIDs: [0, mdns]), failsafe: TimeInterval(seconds + 30))
@@ -50,6 +52,7 @@ enum FirewallRelayTest {
         while Date().timeIntervalSince(start) < Double(seconds) {
             sleep(10)
             let ok = canary(uid)
+            checks.run()
             failures = ok ? 0 : failures + 1
             let f = log.all
             let errors = f.filter { !$0.error.isEmpty }.count
@@ -60,7 +63,52 @@ enum FirewallRelayTest {
         }
         remove()
         report(log.all, relay: relay, seconds: seconds, stoppedEarly: stoppedEarly)
+        print("Checks through the relay: " + checks.summary)
         exit(stoppedEarly.isEmpty ? 0 : 2)
+    }
+
+    /// UDP over IPv4, and TCP and UDP over IPv6, as you: the paths everyday traffic might not touch in a minute.
+    final class Checks {
+        let uid: String
+        let names = ["UDP IPv4 (DNS to 1.1.1.1)", "TCP IPv6 (HTTPS)", "UDP IPv6 (DNS to 2606:4700:4700::1111)"]
+        var baseline: [String: Bool] = [:]
+        var passed: [String: Int] = [:], tried: [String: Int] = [:]
+
+        init(uid: String) {
+            self.uid = uid
+            for n in names { baseline[n] = check(n) }
+        }
+
+        func check(_ name: String) -> Bool {
+            guard !uid.isEmpty else { return false }
+            let sudo = ["-u", "#\(uid)"]
+            switch name {
+            case names[0]: return dig(sudo, "1.1.1.1")
+            case names[1]:
+                let r = PFRedirect.run("/usr/bin/sudo", sudo + ["/usr/bin/curl", "-6", "-s", "-m", "6", "-o", "/dev/null", "-w", "%{http_code}",
+                                                               "https://www.apple.com/library/test/success.html"])
+                return r.out.hasPrefix("2") || r.out.hasPrefix("3")
+            default: return dig(sudo, "2606:4700:4700::1111")
+            }
+        }
+
+        func dig(_ sudo: [String], _ server: String) -> Bool {
+            let r = PFRedirect.run("/usr/bin/sudo", sudo + ["/usr/bin/dig", "@\(server)", "apple.com", "+short", "+time=3", "+tries=1"])
+            return !r.out.isEmpty && !r.out.contains(";;")
+        }
+
+        func run() {
+            for n in names where baseline[n] == true {
+                tried[n, default: 0] += 1
+                if check(n) { passed[n, default: 0] += 1 }
+            }
+        }
+
+        var summary: String {
+            names.map { n in
+                baseline[n] == true ? "\(n) \(passed[n] ?? 0)/\(tried[n] ?? 0)" : "\(n) not available here"
+            }.joined(separator: " · ")
+        }
     }
 
     /// The web through the relay, as you (root is exempt from the redirect).
