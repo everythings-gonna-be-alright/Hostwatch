@@ -234,11 +234,13 @@ struct FirewallListView: View {
                                        description: Text("Every connection seen so far would pass."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                let byYou = list.filter { $0.1.verdict == .block && signatures.entry($0.0.facts.patternKey)?.source == "you" }
+                let byRules = list.filter { $0.1.verdict == .block && signatures.entry($0.0.facts.patternKey)?.source != "you" }
+                let asked = list.filter { $0.1.verdict == .ask }
                 List {
-                    ForEach([FirewallVerdict.block, .ask], id: \.self) { verdict in
-                        let rows = list.filter { $0.1.verdict == verdict }
+                    ForEach([("Blocked by you", byYou), ("Would block", byRules), ("Would ask about", asked)], id: \.0) { title, rows in
                         if !rows.isEmpty {
-                            Section(verdict == .block ? "Would block (\(rows.count))" : "Would ask about (\(rows.count))") {
+                            Section("\(title) (\(rows.count))") {
                                 ForEach(rows, id: \.0.id) { entry, decision in
                                     FirewallRow(entry: entry, decision: decision, signatures: signatures)
                                 }
@@ -286,10 +288,18 @@ private struct FirewallRow: View {
             Spacer()
             if !entry.facts.patternKey.isEmpty, entry.facts.knownBad.isEmpty {
                 let pattern = entry.facts.patternKey.split(separator: "|").last.map(String.init) ?? ""
-                Button("Allow") { signatures.set(.safe, keys: [entry.facts.patternKey], note: "allowed in Firewall") }
-                    .help("Mark Safe: \(entry.name) → \(pattern)")
-                Button("Block") { signatures.set(.suspicious, keys: [entry.facts.patternKey], note: "blocked in Firewall") }
-                    .help("Mark Suspicious: \(entry.name) → \(pattern)")
+                let mine = signatures.entry(entry.facts.patternKey)
+                if mine?.source == "you", mine?.status == .suspicious || mine?.status == .dangerous {
+                    // Your decision already: say so, and offer the other one.
+                    Label("Blocked by you", systemImage: "hand.raised.fill").foregroundStyle(.secondary).font(.callout)
+                    Button("Allow Instead") { signatures.set(.safe, keys: [entry.facts.patternKey], note: "allowed in Firewall") }
+                        .help("Mark Safe: \(entry.name) → \(pattern)")
+                } else {
+                    Button("Allow") { signatures.set(.safe, keys: [entry.facts.patternKey], note: "allowed in Firewall") }
+                        .help("Mark Safe: \(entry.name) → \(pattern)")
+                    Button("Block") { signatures.set(.suspicious, keys: [entry.facts.patternKey], note: "blocked in Firewall") }
+                        .help("Mark Suspicious: \(entry.name) → \(pattern)")
+                }
             }
         }
         .controlSize(.small)

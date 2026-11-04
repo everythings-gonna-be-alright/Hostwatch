@@ -29,6 +29,15 @@ import Testing
         #expect(v(facts(app, ip: "1.2.3.4")) == .ask)                                     // new
     }
 
+    @Test func unknownDestinationsAreLeftOut() throws {
+        let line = #"{"kind":"net","time":"05:55:24","pid":49216,"ppid":49214,"name":"curl","proc":"/usr/bin/curl","target":"?:?","extra":"TCP","inferred":true,"note":"closed"}"#
+        let inferred = try JSONDecoder().decode(ActivityEvent.self, from: Data(line.utf8))
+        #expect(FirewallMonitor.facts(inferred) == nil)       // the firewall always knows where a connection goes
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-fw"), fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("fwu-\(UUID()).json"))
+        fw.mode = .watch
+        #expect(fw.observe(inferred, status: .suspicious) == nil && fw.entries.isEmpty)
+    }
+
     @Test func watchListsWhatWouldntPassAndJudgesAgain() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-fw-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
