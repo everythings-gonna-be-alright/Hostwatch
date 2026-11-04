@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/status-prototype-yellow" alt="Status: prototype">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
+  <a href="https://vshymanskyy.github.io/StandWithUkraine/"><img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand With Ukraine"></a>
 </p>
 
 <p align="center">
