@@ -68,6 +68,30 @@ import Testing
         #expect(fw.prompts.isEmpty && answered.count == 1 && answered[0] == ("k", false))
     }
 
+    /// Forget removes the connections and your firewall decisions for them, but not decisions made in Patterns.
+    @Test func forgettingRemovesTheFirewallDecisions() throws {
+        let (fw, store) = firewall()
+        var flushed = 0
+        fw.flushAnswers = { flushed += 1 }
+        let entries = fw.list(status: { store.status(forKey: $0) })
+        let syncd = try #require(entries.first { $0.0.facts.program.hasSuffix("syncd") }?.0)
+        let fetcher = try #require(entries.first { $0.0.facts.program.hasSuffix("fetcher") }?.0)
+        let key = syncd.facts.patternKey, other = fetcher.facts.patternKey
+        _ = store.observe(net("/opt/tools/bin/syncd", pid: 9, to: "93.184.216.34:443", host: "api.example.com"))
+        _ = store.observe(net("/usr/local/bin/fetcher", pid: 9, to: "198.18.0.7:80"))
+        store.set(.suspicious, keys: [key], note: "blocked in Firewall")
+        store.set(.safe, keys: [other], note: "marked in Patterns")
+        #expect(store.status(forKey: key) == .suspicious)
+
+        let reset = fw.forget([syncd.id, fetcher.id], signatures: store)
+        #expect(reset == [key])
+        #expect(store.status(forKey: key) == .unclassified)                  // your firewall Block is gone
+        #expect(store.status(forKey: other) == .safe)                        // a Patterns decision stays
+        #expect(fw.entries[syncd.id] == nil && fw.entries[fetcher.id] == nil && fw.entries.count == 1)
+        #expect(flushed == 1)                                                  // the collector forgets its answers
+        #expect(fw.forget(["nothing"], signatures: store).isEmpty && flushed == 1)
+    }
+
     @Test func modesHaveShortNames() {
         #expect(FirewallMode.allCases.map(\.short) == ["Off", "Watch", "Ask", "Strict"])
     }

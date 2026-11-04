@@ -433,7 +433,10 @@ struct NetworkView: View {
         if !named.isEmpty {
             Button("Mark \(named.count > 1 ? "\(named.count) Domains" : "Domain") Known") { domains.setKnown(named, true) }
             Button("Mark as Not Known") { domains.setKnown(named, false) }
-            Button("Forget (treat as new next time)") { domains.forget(named) }
+        }
+        if !picked.isEmpty {
+            Button(named.isEmpty ? "Forget" : "Forget (treat as new next time)") { forget(picked) }
+                .help("Also removes its firewall connections and the Allow or Block you gave them; they're asked about again")
             Divider()
         }
         if let e = picked.first(where: \.isConnection)?.entry, picked.count == 1 {
@@ -444,6 +447,15 @@ struct NetworkView: View {
             NSPasteboard.general.setString(picked.map { $0.isConnection ? "\($0.destination) \($0.detail)" : $0.destination }
                 .joined(separator: "\n"), forType: .string)
         }
+    }
+
+    /// Forget: the domains (new again next time), their firewall connections, and your firewall decisions for them.
+    private func forget(_ picked: [NetworkRow]) {
+        let named = picked.filter { $0.record != nil && !$0.isConnection }.map(\.destination)
+        let ids = picked.flatMap { row in row.isConnection ? [row.entry?.id].compactMap { $0 } : (row.children ?? []).compactMap(\.entry?.id) }
+        if !named.isEmpty { domains.forget(named) }
+        firewall.forget(ids, signatures: signatures)
+        state.selection = []
     }
 
     private func time(_ d: Date) -> String {
