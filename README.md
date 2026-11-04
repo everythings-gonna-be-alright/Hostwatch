@@ -65,6 +65,7 @@ allow. It never deletes anything.
 
 **👀 See what happens**
 - **Live HUD** – new processes, connections and file opens as they happen.
+- **Running Now** – every running process with CPU, CPU time, memory and uptime; jump to the moment it was spawned.
 - **Time Travel** – scrub back through recorded activity, resources and heavy processes.
 - **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
 

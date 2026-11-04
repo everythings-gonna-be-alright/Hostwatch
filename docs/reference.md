@@ -18,7 +18,7 @@ Each kind of control has one home:
   badges, Pause Live Stream, **Show HUD** (⌃⌥⌘H, works from any app), Hold Suspicious Processes,
   **Settings…** (⌘,) and Quit.
 - **App menu bar** (while a Hostwatch window is open):
-  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, the **Show** filter
+  - *View*: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, Running Now (⌥⌘R), Time Travel (⌥⌘T), the **Show** filter
     (by pattern status), event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves).
   - *Activity*: Pause, Clear Events (⌘K), Ask AI About Selection (⌘↩), Mark Safe / Suspicious /
     Dangerous, Exclude Selection…, Start/Stop Collector.
@@ -758,6 +758,27 @@ has quit (so nothing is saved back) and opens it again. Full Disk Access stays g
 The event list starts with the newest recorded events from history (up to its 5,000-event limit), so it isn't
 empty; the footer shows how many came from before the restart. They are display only (detection already saw
 them) and sort below every new event. Time Travel shows the rest.
+
+## Running Now
+
+The Events tab's switch (**Events · Running Now**, or *View ▸ Running Now*, ⌥⌘R) swaps the event list for every
+process running at this moment, refreshed every 3 s while the window is on screen:
+
+- **Columns:** process (with its app's icon; ✦ when Hostwatch saw it start), PID, user (root in orange), % CPU
+  (since the previous refresh; orange from 50%), CPU time, memory (physical footprint, as Activity Monitor's
+  *Memory*), threads, running for, parent. Sort by any column; the search field matches name, path, command line,
+  user or PID. The footer totals CPU and memory.
+- **Details** (select a row): path, parent, user, started, running for, CPU now, CPU time, average CPU share since it
+  started, memory, threads, the full command line (secrets masked), and the pattern status of its launch when
+  Hostwatch recorded it.
+- **Show Spawn in Timeline** (double-click, or the button): opens Time Travel at the moment the process started, with
+  its launch selected (the search, *Only These* and a Show filter that would hide it are cleared). A process that
+  started before the recording began can't be shown there.
+- Also: Watch Closely…, Ask AI… (when its launch was recorded this session), Reveal in Finder, Copy Command Line,
+  Copy Path, Copy PID.
+- **How:** the app asks the collector, which (as root) reads every process with libproc (`proc_pid_rusage`, the
+  task info and `KERN_PROCARGS2` for command lines) and answers with one list. CPU % is the difference between two
+  lists. Nothing is asked while the list is closed or the window is hidden.
 
 ## Time Travel
 

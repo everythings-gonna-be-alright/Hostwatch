@@ -277,6 +277,9 @@ final class TimeTravel: ObservableObject {
     @Published private(set) var memLane: [Double?] = []
     /// Resource samples inside the shown slice, for the strip and the banner.
     @Published private(set) var windowSamples: [MetricSample] = []
+    /// The launch event to select once the slice is loaded (Running Now ▸ Show Spawn in Timeline).
+    @Published private(set) var focusID: UUID?
+    private var pendingFocus: (pid: Int, start: Double)?
     /// The last sample at or before the playhead.
     var sampleAtPlayhead: MetricSample? { windowSamples.last { $0.date <= playhead } }
 
@@ -328,9 +331,27 @@ final class TimeTravel: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = nil
         events = []
+        pendingFocus = nil
+        focusID = nil
     }
 
     func toggle() { active ? exit() : enter() }
+
+    /// Opens time travel at the moment a process started, its launch event selected when it was recorded.
+    func reveal(pid: Int, start: Date) {
+        pause()
+        focusID = nil
+        pendingFocus = (pid, start.timeIntervalSince1970)
+        // The slice ends a little after the launch, so it's near the top of the newest-first list.
+        enter(at: start.addingTimeInterval(min(30, span / 4)))
+    }
+
+    /// The launch event of `pid` that started at `start` (s since 1970; 0 or unknown on either side: any).
+    nonisolated static func launch(in events: [ActivityEvent], pid: Int, start: Double) -> ActivityEvent? {
+        let execs = events.filter { $0.kind == .exec && $0.pid == pid }
+        return execs.first { start > 0 && $0.pstart > 0 && abs($0.pstart - start) < 2 }
+            ?? execs.first { start <= 0 || $0.pstart <= 0 }
+    }
 
     // MARK: Moving
 
@@ -405,6 +426,10 @@ final class TimeTravel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.events = result.events
             self.clipped = result.clipped
+            if let f = self.pendingFocus {
+                self.pendingFocus = nil
+                self.focusID = Self.launch(in: result.events, pid: f.pid, start: f.start)?.id
+            }
             self.windowSamples = await self.metrics.samples(from: from, to: to)
             self.loading = false
         }

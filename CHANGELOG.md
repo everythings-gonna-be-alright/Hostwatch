@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Running Now** (Events tab ▸ *Running Now*, ⌥⌘R): every process running at this moment, with % CPU, CPU time,
+  memory, threads, user, parent and how long it has been running, refreshed every 3 s. Select one for its details
+  and full command line; **Show Spawn in Timeline** (or double-click) opens Time Travel at the moment it started,
+  with its launch selected. Watch Closely, Ask AI and Reveal in Finder from there too. Root processes included: the
+  collector reads the list.
+
 ## 0.9.0 – Watch Closely, and one Network tab
 
 - **Network tab** (⌘5, was Domains): domains and the firewall on one timeline, newest first. Each destination

@@ -223,6 +223,9 @@ final class Agent: @unchecked Sendable {
     private var pidPaths = BoundedMap<Int, String>(limit: 8192)
     private var pidParents = BoundedMap<Int, Int>(limit: 8192)
 
+    let processTableLock = NSLock()
+    var processTableBefore: ([ProcessInstance: ProcessUsage], TimeInterval)?   // the last Running Now list's usage
+
     let netLock = NSLock()
     var pidArgs = BoundedMap<Int, String>(limit: 8192)       // command lines, for inferred destinations
     var netPids = BoundedMap<Int, TimeInterval>(limit: 8192)  // pids a connection was reported for
