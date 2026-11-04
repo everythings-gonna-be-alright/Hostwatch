@@ -86,6 +86,7 @@ final class AgentWatch: @unchecked Sendable {
         agent.netLock.lock(); let args = agent.pidArgs[pid] ?? ""; agent.netLock.unlock()
         let recorder = BehaviorRecorder(pid: pid, name: Agent.base(path), path: path, args: args,
                                         ppid: ProcessList.parent(pid), limit: seconds, home: Self.homeOfClient())
+        recorder.adopt(BehaviorRecorder.descendants(of: pid))         // helpers it already runs
         let s = Session(id: id, recorder: recorder, client: client)
         let child: Spawned
         do {
@@ -202,10 +203,13 @@ final class AgentWatch: @unchecked Sendable {
         guard !path.isEmpty else { print("No process \(pid)."); exit(1) }
         let recorder = BehaviorRecorder(pid: pid, name: Agent.base(path), path: path, ppid: ProcessList.parent(pid),
                                         limit: seconds, home: homeOfClient())
-        print("Watching \(Agent.base(path)) (pid \(pid)) for \(Int(seconds)) s with \(supportedEvents.count) event types…")
+        recorder.adopt(BehaviorRecorder.descendants(of: pid))
+        print("Watching \(Agent.base(path)) (pid \(pid)) and \(recorder.tree.count - 1) process(es) it already runs, for "
+              + "\(Int(seconds)) s with \(supportedEvents.count) event types…")
         guard let child = try? Spawned.start("/usr/bin/eslogger", supportedEvents) else { print("eslogger didn't start."); exit(1) }
         let lock = NSLock()
         var parsed = 0, skipped = 0
+        var ignored: [String: Int] = [:]                    // matched a pid but weren't the tree's own events
         Thread.detachNewThread {
             let reader = LineReader(fd: child.stdout!)
             while let line = reader.next() {
@@ -214,7 +218,16 @@ final class AgentWatch: @unchecked Sendable {
                 lock.unlock()
                 guard markers.contains(where: { line.range(of: $0) != nil }),
                       let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { skipped += 1; continue }
-                lock.lock(); recorder.add(raw); parsed += 1; lock.unlock()
+                lock.lock()
+                let before = recorder.profile.events
+                recorder.add(raw)
+                parsed += 1
+                if recorder.profile.events == before {
+                    let type = (raw["event"] as? [String: Any])?.keys.first ?? "?"
+                    let caller = raw["process"] as? [String: Any]
+                    ignored["\(type) by \(Agent.base(Agent.exe(caller))) (\(Agent.pid(caller)))", default: 0] += 1
+                }
+                lock.unlock()
             }
         }
         let start = Date()
@@ -230,6 +243,10 @@ final class AgentWatch: @unchecked Sendable {
         let profile = recorder.profile
         lock.unlock()
         print("Lines: \(parsed) parsed for the tree, \(skipped) skipped (other processes). Events: \(profile.events).")
+        if !ignored.isEmpty {
+            print("Mentioned the tree but done by others (not counted): "
+                  + ignored.sorted { $0.value > $1.value }.prefix(8).map { "\($0.key) ×\($0.value)" }.joined(separator: ", "))
+        }
         print("\nHighlights:")
         for h in profile.highlights() { print("  [\(h.level)] \(h.text)") }
         print("\n" + profile.evidence())
