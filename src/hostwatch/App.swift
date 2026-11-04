@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Claude Code's actions, checked before they run (a PreToolUse hook asks this app).
     private let claudeGuard = ClaudeGuard()
     private var guardPanel: NSPanel?
+    /// Firewall rules; Watch mode lists what they would block (nothing is blocked yet).
+    private let firewall = FirewallMonitor()
     private let sheets = WindowSheetState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
@@ -34,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
-        baseline: baseline, intel: intel, claudeGuard: claudeGuard, openBaseline: { [weak self] in self?.openBaselineReport() },
+        baseline: baseline, intel: intel, claudeGuard: claudeGuard, firewall: firewall, openBaseline: { [weak self] in self?.openBaselineReport() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
         customHistorySize: { [weak self] in self?.customHistorySize() },
@@ -97,7 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
         model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
         metrics.heavyProvider = { [weak self] in self?.vitals.snapshot ?? [] }      // recorded for Time Travel
-        model.onEvent = { [weak self] event in if event.kind == .exec { self?.vitals.noteLaunch(event) } }
+        model.onEvent = { [weak self] event in
+            guard let self else { return }
+            if event.kind == .exec { self.vitals.noteLaunch(event) }
+            if event.kind == .net { self.firewall.observe(event, status: self.signatures.status(for: event)) }
+        }
         model.intel = intel
         intel.seenDomains = { [weak self] in
             let since = Date().addingTimeInterval(-30 * 86400)
@@ -1024,6 +1030,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         signatures.save(sync: true)
         stories.save()
         domains.save()
+        firewall.save()
         guard collector.isRunning, !terminating else { return .terminateNow }
         terminating = true
         var replied = false

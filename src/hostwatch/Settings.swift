@@ -17,6 +17,7 @@ struct SettingsContext {
     let baseline: BaselineLearner
     let intel: ThreatIntel
     let claudeGuard: ClaudeGuard
+    let firewall: FirewallMonitor
     let openBaseline: () -> Void
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
@@ -40,6 +41,7 @@ final class SettingsState: ObservableObject {
     @Published var showReset = false
     @Published var showGuardLog = false
     @Published var guardCopied = false
+    @Published var showFirewallList = false
     @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
         didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
     }
@@ -58,13 +60,14 @@ final class SettingsState: ObservableObject {
 }
 
 enum SettingsPane: Int, CaseIterable {
-    case general, hud, detection, ai, exclusions, history
+    case general, hud, detection, firewall, ai, exclusions, history
 
     var title: String {
         switch self {
         case .general: return "General"
         case .hud: return "HUD"
         case .detection: return "Detection"
+        case .firewall: return "Firewall"
         case .ai: return "AI"
         case .exclusions: return "Exclusions"
         case .history: return "History"
@@ -76,6 +79,7 @@ enum SettingsPane: Int, CaseIterable {
         case .general: return "gearshape"
         case .hud: return "rectangle.inset.topright.filled"
         case .detection: return "shield.lefthalf.filled"
+        case .firewall: return "network.badge.shield.half.filled"
         case .ai: return "sparkles"
         case .exclusions: return "eye.slash"
         case .history: return "clock.arrow.circlepath"
@@ -100,6 +104,7 @@ final class SettingsWindowController: NSWindowController {
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline, intel: c.intel,
                                                           openBaseline: c.openBaseline, ui: state))
+            case .firewall: view = AnyView(FirewallPane(firewall: c.firewall, signatures: c.signatures, ui: state))
             case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, claudeGuard: c.claudeGuard, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,

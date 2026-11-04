@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Firewall, stage 1: Watch mode** (Settings ▸ Firewall): every connection Hostwatch sees is judged as the coming
+  firewall will judge it, per program: passes (local network, macOS itself, Safe patterns, trusted developers),
+  asks (anything new) or blocks (known malware addresses, patterns marked Suspicious or Dangerous, high-risk ones).
+  It lists what it would block or ask about, with Allow and Block. Nothing is blocked yet.
 - **Claude Code guard** (Settings ▸ AI, off until you turn it on): a hook in Claude Code hands Hostwatch every
   command, file change, file read and web fetch before it happens. Dangerous ones are blocked (deleting your home
   folder or a disk, a remote shell, a secret sent out, a known malware address, switching off SIP or Gatekeeper,
