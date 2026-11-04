@@ -96,9 +96,11 @@ enum FirewallRelayTest {
             switch name {
             case names[0]: return dig(sudo, "1.1.1.1")
             case names[1]:
-                let r = PFRedirect.run("/usr/bin/sudo", sudo + ["/usr/bin/curl", "-6", "-s", "-m", "6", "-o", "/dev/null", "-w", "%{http_code}",
+                // Real IPv6 only: without it, curl -6 reaches IPv4 servers through IPv4-mapped addresses (::ffff:…).
+                let r = PFRedirect.run("/usr/bin/sudo", sudo + ["/usr/bin/curl", "-6", "-s", "-m", "6", "-o", "/dev/null", "-w", "%{http_code} %{remote_ip}",
                                                                "https://www.apple.com/library/test/success.html"])
-                return r.out.hasPrefix("2") || r.out.hasPrefix("3")
+                let parts = r.out.split(separator: " ")
+                return parts.count == 2 && (parts[0].hasPrefix("2") || parts[0].hasPrefix("3")) && !parts[1].hasPrefix("::ffff:")
             default: return dig(sudo, "2606:4700:4700::1111")
             }
         }
