@@ -12,24 +12,24 @@ extension GuardPrompt {
     }
 }
 
-/// The floating panel when Claude Code won't ask you itself (it runs with permissions skipped): Block or
-/// Allow Once; no answer blocks it.
+/// The question when Claude Code won't ask you itself (it runs with permissions skipped), in the style of macOS's
+/// permission alerts. Block is the default (Return); Escape blocks too; no answer blocks it.
 struct GuardPromptView: View {
     @ObservedObject var claudeGuard: ClaudeGuard
 
     var body: some View {
         if let prompt = claudeGuard.prompts.first {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "exclamationmark.shield.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.orange)
-                        .symbolRenderingMode(.hierarchical)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(prompt.title).font(.headline)
-                        Text("It " + prompt.reason + ".").font(.callout).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            VStack(spacing: 14) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.orange)
+                    .symbolRenderingMode(.hierarchical)
+                    .accessibilityHidden(true)
+                VStack(spacing: 5) {
+                    Text(prompt.title).font(.headline).multilineTextAlignment(.center)
+                    Text("It " + prompt.reason + ".")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
                 ScrollView {
                     Text(prompt.subject)
@@ -38,29 +38,35 @@ struct GuardPromptView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
-                .frame(maxHeight: 130)
+                .frame(maxHeight: 120)
                 .fixedSize(horizontal: false, vertical: true)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.1)))
-                Text("In \(Self.short(prompt.cwd)). Claude Code is running without asking for permission, so Hostwatch asks instead.")
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
+                Text("In \(Self.short(prompt.cwd)). Claude Code runs without asking for permission, so Hostwatch asks.")
                     .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack {
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 8) {
+                    HStack(spacing: 10) {
+                        Button { claudeGuard.answer(prompt.id, true) } label: { Text("Allow Once").frame(maxWidth: .infinity) }
+                            .buttonStyle(.glass)
+                        Button { claudeGuard.answer(prompt.id, false) } label: { Text("Block").frame(maxWidth: .infinity) }
+                            .buttonStyle(.glassProminent)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    .controlSize(.large)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let left = max(0, Int(prompt.deadline.timeIntervalSince(context.date).rounded()))
-                        Text("Blocked in \(left) s if you don't answer").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                        Text("Blocked in \(left) s if you don't answer"
+                             + (claudeGuard.prompts.count > 1 ? " · \(claudeGuard.prompts.count - 1) more waiting" : ""))
+                            .font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
                     }
-                    if claudeGuard.prompts.count > 1 {
-                        Text("· \(claudeGuard.prompts.count - 1) more waiting").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Allow Once") { claudeGuard.answer(prompt.id, true) }
-                    Button("Block") { claudeGuard.answer(prompt.id, false) }
-                        .keyboardShortcut(.defaultAction)
                 }
+                .padding(.top, 4)
             }
-            .padding(18)
-            .frame(width: 520)
+            .padding(.horizontal, 22)
+            .padding(.top, 26)
+            .padding(.bottom, 16)
+            .frame(width: 400)
+            .onExitCommand { claudeGuard.answer(prompt.id, false) }
         }
     }
 
