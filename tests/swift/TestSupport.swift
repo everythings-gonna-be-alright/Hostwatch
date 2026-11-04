@@ -100,11 +100,18 @@ enum Binaries {
     }
 }
 
-/// A throwaway UserDefaults suite, removed (with its plist in ~/Library/Preferences) when the test run ends.
+/// A throwaway UserDefaults suite. Its name is a file path in a temporary folder, so the settings never land in
+/// ~/Library/Preferences (removing a suite there doesn't stick: the preferences daemon writes an empty plist back).
+/// The folder is emptied when the test run ends and again at the next run.
 func scratchDefaults(_ prefix: String = "hostwatch-tests") -> UserDefaults {
-    let name = "\(prefix)-\(UUID().uuidString)"
     ScratchDefaults.lock.lock()
-    if ScratchDefaults.names.isEmpty { atexit { ScratchDefaults.removeAll() } }
+    if !ScratchDefaults.started {
+        ScratchDefaults.started = true
+        try? FileManager.default.removeItem(at: ScratchDefaults.folder)            // leftovers from an earlier run
+        try? FileManager.default.createDirectory(at: ScratchDefaults.folder, withIntermediateDirectories: true)
+        atexit { ScratchDefaults.removeAll() }
+    }
+    let name = ScratchDefaults.folder.appendingPathComponent("\(prefix)-\(UUID().uuidString)").path
     ScratchDefaults.names.append(name)
     ScratchDefaults.lock.unlock()
     return UserDefaults(suiteName: name)!
@@ -112,13 +119,12 @@ func scratchDefaults(_ prefix: String = "hostwatch-tests") -> UserDefaults {
 
 enum ScratchDefaults {
     nonisolated(unsafe) static var names: [String] = []
+    nonisolated(unsafe) static var started = false
     static let lock = NSLock()
+    static let folder = FileManager.default.temporaryDirectory.appendingPathComponent("hostwatch-test-defaults", isDirectory: true)
 
     static func removeAll() {
-        let prefs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
-        for name in names {
-            UserDefaults.standard.removePersistentDomain(forName: name)
-            try? FileManager.default.removeItem(at: prefs.appendingPathComponent(name + ".plist"))
-        }
+        for name in names { UserDefaults.standard.removePersistentDomain(forName: name) }
+        try? FileManager.default.removeItem(at: folder)
     }
 }
