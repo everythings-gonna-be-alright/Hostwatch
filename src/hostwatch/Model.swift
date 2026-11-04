@@ -378,6 +378,8 @@ final class HUDModel: ObservableObject {
     var onFirewallAsk: ((String, ActivityEvent) -> Void)?
     /// The firewall's state in the collector ("on", "off", "failed") and why.
     var onFirewallStatus: ((String, String) -> Void)?
+    /// Watch Closely: the collector's recording of one process (progress and result).
+    var onWatch: ((WatchMessage) -> Void)?
     /// What the collector's firewall should do: "off", "ask" or "strict" (sent on every connect).
     var firewallMode = "off" { didSet { if firewallMode != oldValue { sendFirewall() } } }
 
@@ -647,6 +649,13 @@ final class HUDModel: ObservableObject {
     }
 
     /// The answer to a firewall question, remembered by the collector for `ttl` seconds.
+    /// Starts or stops a watch; false when the collector isn't connected.
+    func sendWatch(_ watch: [String: Any]) -> Bool {
+        guard connected else { return false }
+        send(["watch": watch])
+        return true
+    }
+
     func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
         send(["fw_answer": ["key": key, "pass": pass, "ttl": ttl]])
     }
@@ -679,6 +688,7 @@ final class HUDModel: ObservableObject {
     private static let topMarker = Data(#""kind":"top""#.utf8)
     private static let askMarker = Data(#""kind":"fw_ask""#.utf8)
     private static let statusMarker = Data(#""kind":"fw_status""#.utf8)
+    private static let watchMarker = Data(#""kind":"watch""#.utf8)
     private struct TopMessage: Decodable {
         var procs: [TopProcess]
         var disk_read: Double?
@@ -712,6 +722,11 @@ final class HUDModel: ObservableObject {
                    let event = try? decoder.decode(ActivityEvent.self, from: netLine) {
                     onFirewallAsk?(key, event)
                 }
+                continue
+            }
+            // A watch is reported even while paused: you asked for it.
+            if line.range(of: Self.watchMarker) != nil {
+                if let m = try? WatchMessage.decoder.decode(WatchMessage.self, from: Data(line)) { onWatch?(m) }
                 continue
             }
             if line.range(of: Self.statusMarker) != nil {

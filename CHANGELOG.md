@@ -21,6 +21,11 @@
 - **Patterns grouped by program** (Group by Process, on by default): one row per program with its patterns under
   it, showing the most serious status, how many are New and the total count. Marking a program's row marks all
   its patterns.
+- **Watch Closely:** right-click an event (or ⌥⌘W) to record for a minute what that process and everything it
+  starts actually does: files, network, other processes it touches, persistence, privileges, privacy permissions,
+  services, memory. Shown in plain words with what stands out first; then Claude or the on-device model explains
+  what the process is doing and whether it's dangerous. Built on Endpoint Security, no new permissions. Test tool:
+  `sudo Hostwatch --watch-test <pid> [seconds]`.
 - **Faster Patterns tab:** the list is rebuilt only when something it shows changed (at most a few times a second
   while events stream in, never on a redraw or a click), in the background from a copy of the patterns, with
   every count in the same pass and sort values worked out once. On 7,800 patterns the main thread's share went

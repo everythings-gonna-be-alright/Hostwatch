@@ -400,6 +400,27 @@ about once ("A Docker container wants to connect to pypi.org"), and Block stops 
 bridged or shared (NAT) networking send packets from the VM's own interface, not from a Mac process, so the relay
 never sees them.
 
+### Watch Closely
+
+Right-click an event (or Activity ▸ *Watch Selected Process Closely…*, ⌥⌘W) to record what its process, and every
+process it starts, does for 30 s to 5 min (1 min by default). The collector runs a second `eslogger` with about 60
+Endpoint Security event types (`BehaviorRecorder.events`, those this macOS knows): file create, write, rename,
+delete, permissions and quarantine changes; code loaded and memory made executable; signals, task ports, debugging
+and thread injection into other processes; setuid, sudo, authorization; XPC and Unix-socket connections; login
+items, configuration profiles, privacy (TCC) changes; kernel extensions, drivers, mounts and more. Lines are checked
+for the tree's pids before they're parsed, so other processes cost almost nothing. The collector's own connection
+sources add the network. The result is a behaviour profile (`BehaviorProfile`, never the raw events), sent to the
+app every 2 s; recording ends at the time limit, on *Stop*, when every watched process has exited, or when the app
+goes away.
+
+The window shows **What stands out** first (local rules: persistence, privacy changes, injection into or control of
+other processes, privilege changes, keychains, SSH and cloud keys, browser data, launch agents, removed quarantine,
+executables made in temporary folders, mass renames), then processes as a tree, network, other processes, persistence,
+privileges, system, services, files grouped by folder (changes first) and event counts. When recording ends, **Ask**
+explains it with Claude or Apple's on-device model (the engine switch, as in Ask AI); the evidence is the profile,
+most telling first, with the signer and parent chain, editable before sending, secrets masked. Test it as root:
+`sudo Hostwatch --watch-test <pid> [seconds]` prints the highlights and the evidence.
+
 ### Claude Code guard
 
 *Settings ▸ AI ▸ Claude Code guard* (off by default) adds a `PreToolUse` hook to Claude Code's user settings
