@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 // MARK: - Signature model
@@ -1005,7 +1006,10 @@ final class SignatureStore: ObservableObject {
     /// "You", "Rule: …", "Baseline: Slack", "AI (on-device)", "AI suggests Safe", or "New".
     func decidedBy(_ key: String) -> String {
         guard let e = entries[key] else { return "" }
-        let status = status(forKey: key)
+        return Self.decidedBy(e, status: status(forKey: key))
+    }
+
+    nonisolated static func decidedBy(_ e: SignatureEntry, status: SignatureStatus) -> String {
         if status == .unclassified {
             if e.reopened != nil { return "Reopened" }
             if let s = e.suggestion { return "AI suggests \(s.status.title)" }
@@ -1112,9 +1116,16 @@ final class SignatureStore: ObservableObject {
     /// Seen once, not high risk, not Suspicious or Dangerous, not decided by you or a rule of yours: a command typed
     /// once, a one-time connection. Recorded when it happens (detection works the first time); hidden in Patterns.
     func isOneOff(_ e: SignatureEntry) -> Bool {
-        guard e.count <= 1, e.risk != .high, e.reopened == nil, !isCombined(e.id), !reviewedByYou(e.id) else { return false }
-        let status = status(forKey: e.id)
-        return status == .unclassified || status == .safe
+        e.count <= 1 && isOneOff(e, status: status(forKey: e.id), reviewed: reviewedByYou(e.id))
+    }
+
+    private func isOneOff(_ e: SignatureEntry, status: SignatureStatus, reviewed: Bool) -> Bool {
+        Self.isOneOff(e, status: status, reviewed: reviewed, combined: isCombined(e.id))
+    }
+
+    nonisolated static func isOneOff(_ e: SignatureEntry, status: SignatureStatus, reviewed: Bool, combined: Bool) -> Bool {
+        e.count <= 1 && e.risk != .high && e.reopened == nil && !reviewed && (status == .unclassified || status == .safe)
+            && !combined
     }
 
     /// A one-off nobody decided, or decided Safe only automatically (routine): forgotten after a week. Ones an AI
@@ -1285,18 +1296,48 @@ final class SignatureStore: ObservableObject {
 
     // MARK: Queries for views
 
-    /// How many rows the Patterns table shows for a Show choice (same search and scope, no sorting).
+
+    /// What the Patterns tab's rows are made from: copies of the store's state (cheap: copy-on-write), so the
+    /// work can run off the main thread.
+    func patternInput(filter: SignatureFilter) -> PatternListInput {
+        PatternListInput(entries: entries, processRules: processRules, combined: Set(merges.map(\.key)),
+                         search: search.trimmingCharacters(in: .whitespaces).lowercased(), scope: scope?.keys,
+                         showSeenOnce: showSeenOnce, filter: filter)
+    }
+
+    /// Everything the Patterns tab shows, in one pass over the patterns: the rows (unsorted) and every count.
+    func patternSnapshot(filter: SignatureFilter) -> (items: [PatternItem], counts: PatternCounts) {
+        patternInput(filter: filter).compute()
+    }
+
+    /// How many rows the Patterns table shows for a Show choice (same search and scope).
     func patternCount(filter: SignatureFilter) -> Int {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let scope = self.scope
-        return entries.values.reduce(0) { n, e in
-            guard scope.map({ $0.keys.contains(e.id) }) ?? true,
-                  q.isEmpty || e.process.lowercased().contains(q) || e.pattern.lowercased().contains(q)
-                    || e.exampleName.lowercased().contains(q) else { return n }
-            guard listed(e, searching: !q.isEmpty) else { return n }
-            return scope != nil || filter.admits(status(forKey: e.id), risk: e.risk, reviewed: reviewedByYou(e.id)) ? n + 1 : n
+        switch filter {
+        case .all: return patternSnapshot(filter: .all).items.count
+        case .unclassified: return patternSnapshot(filter: .all).counts.new
+        case .important: return patternSnapshot(filter: .all).counts.important
         }
     }
+
+    /// One-offs the table would show with Seen Once on (same Show filter).
+    func oneOffCount(filter: SignatureFilter) -> Int { patternSnapshot(filter: filter).counts.oneOffs }
+
+    /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
+    func patternItems(filter: SignatureFilter) -> [PatternItem] {
+        PatternItem.sorted(patternSnapshot(filter: filter).items, by: patternOrder)
+    }
+
+    /// What the Patterns table's rows depend on (not the selection: clicking a row rebuilds nothing).
+    private(set) lazy var listChanges: AnyPublisher<Void, Never> = {
+        Publishers.MergeMany([$revision.map { _ in () }.eraseToAnyPublisher(),
+                              $search.map { _ in () }.eraseToAnyPublisher(),
+                              $scope.map { _ in () }.eraseToAnyPublisher(),
+                              $patternOrder.map { _ in () }.eraseToAnyPublisher(),
+                              $showSeenOnce.map { _ in () }.eraseToAnyPublisher(),
+                              $groupByProcess.map { _ in () }.eraseToAnyPublisher()])
+            .dropFirst(6)                                                    // each sends its current value at once
+            .eraseToAnyPublisher()
+    }()
 
     /// The Patterns tab groups patterns under their program.
     @Published var groupByProcess = UserDefaults.standard.object(forKey: "patternsGroupByProcess") as? Bool ?? true {
@@ -1323,29 +1364,7 @@ final class SignatureStore: ObservableObject {
         showSeenOnce || searching || scope != nil || !isOneOff(e)
     }
 
-    /// One-offs the table would show with Seen Once on (same search and Show filter).
-    func oneOffCount(filter: SignatureFilter) -> Int {
-        entries.values.filter { isOneOff($0) && filter.admits(status(forKey: $0.id), risk: $0.risk, reviewed: reviewedByYou($0.id)) }.count
-    }
 
-    /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
-    func patternItems(filter: SignatureFilter) -> [PatternItem] {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let scope = self.scope
-        return entries.values
-            .filter { e in scope.map { $0.keys.contains(e.id) } ?? true }
-            .filter { q.isEmpty || $0.process.lowercased().contains(q) || $0.pattern.lowercased().contains(q)
-                || $0.exampleName.lowercased().contains(q) }
-            .filter { listed($0, searching: !q.isEmpty) }
-            .compactMap { e -> PatternItem? in
-                let status = status(forKey: e.id)
-                guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
-                let note = note(forKey: e.id)
-                return PatternItem(entry: e, status: status, statusRank: rank(status),
-                                   source: note.source, note: note.note, decidedBy: decidedBy(e.id))
-            }
-            .sorted(using: patternOrder)
-    }
 
     /// You decided this pattern: on the pattern itself, or through a whole-process rule you set.
     func reviewedByYou(_ key: String) -> Bool {
@@ -1373,7 +1392,9 @@ final class SignatureStore: ObservableObject {
             .map { $0 }
     }
 
-    func rank(_ s: SignatureStatus) -> Int {
+    func rank(_ s: SignatureStatus) -> Int { Self.rank(s) }
+
+    nonisolated static func rank(_ s: SignatureStatus) -> Int {
         switch s {
         case .dangerous: return 0
         case .suspicious: return 1

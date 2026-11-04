@@ -74,3 +74,64 @@ import Testing
             .appendingPathComponent("patterns-grouped.png"))
     }
 }
+
+/// The Patterns list is built off the main thread from a copy of the store; it must say exactly what the store says.
+@MainActor @Suite(.serialized) struct PatternListBuilding {
+    func store() -> SignatureStore {
+        _ = TestEnv.ready
+        let s = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hw-list-\(UUID().uuidString)"))
+        s.showSeenOnce = true
+        for (i, host) in ["google.us", "example.com", "pypi.org", "github.com"].enumerated() {
+            let e = net("/usr/bin/curl", pid: 50 + i, to: "142.250.1.\(i):443", host: host)
+            _ = s.observe(e); _ = s.observe(e)
+        }
+        let tool = net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 70, to: "45.1.2.3:443")
+        _ = s.observe(tool); _ = s.observe(tool)
+        let keys = s.allEntries.map(\.id).sorted()
+        s.set(.dangerous, keys: [keys[0]])
+        s.set(.safe, keys: [keys[1]], note: "allowed in Firewall")
+        return s
+    }
+
+    @Test func backgroundRowsMatchTheStore() {
+        let s = store()
+        defer { s.showSeenOnce = false }
+        let (items, counts) = s.patternInput(filter: .all).compute()
+        #expect(items.count == s.allEntries.count)
+        for item in items {
+            #expect(item.status == s.status(forKey: item.id))
+            #expect(item.decidedBy == s.decidedBy(item.id))
+            #expect(item.note == s.note(forKey: item.id).note && item.source == s.note(forKey: item.id).source)
+        }
+        for status in SignatureStatus.allCases { #expect((counts.byStatus[status] ?? 0) == s.count(status)) }
+        let important = s.allEntries.filter {
+            SignatureFilter.important.admits(s.status(forKey: $0.id), risk: $0.risk, reviewed: s.reviewedByYou($0.id))
+        }.count
+        #expect(counts.important == important && important >= 1)
+    }
+
+    @Test func fastSortingAgreesWithTheTablesComparator() {
+        let s = store()
+        defer { s.showSeenOnce = false }
+        let items = s.patternInput(filter: .all).compute().items
+        for order in [KeyPathComparator(\PatternItem.count, order: .reverse), KeyPathComparator(\PatternItem.priority),
+                      KeyPathComparator(\PatternItem.lastSeen, order: .reverse)] {
+            let fast = PatternItem.sorted(items, by: [order]).map { $0[keyPath: order.keyPath] as! AnyHashable }
+            let slow = items.sorted(using: [order]).map { $0[keyPath: order.keyPath] as! AnyHashable }
+            #expect(fast == slow)
+        }
+    }
+
+    @Test func theModelPublishesRowsAndCounts() async throws {
+        let s = store()
+        defer { s.showSeenOnce = false }
+        let model = PatternListModel()
+        model.build(s, filter: .all, wait: true)
+        #expect(model.shown == 5 && model.counts.byStatus[.dangerous] == s.count(.dangerous))
+        let important = s.patternItems(filter: .important).count
+        s.groupByProcess = true
+        model.build(s, filter: .important)                              // in the background
+        for _ in 0..<50 where model.shown != important { try await Task.sleep(nanoseconds: 20_000_000) }
+        #expect(model.shown == important && important < 5)
+    }
+}

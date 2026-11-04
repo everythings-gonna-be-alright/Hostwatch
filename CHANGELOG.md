@@ -21,6 +21,10 @@
 - **Patterns grouped by program** (Group by Process, on by default): one row per program with its patterns under
   it, showing the most serious status, how many are New and the total count. Marking a program's row marks all
   its patterns.
+- **Faster Patterns tab:** the list is rebuilt only when something it shows changed (at most a few times a second
+  while events stream in, never on a redraw or a click), in the background from a copy of the patterns, with
+  every count in the same pass and sort values worked out once. On 7,800 patterns the main thread's share went
+  from about 230 ms per update to under 1 ms. Decided By now comes after Process and Pattern.
 - **One-off patterns:** a command typed once (or a one-time connection) that you didn't decide and isn't risky is
   hidden in Patterns unless **Seen Once** is on, and forgotten after a week unless it happens again (if it's
   undecided or Safe only automatically). It's still
