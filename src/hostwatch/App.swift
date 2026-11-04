@@ -245,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         var added = false
         for prompt in firewall.prompts where firewallPanels[prompt.id] == nil {
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 190),
-                                styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+                                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.title = "Firewall"
             panel.titlebarAppearsTransparent = true
             panel.level = .floating
@@ -264,7 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                                              y: screen.midY - size.height / 2 - slot * 34))
             }
             firewallPanels[prompt.id] = panel
+            // Non-activating: answering doesn't switch you to Hostwatch's main window.
             panel.orderFrontRegardless()
+            panel.makeKey()
             added = true
         }
         if added { NSSound(named: "Tink")?.play() }
@@ -292,7 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         if guardPanel == nil {
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 240),
-                                styleMask: [.titled, .fullSizeContentView],
+                                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
                                 backing: .buffered, defer: false)
             panel.title = "Claude Code Guard"
             panel.titlebarAppearsTransparent = true
@@ -307,8 +309,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         guard let panel = guardPanel, !panel.isVisible else { return }
         panel.center()
-        NSApp.activate()
-        panel.makeKeyAndOrderFront(nil)
+        // In front and ready for Return, without bringing Hostwatch's other windows forward.
+        panel.orderFrontRegardless()
+        panel.makeKey()
         NSSound(named: "Funk")?.play()
     }
 
