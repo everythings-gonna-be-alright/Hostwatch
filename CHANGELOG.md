@@ -1,30 +1,34 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 – a firewall, and a guard for Claude Code
 
-- **Ask Claude in a firewall question:** the window has an *Ask Claude* button; Claude's advice appears inside it
-  (Allow or Block first, then what the program and the destination are, and the risks), with a verdict and risk
-  badge. Uses the same evidence as Ask AI; counted in the Claude usage counter.
-- **Firewall: Ask and Strict modes** (Settings ▸ Firewall). Your programs' new TCP and UDP connections go through a
-  relay in the collector (pf on the loopback; nothing decrypted, only the TLS server name read), which checks each
-  new program and destination with the firewall's rules. **Ask**: a new one waits, without a time limit, while its
-  own window asks Allow / Block (your answer decides the pattern); one window per question, in the middle of the screen. **Strict**: anything not allowed is
-  blocked. Fail-safes: the redirect goes away when you switch off, when the collector stops, through a watchdog if
-  it crashes, after a reboot, and if the web check through the relay fails twice. Not covered: root's programs,
-  macOS's own DNS lookups, the local network. Test tools: `sudo Hostwatch --firewall-probe` and
-  `--firewall-relay-test`.
-- **Firewall, stage 1: Watch mode** (Settings ▸ Firewall): every connection Hostwatch sees is judged as the coming
-  firewall will judge it, per program: passes (local network, macOS itself, Safe patterns, trusted developers),
-  asks (anything new) or blocks (known malware addresses, patterns marked Suspicious or Dangerous, high-risk ones).
-  It lists what it would block or ask about, with Allow and Block. Nothing is blocked yet.
-- **Claude Code guard** (Settings ▸ AI, off until you turn it on): a hook in Claude Code hands Hostwatch every
-  command, file change, file read and web fetch before it happens. Dangerous ones are blocked (deleting your home
-  folder or a disk, a remote shell, a secret sent out, a known malware address, switching off SIP or Gatekeeper,
-  deleting Hostwatch); risky ones need your OK (code downloaded and run, decoded commands, launch agents and
-  startup files, crontab, reading keys and passwords, sudo, AppleScript, deletions outside the project, scripts
-  that do any of this). Claude Code asks you; when it runs without asking, a Hostwatch panel does (no answer in
-  60 s blocks it). Hostwatch never approves anything itself; without the app the same rules apply, minus the threat
-  lists. A log of what was blocked or asked, and a warning if the hook is removed from Claude Code's settings.
+- **Firewall** (Settings ▸ Firewall: Off, Watch, Ask, Strict). Each program's new TCP and UDP connections are
+  judged with Hostwatch's rules: the local network, macOS itself, Safe patterns and trusted developers pass; known
+  malware addresses, patterns marked Suspicious or Dangerous and high-risk ones are blocked; anything new is asked
+  about.
+  - **Watch** blocks nothing and lists what would be blocked or asked about, with Allow and Block.
+  - **Ask** holds a new connection, without a time limit, while a window in the middle of the screen asks
+    **Allow / Block**; your answer decides the pattern. Answering doesn't bring Hostwatch's other windows forward.
+  - **Strict** blocks anything not allowed, without asking.
+  - How: the collector's relay (pf on the loopback, IPv4 and IPv6, every interface) takes your programs' new
+    connections, finds where each was going and which program made it, and reads only the TLS server name
+    (nothing is decrypted). No paid Apple entitlement is needed.
+  - Fail-safes: the redirect goes away when you switch to Watch or Off, when the collector stops, through a
+    watchdog if it crashes, at reboot, and if the web check through the relay fails twice.
+  - Not covered: programs running as root, macOS's own DNS lookups, the local network.
+  - Test tools (as root): `--firewall-probe`, `--firewall-relay-test [seconds]`.
+- **Ask Claude in a firewall question** (✱ Ask Claude, ⌘K): Claude's advice appears in the window (Allow or
+  Block first, then the program, the destination and the risks) with a verdict and risk badge. You still decide.
+- **Claude Code guard** (Settings ▸ AI, off until you turn it on): a hook hands Hostwatch every command, file change,
+  file read and web fetch Claude Code is about to make.
+  - Blocked: deleting your home folder or a disk, a remote shell, a secret sent out, a known malware address,
+    switching off SIP or Gatekeeper, deleting Hostwatch.
+  - You're asked: code downloaded and run, decoded commands, launch agents and startup files, crontab, reading keys
+    and passwords, sudo, AppleScript, deletions outside the project, scripts that do any of this.
+  - Claude Code asks you; when it runs without asking, a Hostwatch window does (no answer in 60 s blocks).
+    Hostwatch never approves anything itself; without the app the same rules apply, minus the threat lists.
+  - A log of what was blocked or asked, a warning if the hook is removed, and the hook as a fragment to copy into
+    a project's or the managed settings.
 
 ## 0.7.0 – known threats, far fewer decisions
 

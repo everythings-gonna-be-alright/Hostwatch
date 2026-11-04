@@ -6,7 +6,8 @@
 
 <p align="center">
   Behavior-based intrusion detection for macOS.<br>
-  Learns what's normal on your Mac, flags what isn't, and connects small signs into a story.
+  Learns what's normal on your Mac, flags what isn't, connects small signs into a story,<br>
+  and can stop unknown connections and risky Claude Code commands.
 </p>
 
 <p align="center">
@@ -32,10 +33,16 @@ An app starting a shell, a file landing in Downloads, a connection to a new serv
 own. Attacks are **chains** of such steps. Hostwatch watches processes, files and connections, learns
 what's normal on your Mac, and shows only what's new or suspicious, linked into the story of what happened.
 
-It detects and explains. It never deletes anything.
+It detects and explains, and if you turn them on, its firewall and Claude Code guard stop what you didn't
+allow. It never deletes anything.
 
 ## What it does
 
+- **Firewall** – each app's new connections checked before they're made: allowed ones pass, unknown ones wait
+  while a window asks **Allow / Block** (*Ask*), or are refused (*Strict*). *Watch* only shows what it would do.
+- **Claude Code guard** – Claude Code's commands checked before they run: the dangerous blocked, the risky
+  need your OK.
+- **Ask Claude** – in any question window, Claude explains the program and the destination and suggests what to do.
 - **Live HUD** – new processes, connections and file opens as they happen.
 - **Patterns** – events grouped by behaviour; ordinary ones are decided automatically, so few need you.
 - **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
@@ -47,7 +54,6 @@ It detects and explains. It never deletes anything.
 - **Network signals** – hostnames, first-seen domains, beaconing, raw-IP connections.
 - **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
 - **Ask AI / MCP** – ask about any event, or let Claude Code investigate your history (read-only).
-- **Claude Code guard** – checks what Claude Code is about to run: blocks the dangerous, asks you about the risky.
 
 ## Install
 
@@ -66,18 +72,21 @@ Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or th
 ## How it works
 
 ```
-collector (root, read-only)            Hostwatch.app (you)
+collector (root)                       Hostwatch.app (you)
 eslogger · tcpdump · lsof · libproc ─► patterns · baseline · stories · domains
-          verified Unix socket          HUD · window · Time Travel · Ask AI · MCP
+firewall relay (pf)  ◄── Allow/Block ── HUD · window · Time Travel · Ask AI · MCP
+          verified Unix socket
 ```
 
-The collector is built into the app and only observes. Everything stays on your Mac, except what you
-send to Claude and a daily update check (both optional).
+The collector is built into the app. It only observes, unless you turn on the firewall: then it also relays
+your apps' new connections through itself (macOS's own pf, no extension or paid entitlement needed).
+Everything stays on your Mac, except what you send to Claude and a daily update check (both optional).
 
 ## Privacy
 
 - History, patterns and stories stay in `~/Library/Application Support/Hostwatch` and `~/Library/Logs/Hostwatch`.
 - Passwords and tokens are masked before they're recorded, and again before anything goes to an AI.
+- The firewall reads only which server an app asks for. It never decrypts traffic.
 - *Apple On-Device* AI keeps everything on the Mac; Claude is used only if you choose it.
 - The MCP server needs your permission and a token, and can't change anything.
 - *Settings ▸ General ▸ Reset Hostwatch…* erases it all.
@@ -85,7 +94,8 @@ send to Claude and a daily update check (both optional).
 ## Limitations
 
 A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), the
-collector asks for your password at each start, and the optional process hold is best effort.
+collector asks for your password at each start, and the optional process hold is best effort. The firewall
+covers your own apps, not programs running as root or macOS's own DNS lookups.
 
 ## Development
 
