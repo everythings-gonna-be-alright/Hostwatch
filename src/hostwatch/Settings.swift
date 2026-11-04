@@ -16,6 +16,7 @@ struct SettingsContext {
     let updates: UpdateChecker
     let baseline: BaselineLearner
     let intel: ThreatIntel
+    let claudeGuard: ClaudeGuard
     let openBaseline: () -> Void
     // Actions that need the app (alerts, panels, window frames).
     let toggleCollector: () -> Void
@@ -37,6 +38,7 @@ final class SettingsState: ObservableObject {
     @Published var mcpError: String?
     @Published var refresh = 0
     @Published var showReset = false
+    @Published var showGuardLog = false
     @Published var heavyHighlight = UserDefaults.standard.object(forKey: "heavyHighlight") as? Bool ?? true {
         didSet { UserDefaults.standard.set(heavyHighlight, forKey: "heavyHighlight") }
     }
@@ -97,7 +99,7 @@ final class SettingsWindowController: NSWindowController {
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
                                                           signatures: c.signatures, baseline: c.baseline, intel: c.intel,
                                                           openBaseline: c.openBaseline, ui: state))
-            case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, ui: state))
+            case .ai: view = AnyView(AIPane(classifier: c.classifier, signatures: c.signatures, claudeGuard: c.claudeGuard, ui: state))
             case .exclusions: view = AnyView(ExclusionsPane(model: c.model, draft: c.editorDraft))
             case .history: view = AnyView(HistoryPane(history: c.history, custom: c.customHistorySize,
                                                       changeLocation: c.changeHistoryLocation, clear: c.clearHistory))
@@ -120,6 +122,12 @@ final class SettingsWindowController: NSWindowController {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Settings ▸ AI with the Claude Code guard's log open.
+    func showGuardLog() {
+        show(.ai)
+        state.showGuardLog = true
+    }
 
     func show(_ pane: SettingsPane? = nil) {
         state.fullDiskAccess = Collector.appearsToHaveFullDiskAccess
@@ -156,7 +164,7 @@ private struct Pane<Content: View>: View {
     }
 }
 
-private struct Footnote: View {
+struct Footnote: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
@@ -440,12 +448,13 @@ private struct DetectionPane: View {
 private struct AIPane: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var signatures: SignatureStore
+    let claudeGuard: ClaudeGuard
     @ObservedObject var ui: SettingsState
     @ObservedObject var usage = ClaudeUsage.shared
 
     var body: some View {
         let status = classifier.localStatus
-        Pane {
+        Pane(height: 640) {
             Section {
                 Picker("Engine", selection: $classifier.engine) {
                     ForEach(AIEngine.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -474,6 +483,7 @@ private struct AIPane: View {
                          + "high-risk patterns, and no AI ever trusts a high-risk pattern or an interpreter or shell "
                          + "(python, bash, node…): those stay your decision.")
             }
+            ClaudeGuardSection(claudeGuard: claudeGuard, ui: ui)
             Section {
                 Toggle("Allow Claude Code to read Hostwatch data (MCP)", isOn: Binding(
                     get: { ui.mcpEnabled },
@@ -523,6 +533,9 @@ private struct AIPane: View {
                          + "token's hash, so copy the command now. New Token or turning access off cuts off "
                          + "every earlier registration. Secrets are masked; nothing can be changed through it.")
             }
+        }
+        .sheet(isPresented: $ui.showGuardLog) {
+            ClaudeGuardLogView(claudeGuard: claudeGuard) { ui.showGuardLog = false }
         }
     }
 }

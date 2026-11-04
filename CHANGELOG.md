@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Claude Code guard** (Settings ▸ AI, off until you turn it on): a hook in Claude Code hands Hostwatch every
+  command, file change, file read and web fetch before it happens. Dangerous ones are blocked (deleting your home
+  folder or a disk, a remote shell, a secret sent out, a known malware address, switching off SIP or Gatekeeper,
+  deleting Hostwatch); risky ones need your OK (code downloaded and run, decoded commands, launch agents and
+  startup files, crontab, reading keys and passwords, sudo, AppleScript, deletions outside the project, scripts
+  that do any of this). Claude Code asks you; when it runs without asking, a Hostwatch panel does (no answer in
+  60 s blocks it). Hostwatch never approves anything itself; without the app the same rules apply, minus the threat
+  lists. A log of what was blocked or asked, and a warning if the hook is removed from Claude Code's settings.
+
 ## 0.7.0 – known threats, far fewer decisions
 
 - **Claude usage counter** in Settings ▸ AI: all-time Claude tokens and cost Hostwatch used (Ask AI, classifying,
