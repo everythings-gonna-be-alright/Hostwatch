@@ -82,6 +82,31 @@ struct ClaudeGuardSection: View {
             if claudeGuard.enabled || claudeGuard.status != .off {
                 LabeledContent("Status") { statusView }
             }
+            if claudeGuard.enabled {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Added to ~/.claude/settings.json. Start a new Claude Code session to load it.")
+                    HStack(alignment: .top) {
+                        Text("To use it elsewhere, paste this into a project's .claude/settings.json, or into the managed "
+                             + "settings (/Library/Application Support/ClaudeCode/managed-settings.json, admin only) so "
+                             + "Claude can't remove it:")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(ui.guardCopied ? "Copied" : "Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(claudeGuard.configFragment, forType: .string)
+                            ui.guardCopied = true
+                        }
+                        .controlSize(.small)
+                    }
+                    Text(claudeGuard.configFragment)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
+                }
+                .font(.callout)
+            }
             LabeledContent {
                 HStack(spacing: 8) {
                     Text(summary).foregroundStyle(.secondary).monospacedDigit()
@@ -93,19 +118,16 @@ struct ClaudeGuardSection: View {
         } header: {
             Text("Claude Code guard")
         } footer: {
-            Footnote("Adds a hook to Claude Code (~/.claude/settings.json) that hands Hostwatch every command, file "
-                     + "change, file read and web fetch before it happens. Dangerous ones (deleting your home folder, a "
-                     + "remote shell, sending a secret out, a known malware address) are blocked; risky ones (code "
-                     + "downloaded and run, persistence, reading secrets, sudo) need your OK in Claude Code, or in a "
-                     + "Hostwatch panel when Claude Code runs without asking. Hostwatch never approves anything itself. "
-                     + "When Hostwatch isn't running, the same rules apply without the threat lists.")
+            Footnote("Before Claude Code runs a command or touches a file, Hostwatch checks it: dangerous ones are "
+                     + "blocked, risky ones need your OK (in Claude Code, or in a Hostwatch panel when Claude Code runs "
+                     + "without asking). Hostwatch never approves anything itself.")
         }
     }
 
     private var summary: String {
         let recent = claudeGuard.log.filter { $0.date > Date().addingTimeInterval(-86400) }
         let blocked = recent.filter { [.blocked, .declinedHere, .noAnswer].contains($0.outcome) }.count
-        return "\(claudeGuard.checked) checked in all · \(recent.count - blocked) asked · \(blocked) blocked"
+        return "\(recent.count - blocked) asked · \(blocked) blocked"
     }
 
     @ViewBuilder private var statusView: some View {
