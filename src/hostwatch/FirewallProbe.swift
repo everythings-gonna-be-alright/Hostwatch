@@ -33,7 +33,7 @@ enum FirewallProbe {
 
         // Before: both work without the relay?
         let before = (web: web(uid, webIP), dns: dns(uid, dnsIP))
-        print("Before:  HTTP \(before.web)  ·  DNS \(before.dns)")
+        print("Before:  \(before.web)  ·  DNS \(before.dns)")
 
         // Relay listeners.
         guard let tcp = listen(SOCK_STREAM), let udp = listen(SOCK_DGRAM) else { print("Can't listen on 127.0.0.1:\(relayPort)"); exit(1) }
@@ -77,7 +77,7 @@ enum FirewallProbe {
         cleanUp()
         let after = sh("/sbin/pfctl", ["-a", anchor, "-s", "rules"]).out.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("Through the relay:  HTTP \(during.web)  ·  DNS \(during.dns)")
+        print("Through the relay:  \(during.web)  ·  DNS \(during.dns)")
         lock.lock(); let log = seen; lock.unlock()
         for s in log {
             print("  relay saw \(s.proto) from \(s.client) → original \(s.original) [\(s.method)] · program \(s.program) · \(s.bytes) bytes back")
@@ -135,8 +135,9 @@ enum FirewallProbe {
     static func relayTCP(_ client: Int32, _ peer: sockaddr_in) {
         defer { close(client) }
         let (cip, cport) = (ip(peer.sin_addr), UInt16(bigEndian: peer.sin_port))
+        let who = program(tcp: true, cport)                    // now, while the client still holds the port
         guard let (dst, method) = original(proto: IPPROTO_TCP, client: peer, localPort: relayPort) else {
-            record(Seen(proto: "TCP", client: "\(cip):\(cport)", original: "?", method: "not found", program: program("TCP", cport), bytes: 0)); return
+            record(Seen(proto: "TCP", client: "\(cip):\(cport)", original: "?", method: "not found", program: who, bytes: 0)); return
         }
         let up = socket(AF_INET, SOCK_STREAM, 0)
         defer { close(up) }
@@ -149,7 +150,7 @@ enum FirewallProbe {
             back = pump(up, client)
         }
         record(Seen(proto: "TCP", client: "\(cip):\(cport)", original: "\(ip(dst.sin_addr)):\(UInt16(bigEndian: dst.sin_port))",
-                    method: method, program: program("TCP", cport), bytes: back))
+                    method: method, program: who, bytes: back))
     }
 
     @discardableResult
@@ -172,9 +173,10 @@ enum FirewallProbe {
             let packet = Array(buf[0..<n]), client = peer
             Thread.detachNewThread {
                 let cport = UInt16(bigEndian: client.sin_port)
+                let who = program(tcp: false, cport)
                 guard let (dst, method) = original(proto: IPPROTO_UDP, client: client, localPort: relayPort) else {
                     record(Seen(proto: "UDP", client: "\(ip(client.sin_addr)):\(cport)", original: "?", method: "not found",
-                                program: program("UDP", cport), bytes: 0)); return
+                                program: who, bytes: 0)); return
                 }
                 let up = socket(AF_INET, SOCK_DGRAM, 0)
                 defer { close(up) }
@@ -189,7 +191,7 @@ enum FirewallProbe {
                     _ = withUnsafePointer(to: &back) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { sendto(fd, reply, r, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
                 }
                 record(Seen(proto: "UDP", client: "\(ip(client.sin_addr)):\(cport)", original: "\(ip(dst.sin_addr)):\(UInt16(bigEndian: dst.sin_port))",
-                            method: method, program: program("UDP", cport), bytes: max(r, 0)))
+                            method: method, program: who, bytes: max(r, 0)))
             }
         }
     }
@@ -253,16 +255,10 @@ enum FirewallProbe {
     }
 
     /// The program with a socket on that local port (not this relay).
-    static func program(_ proto: String, _ port: UInt16) -> String {
-        let out = sh("/usr/sbin/lsof", ["-nP", "-i\(proto):\(port)", "-Fpc"]).out
-        var pid = "", name = ""
-        for line in out.split(separator: "\n") {
-            if line.hasPrefix("p") { pid = String(line.dropFirst()) }
-            if line.hasPrefix("c"), pid != String(getpid()) { name = String(line.dropFirst()); break }
-        }
-        guard let p = Int32(pid), !name.isEmpty, p != getpid() else { return "? (port \(port))" }
-        var path = [CChar](repeating: 0, count: 4096)
-        return proc_pidpath(p, &path, UInt32(path.count)) > 0 ? "\(String(cString: path)) (pid \(p))" : "\(name) (pid \(p))"
+    static func program(tcp: Bool, _ port: UInt16) -> String {
+        let start = Date()
+        guard let o = SocketOwner.find(tcp: tcp, localPort: port) else { return "? (port \(port))" }
+        return "\(o.path) (pid \(o.pid), found in \(Int(Date().timeIntervalSince(start) * 1000)) ms)"
     }
 
     // MARK: Helpers
