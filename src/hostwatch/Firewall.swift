@@ -63,7 +63,10 @@ enum FirewallAdvice {
         ## The firewall's question
         \(p.event.name) (\(p.event.proc)) wants to open a \(p.event.extra) connection to \(p.destination), \
         address \(p.event.remoteHost ?? "?"), port \(p.event.remotePort). The firewall's rules: \(p.reason).
-        """
+        """ + (SignatureBuilder.vmGateway(p.event.proc).map { label in
+            "\n\(p.event.name) carries the traffic of a \(label.lowercased()) running inside its virtual machine: the "
+                + "connection was made by some program in it, which macOS can't see. Judge the destination, not \(p.event.name)."
+        } ?? "")
     }
 }
 
@@ -76,6 +79,8 @@ struct FirewallPrompt: Identifiable {
     let since: Date
     var patternKey: String { event.signatureKey }
     var destination: String { event.host.isEmpty ? (event.remoteHost ?? event.target) : event.host }
+    /// "Docker container" when a VM gateway carries it, else the program's name.
+    var who: String { SignatureBuilder.vmGateway(event.proc) ?? event.name }
 }
 
 enum FirewallVerdict: Int, Codable, Comparable {

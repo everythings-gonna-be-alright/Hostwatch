@@ -105,7 +105,8 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 
 A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), the
 collector asks for your password at each start, and the optional process hold is best effort. The firewall
-covers your own apps, not programs running as root or macOS's own DNS lookups.
+covers your own apps, not programs running as root or macOS's own DNS lookups. Containers are judged by
+destination (which program inside made a connection can't be seen); VMs with bridged networking aren't covered.
 
 ## Development
 

@@ -347,6 +347,18 @@ enum SignatureBuilder {
     /// script it's given, so trusting it broadly would trust a virus's script too.
     static func runsAnyCode(_ e: SignatureEntry) -> Bool { isLolbin(SignatureStore.subjectPath(e)) }
 
+    /// Programs that carry the network traffic of containers or virtual machines: on macOS the connection is theirs,
+    /// whatever program inside the VM made it. Their connections are judged per destination and never pass on the
+    /// gateway's trusted signature (Docker Inc. signs the backend, not what runs in your containers).
+    static let vmGateways: [String: String] = [
+        "com.docker.backend": "Docker container", "com.docker.vpnkit": "Docker container", "vpnkit": "Docker container",
+        "gvproxy": "Podman container", "OrbStack Helper": "OrbStack container", "limactl": "Lima VM",
+        "qemu-system-aarch64": "virtual machine", "qemu-system-x86_64": "virtual machine",
+    ]
+
+    /// "Docker container" for Docker Desktop's backend, nil for an ordinary program.
+    static func vmGateway(_ path: String) -> String? { vmGateways[(path as NSString).lastPathComponent] }
+
     static func isLolbin(_ path: String) -> Bool {
         var name = (path as NSString).lastPathComponent.lowercased()
         if name.hasPrefix("python") || name.hasPrefix("pip") || lolbins.contains(name) { return true }   // sqlite3
@@ -623,8 +635,10 @@ enum SignatureBuilder {
             var bucket = hostBucket(host)
             // Which cloud /16 a web request lands in says nothing; odd ports keep the /16.
             if !localBuckets.contains(bucket), webPorts.contains(port) { bucket = "internet" }
-            // Interpreters and shells: the destination itself (its domain, or the address), never "internet".
-            if isLolbin(rawActor), !localBuckets.contains(bucket) {
+            // Interpreters, shells and VM gateways (anything may run behind them): the destination itself (its
+            // domain, or the address), never "internet".
+            let gateway = vmGateway(rawActor)
+            if isLolbin(rawActor) || gateway != nil, !localBuckets.contains(bucket) {
                 bucket = e.host.isEmpty ? host.lowercased() : (DomainRegistry.registrable(e.host) ?? e.host.lowercased())
             }
             let pattern = "\(e.extra) \(bucket):\(portBucket(port))"
@@ -639,6 +653,8 @@ enum SignatureBuilder {
                 risk = .routine; reason = "loopback"
             } else if isSealedSystem(rawActor), !isLolbin(rawActor) {
                 risk = .routine; reason = "macOS system process"
+            } else if let gateway, !localBuckets.contains(bucket) {
+                reason = "from a \(gateway.lowercased()) (inside its virtual machine)"
             }
             return withSigning(make(e.kind, actor, pattern, risk, reason), e)
 
@@ -666,7 +682,8 @@ enum SignatureBuilder {
             // Unsigned/ad-hoc code is everyday on a dev Mac (Homebrew, builds, bundled runtimes);
             // it only matters when it came from a download or temp folder.
             s.risk = .high; s.reason = "\(id.label.lowercased()) code from a download/temp folder"
-        } else if s.risk == .normal, cache.trusts(subject, id), !s.pattern.hasSuffix("]") {
+        } else if s.risk == .normal, cache.trusts(subject, id), !s.pattern.hasSuffix("]"),
+                  !(e.kind == .net && vmGateway(subject) != nil) {
             // Apple or a trusted developer doing non-sensitive things. A spawn
             // also needs a trusted (or system) parent, and never covers starting shells/LOLBins.
             var ok = true

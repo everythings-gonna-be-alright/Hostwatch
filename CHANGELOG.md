@@ -10,6 +10,10 @@
 - **Forget also forgets the firewall's decision:** in the Network tab, Forget removes the destination's connections
   from the firewall list and resets the Allow or Block you gave them there, so they're asked about again
   (decisions made in Patterns stay).
+- **Containers and VMs in the firewall:** a Docker container's connections were Docker Desktop's, which passed on
+  Docker's trusted signature, and one Allow covered every site. Connections of VM gateways (Docker, Podman,
+  OrbStack, Lima, QEMU) are now judged per destination and asked about as "A Docker container wants to connect
+  to pypi.org"; Block stops that destination for every container. Claude's advice is told it's a container.
 - **No more `nettop` or `lsof`:** the collector reads macOS's own connection statistics (what `nettop` is built
   on) and every process's sockets directly. Every new TCP and UDP connection is seen with its real destination,
   even one that lasts milliseconds, with less CPU and no helper programs. On a macOS without that framework it
