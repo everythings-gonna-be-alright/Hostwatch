@@ -1100,9 +1100,25 @@ final class SignatureStore: ObservableObject {
     // MARK: Tidying (routine Safe noise only)
 
     static let pruneAfter: TimeInterval = 30 * 24 * 3600
+    /// A one-off (seen once, never decided, not risky) is forgotten after this long without happening again.
+    static let oneOffAfter: TimeInterval = 7 * 24 * 3600
+    /// Patterns an open story uses (wired by the app): never forgotten while it's open.
+    var inUse: () -> Set<String> = { [] }
+    /// The Patterns tab shows one-offs only when asked (or when searching or scoped).
+    @Published var showSeenOnce = UserDefaults.standard.bool(forKey: "patternsShowSeenOnce") {
+        didSet { UserDefaults.standard.set(showSeenOnce, forKey: "patternsShowSeenOnce") }
+    }
+
+    /// Seen once, decided by nobody (no rule, no AI, not you), not high risk: a command typed once, a one-time
+    /// connection. Recorded when it happens (detection works on the first time), but not worth keeping.
+    func isOneOff(_ e: SignatureEntry) -> Bool {
+        e.count <= 1 && e.risk != .high && e.reopened == nil && status(forKey: e.id) == .unclassified && !isCombined(e.id)
+    }
     static let foldMinimum = 3
     /// "Tidied: removed 1,204 old routine patterns, folded 3,410 into 212."
     @Published private(set) var tidySummary = ""
+    /// One-offs the last tidy forgot.
+    private(set) var lastOneOffs = 0
     private var lastTidy: Date?
 
     /// Decided automatically as ordinary (system reads, caches, scratch writes), and nothing since.
@@ -1144,7 +1160,14 @@ final class SignatureStore: ObservableObject {
             entries[key] = nil
             pruned += 1
         }
-        if pruned > 0 { aliases = aliases.filter { entries[$0.value] != nil } }
+        // One-offs that didn't happen again within a week: if they do later, they're simply new again.
+        let protected = inUse()
+        var oneOffs = 0
+        for (key, e) in entries where isOneOff(e) && now.timeIntervalSince(e.lastSeen) > Self.oneOffAfter && !protected.contains(key) {
+            entries[key] = nil
+            oneOffs += 1
+        }
+        if pruned + oneOffs > 0 { aliases = aliases.filter { entries[$0.value] != nil } }
         var groups: [String: [SignatureEntry]] = [:]
         for e in entries.values where isRoutineNoise(e) && !isCombined(e.id) {
             let shaped = Self.shape(e.pattern)
@@ -1162,11 +1185,13 @@ final class SignatureStore: ObservableObject {
             folded += group.count
             into += 1
         }
-        if pruned + folded > 0 {
-            tidySummary = "Tidied: removed \(pruned.formatted()) old routine pattern\(pruned == 1 ? "" : "s"), folded "
+        if pruned + folded + oneOffs > 0 {
+            tidySummary = "Tidied: removed \(pruned.formatted()) old routine pattern\(pruned == 1 ? "" : "s") and "
+                + "\(oneOffs.formatted()) one-off\(oneOffs == 1 ? "" : "s") (seen once, a week ago), folded "
                 + "\(folded.formatted()) into \(into.formatted())."
             changedNow()
         }
+        lastOneOffs = oneOffs
         return (pruned, folded, into)
     }
 
@@ -1260,8 +1285,19 @@ final class SignatureStore: ObservableObject {
             guard scope.map({ $0.keys.contains(e.id) }) ?? true,
                   q.isEmpty || e.process.lowercased().contains(q) || e.pattern.lowercased().contains(q)
                     || e.exampleName.lowercased().contains(q) else { return n }
+            guard listed(e, searching: !q.isEmpty) else { return n }
             return scope != nil || filter.admits(status(forKey: e.id), risk: e.risk, reviewed: reviewedByYou(e.id)) ? n + 1 : n
         }
+    }
+
+    /// One-offs are listed when asked for, or when you search or look at a scope.
+    private func listed(_ e: SignatureEntry, searching: Bool) -> Bool {
+        showSeenOnce || searching || scope != nil || !isOneOff(e)
+    }
+
+    /// One-offs the table would show with Seen Once on (same search and Show filter).
+    func oneOffCount(filter: SignatureFilter) -> Int {
+        entries.values.filter { isOneOff($0) && filter.admits(status(forKey: $0.id), risk: $0.risk, reviewed: reviewedByYou($0.id)) }.count
     }
 
     /// Rows for the Patterns table: filtered by the shared Show filter and search, sorted by columns.
@@ -1272,6 +1308,7 @@ final class SignatureStore: ObservableObject {
             .filter { e in scope.map { $0.keys.contains(e.id) } ?? true }
             .filter { q.isEmpty || $0.process.lowercased().contains(q) || $0.pattern.lowercased().contains(q)
                 || $0.exampleName.lowercased().contains(q) }
+            .filter { listed($0, searching: !q.isEmpty) }
             .compactMap { e -> PatternItem? in
                 let status = status(forKey: e.id)
                 guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewedByYou(e.id)) else { return nil }
