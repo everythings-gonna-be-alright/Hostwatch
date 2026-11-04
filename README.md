@@ -83,7 +83,7 @@ Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or th
 
 ```
 collector (root)                       Hostwatch.app (you)
-eslogger · tcpdump · lsof · libproc ─► patterns · baseline · stories · domains
+eslogger · tcpdump · NetworkStatistics ─► patterns · baseline · stories · domains
 firewall relay (pf)  ◄── Allow/Block ── HUD · window · Time Travel · Ask AI · MCP
           verified Unix socket
 ```

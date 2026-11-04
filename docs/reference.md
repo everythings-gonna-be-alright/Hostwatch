@@ -814,16 +814,17 @@ script). The launcher starts it as root, and it combines:
   the capture device, so packets are decoded without root) → every outgoing TCP connection, from
   its SYN packet, with the owning process. This catches connections too short for any polling,
   like `curl google.com`. Endpoint Security has no connect event.
-- `lsof -i` snapshot diff every second → UDP flows, incoming connections, and a fallback if packet
-  metadata is unavailable. Each connection is reported once, by whichever source sees it first.
-- `nettop` traffic statistics (backstop) → a new process with TCP traffic that neither source
-  reported within ~1.5 s gets an **inferred** connection event. This matters with security tools
-  that take over TCP flows in the kernel (e.g. a traffic-scanning network extension): their short
-  connections never appear as packets from the process and close before the next `lsof` poll.
-  The destination comes from the process's command line, resolved through the DNS answers just
-  seen (`curl google.ua` → `TCP google.ua:80 [142.251.110.94:80]`). It shows as `≈name` when only
-  the command line names it, or "closed too fast to read" when nothing does. The Activity list
-  marks these as inferred, with byte counts.
+- Every process's connected sockets, read with libproc every second and compared with the previous look
+  → incoming connections, long-lived UDP flows, and a fallback if packet metadata is unavailable. Each
+  connection is reported once, by whichever source sees it first. (Before 0.9 this was `lsof -i`.)
+- macOS's connection statistics (NetworkStatistics.framework, what `nettop` is built on) → every new TCP
+  and UDP socket of every process, with its real destination, even one that closes within milliseconds.
+  This matters with security tools that take over TCP flows in the kernel (e.g. a traffic-scanning
+  network extension): their short connections never appear as packets from the process. The framework
+  is private, so it's opened at run time; if a macOS ever lacks it, the collector falls back to running
+  `nettop` (under a small shell that stops it if the collector dies) and reports a new process with TCP
+  traffic nobody else reported as an **inferred** connection, its destination taken from what nettop saw
+  or the command line (`≈name`), marked as inferred with byte counts.
 - Passive DNS answers (`tcpdump`, port 53, read-only) → a hostname for each new connection: the
   name that resolved to its IP, e.g. `curl TCP www.google.com:80`, kept even behind CNAMEs. If no
   answer was seen (cached before the collector started, or encrypted DNS/DoH), reverse DNS is used
@@ -831,7 +832,7 @@ script). The launcher starts it as root, and it combines:
   still shows the IP, Claude gets both, and exclusions match hostnames: `net:*.google.com:*`.
 
 **Hostwatch's own activity is not reported** (live, in history or in stories): the app that started the
-collector (verified by pid), the collector's own helpers (eslogger, tcpdump, lsof, nettop) and the children
+collector (verified by pid), the collector's own helpers (eslogger, tcpdump, nettop if used) and the children
 of these. Other runs of the Hostwatch program, such as the MCP server Claude Code starts, are reported like
 any program: hiding "anything running the Hostwatch binary" would let malware hide by starting it with
 injected code. A pid leaves the list when its process exits, so a reused pid is watched again.
@@ -951,7 +952,7 @@ cat ~/.zshrc >/dev/null              # 📄 file
   ones rewritten with a new index), and every file is masked again before it's compressed. A secret in a
   shape no rule knows can still slip through. Environment variables are never forwarded.
 - To find connections, the collector runs `tcpdump` (DNS answers and TCP SYN headers only, no
-  payloads) and `nettop` as root, read-only. Nothing is captured to disk.
+  payloads) as root and reads macOS's connection statistics, read-only. Nothing is captured to disk.
 - `eslogger` is a notify-only observer. It cannot deny execution.
 - Config lines sent by clients are only used as filters; the agent runs no commands based on them.
 - The HUD itself runs as the logged-in user; only the collector is elevated.
@@ -961,10 +962,10 @@ cat ~/.zshrc >/dev/null              # 📄 file
 
 ## Known limitations
 
-- Very short TCP connections are caught by packet capture, or by the `nettop` backstop when a
-  security product hides them from capture. Backstop events arrive ~2 s late, and their
-  destination is inferred from the command line, so it can be unknown. Short UDP flows, listening
-  sockets and unconnected UDP sockets can still be missed.
+- Very short connections are caught by packet capture and by macOS's connection statistics. Only with
+  the `nettop` fallback (a macOS without that framework) do they arrive ~2 s late with a destination
+  inferred from the command line. UDP sent without connecting (`sendto`) has no destination to show,
+  and listening sockets aren't connections.
 - File opens are high volume. The rate cap drops excess file events, so add
   exclusions for noisy apps.
 - The `eslogger` JSON parser is defensive but may need updates across macOS releases.
