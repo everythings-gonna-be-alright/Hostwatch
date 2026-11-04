@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var guardPanel: NSPanel?
     /// Firewall rules; Watch mode lists what they would block (nothing is blocked yet).
     private let firewall = FirewallMonitor()
+    private var firewallPanel: NSPanel?
     private let sheets = WindowSheetState()
     private lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
     private lazy var classifier = PatternClassifier(store: signatures)
@@ -134,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         intel.start()
         setUpClaudeGuard()
+        setUpFirewall()
         vitals.onHeavyUntrusted = { [weak self] launch, tracked in
             guard let self else { return }
             let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))
@@ -215,6 +217,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func toggleHold() { hold.enabled.toggle() }
+
+    // MARK: Firewall
+
+    private func setUpFirewall() {
+        firewall.status = { [weak self] e in self?.signatures.status(for: e) ?? .unclassified }
+        firewall.knownBad = { [weak self] e in self?.intel.check(e)?.summary ?? "" }
+        firewall.markPattern = { [weak self] key, status in
+            self?.signatures.set(status, keys: [key], note: status == .safe ? "allowed in Firewall" : "blocked in Firewall")
+        }
+        firewall.answer = { [weak self] key, pass, ttl in self?.model.sendFirewallAnswer(key: key, pass: pass, ttl: ttl) }
+        firewall.onPromptsChange = { [weak self] in self?.refreshFirewallPanel() }
+        firewall.onModeChange = { [weak self] mode in self?.model.firewallMode = mode.collector }
+        model.onFirewallAsk = { [weak self] key, event in self?.firewall.handleAsk(key: key, event: event) }
+        model.onFirewallStatus = { [weak self] state, detail in self?.firewall.relayStatus(state, detail) }
+        model.firewallMode = firewall.mode.collector
+    }
+
+    /// "Chrome wants to connect to x.com": in front while a connection waits for you (Ask mode).
+    private func refreshFirewallPanel() {
+        guard !firewall.prompts.isEmpty else { firewallPanel?.orderOut(nil); return }
+        if firewallPanel == nil {
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 200),
+                                styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+            panel.title = "Firewall"
+            panel.titlebarAppearsTransparent = true
+            panel.level = .floating
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            let host = NSHostingController(rootView: FirewallPromptView(firewall: firewall))
+            host.sizingOptions = [.preferredContentSize]
+            panel.contentViewController = host
+            firewallPanel = panel
+        }
+        guard let panel = firewallPanel, !panel.isVisible else { return }
+        if let screen = NSScreen.main?.visibleFrame {
+            panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 20, y: screen.maxY - 20))
+        }
+        panel.orderFrontRegardless()
+        NSSound(named: "Tink")?.play()
+    }
 
     // MARK: Claude Code guard
 

@@ -339,17 +339,34 @@ patterns, Suggest Rules), counted across launches from each `claude -p` result (
 tooltip. Failed runs that still reached Claude count too. **Reset** starts from zero; *Reset Hostwatch* with
 settings clears it. The on-device model is free and isn't counted.
 
-### Firewall (stage 1: Watch)
+### Firewall
 
-*Settings ▸ Firewall*: **Off** or **Watch**. Watch judges every connection Hostwatch sees (TCP and UDP) with the
+*Settings ▸ Firewall*: **Off**, **Watch**, **Ask** or **Strict**. Watch judges every connection Hostwatch sees (TCP and UDP) with the
 firewall's rules (`FirewallPolicy`), first match wins: local network (loopback, LAN, link-local, multicast) and
 Hostwatch itself pass; a known malware address blocks (even if Safe); a pattern marked Suspicious or Dangerous
 blocks; Safe passes; then by risk: high-risk blocks, routine (macOS, trusted developers) passes; a sealed macOS
 binary that isn't a shell or tool passes; anything else new is asked about. What wouldn't simply pass is listed
 (*Show Connections…*, last 7 days, at most 500, in `firewall-watch.json`), judged again with each pattern's current
-status; Allow / Block mark the pattern Safe / Suspicious. Nothing is blocked yet: the next stages add a relay in
-the collector (a pf redirect on the loopback, the original destination from pf, the program from the socket),
-then Ask and Strict modes.
+status; Allow / Block mark the pattern Safe / Suspicious. Watch blocks nothing.
+
+**Ask and Strict** turn on the relay in the collector (`AgentFirewall`, `FirewallRelay`, `PFRedirect`). pf rules in
+the anchor `com.apple/hostwatch` (inside Apple's, which `/etc/pf.conf` loads) send every new outgoing TCP and UDP
+connection of non-root users (not `_mdnsresponder`, not loopback, LAN, link-local, multicast, CGNAT) over `lo0` to
+the relay on port 46110 (loopback only), IPv4 and IPv6, every interface. Connections already open aren't touched.
+For each one the relay finds the original destination (`DIOCNATLOOK`, else pf's state table), the program (the
+process holding the client's port, `SocketOwner`) and, for TLS, the server name (peeked, nothing decrypted), then
+asks the app (`fw_ask`, one question per program, protocol, destination and port however many connections wait).
+The app answers with the rules: allowed → pass (remembered 5 min), blocked → refused (1 min); something new is
+refused in Strict, and in Ask waits while a panel asks **Allow / Block** (your answer marks the pattern Safe or
+Suspicious and answers its other waiting connections; no answer in 30 s refuses it this time). Without the app,
+Strict refuses and Ask passes. TCP is relayed with BSD sockets (half-closes passed on exactly), UDP as flows
+(ended after 60 s quiet, 10 s for DNS); relayed flows the other sources missed (UDP mostly) become net events.
+Fail-safes: the redirect is removed when the mode leaves Ask/Strict, when the collector stops, by a watchdog in
+its own session when the collector's process is gone, at the next collector start (stale rules), at reboot
+(anchors live in memory), and when the web check through the relay (`curl` as `nobody`, every 30 s) fails twice,
+which also switches the app back to Watch. Not covered: programs running as root, macOS's DNS lookups, the local
+network; Hostwatch itself always passes. Test tools (as root): `--firewall-probe` (two test destinations) and
+`--firewall-relay-test [s]` (your real traffic through the relay, blocking nothing).
 
 ### Claude Code guard
 

@@ -248,6 +248,11 @@ final class FirewallRelay: @unchecked Sendable {
     }
 
     private func accept(_ inbound: NWConnection, tcp: Bool, v6: Bool) {
+        // Finding the destination and deciding may wait (pf, the app): not on the framework's shared queue.
+        Thread.detachNewThread { [self] in acceptUDP(inbound, v6: v6) }
+    }
+
+    private func acceptUDP(_ inbound: NWConnection, v6: Bool) {
         guard let client = Self.endpoint(inbound.endpoint) else { inbound.cancel(); return }
         var flow = begin(tcp: false, client: client)
         let local = IPEndpoint(ip: (v6 ? IPEndpoint.loopback6 : .loopback4).ip, port: port)

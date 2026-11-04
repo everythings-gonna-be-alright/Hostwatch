@@ -238,6 +238,9 @@ final class Agent: @unchecked Sendable {
     private let clientsLock = NSLock()
     private var clients: [ObjectIdentifier: AgentClient] = [:]
 
+    /// The firewall (Ask and Strict modes): the relay and pf redirect, decisions from the app.
+    lazy var firewall = AgentFirewall(agent: self)
+
     init() { ignoredPids = [selfPid] }
 
     // MARK: Lifecycle
@@ -348,7 +351,7 @@ final class Agent: @unchecked Sendable {
         clientsLock.lock()
         let had = clients.removeValue(forKey: ObjectIdentifier(client)) != nil
         clientsLock.unlock()
-        if had { close(client.fd) }
+        if had { close(client.fd); firewall.clientGone(client) }
     }
 
     var clientCount: Int { clientsLock.lock(); defer { clientsLock.unlock() }; return clients.count }

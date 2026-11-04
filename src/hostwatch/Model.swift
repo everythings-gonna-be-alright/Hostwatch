@@ -374,6 +374,12 @@ final class HUDModel: ObservableObject {
     var onVitals: (([ProcessVitalSample]) -> Void)?
     /// Every event that arrives (launches feed `ProcessVitals`).
     var onEvent: ((ActivityEvent) -> Void)?
+    /// The firewall asks about a new connection (key, the connection as a net event); answer with sendFirewallAnswer.
+    var onFirewallAsk: ((String, ActivityEvent) -> Void)?
+    /// The firewall's state in the collector ("on", "off", "failed") and why.
+    var onFirewallStatus: ((String, String) -> Void)?
+    /// What the collector's firewall should do: "off", "ask" or "strict" (sent on every connect).
+    var firewallMode = "off" { didSet { if firewallMode != oldValue { sendFirewall() } } }
 
     @Published var exclusionText: String {
         didSet {
@@ -633,6 +639,16 @@ final class HUDModel: ObservableObject {
     /// The agent filters per client too, so exclusions also cut collector traffic.
     private func sendConfig() {
         send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue), "top": true])
+        sendFirewall()
+    }
+
+    func sendFirewall(flush: Bool = false) {
+        send(["firewall": ["mode": firewallMode, "flush": flush]])
+    }
+
+    /// The answer to a firewall question, remembered by the collector for `ttl` seconds.
+    func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
+        send(["fw_answer": ["key": key, "pass": pass, "ttl": ttl]])
     }
 
     /// Asks the collector to exit; it only obeys a client that knows its token.
@@ -661,6 +677,8 @@ final class HUDModel: ObservableObject {
     }
 
     private static let topMarker = Data(#""kind":"top""#.utf8)
+    private static let askMarker = Data(#""kind":"fw_ask""#.utf8)
+    private static let statusMarker = Data(#""kind":"fw_status""#.utf8)
     private struct TopMessage: Decodable {
         var procs: [TopProcess]
         var disk_read: Double?
@@ -683,6 +701,22 @@ final class HUDModel: ObservableObject {
                 if let top = try? decoder.decode(TopMessage.self, from: Data(line)) {
                     onTop?(top.procs, top.disk_read ?? 0, top.disk_write ?? 0)
                     if let vitals = top.vitals { onVitals?(vitals) }
+                }
+                continue
+            }
+            // Firewall questions are answered even while paused: a connection is waiting.
+            if line.range(of: Self.askMarker) != nil {
+                if let obj = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any], let key = obj["key"] as? String,
+                   let netLine = String(decoding: line, as: UTF8.self).replacingOccurrences(of: #""kind":"fw_ask""#, with: #""kind":"net""#)
+                       .data(using: .utf8),
+                   let event = try? decoder.decode(ActivityEvent.self, from: netLine) {
+                    onFirewallAsk?(key, event)
+                }
+                continue
+            }
+            if line.range(of: Self.statusMarker) != nil {
+                if let obj = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any] {
+                    onFirewallStatus?(obj["state"] as? String ?? "", obj["detail"] as? String ?? "")
                 }
                 continue
             }
