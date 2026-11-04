@@ -139,6 +139,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         intel.start()
         setUpClaudeGuard()
         setUpFirewall()
+        // A pattern an open story points at is kept while the story is open, even a one-off.
+        signatures.inUse = { [weak self] in
+            Set((self?.stories.stories ?? []).filter { !$0.dismissed }.flatMap(\.steps).map(\.event.signatureKey))
+        }
         vitals.onHeavyUntrusted = { [weak self] launch, tracked in
             guard let self else { return }
             let cpu = Int(self.vitals.cpuAverage(tracked, at: Date()))

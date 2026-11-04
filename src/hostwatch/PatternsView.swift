@@ -200,6 +200,14 @@ struct PatternsView: View {
             } else {
                 ShowFilterPicker(filter: $filter, counts: [.unclassified: signatures.patternCount(filter: .unclassified),
                                                            .important: signatures.patternCount(filter: .important)])
+                let once = signatures.oneOffCount(filter: filter)
+                Toggle(isOn: $signatures.showSeenOnce) {
+                    Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
+                }
+                .toggleStyle(.button)
+                .fixedSize()
+                .help("Patterns seen only once, that nobody decided and aren't risky: hidden unless this is on (search "
+                      + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
