@@ -15,6 +15,10 @@
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.
 - **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
+- **Fix: known bad shows everywhere.** An event on a threat list says *Known bad* in the Status column (it showed
+  the pattern's status, often Safe, beside the KNOWN BAD tag) and sorts first; the Ask AI window shows the match
+  (chip and a *Threat list* row), and the AI now gets Hostwatch's signals: threat-list match, beacon, new domain,
+  raw IP, first seen.
 - **Fix: the history size limit now holds.** It counts activity, resource samples and process lists together,
   and deletes the oldest compressed history for real (it removed only the plain file name, so compressed files
   were never deleted and history could grow past the limit).

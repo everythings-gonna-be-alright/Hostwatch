@@ -1078,6 +1078,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func openAskAI(for event: ActivityEvent, related: [ActivityEvent]? = nil, preface: String = "",
                            title: String? = nil, classifyPattern: Bool = true) {
         let related = related ?? model.history.filter { $0.pid == event.pid && $0.id != event.id }
+        // The threat-list match (a connection's, or a program file's hash) goes into the window and the evidence.
+        var event = event
+        if event.knownBad.isEmpty, let bad = intel.flag(for: event) { event.knownBad = bad }
         let analysis = AIAnalysis(event: event, related: related, preface: preface)
         analysis.patternStatus = signatures.status(for: event)
         analysis.patternRisk = signatures.entry(event.signatureKey)?.risk ?? event.signatureRisk

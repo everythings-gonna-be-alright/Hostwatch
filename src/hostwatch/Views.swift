@@ -489,8 +489,8 @@ struct EventRow: View {
                 .frame(width: 11 * s)
                 .overlay(alignment: .leading) {
                     // Status stripe: red/orange for flagged patterns, green for safe.
-                    if status != .unclassified {
-                        Rectangle().fill(Color(nsColor: status.nsColor))
+                    if knownBad != nil || status != .unclassified {
+                        Rectangle().fill(knownBad != nil ? Color.red : Color(nsColor: status.nsColor))
                             .frame(width: 2 * s, height: rowHeight(s) - 2)
                             .offset(x: -5 * s)
                     }
@@ -890,7 +890,8 @@ struct ActivityWindowView: View {
     private func makeRows(_ events: [ActivityEvent]) -> [EventItem] {
         let items = events.map { e -> EventItem in
             let status = signatures.status(for: e)
-            return EventItem(event: e, status: status, statusRank: signatures.rank(status))
+            // Known bad sorts above Dangerous.
+            return EventItem(event: e, status: status, statusRank: intel.flag(for: e) != nil ? -1 : signatures.rank(status))
         }
         // The list is already newest first: only sort for another column or direction.
         let newestFirst = model.eventOrder.count == 1 && model.eventOrder[0].keyPath == \EventItem.seq
@@ -918,10 +919,16 @@ struct ActivityWindowView: View {
                 .width(min: 20, ideal: 24, max: 32)
                 TableColumn("Status", value: \.statusRank) { item in
                     HStack(spacing: 4) {
-                        StatusPill(status: item.status)
                         if let bad = intel.flag(for: item.event) {
-                            Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
-                                .help("KNOWN BAD · \(bad)")
+                            // A listed destination or file outranks the pattern's own status (often Safe: the
+                            // pattern is the program's connections in general).
+                            KnownBadPill()
+                                .help("On a threat list: \(bad)\nThe pattern itself is \(item.status.title.lowercased()).")
+                        } else {
+                            StatusPill(status: item.status)
+                        }
+                        if intel.flag(for: item.event) != nil {
+                            EmptyView()                   // the known-bad pill says it all
                         } else if case .heavy = heavy.badge(for: item.event) {
                             Image(systemName: "flame.fill").foregroundStyle(.orange)
                                 .help("Still running and using a lot of CPU or memory")
@@ -1126,6 +1133,26 @@ struct ProtocolTag: View {
 }
 
 /// "⛔ KNOWN BAD" on a row whose connection or program is on a threat list.
+/// The Status column for an event on a threat list: same shape as `StatusPill`, red.
+struct KnownBadPill: View {
+    var body: some View {
+        Label {
+            Text("Known bad").foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Color.red.opacity(0.16)))
+        .overlay(Capsule().strokeBorder(Color.red.opacity(0.45), lineWidth: 0.5))
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityLabel("Known bad")
+    }
+}
+
 struct KnownBadTag: View {
     let detail: String
 
