@@ -244,16 +244,28 @@ PAGE = """<!doctype html>
 
   .layout {{ max-width: 1240px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 56px; }}
   nav.toc {{ position: sticky; top: 64px; align-self: start; max-height: calc(100vh - 64px); overflow: auto; padding: 28px 8px 40px 0; }}
-  .filter {{ width: 100%; height: 38px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--line-strong); background: var(--bg-raise);
-            color: var(--text); font: 400 14px var(--sans); margin-bottom: 18px; }}
-  .filter::placeholder {{ color: var(--dim); }}
+  .search {{ position: relative; margin-bottom: 18px; }}
+  .q {{ width: 100%; height: 40px; padding: 0 36px 0 12px; border-radius: var(--r-control); border: 1px solid var(--line-strong);
+       background: var(--bg-raise); color: var(--text); font: 400 14px var(--sans); }}
+  .q::placeholder {{ color: var(--dim); }}
+  .q::-webkit-search-cancel-button {{ display: none; }}
+  .search kbd {{ position: absolute; right: 10px; top: 10px; font: 500 11px/18px var(--mono); color: var(--dim); border: 1px solid var(--line-strong);
+                border-radius: 5px; padding: 0 6px; }}
+  .results .count {{ font: 500 12px var(--mono); color: var(--dim); padding: 0 8px 8px; }}
+  nav.toc .results a {{ display: block; padding: 10px 10px; border-radius: 10px; text-decoration: none; color: var(--muted); }}
+  .results a .where {{ display: block; font: 500 11px var(--mono); color: var(--dim); margin-bottom: 2px; }}
+  .results a .title {{ display: block; color: var(--text); font-size: 14px; font-weight: 500; }}
+  .results a .snip {{ display: block; font-size: 13px; line-height: 1.5; margin-top: 3px; }}
+  nav.toc .results a.sel, nav.toc .results a:hover {{ background: rgba(255,255,255,0.06); }}
+  .results .empty {{ color: var(--muted); font-size: 14px; padding: 8px; }}
+  mark {{ background: rgba(255,255,255,0.18); color: var(--text); border-radius: 3px; padding: 0 1px; }}
+  main mark.hit {{ background: rgba(255,255,255,0.22); box-shadow: 0 0 0 2px rgba(255,255,255,0.22); }}
   nav.toc ol {{ list-style: none; margin: 0; padding: 0; }}
   nav.toc ol ol {{ margin: 2px 0 6px 30px; }}
   nav.toc a {{ display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; line-height: 1.4; }}
   nav.toc a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
   nav.toc a.active {{ color: var(--text); background: rgba(255,255,255,0.05); }}
   nav.toc .n {{ font: 500 11px/1.9 var(--mono); color: var(--dim); min-width: 18px; }}
-  nav.toc li.hidden {{ display: none; }}
 
   main {{ padding: 40px 0 120px; min-width: 0; }}
   .hero {{ padding: 24px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }}
@@ -263,7 +275,6 @@ PAGE = """<!doctype html>
   h1 .quiet {{ color: var(--dim); }}
   .hero p {{ color: var(--muted); font-size: 17px; max-width: 640px; margin: 0; }}
   .chapter {{ border-bottom: 1px solid var(--line); padding: 8px 0 32px; }}
-  .chapter.hidden {{ display: none; }}
   h2 {{ font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.025em; margin: 40px 0 14px; position: relative; }}
   h3 {{ font-weight: 500; font-size: 20px; letter-spacing: -0.015em; margin: 32px 0 10px; position: relative; }}
   h4 {{ font-weight: 600; font-size: 16px; margin: 24px 0 8px; }}
@@ -282,7 +293,6 @@ PAGE = """<!doctype html>
   table {{ border-collapse: collapse; font-size: 14px; min-width: 60%; }}
   th, td {{ text-align: left; padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: #c9ccd1; }}
   th {{ font: 500 12px var(--mono); color: var(--dim); }}
-  .none {{ display: none; color: var(--muted); padding: 40px 0; }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
   @media (max-width: 900px) {{
@@ -305,8 +315,12 @@ PAGE = """<!doctype html>
 </div></header>
 <div class="layout">
   <nav class="toc" aria-label="Contents">
-    <input class="filter" type="search" placeholder="Filter the docs" aria-label="Filter the docs">
-    {toc}
+    <div class="search">
+      <input class="q" type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </div>
+    <div class="results" role="listbox" aria-label="Search results" hidden></div>
+    <div class="contents">{toc}</div>
   </nav>
   <main>
     <div class="hero">
@@ -316,34 +330,116 @@ PAGE = """<!doctype html>
         <a href="../#when">install steps</a>, then read on in order.</p>
     </div>
     {body}
-    <p class="none">Nothing matches that filter.</p>
   </main>
 </div>
 <footer>Hostwatch · MIT license · <a href="../">Home</a> · <a href="{repo}" target="_blank" rel="noopener">GitHub</a> ·
   <a href="{repo}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a></footer>
 <script>
-  // Filter: hide chapters (and their entries) that don't mention the text.
-  const box = document.querySelector(".filter"), chapters = [...document.querySelectorAll(".chapter")];
-  const entries = [...document.querySelectorAll("nav.toc > ol > li")], none = document.querySelector(".none");
-  box.addEventListener("input", () => {{
-    const q = box.value.trim().toLowerCase(); let shown = 0;
-    chapters.forEach(c => {{
-      const hit = !q || c.textContent.toLowerCase().includes(q);
-      c.classList.toggle("hidden", !hit); if (hit) shown++;
-      const h = c.querySelector("h2"); if (!h) return;
-      const li = entries.find(l => l.querySelector("a").getAttribute("href") === "#" + h.id);
-      if (li) li.classList.toggle("hidden", !hit);
+  // Search: an index of every section (h2-h4 and the text under it), ranked results with excerpts, keyboard driven.
+  const main = document.querySelector("main"), q = document.querySelector(".q");
+  const results = document.querySelector(".results"), contents = document.querySelector(".contents");
+  const heads = [...main.querySelectorAll("h2[id], h3[id], h4[id]")];
+  const searchable = heads.filter(h => h.tagName !== "H2");      // parts ("Features"…) group results, they aren't results
+  const level = h => +h.tagName[1];
+  const index = searchable.map(h => {{
+    let text = "", n = h.nextElementSibling;
+    while (n && !(/^H[2-4]$/.test(n.tagName) && level(n) <= level(h))) {{
+      if (!/^H[2-4]$/.test(n.tagName)) text += " " + (n.innerText || n.textContent).split(String.fromCharCode(10)).filter(Boolean).join(" · ");
+      n = n.nextElementSibling;
+      if (!n && h.parentElement.nextElementSibling) break;
+    }}
+    let group = "", p = heads.indexOf(h);
+    for (let i = p - 1; i >= 0; i--) if (level(heads[i]) < level(h)) {{ group = heads[i].textContent.replace(/^#/, ""); break; }}
+    return {{ id: h.id, title: h.textContent.replace(/^#/, ""), group, text: text.replace(/\s+/g, " ").trim() }};
+  }});
+  const esc = t => t.replace(/[&<>"]/g, c => ({{"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}})[c]);
+  // Case-insensitive highlighting without regular expressions: find each term, wrap it.
+  function spans(t, terms) {{
+    const low = t.toLowerCase(), out = [];
+    for (const w of terms) {{ let k = low.indexOf(w); while (k >= 0) {{ out.push([k, k + w.length]); k = low.indexOf(w, k + w.length); }} }}
+    out.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const r of out) {{ if (merged.length && r[0] <= merged[merged.length - 1][1]) merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], r[1]); else merged.push(r); }}
+    return merged;
+  }}
+  function marked(t, terms, cls) {{
+    let html = "", at = 0;
+    for (const [a, b] of spans(t, terms)) {{ html += esc(t.slice(at, a)) + "<mark" + (cls ? ' class="' + cls + '"' : "") + ">" + esc(t.slice(a, b)) + "</mark>"; at = b; }}
+    return html + esc(t.slice(at));
+  }}
+  const mark = (t, terms) => marked(t, terms, "");
+  let sel = 0, shown = [];
+
+  function search(raw) {{
+    const terms = raw.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) {{ results.hidden = true; contents.hidden = false; return; }}
+    shown = index.map(e => {{
+      const t = e.title.toLowerCase(), x = e.text.toLowerCase();
+      let score = 0;
+      for (const w of terms) {{
+        const inT = t.includes(w), inX = x.includes(w);
+        if (!inT && !inX) return null;
+        score += (inT ? 10 : 0) + (t.startsWith(w) ? 5 : 0) + Math.min(x.split(w).length - 1, 8);
+      }}
+      return {{ e, score }};
+    }}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 20);
+    sel = 0;
+    contents.hidden = true; results.hidden = false;
+    if (!shown.length) {{ results.innerHTML = '<div class="empty">Nothing matches “' + esc(raw) + '”.</div>'; return; }}
+    results.innerHTML = '<div class="count">' + shown.length + (shown.length === 20 ? "+" : "") + " results</div>" + shown.map((r, i) => {{
+      const x = r.e.text, lx = x.toLowerCase(), at = Math.max(0, Math.min(...terms.map(w => {{ const k = lx.indexOf(w); return k < 0 ? 1e9 : k; }})));
+      const start = at === 1e9 ? 0 : Math.max(0, at - 50), snip = (start ? "…" : "") + x.slice(start, start + 150) + (x.length > start + 150 ? "…" : "");
+      return '<a href="#' + r.e.id + '" data-i="' + i + '" class="' + (i ? "" : "sel") + '" role="option">' +
+             (r.e.group ? '<span class="where">' + esc(r.e.group) + '</span>' : "") +
+             '<span class="title">' + mark(r.e.title, terms) + '</span><span class="snip">' + mark(snip, terms) + "</span></a>";
+    }}).join("");
+  }}
+
+  // Jumping to a result highlights the words in that section until the next search.
+  function clearHits() {{ main.querySelectorAll("mark.hit").forEach(m => m.replaceWith(document.createTextNode(m.textContent))); main.normalize(); }}
+  function highlight(id, terms) {{
+    clearHits();
+    const h = document.getElementById(id); if (!h || !terms.length) return;
+    let n = h.nextElementSibling; const blocks = [h];
+    while (n && !(/^H[2-4]$/.test(n.tagName) && level(n) <= level(h))) {{ blocks.push(n); n = n.nextElementSibling; }}
+    blocks.forEach(b => {{
+      const walk = document.createTreeWalker(b, NodeFilter.SHOW_TEXT), nodes = [];
+      while (walk.nextNode()) nodes.push(walk.currentNode);
+      nodes.forEach(t => {{
+        if (!spans(t.nodeValue, terms).length) return;
+        const span = document.createElement("span");
+        span.innerHTML = marked(t.nodeValue, terms, "hit");
+        t.replaceWith(...span.childNodes);
+      }});
     }});
-    none.style.display = shown ? "none" : "block";
+  }}
+  function open(i) {{
+    const r = shown[i]; if (!r) return;
+    const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    location.hash = r.e.id; highlight(r.e.id, terms);
+  }}
+  q.addEventListener("input", () => search(q.value));
+  q.addEventListener("keydown", e => {{
+    const items = [...results.querySelectorAll("a")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {{
+      e.preventDefault(); if (!items.length) return;
+      sel = (sel + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      items.forEach((a, k) => a.classList.toggle("sel", k === sel)); items[sel].scrollIntoView({{ block: "nearest" }});
+    }} else if (e.key === "Enter") {{ e.preventDefault(); open(sel); }}
+    else if (e.key === "Escape") {{ q.value = ""; search(""); clearHits(); q.blur(); }}
+  }});
+  results.addEventListener("click", e => {{ const a = e.target.closest("a"); if (!a) return; e.preventDefault(); open(+a.dataset.i); }});
+  document.addEventListener("keydown", e => {{
+    if ((e.key === "/" && document.activeElement !== q) || (e.key === "k" && (e.metaKey || e.ctrlKey))) {{ e.preventDefault(); q.focus(); q.select(); }}
   }});
   // Highlight the section being read.
-  const links = new Map([...document.querySelectorAll("nav.toc a")].map(a => [a.getAttribute("href").slice(1), a]));
+  const links = new Map([...document.querySelectorAll(".contents a")].map(a => [a.getAttribute("href").slice(1), a]));
   const seen = new IntersectionObserver(es => es.forEach(e => {{
     if (!e.isIntersecting) return;
     links.forEach(a => a.classList.remove("active"));
     const a = links.get(e.target.id); if (a) a.classList.add("active");
   }}), {{ rootMargin: "-80px 0px -70% 0px" }});
-  document.querySelectorAll("main h2[id], main h3[id]").forEach(h => seen.observe(h));
+  heads.forEach(h => seen.observe(h));
 </script>
 </body>
 </html>
