@@ -961,13 +961,14 @@ open dist/Hostwatch.app      # prompts for an admin password to start the collec
 
 ### Demo mode (screenshots)
 
-`Hostwatch --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]` fills the app with made-up
-activity of a made-up user (`/Users/alex`): everyday work plus a fake download that removes its quarantine, reads
-cookies and the keychain, adds a launch agent and calls home. It opens the scene asked for. Everything it keeps goes
-to `<folder>`, it never connects to the collector and starts nothing as root, and it refuses to run under the real
-bundle id (so it can't touch your settings): run it from a copy whose `CFBundleIdentifier` is changed and re-signed
-ad hoc. The website's screenshots are made this way. `live` keeps adding events about once a second, for the website's background video (recorded with
-`screencapture -v` and encoded with ffmpeg).
+Only in the demo build: `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app` (Swift flag `-DDEMO`, its own
+bundle id `local.hostwatch.demo` and build folder `.build-demo`). The normal build, and every release, has no demo code
+at all. Run it as `"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]`:
+it fills the app with made-up activity of a made-up user (`/Users/alex`), everyday work plus a fake download that
+removes its quarantine, reads cookies and the keychain, adds a launch agent and calls home, and opens the scene asked
+for. Everything it keeps goes to `<folder>`; it never connects to the collector and starts nothing as root. `live`
+keeps adding events about once a second, for the website's background video (recorded with `screencapture -v`, encoded
+with ffmpeg). `./scripts/test.sh` also runs the demo tests against the demo build.
 
 ## Test
 

@@ -580,8 +580,10 @@ final class HUDModel: ObservableObject {
 
     // MARK: Networking
 
+    #if DEMO
     /// Demo mode: shown as live, with no collector behind it.
     func demoConnect() { connected = true }
+    #endif
 
     func connect() {
         reconnectScheduled = false

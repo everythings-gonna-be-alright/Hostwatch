@@ -43,12 +43,17 @@
 
 ## Why
 
-An app starting a shell, a file landing in Downloads, a connection to a new server: each is normal on its
-own. Attacks are **chains** of such steps. Hostwatch watches processes, files and connections, learns
-what's normal on your Mac, and shows only what's new or suspicious, linked into the story of what happened.
+**One machine was enough.** In 2026, [GitHub](https://techcrunch.com/2026/05/20/github-says-hackers-stole-data-from-thousands-of-internal-repositories/)
+lost about 3,800 internal repositories to a poisoned editor extension on one employee's device;
+[Grafana Labs](https://grafana.com/blog/grafana-labs-security-update-latest-on-tanstack-npm-supply-chain-ransomware-incident/)
+had its codebase taken through a compromised npm package; [Binance](https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/)
+lost $6.3 billion to a coding task from a fake job interview. Each was code someone trusted and ran.
 
-It detects and explains, and if you turn them on, its firewall and Claude Code guard stop what you didn't
-allow. It never deletes anything.
+Meanwhile new CVEs grew **+49.5%** in the first half of 2026 ([Jerry Gamblin](https://jerrygamblin.com/2026/07/01/3528/)),
+and new macOS backdoor variants **+67%** in 2025 ([Moonlock](https://moonlock.com/mid-2026-macos-threat-report)).
+
+Hostwatch watches what runs on your Mac, what it touches and where it connects, and links small signs into the story
+of what happened. Its firewall and Claude Code guard can stop what you didn't allow. It never deletes anything.
 
 ## What's new
 
