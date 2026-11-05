@@ -232,14 +232,14 @@
   .chart figcaption a:hover { color: var(--text); }
   .chart .text p b { color: var(--text); font-weight: 500; }
   .stats { min-height: 0; }
-  .stats dl { margin: 22px 28px 28px; display: grid; gap: 10px; flex: 1; align-content: space-evenly; }
-  .stats .stat { display: grid; grid-template-columns: 132px 1fr; gap: 18px; align-items: center; padding: 14px 0;
-                 }
-  .stats dt { font-size: 48px; font-weight: 500; letter-spacing: -0.04em; color: var(--text); line-height: 1; }
+  .stats dl { margin: 18px 28px 24px; display: grid; gap: 0; }
+  .stats .stat { display: grid; grid-template-columns: 104px 1fr; gap: 20px; align-items: baseline; padding: 18px 0;
+                 border-top: 1px solid var(--line); }
+  .stats dt { font-size: 36px; font-weight: 400; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
   .stats dd { margin: 0; display: grid; gap: 8px; min-width: 0; }
-  .stats .what { color: var(--text); font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; }
-  .stats .bar { display: block; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); overflow: hidden; }
-  .stats .bar i { display: block; height: 100%; border-radius: 2px; background: var(--bar); }
+  .stats .what { color: var(--muted); font-size: 15px; line-height: 1.45; }
+  .stats .bar { display: block; height: 2px; border-radius: 1px; background: var(--line); overflow: hidden; }
+  .stats .bar i { display: block; height: 100%; background: var(--muted); }
   .stats .meta { font: 500 11.5px var(--mono); color: var(--dim); letter-spacing: 0; }
   .stats .meta a { color: var(--muted); text-decoration: none; white-space: nowrap; }
   .stats .meta a:hover { color: var(--text); }
