@@ -1,12 +1,18 @@
 # Changelog
 
-## 0.10.0 – Running Now
+## 0.10.0 – Running Now, a new look
 
 - **Running Now** (Events tab ▸ *Running Now*, ⌥⌘R): every process running at this moment, with % CPU, CPU time,
   memory, threads, user, parent and how long it has been running, refreshed every 3 s. Select one for its details
   and full command line; **Show Spawn in Timeline** (or double-click) opens Time Travel at the moment it started,
   with its launch selected. Watch Closely, Ask AI and Reveal in Finder from there too. Root processes included: the
   collector reads the list.
+- **New icon:** the activity list in white on a graphite tile, the flagged row brightest, the dots above it joined
+  by a thin timeline. The **menu bar icon** is the same mark, tinted by macOS like its own icons.
+- **Website and docs:** <https://everythings-gonna-be-alright.github.io/Hostwatch/>, with documentation of every
+  feature, setting and rule, searchable (`/` or ⌘K). *Help ▸ Hostwatch Help* opens it.
+- **Fix:** the menu bar's *known-bad matches this week* counts open stories, so dismissing or deleting them clears it
+  (it counted the threat log and stayed after the stories were gone).
 
 ## 0.9.0 – Watch Closely, and one Network tab
 
