@@ -28,12 +28,14 @@ struct MetricSample: Codable, Sendable, Equatable {
     var top: [TopProcess]?
     /// Processes started while watching that ran heavy at this moment (live strip and badges, for Time Travel).
     var heavy: [HeavyProcess]?
+    /// Free space on the startup disk, bytes (what Finder calls Available: includes purgeable space).
+    var free: Double?
 
     var date: Date { Date(timeIntervalSince1970: t) }
 
     enum CodingKeys: String, CodingKey {
         case t, cpu = "c", mem = "m", pressure = "p", netIn = "ni", netOut = "no", diskRead = "dr", diskWrite = "dw", top
-        case heavy = "h"
+        case heavy = "h", free = "df"
     }
 }
 
@@ -242,6 +244,7 @@ final class MetricsStore: ObservableObject {
     static let interval: TimeInterval = 5
     @Published private(set) var recent: [MetricSample] = []
     @Published var showTop = false                       // the strip's "busiest processes" popover
+    @Published var showDisk = false                      // the strip's disk space popover
     var latest: MetricSample? { recent.last }
 
     private let sampler = SystemSampler()
@@ -286,6 +289,7 @@ final class MetricsStore: ObservableObject {
         }
         let heavy = heavyProvider()
         if !heavy.isEmpty { sample.heavy = heavy }
+        sample.free = DiskSpace.shared.free(now: now).map(Double.init)
         recent.append(sample)
         if let first = recent.first, now.timeIntervalSince(first.date) > 30 * 60 { recent.removeFirst() }
         let archive = archive
@@ -383,6 +387,27 @@ struct Sparkline: View {
     }
 }
 
+/// The startup disk's capacity and free space (read at most every 30 s: the query touches the file system).
+final class DiskSpace: @unchecked Sendable {
+    static let shared = DiskSpace()
+    private let lock = NSLock()
+    private var cached: (at: Date, free: Int64, total: Int64)?
+
+    /// Bytes available, as Finder shows them (purgeable space counts as free).
+    func free(now: Date = Date()) -> Int64? { read(now)?.free }
+    func total(now: Date = Date()) -> Int64? { read(now)?.total }
+
+    private func read(_ now: Date) -> (free: Int64, total: Int64)? {
+        lock.lock(); defer { lock.unlock() }
+        if let c = cached, now.timeIntervalSince(c.at) < 30 { return (c.free, c.total) }
+        let keys: Set<URLResourceKey> = [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey]
+        guard let v = try? URL(fileURLWithPath: "/").resourceValues(forKeys: keys),
+              let free = v.volumeAvailableCapacityForImportantUsage, let total = v.volumeTotalCapacity else { return nil }
+        cached = (now, free, Int64(total))
+        return (free, Int64(total))
+    }
+}
+
 enum Rate {
     static func text(_ bytesPerSecond: Double) -> String {
         guard bytesPerSecond >= 1 else { return "0 B/s" }
@@ -417,6 +442,16 @@ struct MetricsStrip: View {
                 if let r = s.diskRead, let w = s.diskWrite {
                     Label("R \(Rate.text(r)) · W \(Rate.text(w))", systemImage: "internaldrive")
                         .help("Disk: read and written by all processes (from the collector)")
+                }
+                if let free = s.free {
+                    Button { metrics.showDisk.toggle() } label: {
+                        Label("\(DiskFormat.short(free)) free", systemImage: "externaldrive")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Free space on the startup disk · click for its trend and which programs write the most")
+                    .popover(isPresented: $metrics.showDisk, arrowEdge: .top) {
+                        DiskSpaceView(metrics: metrics, at: traveling ? travel.playhead : nil)
+                    }
                 }
                 Button { metrics.showTop.toggle() } label: { Image(systemName: "list.number") }
                     .buttonStyle(.borderless)

@@ -4,7 +4,7 @@ import Foundation
 
 /// Every running process, recorded about once a minute, so Time Travel can show what ran at any moment.
 /// One file per day (`processes-YYYYMMDD.jsonl`), compressed when the day is over, removed with its history.
-/// A line is one moment: `{"t":…,"k":1,"new":[rows],"gone":[pid],"v":[[pid,cpuTime,mem,threads]]}`.
+/// A line is one moment: `{"t":…,"k":1,"new":[rows],"gone":[pid],"v":[[pid,cpuTime,mem,threads,written]]}`.
 struct ProcessHistory: Sendable {
     // Keyframes (`k:1`: the first line of each day, then every 30 minutes) list every process. Lines between
     // them list only what changed since the line before: started (`new`), ended (`gone`), or moved (`v`).
@@ -50,8 +50,10 @@ struct ProcessHistory: Sendable {
             for p in list {
                 guard let old = state.last[p.pid], old.start == p.start else { new.append(p); continue }
                 let memMoved = abs(Double(p.mem - old.mem)) > Double(max(old.mem, 1)) * 0.01
-                if p.cpuTime - old.cpuTime >= 0.01 || memMoved || p.threads != old.threads {
-                    changed.append([Double(p.pid), (p.cpuTime * 100).rounded() / 100, Double(p.mem), Double(p.threads)])
+                let wrote = (p.written ?? 0) != (old.written ?? 0)
+                if p.cpuTime - old.cpuTime >= 0.01 || memMoved || p.threads != old.threads || wrote {
+                    changed.append([Double(p.pid), (p.cpuTime * 100).rounded() / 100, Double(p.mem), Double(p.threads),
+                                    Double(p.written ?? 0)])
                 }
             }
         }
@@ -61,7 +63,7 @@ struct ProcessHistory: Sendable {
         if !rows.isEmpty, let json = try? JSONEncoder().encode(rows) { out += Data(",\"new\":".utf8) + json }
         if !gone.isEmpty { out += Data(",\"gone\":[\(gone.sorted().map(String.init).joined(separator: ","))]".utf8) }
         if !changed.isEmpty {
-            let v = changed.map { r in "[\(Int(r[0])),\(r[1]),\(Int64(r[2])),\(Int(r[3]))]" }.joined(separator: ",")
+            let v = changed.map { r in "[\(Int(r[0])),\(r[1]),\(Int64(r[2])),\(Int(r[3])),\(Int64(r[4]))]" }.joined(separator: ",")
             out += Data(",\"v\":[\(v)]".utf8)
         }
         out += Data("}".utf8)
@@ -72,6 +74,7 @@ struct ProcessHistory: Sendable {
         for r in changed {
             let pid = Int(r[0])
             next[pid]?.cpuTime = r[1]; next[pid]?.mem = Int64(r[2]); next[pid]?.threads = Int(r[3])
+            next[pid]?.written = Int64(r[4])
         }
         state.last = next
         state.day = day
@@ -131,6 +134,7 @@ struct ProcessHistory: Sendable {
                     p.cpu = max(0, (n.cpuTime - p.cpuTime) / (nextT - at) * 100)
                     p.cpuTime += (n.cpuTime - p.cpuTime) * f
                     p.mem += Int64(Double(n.mem - p.mem) * f)
+                    if let a = p.written, let b = n.written { p.written = a + Int64(Double(b - a) * f) }
                 } else {
                     p.cpu = before.flatMap { b in b.alive[p.pid].map { max(0, (p.cpuTime - $0.cpuTime) / (at - b.t) * 100) } }
                 }
@@ -160,6 +164,64 @@ struct ProcessHistory: Sendable {
                         processes: out.sorted { $0.pid < $1.pid })
     }
 
+    // MARK: Who wrote to disk
+
+    /// One program's disk writes over a period.
+    struct Writer: Sendable, Identifiable, Equatable {
+        var id: String { path.isEmpty ? name : path }
+        var name: String
+        var path: String
+        var bytes: Int64
+        var processes: Int                    // instances seen writing (a program can run many times)
+    }
+
+    /// Bytes written to disk per program between `from` and `to`, most first. Counted from the once-a-minute
+    /// lists: a process that started and ended between two lists isn't seen. Writes include files later deleted.
+    func writers(from: Date, to: Date, limit: Int = 25) -> [Writer] {
+        var lines: [Line] = []
+        var day = Calendar.current.startOfDay(for: from)
+        while day <= to {
+            lines += Self.index(archive.data(day: MetricsArchive.dayName(day)))
+            day = Calendar.current.date(byAdding: .day, value: 1, to: day) ?? to.addingTimeInterval(1)
+        }
+        return Self.writers(lines, from: from.timeIntervalSince1970, to: to.timeIntervalSince1970, limit: limit)
+    }
+
+    static func writers(_ lines: [Line], from: Double, to: Double, limit: Int = 25) -> [Writer] {
+        // Start at the keyframe before `from`, so the processes running at `from` have their starting values.
+        let first = lines.lastIndex { $0.key && $0.t <= from } ?? lines.firstIndex(where: \.key) ?? 0
+        var alive: [Int: RunningProcessInfo] = [:]
+        var base: [String: Int64] = [:]               // written at `from`, per process instance
+        var seen: [String: (name: String, path: String, first: Int64, last: Int64)] = [:]
+        func key(_ p: RunningProcessInfo) -> String { "\(p.pid)-\(p.start)" }
+        for line in lines[first...] where line.t <= to {
+            apply(line, to: &alive)
+            if line.t <= from {
+                base = [:]
+                for p in alive.values { if let w = p.written { base[key(p)] = w } }
+                continue
+            }
+            for p in alive.values {
+                guard let w = p.written else { continue }
+                let k = key(p)
+                if seen[k] == nil {
+                    // Running at `from`: count from its value then; started later: from zero.
+                    let start = base[k] ?? (p.start >= from ? 0 : w)
+                    seen[k] = (p.name, p.path, start, w)
+                } else {
+                    seen[k]?.last = w
+                }
+            }
+        }
+        var byProgram: [String: Writer] = [:]
+        for s in seen.values where s.last > s.first {
+            let id = s.path.isEmpty ? s.name : s.path
+            byProgram[id, default: Writer(name: s.name, path: s.path, bytes: 0, processes: 0)].bytes += s.last - s.first
+            byProgram[id]?.processes += 1
+        }
+        return Array(byProgram.values.sorted { $0.bytes > $1.bytes }.prefix(limit))
+    }
+
     /// One line's changes, applied to the processes alive before it (a keyframe replaces them).
     private static func apply(_ line: Line, to alive: inout [Int: RunningProcessInfo]) {
         guard let obj = (try? JSONSerialization.jsonObject(with: line.bytes)) as? [String: Any] else { return }
@@ -169,11 +231,12 @@ struct ProcessHistory: Sendable {
            let rows = try? JSONDecoder().decode([RunningProcessInfo].self, from: json) {
             for r in rows { alive[r.pid] = r }
         }
-        for v in obj["v"] as? [[NSNumber]] ?? [] where v.count == 4 {
+        for v in obj["v"] as? [[NSNumber]] ?? [] where v.count >= 4 {
             let pid = v[0].intValue
             alive[pid]?.cpuTime = v[1].doubleValue
             alive[pid]?.mem = v[2].int64Value
             alive[pid]?.threads = v[3].intValue
+            if v.count >= 5 { alive[pid]?.written = v[4].int64Value }
         }
     }
 }
