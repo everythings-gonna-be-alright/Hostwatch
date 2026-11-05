@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Website** with new screenshots: https://everythings-gonna-be-alright.github.io/Hostwatch/ (from `docs/`). The
+  README's screenshots are new too; all show made-up demo data.
+- **New app icon:** the activity list in white on a graphite tile, the flagged row brightest, the dots above it joined
+  by a thin timeline.
+- **Demo mode** for screenshots: `Hostwatch --demo <folder> [scene]` (see the reference). Made-up data only, in its
+  own folder, without the collector.
+
 ## 0.10.0 – Running Now
 
 - **Running Now** (Events tab ▸ *Running Now*, ⌥⌘R): every process running at this moment, with % CPU, CPU time,

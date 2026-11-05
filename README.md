@@ -20,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="https://everythings-gonna-be-alright.github.io/Hostwatch/"><b>Website</b></a> ·
   <a href="#install"><b>Install</b></a> ·
   <a href="#whats-new">What's new</a> ·
   <a href="#what-it-does">Features</a> ·
@@ -29,12 +30,15 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/hud.png" width="420" alt="Hostwatch HUD: live processes, connections and file opens">
+  <img src="docs/images/site/events.png" alt="Hostwatch Events tab: processes, files and connections, with what's new and risky marked">
 </p>
 
 <p align="center">
-  <img src="docs/images/window-0.5.0.png" alt="Hostwatch Activity window in Time Travel">
+  <img src="docs/images/site/story.png" width="49%" alt="A story: a download, quarantine removed, autostart and a call home, rated Dangerous">
+  <img src="docs/images/site/watch.png" width="47%" alt="Watch Closely: what one process did in a minute, risky actions first">
 </p>
+
+<p align="center"><sub>Screenshots show made-up demo data.</sub></p>
 
 ---
 

@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hostwatch: free intrusion detection for macOS</title>
+<meta name="description" content="Hostwatch is free, open-source intrusion detection for macOS. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://everythings-gonna-be-alright.github.io/Hostwatch/">
+<meta name="theme-color" content="#08090a">
+<meta name="color-scheme" content="dark">
+<!-- Link previews -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Hostwatch">
+<meta property="og:url" content="https://everythings-gonna-be-alright.github.io/Hostwatch/">
+<meta property="og:title" content="Hostwatch: free intrusion detection for macOS">
+<meta property="og:description" content="Learns what's normal on your Mac, flags what isn't, and tells you the story. AI-ready, strict when you need it, open source.">
+<meta property="og:image" content="https://everythings-gonna-be-alright.github.io/Hostwatch/images/site/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hostwatch: intrusion detection that understands your Mac">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hostwatch: free intrusion detection for macOS">
+<meta name="twitter:description" content="Learns what's normal on your Mac, flags what isn't, and tells you the story. AI-ready, strict when you need it, open source.">
+<meta name="twitter:image" content="https://everythings-gonna-be-alright.github.io/Hostwatch/images/site/og.jpg">
+<!-- What this page is about, for search engines -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Hostwatch",
+  "applicationCategory": "SecurityApplication",
+  "operatingSystem": "macOS 26 or later",
+  "softwareVersion": "0.10.0",
+  "description": "Hostwatch is free, open-source intrusion detection for macOS. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.",
+  "url": "https://everythings-gonna-be-alright.github.io/Hostwatch/",
+  "downloadUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
+  "installUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
+  "codeRepository": "https://github.com/everythings-gonna-be-alright/Hostwatch",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "image": "https://everythings-gonna-be-alright.github.io/Hostwatch/images/site/og.jpg",
+  "screenshot": "https://everythings-gonna-be-alright.github.io/Hostwatch/images/site/events.png",
+  "author": {
+    "@type": "Person",
+    "name": "everythings-gonna-be-alright",
+    "url": "https://github.com/everythings-gonna-be-alright"
+  },
+  "keywords": "macOS intrusion detection, HIDS, Mac security, endpoint security, firewall, infostealer, malware detection, Claude Code"
+}
+</script>
+<link rel="icon" href="images/site/mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="images/site/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08090a;
+    --bg-raise: #0b0c0d;
+    --line: rgba(255,255,255,0.08);
+    --line-strong: rgba(255,255,255,0.14);
+    --text: #f7f8f8;
+    --muted: #8a8f98;
+    --dim: #7c818a;          /* at least 4.5:1 on the background, for small text */
+    --max: 1200px;
+    --r-surface: 14px;       /* cards, the logo tile */
+    --r-control: 10px;       /* buttons, the version pill, focus rings */
+    /* Our own pair: Instrument Sans for text, IBM Plex Mono for technical labels (system fonts while they load). */
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 400 16px/1.6 var(--sans); letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { display: block; max-width: 100%; height: auto; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 20; background: rgba(8,9,10,0.7);
+        backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-bottom: 1px solid var(--line); }
+  nav .wrap { height: 68px; display: flex; align-items: center; gap: 32px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 18px; letter-spacing: -0.02em; }
+  .brand .mark { width: 30px; height: 30px; }
+  nav .links { display: flex; gap: 26px; font-size: 14px; color: var(--muted); }
+  nav .links a:hover { color: var(--text); }
+  nav .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  @media (max-width: 760px) { nav .links { display: none; } }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: var(--r-control);
+         font: 500 14px var(--sans); letter-spacing: -0.01em; transition: background .15s, color .15s, border-color .15s; }
+  .btn.light { background: var(--text); color: #08090a; }
+  .btn.light:hover { background: #ffffff; }
+  .btn.ghost { color: var(--muted); border: 1px solid var(--line-strong); }
+  .btn.ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.28); }
+  .btn.lg { height: 44px; padding: 0 20px; font-size: 15px; }
+  .link-arrow { color: var(--muted); font-size: 15px; display: inline-flex; gap: 6px; align-items: center; }
+  .link-arrow:hover { color: var(--text); }
+  a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; border-radius: var(--r-control); }
+
+  /* Hero */
+  .hero { position: relative; padding: 56px 0 0; }
+  .brand.top { margin-bottom: 80px; width: max-content; gap: 14px; font-size: 26px; letter-spacing: -0.03em; }
+  /* The mark on a small graphite tile: the app icon in miniature. */
+  .brand.top .logo-tile { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-surface);
+                          background: linear-gradient(180deg, #1d1e20, #0b0c0d); }
+  .brand.top .mark { width: 40px; height: 40px; }
+  .brand.top .soft { color: var(--muted); }
+  .pill { display: inline-flex; align-items: center; gap: 10px; height: 30px; padding: 0 12px 0 6px; border-radius: var(--r-control);
+          border: 1px solid var(--line-strong); font-size: 13px; color: var(--muted); background: rgba(255,255,255,0.02); }
+  .pill b { color: var(--text); font-weight: 500; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 6px; font-size: 12px; }
+  .pill:hover { color: var(--text); }
+  .pill .sep { width: 1px; height: 14px; background: var(--line-strong); }
+  .pill .gh { width: 14px; height: 14px; flex: none; }
+  .pill .ext { margin-left: -4px; }
+  h1 { font-weight: 500; font-size: clamp(44px, 7.2vw, 84px); line-height: 1.02; letter-spacing: -0.035em; margin: 28px 0 24px; max-width: 980px; color: var(--text); }
+  h1 .quiet { color: var(--dim); }
+  .sub { font-size: clamp(17px, 1.6vw, 20px); color: var(--muted); max-width: 560px; margin: 0 0 40px; line-height: 1.55; letter-spacing: -0.015em; }
+  .sub em { font-style: normal; color: var(--text); }
+  .actions { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+
+  /* Behind the headline: the main window split into its own layers (body, toolbar, filters and columns,
+     the flagged rows), floating a little apart and turned slightly to the right. */
+  .hero { overflow: hidden; padding-bottom: 150px; }
+  .hero .wrap { position: relative; z-index: 1; }
+  .backdrop { position: absolute; z-index: 0; top: -60px; left: 36%; width: 1180px; height: 875px;
+              perspective: 2600px; pointer-events: none;
+              -webkit-mask-image: linear-gradient(90deg, transparent 8%, #000 46%), linear-gradient(180deg, #000 58%, transparent 95%);
+              -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent 8%, #000 46%), linear-gradient(180deg, #000 58%, transparent 95%);
+              mask-composite: intersect; }
+  .backdrop .win { position: absolute; left: 0; right: 0; top: 140px; height: 735px; transform-style: preserve-3d;
+                   transform: rotateY(-24deg) rotateX(10deg) rotateZ(-2deg);
+                   animation: hw-drift 22s ease-in-out -7s infinite alternate; }  /* already moving on the first frame */
+  .backdrop .part { position: absolute; inset: 0; }
+  .backdrop .part img { width: 100%; display: block; }
+  /* Insets are top right bottom left, in % of the screenshot (the window is 31-1768 x 22-1079 of 1800 x 1121).
+     The window is one dimmed layer; where a control was lifted out it has a hole, filled with that bar's
+     own grey (raw pixel values, as the browser draws them) at the same dimming, so nothing shows twice and no box appears. */
+  .backdrop .base { clip-path: inset(1.96% 1.78% 3.75% 1.72% round 12px);
+                    background: linear-gradient(180deg, #2d2e2e 8.1%, #252626 8.1%); }
+  /* The window itself is a recording of the app at work (made-up demo data): events keep arriving. It sits where the
+     window is inside the screenshot the lifted controls come from, so they line up. */
+  .backdrop .base .screen { position: absolute; inset: 0; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.7%202.7H46.5V7.4H8.7ZM59.0%202.7H70.8V7.4H59.0ZM75.6%202.7H94.4V7.4H75.6ZM2.5%209.0H16.5V11.9H2.5ZM17.1%209.0H37.8V11.9H17.1Z%27/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.7%202.7H46.5V7.4H8.7ZM59.0%202.7H70.8V7.4H59.0ZM75.6%202.7H94.4V7.4H75.6ZM2.5%209.0H16.5V11.9H2.5ZM17.1%209.0H37.8V11.9H17.1Z%27/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; }
+  .backdrop .base video { position: absolute; left: 1.72%; top: 1.96%; width: 96.56%; height: 94.38%; object-fit: fill; display: block; }
+  .backdrop .tabs { clip-path: inset(2.7% 53.5% 92.6% 8.7% round 999px); }
+  .backdrop .count { clip-path: inset(2.7% 29.2% 92.6% 59.0% round 999px); }
+  .backdrop .tools { clip-path: inset(2.7% 5.6% 92.6% 75.6% round 999px); }
+  .backdrop .seg { clip-path: inset(9.0% 83.5% 88.1% 2.5% round 6px); }
+  .backdrop .chips { clip-path: inset(9.0% 62.2% 88.1% 17.1% round 999px); }
+  /* Where everything rests: every control in its own place in the window, as on a Mac. */
+  /* One brightness for the window and its controls, so at rest it reads as one window. */
+  .backdrop .part { opacity: 0.4; }
+  /* When the page opens (pure CSS, no script), in one smooth phase: the window fades in where it is and the
+     controls drift down a short way into their places, one shortly after another. */
+  .backdrop .base  { animation: hw-fade 1.4s ease-out both; }
+  .backdrop .tabs  { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .15s both; }
+  .backdrop .tools { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .25s both; }
+  .backdrop .count { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .35s both; }
+  .backdrop .chips { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .45s both; }
+  .backdrop .seg   { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .55s both; }
+  /* The whole window glides in at the same time (on the outer box, so the sway inside keeps running). */
+  .backdrop { animation: hw-enter 1.8s cubic-bezier(.22,.7,.2,1) both; }
+  @keyframes hw-enter { from { transform: translate(90px, 40px) scale(0.94); } }
+  @keyframes hw-fade { from { opacity: 0; } }
+  @keyframes hw-land { from { transform: translateZ(120px); opacity: 0; } }
+  /* Then a slow, endless sway: two positions, eased both ways, so it never jerks. Starts where the window rests. */
+  @keyframes hw-drift { from { transform: rotateY(-24deg) rotateX(10deg) rotateZ(-2deg); }
+                        to   { transform: rotateY(-20.5deg) rotateX(8.5deg) rotateZ(-1.4deg) translateY(-5px); } }
+  @media (prefers-reduced-motion: reduce) { .backdrop, .backdrop .win { animation: none; } }
+  .hero-shot { display: none; }
+  @media (max-width: 900px) {
+    .backdrop { display: none; }
+    .hero { padding-bottom: 40px; }
+    .hero-shot { display: block; margin-top: 56px; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 95%); mask-image: linear-gradient(180deg, #000 55%, transparent 95%); }
+  }
+
+  .proof { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 0; position: relative; z-index: 2; background: var(--bg); }
+  .proof .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .proof span { display: block; padding: 26px 0; text-align: center; font-size: 13px; color: var(--dim); font-family: var(--mono); letter-spacing: 0; }
+  .proof span + span { border-left: 1px solid var(--line); }
+  @media (max-width: 760px) { .proof .wrap { grid-template-columns: 1fr 1fr; } .proof span + span { border-left: 0; } }
+
+  /* Sections */
+  section { padding: 160px 0 0; }
+  .label { font: 500 13px var(--mono); color: var(--muted); letter-spacing: 0; display: flex; gap: 10px; align-items: center; }
+  .label .num { color: var(--text); }
+  .label::after { content: ""; flex: 0 0 40px; height: 1px; background: var(--line-strong); }
+  h2 { font-weight: 500; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -0.03em; margin: 22px 0 0; max-width: 900px; }
+  h2 .quiet { color: var(--dim); }
+  .lead-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: end; }
+  .lead-row p { color: var(--muted); font-size: 17px; margin: 0; max-width: 460px; }
+  @media (max-width: 900px) { .lead-row { grid-template-columns: 1fr; gap: 20px; } }
+
+
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); border-left: 1px solid var(--line); margin-top: 16px; }
+  .trio > div { padding: 36px 32px 8px; border-right: 1px solid var(--line); }
+  .trio h3 { font-size: 15px; font-weight: 500; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .trio p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+
+  /* The numbers behind "why": one grey series (the page has no decorative colour); 2026 hatched as a partial year. */
+  :root { --bar: #c9ccd1; --bar-soft: rgba(201,204,209,0.18); }
+  .data { margin-top: 16px; }
+  .chart { margin: 0; min-height: 0; }
+  .chart .cvechart { width: 100%; height: auto; padding: 8px 28px 0; display: block; }
+  .cvechart .grid { stroke: var(--line); stroke-width: 1; }
+  .cvechart .baseline { stroke: var(--line-strong); stroke-width: 1; }
+  .cvechart text { font: 500 10px var(--mono); fill: var(--muted); text-anchor: middle; }
+  .cvechart text.ax { text-anchor: end; fill: var(--dim); }
+  .cvechart text.v { fill: var(--text); font-size: 11px; }
+  .cvechart text.fl { font-size: 10px; fill: var(--muted); text-anchor: end; }
+  .cvechart .line { fill: none; stroke: var(--bar); stroke-width: 2; stroke-linecap: round; }
+  .cvechart .line.dashed { stroke-dasharray: 5 5; opacity: 0.8; }
+  .cvechart .fan { fill: var(--bar); fill-opacity: 0.08; }
+  .cvechart .pt circle:first-of-type { fill: var(--bar); stroke: var(--bg-raise); stroke-width: 2; }
+  .cvechart .pt circle.hollow { fill: var(--bg-raise); stroke: var(--bar); stroke-width: 2; }
+  .cvechart .pt:hover circle:first-of-type { r: 5; }
+  .chart figcaption, .stats dd a { font-size: 12px; color: var(--dim); }
+  .chart figcaption { padding: 12px 28px 24px; }
+  .chart figcaption a, .stats dd a { color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .chart figcaption a:hover, .stats dd a:hover { color: var(--text); }
+  .chart .text p b { color: var(--text); font-weight: 500; }
+  .stats { min-height: 0; }
+  .stats dl { margin: 20px 28px 28px; display: grid; gap: 0; }
+  .stats dl div { padding: 16px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: baseline; }
+  .stats dt { font-size: 32px; font-weight: 500; letter-spacing: -0.03em; color: var(--text); }
+  .stats dd { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* The "why" picture: three trusted things flowing into one machine, which Hostwatch watches. White line art, still. */
+  .why-wrap { display: grid; gap: 28px; justify-items: start; }
+  .why-art { width: 100%; max-width: 380px; height: auto; }
+  .why-art .thing, .why-art .laptop { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+  .why-art .glass { fill: #111214; stroke: none; }
+  .why-art .notch { fill: #08090a; }
+  .why-art .laptop.thin { stroke-width: 1.1; }
+  .why-art .flow { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 5; stroke-linecap: round; }
+  .why-art .ok { fill: #08090a; stroke: var(--text); stroke-width: 1.3; }
+  .why-art .tick { fill: none; stroke: var(--text); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .why-art .cap { font: 500 9px var(--mono); fill: var(--dim); text-anchor: middle; letter-spacing: 0; }
+  .why-art .mark { fill: var(--text); }
+  .incidents { margin-top: 56px; border-top: 1px solid var(--line); }
+  .incidents small { display: block; font: 500 12px var(--mono); color: var(--dim); letter-spacing: 0; margin-bottom: 10px; }
+  .incidents .link-arrow { margin-top: 14px; font-size: 14px; }
+  .incidents > div { padding-bottom: 28px; }
+  @media (max-width: 900px) { .trio { grid-template-columns: 1fr; border-left: 0; } .trio > div { border-right: 0; border-top: 1px solid var(--line); padding: 28px 0; } }
+
+  /* Bento */
+  .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-top: 64px; }
+  .tile { background: var(--bg-raise); border: 1px solid rgba(255,255,255,0.05); border-radius: var(--r-surface); overflow: hidden; display: flex; flex-direction: column; min-height: 460px; }
+  .tile .text { padding: 28px 28px 0; }
+  .tile h3 { font-size: 17px; font-weight: 500; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .tile p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; max-width: 440px; }
+  .tile .img { flex: 1; position: relative; margin-top: 28px; overflow: hidden; min-height: 300px; }
+  .tile .img img { position: absolute; max-width: none; }
+  .tile .img::after { content: ""; position: absolute; inset: auto 0 0 0; height: 90px; background: linear-gradient(180deg, transparent, var(--bg-raise)); }
+  .t-7 { grid-column: span 7; } .t-5 { grid-column: span 5; } .t-4 { grid-column: span 4; } .t-8 { grid-column: span 8; }
+  @media (max-width: 900px) { .t-7, .t-5, .t-4, .t-8 { grid-column: span 12; } }
+
+  .img.center img { width: 300px; left: 50%; top: 0; transform: translateX(-50%); }
+  .img.crop-left img { width: 1000px; left: 28px; top: 0; }
+  .img.crop-story img { width: 700px; left: 28px; top: 0; }
+  .img.crop-watch img { width: 640px; left: 28px; top: -20px; }
+  .img.crop-running img { width: 900px; left: 28px; top: 0; }
+
+  /* Chain */
+  .chain { margin-top: 56px; display: grid; grid-template-columns: repeat(6, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .chain div { padding: 22px 18px; border-left: 1px solid var(--line); }
+  .chain div:first-child { border-left: 0; padding-left: 0; }
+  .chain small { font: 500 12px var(--mono); color: var(--dim); letter-spacing: 0; }
+  .chain span { display: block; margin-top: 8px; font-size: 15px; color: var(--text); letter-spacing: -0.01em; }
+  .chain div:last-child small { color: var(--text); }
+  @media (max-width: 900px) { .chain { grid-template-columns: 1fr 1fr; } .chain div, .chain div:first-child { border-left: 0; border-top: 1px solid var(--line); padding-left: 0; } }
+
+  /* Privacy */
+  .facts { margin: 64px 0 0; display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--line); }
+  .facts div { padding: 26px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 120px 1fr; gap: 24px; }
+  .facts div:nth-child(odd) { padding-right: 40px; }
+  .facts div:nth-child(even) { padding-left: 40px; border-left: 1px solid var(--line); }
+  .facts dt { font: 500 13px var(--mono); color: var(--dim); letter-spacing: 0; padding-top: 3px; }
+  .facts dd { margin: 0; color: var(--muted); font-size: 15px; }
+  .facts dd b { color: var(--text); font-weight: 500; }
+  @media (max-width: 900px) { .facts { grid-template-columns: 1fr; } .facts div:nth-child(odd), .facts div:nth-child(even) { padding: 22px 0; border-left: 0; } .facts div { grid-template-columns: 1fr; gap: 6px; } }
+
+  /* Install */
+  .install { margin-top: 64px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
+  .install div { padding: 28px 28px 0 0; }
+  .install div + div { padding-left: 28px; border-left: 1px solid var(--line); }
+  .install small { font: 500 12px var(--mono); color: var(--dim); letter-spacing: 0; }
+  .install h3 { font-size: 16px; font-weight: 500; margin: 10px 0 6px; }
+  .install p { margin: 0; color: var(--muted); font-size: 15px; }
+  .install a { color: var(--text); border-bottom: 1px solid var(--line-strong); }
+  @media (max-width: 900px) { .install { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
+
+  .closing { text-align: center; padding: 200px 0 160px; position: relative; }
+  .closing h2 { margin: 0 auto 32px; }
+  .closing .actions { justify-content: center; }
+  .closing .note { margin: 28px auto 0; font-size: 13px; color: var(--dim); max-width: 560px; }
+  .closing .note code { font: 12px var(--mono); color: var(--muted); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+  .closing .ua { margin: 72px auto 10px; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .closing .ua b { color: var(--text); font-weight: 500; }
+  .closing .ua .flag { display: inline-block; width: 18px; height: 12px; border-radius: 2px; vertical-align: -1px; margin: 0 2px; }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0 56px; font-size: 13px; color: var(--dim); }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  footer .cols { display: flex; gap: 28px; flex-wrap: wrap; }
+  footer a { color: var(--muted); } footer a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+
+<header class="hero" id="top">
+  <div class="backdrop" id="backdrop" aria-hidden="true">
+    <div class="win">
+      <div class="part base"><div class="screen"><video src="images/site/live.mp4" poster="images/site/live-poster.jpg" autoplay muted loop playsinline preload="auto"></video></div></div>
+      <div class="part seg"><img src="images/site/events.png" alt=""></div>
+      <div class="part chips"><img src="images/site/events.png" alt=""></div>
+      <div class="part tabs"><img src="images/site/events.png" alt=""></div>
+      <div class="part tools"><img src="images/site/events.png" alt=""></div>
+      <div class="part count"><img src="images/site/events.png" alt=""></div>
+    </div>
+  </div>
+  <div class="wrap">
+    <a class="brand top" href="#top"><span class="logo-tile"><svg class="mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <rect x="3.6" y="6.60" width="0.8" height="1.10" rx="0.4" fill="#f7f8f8" fill-opacity="0.45"/>
+  <rect x="3.6" y="11.10" width="0.8" height="0.65" rx="0.4" fill="#f7f8f8" fill-opacity="0.75"/>
+  <circle cx="4" cy="4.9" r="1.25" fill="#f7f8f8" fill-opacity="0.5"/>
+  <rect x="7.5" y="4.00" width="9.8" height="1.8" rx="0.9" fill="#f7f8f8" fill-opacity="0.32"/>
+  <circle cx="4" cy="9.4" r="1.25" fill="#f7f8f8" fill-opacity="0.5"/>
+  <rect x="7.5" y="8.50" width="13.2" height="1.8" rx="0.9" fill="#f7f8f8" fill-opacity="0.32"/>
+  <circle cx="4" cy="13.9" r="1.7" fill="#f7f8f8"/>
+  <rect x="7.5" y="13.00" width="11.8" height="1.8" rx="0.9" fill="#f7f8f8"/>
+  <circle cx="4" cy="18.4" r="1.25" fill="#f7f8f8" fill-opacity="0.5"/>
+  <rect x="7.5" y="17.50" width="7.6" height="1.8" rx="0.9" fill="#f7f8f8" fill-opacity="0.32"/>
+</svg></span><span>Host<span class="soft">watch</span></span></a>
+    <a class="pill" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/tag/v0.10.0" target="_blank" rel="noopener"
+       aria-label="Hostwatch 0.10: Running Now. Release notes on GitHub (opens in a new tab)"><b>0.10</b>Running Now<span class="sep"></span><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Release notes on GitHub<span class="ext">↗</span></a>
+    <h1>Intrusion detection that <span class="quiet">understands your Mac</span></h1>
+    <p class="sub">Learns what's normal on your Mac, flags what isn't, and <em>tells you the story.</em>
+      <em>AI&#8209;ready</em>, <em>strict when you need it</em>, open source.</p>
+    <div class="actions">
+      <a class="btn light lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
+      <a class="link-arrow" href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span>↗</span></a>
+    </div>
+    <img class="hero-shot" src="images/site/events.png" alt="Hostwatch Events tab: processes, files and connections, with what's new and risky marked" width="1800" height="1121">
+  </div>
+</header>
+
+<div class="proof">
+  <div class="wrap">
+    <span>Endpoint Security</span><span>Packet filter firewall</span><span>Apple on-device AI</span><span>MIT licensed</span>
+  </div>
+</div>
+
+<section id="why">
+  <div class="wrap">
+    <div class="label"><span class="num">1.0</span> Why</div>
+    <div class="lead-row">
+      <h2>One machine was enough. <span class="quiet">GitHub, Grafana Labs, Binance. 2026.</span></h2>
+      <div class="why-wrap">
+      <svg class="why-art" viewBox="0 0 340 236" role="img" aria-label="An editor extension, an npm package and a job-interview task, each trusted, all flowing into one laptop, which Hostwatch watches">
+        <!-- three trusted things -->
+        <path d="M30 34 h10 a5 5 0 0 1 10 0 h10 v10 a5 5 0 0 1 0 10 v10 h-10 a5 5 0 0 0 -10 0 h-10 v-10 a5 5 0 0 0 0 -10 z" class="thing"/>
+        <path d="M45 102 l18 9 v20 l-18 9 l-18 -9 v-20 z M27 111 l18 9 l18 -9 M45 120 v20" class="thing"/>
+        <path d="M27 182 h36 a3 3 0 0 1 3 3 v20 a3 3 0 0 1 -3 3 h-36 a3 3 0 0 1 -3 -3 v-20 a3 3 0 0 1 3 -3 z M37 182 v-5 a3 3 0 0 1 3 -3 h10 a3 3 0 0 1 3 3 v5 M24 194 h42" class="thing"/>
+        <circle cx="66" cy="30" r="7" class="ok"/><path d="M62.8 30 l2.2 2.3 l4.2 -4.6" class="tick"/><circle cx="70" cy="104" r="7" class="ok"/><path d="M66.8 104 l2.2 2.3 l4.2 -4.6" class="tick"/><circle cx="72" cy="178" r="7" class="ok"/><path d="M68.8 178 l2.2 2.3 l4.2 -4.6" class="tick"/>
+        <text x="45" y="84" class="cap">extension</text><text x="45" y="158" class="cap">package</text><text x="45" y="226" class="cap">interview task</text>
+        <!-- all into one machine -->
+        <path d="M84 50 C150 50 160 106 204 108 M86 121 C140 121 170 112 204 112 M86 192 C150 192 160 118 204 116" class="flow"/>
+        <rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/>
+        <rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/>
+        <rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/>
+        <path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/>
+        <path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/>
+        <!-- Hostwatch watching on its screen -->
+        <g class="mark" transform="translate(239 87) scale(2)">
+          <circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/>
+          <circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/>
+          <circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/>
+          <circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/>
+          <rect x="3.6" y="6.6" width=".8" height="1.1" rx=".4" opacity=".45"/><rect x="3.6" y="11.1" width=".8" height=".65" rx=".4" opacity=".75"/>
+        </g>
+      </svg>
+      <p>An editor extension. An npm package. A job-interview task. Each was trusted, each ran on one machine.
+        Hostwatch watches what runs on yours.</p>
+      </div>
+    </div>
+    <div class="trio incidents">
+      <div><small>GitHub · May 2026</small><h3>A poisoned VS Code extension</h3><p>One employee's device; about 3,800 internal repositories taken.</p>
+        <a class="link-arrow" href="https://techcrunch.com/2026/05/20/github-says-hackers-stole-data-from-thousands-of-internal-repositories/" target="_blank" rel="noopener">TechCrunch <span>↗</span></a></div>
+      <div><small>Grafana Labs · May 2026</small><h3>A compromised npm package</h3><p>A leaked token; the private codebase downloaded and held for ransom.</p>
+        <a class="link-arrow" href="https://grafana.com/blog/grafana-labs-security-update-latest-on-tanstack-npm-supply-chain-ransomware-incident/" target="_blank" rel="noopener">Grafana Labs <span>↗</span></a></div>
+      <div><small>Binance · October 2026</small><h3>A fake job interview</h3><p>A coding task ran malware on an engineer's laptop; $6.3 billion stolen.</p>
+        <a class="link-arrow" href="https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/" target="_blank" rel="noopener">BleepingComputer <span>↗</span></a></div>
+    </div>
+    <div class="bento data">
+      <figure class="tile t-7 chart">
+        <div class="text"><h3 id="cve-title">CVEs published per year</h3>
+          <p>New vulnerabilities, all software. <b>2026*</b>: 35,364 in the first half (<b>+49.5%</b>), forecast <b>≈72k</b> for the year, up to 91k by a regression model.</p></div>
+        <svg class="cvechart" viewBox="0 0 420 262" role="img" aria-labelledby="cve-title">
+          <defs><linearGradient id="fadex2" x1="0" y1="0" x2="1" y2="0"><stop offset="0.7" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0.35"/></linearGradient><mask id="fadex"><rect x="0" y="0" width="420" height="262" fill="url(#fadex2)"/></mask><linearGradient id="cvefill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--bar)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--bar)" stop-opacity="0"/></linearGradient></defs>
+          <line x1="44" x2="390" y1="174.0" y2="174.0" class="grid"/><text x="36" y="178.0" class="ax">25k</text><line x1="44" x2="390" y1="126.0" y2="126.0" class="grid"/><text x="36" y="130.0" class="ax">50k</text><line x1="44" x2="390" y1="78.0" y2="78.0" class="grid"/><text x="36" y="82.0" class="ax">75k</text><line x1="44" x2="390" y1="30.0" y2="30.0" class="grid"/><text x="36" y="34.0" class="ax">100k</text><line x1="44" x2="390" y1="222" y2="222" class="baseline"/>
+          <path d="M44.0,166.7 C63.2,163.1 120.9,151.4 159.3,145.2 C197.8,139.0 236.2,139.7 274.7,129.5 C313.1,119.2 370.8,91.4 390.0,83.7 L390.0,222 L44.0,222 Z" fill="url(#cvefill)" mask="url(#fadex)"/>
+          <path d="M274.7,129.5 L390.0,47.6 L390.0,83.7 Z" class="fan"><title>2026 forecast range: about 72,000 (straight-line) to 90,831 (regression model)</title></path>
+          <path d="M44.0,166.7 C63.2,163.1 120.9,151.4 159.3,145.2 C197.8,139.0 236.2,139.7 274.7,129.5" class="line"/>
+          <path d="M274.7,129.5 C313.1,119.2 370.8,91.4 390.0,83.7" class="line dashed"/>
+          <g class="pt"><title>2023: 28,818 CVEs</title><circle cx="44.0" cy="166.7" r="4"/><circle cx="44.0" cy="166.7" r="14" fill="transparent" stroke="none"/></g><text x="44.0" y="154.7" class="v">28,818</text><g class="pt"><title>2024: 40,009 CVEs</title><circle cx="159.3" cy="145.2" r="4"/><circle cx="159.3" cy="145.2" r="14" fill="transparent" stroke="none"/></g><text x="159.3" y="133.2" class="v">40,009</text><g class="pt"><title>2025: 48,185 CVEs</title><circle cx="274.7" cy="129.5" r="4"/><circle cx="274.7" cy="129.5" r="14" fill="transparent" stroke="none"/></g><text x="274.7" y="117.5" class="v">48,185</text>
+          <g class="pt"><title>2026 forecast: about 72,000 CVEs</title><circle cx="390.0" cy="83.7" r="4" class="hollow"/><circle cx="390.0" cy="83.7" r="14" fill="transparent" stroke="none"/></g>
+          <text x="380.0" y="73.7" class="fl">≈72k forecast</text>
+          <text x="380.0" y="51.6" class="fl">91k model</text>
+          <text x="44.0" y="240" class="yr">2023</text><text x="159.3" y="240" class="yr">2024</text><text x="274.7" y="240" class="yr">2025</text><text x="390.0" y="240" class="yr">2026*</text>
+        </svg>
+        <table class="sr-only"><caption>CVEs published per year</caption><tr><th>Year</th><th>CVEs</th></tr>
+          <tr><td>2023</td><td>28,818</td></tr><tr><td>2024</td><td>40,009</td></tr><tr><td>2025</td><td>48,185</td></tr><tr><td>2026, January to June</td><td>35,364</td></tr><tr><td>2026 forecast (straight-line)</td><td>71,314 to 72,008</td></tr><tr><td>2026 forecast (regression model)</td><td>90,831</td></tr></table>
+        <figcaption>Source: Jerry Gamblin's CVE data reviews (2026: first half 35,364, then forecast):
+          <a href="https://jerrygamblin.com/2025/01/05/2024-cve-data-review/" target="_blank" rel="noopener">2023–2024 ↗</a>
+          <a href="https://jerrygamblin.com/2026/01/01/2025-cve-data-review/" target="_blank" rel="noopener">2025 ↗</a>
+          <a href="https://jerrygamblin.com/2026/07/01/3528/" target="_blank" rel="noopener">2026 mid-year and forecast ↗</a></figcaption>
+      </figure>
+      <div class="tile t-5 stats">
+        <div class="text"><h3>Mac malware is growing too</h3><p>Trojans and stealers target the Macs developers work on.</p></div>
+        <dl>
+          <div><dt>+67%</dt><dd>new macOS backdoor variants in 2025. <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></dd></div>
+          <div><dt>+17%</dt><dd>new macOS stealer variants in 2025. <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></dd></div>
+          <div><dt>54%</dt><dd>of Mac malware samples are trojans and infostealers (Q3 2026, 37,898 samples). <a href="https://www.pointwild.com/threat-intelligence/mac-malware-trend-report/" target="_blank" rel="noopener">Point Wild ↗</a></dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="detect">
+  <div class="wrap">
+    <div class="label"><span class="num">2.0</span> How</div>
+    <div class="lead-row">
+      <h2>Attacks are chains. <span class="quiet">Hostwatch reads them as one story, not a thousand alerts.</span></h2>
+      <p>An app starting a shell, a file in Downloads, a connection to a new server: each is normal alone. Together
+        they're how a Mac gets compromised.</p>
+    </div>
+    <div class="chain">
+      <div><small>01</small><span>A download</span></div>
+      <div><small>02</small><span>Quarantine removed</span></div>
+      <div><small>03</small><span>It runs</span></div>
+      <div><small>04</small><span>Reads cookies, keychain</span></div>
+      <div><small>05</small><span>Adds itself to startup</span></div>
+      <div><small>06 · Dangerous</small><span>Calls home</span></div>
+    </div>
+    <div class="bento">
+      <div class="tile t-7">
+        <div class="text"><h3>Stories</h3>
+          <p>Related suspicious steps, joined and scored. Every step with its command, file or address, one click from the timeline.</p></div>
+        <div class="img crop-story"><img src="images/site/story.png" alt="A Dangerous story: xattr, CleanMyDisk, curl" loading="lazy"></div>
+      </div>
+      <div class="tile t-5">
+        <div class="text"><h3>Live HUD</h3>
+          <p>A see-through overlay with the newest activity and first-seen behaviour. ⌃⌥⌘H from any app.</p></div>
+        <div class="img center"><img src="images/site/hud.png" alt="The Hostwatch HUD overlay" loading="lazy"></div>
+      </div>
+    </div>
+    <div class="trio">
+      <div><h3>Learns your Mac</h3><p>The first hour sets the baseline. Apple's processes and trusted developers are decided automatically.</p></div>
+      <div><h3>Patterns, not events</h3><p>The same program doing the same kind of thing is one decision. One-off commands stay out of the way.</p></div>
+      <div><h3>Known threats</h3><p>Daily public threat lists and exploited macOS flaws, matched on your Mac.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="protect">
+  <div class="wrap">
+    <div class="label"><span class="num">3.0</span> Who</div>
+    <div class="lead-row">
+      <h2>Unknown connections wait for you. <span class="quiet">Everything else just works.</span></h2>
+      <p>Turn on Ask and each program's new connection is checked first. Known ones pass, known-bad ones are blocked,
+        anything new waits for Allow or Block. Built on macOS's own pf. Nothing is decrypted.</p>
+    </div>
+    <div class="bento">
+      <div class="tile t-4">
+        <div class="text"><h3>Ask, with context</h3>
+          <p>Who's connecting, where, and on what port. Ask Claude right in the question.</p></div>
+        <div class="img center"><img src="images/site/firewall.png" alt="Firewall question: node wants to connect to registry.npmjs.org" loading="lazy"></div>
+      </div>
+      <div class="tile t-8">
+        <div class="text"><h3>Every destination, one timeline</h3>
+          <p>New domains, the programs that reached them, and what the firewall does there. Containers and VMs judged per destination.</p></div>
+        <div class="img crop-left"><img src="images/site/network.png" alt="Network tab with firewall status per destination" loading="lazy"></div>
+      </div>
+    </div>
+    <div class="trio">
+      <div><h3>Watch, Ask, Strict</h3><p>Start with Watch: it only shows what it would block.</p></div>
+      <div><h3>Claude Code guard</h3><p>Claude Code's commands are checked before they run. The dangerous are blocked, the risky need your OK.</p></div>
+      <div><h3>Fails safe</h3><p>The redirect goes away when the collector stops, crashes, or its web check fails.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="investigate">
+  <div class="wrap">
+    <div class="label"><span class="num">4.0</span> What</div>
+    <div class="lead-row">
+      <h2>What is this program doing? <span class="quiet">Watch it for a minute and find out.</span></h2>
+      <p>Watch Closely records everything one process and its helpers do, using Endpoint Security, and puts the risky
+        things first. Then Claude or Apple's on-device model explains it. AI suggests, you decide.</p>
+    </div>
+    <div class="bento">
+      <div class="tile t-7">
+        <div class="text"><h3>Watch Closely</h3>
+          <p>A minute of everything one process does, in plain words, the risky things first. Then Claude or the on-device model explains it.</p></div>
+        <div class="img crop-watch"><img src="images/site/watch.png" alt="Watch Closely: what CleanMyDisk did in a minute" loading="lazy"></div>
+      </div>
+      <div class="tile t-5">
+        <div class="text"><h3>Running Now</h3>
+          <p>Every process, root ones too, with CPU, memory and uptime. Jump to the moment it was spawned.</p></div>
+        <div class="img crop-running"><img src="images/site/running.png" alt="Running Now: every running process" loading="lazy"></div>
+      </div>
+    </div>
+    <div class="trio">
+      <div><h3>Ask AI</h3><p>About any event, domain or story: what it is, the risks, what to do. AI suggests, you decide.</p></div>
+      <div><h3>Time Travel</h3><p>Scrub back through recorded activity, CPU and memory, to any moment.</p></div>
+      <div><h3>MCP server</h3><p>Let Claude Code investigate your history: read-only, only with your permission.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="label"><span class="num">5.0</span> Where</div>
+    <h2>Your activity stays on your Mac. <span class="quiet">All of it.</span></h2>
+    <dl class="facts">
+      <div><dt>Storage</dt><dd>History, patterns and stories live in <b>your Library folder</b>. Nothing is uploaded.</dd></div>
+      <div><dt>Secrets</dt><dd>Passwords and tokens are <b>masked before they're recorded</b>, and again before any AI.</dd></div>
+      <div><dt>Firewall</dt><dd>Reads only which server an app asks for. <b>It never decrypts traffic.</b></dd></div>
+      <div><dt>AI</dt><dd>Only when you ask. <b>Apple's on-device model</b> keeps even that on the Mac.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="label"><span class="num">6.0</span> When</div>
+    <h2>Two minutes to set up. <span class="quiet">macOS 26 or later.</span></h2>
+    <div class="install">
+      <div><small>01</small><h3>Download</h3><p>From <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Releases</a>, then move it to Applications.</p></div>
+      <div><small>02</small><h3>Allow it</h3><p>Privacy &amp; Security → Open Anyway. It isn't notarized.</p></div>
+      <div><small>03</small><h3>Full Disk Access</h3><p>A short setup window walks you through it.</p></div>
+      <div><small>04</small><h3>Start watching</h3><p>Your password once, to start the collector.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="closing">
+  <div class="wrap">
+    <h2>Know what your Mac is doing.<br><span class="quiet">Starting now.</span></h2>
+    <div class="actions">
+      <a class="btn light lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
+      <a class="btn ghost lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/docs/reference.md">Read the reference</a>
+    </div>
+    <p class="note">Always check what you download: compare <code>shasum -a 256 Hostwatch-*.zip</code> with the SHA&#8209;256 listed next to the zip on the release page.</p>
+    <p class="ua"><b>Free, always.</b><br>Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</p>
+    <a class="link-arrow" href="https://u24.gov.ua/" target="_blank" rel="noopener">Help Ukraine on United24 <span>↗</span></a>
+  </div>
+</div>
+
+
+<footer>
+  <div class="wrap">
+    <span>Hostwatch · MIT license</span>
+    <div class="cols">
+      <a href="https://github.com/everythings-gonna-be-alright/Hostwatch">GitHub</a>
+      <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/docs/reference.md">Reference</a>
+      <a href="https://vshymanskyy.github.io/StandWithUkraine/">Stand with Ukraine</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Reduce Motion: the recording stays on its first frame.
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll(".backdrop video").forEach(v => { v.autoplay = false; v.pause(); });
+</script>
+</body>
+</html>
