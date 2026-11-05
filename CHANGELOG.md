@@ -26,6 +26,9 @@
 - **Far fewer disk writes:** Hostwatch rewrote its whole pattern store (10 MB on a busy Mac) every 10 seconds,
   because every event updates a pattern's counter: about 1 MB/s, and a memory jump each time it was encoded. Counters
   and newly learned patterns are now saved every 5 minutes (and at quit); your decisions still within seconds.
+- **Safe rules only from regular behaviour.** A learned Safe rule needs patterns seen at least 5 times, over an
+  hour or more: one-off Safe decisions aren't sent to Claude, and a proposal backed only by them is refused. Dangerous
+  and Suspicious decisions still teach rules from a single sighting.
 - **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
   up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
   lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.

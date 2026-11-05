@@ -102,6 +102,14 @@ struct RuleEvaluation: Equatable {
             r.problems.append("too broad: matches \(r.totalMatches) of \(entries.count) patterns")
         }
         if r.agreeing.isEmpty, r.totalMatches > 0 { r.warnings.append("not based on any of your decisions") }
+        // A Safe rule stops questions for good: it must stand on behaviour that keeps happening, not a one-off.
+        if rule.action == .safe, !r.agreeing.isEmpty {
+            let byID = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            if !r.agreeing.contains(where: { byID[$0]?.isRegular == true }) {
+                r.problems.append("based only on patterns seen a few times: a Safe rule needs regular behaviour "
+                    + "(seen \(SignatureEntry.regularCount)× over an hour or more)")
+            }
+        }
         if rule.action == .safe, r.newHighRisk > 0 {
             r.warnings.append("would mark \(r.newHighRisk) high-risk pattern\(r.newHighRisk == 1 ? "" : "s") Safe")
         }
@@ -186,6 +194,10 @@ final class RuleBook: ObservableObject {
 
     var activeCount: Int { rules.filter(\.isActive).count }
     var yourDecisions: [SignatureEntry] { store.allEntries.filter(Decision.isYours) }
+
+    /// The decisions rules are learned from: Dangerous and Suspicious ones always (a thing that ran once can be
+    /// exactly what to catch again), Safe ones only on regular patterns (seen 5×, over an hour or more).
+    var teachingDecisions: [SignatureEntry] { yourDecisions.filter { $0.status != .safe || $0.isRegular } }
 
     // MARK: Approving
 
@@ -294,9 +306,11 @@ final class RuleBook: ObservableObject {
 
     func suggest() {
         guard !running else { return }
-        let decisions = yourDecisions
+        let decisions = teachingDecisions
         guard decisions.count >= 2 else {
-            message = "Mark at least two patterns yourself first: rules are learned from your decisions."
+            message = yourDecisions.count >= 2
+                ? "Your Safe decisions are on patterns seen only a few times: rules are learned from regular behaviour (seen \(SignatureEntry.regularCount)× over an hour or more)."
+                : "Mark at least two patterns yourself first: rules are learned from your decisions."
             return
         }
         guard let claude = ClaudeLocator.path else { message = "Claude Code CLI not found."; return }

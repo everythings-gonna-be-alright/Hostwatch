@@ -484,7 +484,10 @@ that order of authority. The Rules tab shows it in three views (its toolbar labe
 rules and the story chains you always ignore. Claude's own verdicts are deliberately not used, so rules
 don't amplify the AI. Claude returns up to 8 rules: `kind` (exec/net/file/any), `process` glob, `pattern`
 glob (`*`, `?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale. It
-needs Claude, so it's disabled when the engine is *Apple On-Device*.
+needs Claude, so it's disabled when the engine is *Apple On-Device*. Your **Safe** decisions are sent only for
+**regular** patterns: seen at least 5 times, the first and last time at least an hour apart. A Safe rule stops
+questions for good, so it must stand on behaviour that keeps happening; Dangerous and Suspicious decisions are
+always sent (something that ran once may be exactly what to catch again).
 
 Every proposal is checked locally before you see it:
 
@@ -496,6 +499,7 @@ Every proposal is checked locally before you see it:
 | based on none of your decisions | warning |
 | a Safe rule covering New high-risk patterns | warning (shows how many) |
 | a Safe rule covering an interpreter or shell broadly (program or pattern < 4 letters) | **refused** |
+| a Safe rule whose matching decisions are all on patterns seen < 5 times or within an hour | **refused** (not regular) |
 
 While it runs, **Needs You** shows a progress card (how many of your decisions were sent, a live timer,
 **Cancel**) and the Rules tab reads *Rules (…)*; afterwards a result line says how many proposals came back
