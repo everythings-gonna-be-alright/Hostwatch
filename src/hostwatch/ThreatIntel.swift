@@ -110,8 +110,9 @@ final class ThreatIntel: ObservableObject {
     @Published private(set) var revision = 0
 
     // Lookups (built off the main thread, swapped in at once).
-    private var domains: Set<String> = []
-    private var ips: Set<String> = []
+    // HaGeZi's hundreds of thousands of entries as 8-byte hashes (a set of strings took ~30 MB; this ~3 MB).
+    private var domains = HashedSet()
+    private var ips = HashedSet()
     private var c2: [String: String] = [:]          // ThreatFox: domain / ip / ip:port → "AsyncRAT command server, reported …"
     private var hashes: [String: String] = [:]      // SHA-256 → "AMOS stealer (MalwareBazaar), first seen …"
     private var fileHashes: [String: (stamp: String, sha: String)] = [:]   // path → hash, by size + date
@@ -290,8 +291,9 @@ final class ThreatIntel: ObservableObject {
     /// Reads the cached lists into lookups (off the main thread).
     func load() async {
         let dir = directory
-        let built = await Task.detached(priority: .utility) { () -> (Set<String>, Set<String>, [String: String], [String: String], [ExploitedVuln], [String: Int]) in
-            var domains = Set<String>(), ips = Set<String>(), c2: [String: String] = [:], hashes: [String: String] = [:]
+        let built = await Task.detached(priority: .utility) { () -> (HashedSet, HashedSet, [String: String], [String: String], [ExploitedVuln], [String: Int]) in
+            var domainHashes: [UInt64] = [], ipHashes: [UInt64] = []
+            var c2: [String: String] = [:], hashes: [String: String] = [:]
             var counts: [String: Int] = [:]
             if let text = try? String(contentsOf: dir.appendingPathComponent(Feed.hagezi.rawValue), encoding: .utf8) {
                 var inIPs = false
@@ -300,9 +302,10 @@ final class ThreatIntel: ObservableObject {
                     guard let first = line.first, first != "#", first != "!" else { continue }
                     var entry = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     if entry.hasPrefix("*.") { entry.removeFirst(2) }
-                    if inIPs { ips.insert(entry) } else if !FeedCheck.neverFlag(entry) { domains.insert(entry) }
+                    if inIPs { ipHashes.append(HashedSet.hash(entry)) }
+                    else if !FeedCheck.neverFlag(entry) { domainHashes.append(HashedSet.hash(entry)) }
                 }
-                counts[Feed.hagezi.rawValue] = domains.count + ips.count
+                counts[Feed.hagezi.rawValue] = domainHashes.count + ipHashes.count
             }
             if let text = try? String(contentsOf: dir.appendingPathComponent(Feed.feodo.rawValue), encoding: .utf8) {
                 var n = 0
@@ -328,7 +331,7 @@ final class ThreatIntel: ObservableObject {
                 vulns = ThreatIntel.parseKEV(data)
                 counts[Feed.kev.rawValue] = vulns.count
             }
-            return (domains, ips, c2, hashes, vulns, counts)
+            return (HashedSet(hashes: domainHashes), HashedSet(hashes: ipHashes), c2, hashes, vulns, counts)
         }.value
         (domains, ips, c2, hashes, vulns) = (built.0, built.1, built.2, built.3, built.4)
         for (feed, n) in built.5 { states[feed, default: FeedState()].count = n }
@@ -696,5 +699,45 @@ enum FeedCheck {
         var d = entry.lowercased()
         if d.hasPrefix("*.") { d.removeFirst(2) }
         return neverFlagDomains.contains(d)
+    }
+}
+
+
+/// A large set of strings asked only "is this one in it?": sorted 64-bit FNV-1a hashes and binary search, 8 bytes
+/// per entry. With a few hundred thousand entries a string that isn't listed matches by chance about once in
+/// 50 billion lookups.
+struct HashedSet: Sendable, Equatable {
+    private var sorted: [UInt64] = []
+
+    init() {}
+
+    init(hashes: [UInt64]) {
+        var h = hashes
+        h.sort()
+        var unique: [UInt64] = []
+        unique.reserveCapacity(h.count)
+        for v in h where unique.last != v { unique.append(v) }
+        sorted = unique
+    }
+
+    init<S: Sequence>(_ strings: S) where S.Element == String { self.init(hashes: strings.map(Self.hash)) }
+
+    var count: Int { sorted.count }
+
+    func contains(_ s: String) -> Bool {
+        let h = Self.hash(s)
+        var lo = 0, hi = sorted.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if sorted[mid] < h { lo = mid + 1 } else { hi = mid }
+        }
+        return lo < sorted.count && sorted[lo] == h
+    }
+
+    /// FNV-1a over the UTF-8 bytes: stable across launches and machines (Swift's own hash is seeded per run).
+    static func hash(_ s: String) -> UInt64 {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x0000_0100_0000_01b3 }
+        return h
     }
 }

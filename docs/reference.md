@@ -276,8 +276,9 @@ from the live stream to recorded history. Live collection carries on in the back
   and orange dots mark stories, purple dots new domains. Hover for the time, drag to move; clicking
   near a dot lands on it.
 - **The slice:** the list shows the window ending at the playhead (1 min, 5 min, 15 min or 1 hour), newest
-  first, with the same Show filter, kind toggles, exclusions and search as live. A very busy slice shows
-  its newest ~20,000 events and says so.
+  first, with the same Show filter, kind toggles, exclusions and search as live. It's read a page at a time
+  (about 3,000 events): scrolling to the end of the list loads the next older page. A very busy window stops at
+  its newest ~20,000 events and says so; a shorter window shows the rest.
 - **Search all history:** type in the toolbar search field (two characters or more) and the list shows matches
   from everything recorded, not only the slice: newest first, with the day in the Time column, and tick marks
   on the timeline where they happened. It matches what the live search matches (name, path, detail, host, or

@@ -19,6 +19,9 @@
 - **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
   its trend over the last hour or day and the programs that **wrote the most** to disk then (ended ones too).
   Running Now has a *Disk Written* column.
+- **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
+  up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
+  lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.
 - **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.

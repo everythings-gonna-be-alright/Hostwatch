@@ -913,11 +913,14 @@ struct ActivityWindowView: View {
         let rows = traveling ? travelDerived.rows : makeRows(model.searchResults)
         // Search hits span days: their Time column shows the day too.
         let withDay = traveling && travel.showingSearch
+        let lastRowID = rows.last?.id
         return VStack(spacing: 0) {
           ScrollViewReader { proxy in
             Table(rows, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
                     Text(withDay ? item.event.dayTime : item.event.time).foregroundStyle(.secondary).monospacedDigit()
+                        // The end of a Time Travel window's list: its next older page.
+                        .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
                 }
                 .width(min: 56, ideal: withDay ? 104 : 60, max: withDay ? 130 : 72)
                 TableColumn("Kind", value: \.kind) { item in
