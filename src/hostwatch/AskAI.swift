@@ -46,6 +46,19 @@ enum EvidenceGatherer {
         extra: \(event.extra)\(event.inferred ? "\nnote: connection was \(event.note); destination inferred from the command line and recent DNS answers" : "")\(event.host.isEmpty ? "" : "\nhost: \(event.host) (\(event.hostSource == "dns" ? "DNS name the system resolved to this IP just before the connection" : "reverse DNS only"))")
         """)
 
+        // What Hostwatch itself noticed about this event (the window shows these too).
+        var signals: [String] = []
+        if !event.knownBad.isEmpty {
+            signals.append("ON A THREAT LIST: \(event.knownBad). Lists such as ThreatFox also list popular services "
+                + "(Telegram, Steam, paste sites) that malware abuses as dead drops; weigh the program, the user's "
+                + "likely intent and the other evidence, but treat the match as serious.")
+        }
+        if !event.beacon.isEmpty { signals.append("beacon: connects \(event.beacon)") }
+        if !event.newDomain.isEmpty { signals.append("new domain: first contact with \(event.newDomain)") }
+        if event.rawIP { signals.append("raw IP: public address on an unusual port, no DNS lookup") }
+        if event.isFirst { signals.append("first time this pattern was seen on this Mac") }
+        if !signals.isEmpty { section("Hostwatch signals", signals.map { "- " + $0 }.joined(separator: "\n")) }
+
         // Live process details (if it is still running).
         let pidText = String(event.pid)
         let psLine = LocalCommand.run("/bin/ps", ["-o", "pid=,ppid=,user=,lstart=,command=", "-p", pidText])

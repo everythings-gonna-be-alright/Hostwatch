@@ -87,7 +87,10 @@ struct AskAIView: View {
 
     private var chips: some View {
         FlowLayout(spacing: 6) {
-            if let status = analysis.patternStatus { StatusPill(status: status) }
+            if !event.knownBad.isEmpty {
+                Chip(text: "Known bad", symbol: "xmark.octagon.fill", color: .red).help(event.knownBad)
+            }
+            if let status = analysis.patternStatus { StatusPill(status: status).help("The pattern's status") }
             if analysis.patternRisk == .high { Chip(text: "High risk", symbol: "flame.fill", color: .orange) }
             if event.isFirst { Chip(text: "First time", symbol: "sparkle", color: .yellow) }
             if let id = analysis.facts?.signing { signingChip(id) }
@@ -128,8 +131,21 @@ struct AskAIView: View {
                     Label("\(traffic.in) in · \(traffic.out) out", systemImage: "arrow.up.arrow.down")
                 }
             }
+            if !event.knownBad.isEmpty { threatRow }
             if !event.newDomain.isEmpty { Row("New domain") { Text(event.newDomain) } }
             if !event.beacon.isEmpty { Row("Beaconing") { Text("connects \(event.beacon)").foregroundStyle(.red) } }
+        }
+    }
+
+    /// The threat-list match, and why the pattern can still be Safe.
+    private var threatRow: some View {
+        Row("Threat list") {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.knownBad).foregroundStyle(.red).textSelection(.enabled)
+                Text("This destination is on a threat list, whatever the pattern's status says: the pattern covers "
+                     + "the program's connections in general, the list this one address.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -170,6 +186,7 @@ struct AskAIView: View {
             Row("Name") { Text("\(event.name)  ·  PID \(event.pid)  ·  parent \(event.ppid)").textSelection(.enabled) }
             let exe = analysis.facts?.executable ?? (event.kind == .exec ? event.target : event.proc)
             if !exe.isEmpty { Row("Executable") { PathValue(path: exe) } }
+            if event.kind == .exec, !event.knownBad.isEmpty { threatRow }      // the program file's hash is listed
             if let id = analysis.facts?.signing {
                 Row("Signed by") {
                     HStack(spacing: 6) {
