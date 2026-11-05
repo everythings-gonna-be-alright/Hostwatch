@@ -128,12 +128,12 @@ import Testing
         }
         let reader = LineReader(fd: fds[0])
         var count = 0
-        let before = MemoryFootprint.current()
+        var most = 0
         writer.start()
-        reader.forEach { _ in count += 1; return true }
-        let grown = Int64(MemoryFootprint.current()) - Int64(before)
+        reader.forEach { _ in count += 1; most = max(most, reader.retainedBytes); return true }
         close(fds[0])
         #expect(count == 2400 * 64)
-        #expect(grown < 40_000_000, "reading 300 MB of lines kept \(grown / 1_000_000) MB")
+        // The storage, not the process's footprint (other tests run alongside): the bug kept all 300 MB here.
+        #expect(most < 2_000_000, "the reader's buffer held \(most / 1_000_000) MB")
     }
 }

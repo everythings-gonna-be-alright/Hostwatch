@@ -158,6 +158,9 @@ final class LineReader {
 
     func nextString() -> String? { next().map { String(decoding: $0, as: UTF8.self) } }
 
+    /// Bytes the buffer's storage still holds, read or not (for tests: must stay near the unread part).
+    var retainedBytes: Int { buffer.endIndex }
+
     /// Every line, each handled in its own autorelease pool; `body` returns false to stop. The collector's
     /// loops run on the main thread without a run loop or on detached threads, where nothing ever drains the
     /// pool: every JSON object and bridged string Foundation made per line was kept (~3 MB/s, GBs per hour).
