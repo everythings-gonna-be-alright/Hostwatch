@@ -34,8 +34,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/site/story.png" width="49%" alt="A story: a download, quarantine removed, autostart and a call home, rated Dangerous">
-  <img src="docs/images/site/watch.png" width="47%" alt="Watch Closely: what one process did in a minute, risky actions first">
+  <img src="docs/images/site/hud.png" width="360" alt="Hostwatch HUD: live processes, connections and file opens, with a story on top">
 </p>
 
 <p align="center"><sub>Screenshots show made-up demo data.</sub></p>
