@@ -18,7 +18,7 @@
   below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
 - **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
   its trend over the last hour or day and the programs that **wrote the most** to disk then (ended ones too).
-  Running Now has a *Disk Written* column.
+  Running Now shows what is writing now (*Writing*).
 - **Who's writing to disk:** Running Now's *Writing* column shows bytes per second now (or around the Time Travel
   moment, from the minute lists), so a process writing hard stands out; the total since it started is in its
   information. It showed only that total, which barely moves, so nothing seemed to write.

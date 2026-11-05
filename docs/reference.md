@@ -255,7 +255,7 @@ memory footprint, disk throughput).
 - **Disk space:** the strip shows the startup disk's free space (as Finder counts it, purgeable space included).
   Click it for free space over the last hour or 24 hours (live, or ending at the playhead in Time Travel) and the
   programs that **wrote the most** to disk in that period, with bytes and how many processes. Writes come from the
-  collector (each process's bytes written since it started, also a *Disk Written* column in Running Now) and the
+  collector (each process's bytes written since it started, its rate is the *Writing* column in Running Now) and the
   once-a-minute process lists, so programs that already ended count too; a process that lived less than a minute
   between two lists isn't seen. macOS doesn't track the space each program occupies, so bytes written is the
   measure: temporary files that were deleted again count too.
