@@ -17,6 +17,9 @@ struct RunningProcessInfo: Codable, Sendable, Equatable {
     var threads: Int
     /// Bytes written to disk since it started (nil: an older collector, or not readable).
     var written: Int64? = nil
+    /// Bytes written per second around now (or the Time Travel moment): from `written` in two lists. Worked out by the
+    /// app, never sent or recorded.
+    var writeRate: Double? = nil
 }
 
 /// {"kind":"proc_list","list":[…]}: the answer to {"processes": true}.

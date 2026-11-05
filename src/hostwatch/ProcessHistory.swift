@@ -58,7 +58,7 @@ struct ProcessHistory: Sendable {
             }
         }
         // Stored without the live CPU %: it is recomputed from CPU time between lines.
-        let rows = new.map { var r = $0; r.cpu = nil; return r }
+        let rows = new.map { var r = $0; r.cpu = nil; r.writeRate = nil; return r }
         var out = Data("{\"t\":\(Int(t.rounded())),\"k\":\(key ? 1 : 0)".utf8)
         if !rows.isEmpty, let json = try? JSONEncoder().encode(rows) { out += Data(",\"new\":".utf8) + json }
         if !gone.isEmpty { out += Data(",\"gone\":[\(gone.sorted().map(String.init).joined(separator: ","))]".utf8) }
@@ -132,11 +132,16 @@ struct ProcessHistory: Sendable {
             for var p in alive.values {
                 if let n = next[p.pid], n.start == p.start {
                     p.cpu = max(0, (n.cpuTime - p.cpuTime) / (nextT - at) * 100)
+                    if let a = p.written, let b = n.written { p.writeRate = Double(max(0, b - a)) / (nextT - at) }
                     p.cpuTime += (n.cpuTime - p.cpuTime) * f
                     p.mem += Int64(Double(n.mem - p.mem) * f)
                     if let a = p.written, let b = n.written { p.written = a + Int64(Double(b - a) * f) }
                 } else {
                     p.cpu = before.flatMap { b in b.alive[p.pid].map { max(0, (p.cpuTime - $0.cpuTime) / (at - b.t) * 100) } }
+                    p.writeRate = before.flatMap { b in
+                        guard let old = b.alive[p.pid]?.written, let w = p.written else { return nil }
+                        return Double(max(0, w - old)) / (at - b.t)
+                    }
                 }
                 out.append(p)
             }
@@ -144,7 +149,10 @@ struct ProcessHistory: Sendable {
             for var n in next.values where alive[n.pid]?.start != n.start && n.start > 0 && n.start <= t {
                 let lived = max(nextT - n.start, 1)
                 n.cpu = n.cpuTime / lived * 100
-                n.cpuTime *= min(1, max(0, t - n.start) / lived)
+                n.writeRate = n.written.map { Double($0) / lived }
+                let share = min(1, max(0, t - n.start) / lived)          // how far into its first minute we are
+                n.cpuTime *= share
+                n.written = n.written.map { Int64(Double($0) * share) }
                 out.removeAll { $0.pid == n.pid }
                 out.append(n)
             }
@@ -153,8 +161,10 @@ struct ProcessHistory: Sendable {
                 if let b = before, at > b.t {
                     if let old = b.alive[p.pid], old.start == p.start {
                         p.cpu = max(0, (p.cpuTime - old.cpuTime) / (at - b.t) * 100)
+                        if let a = old.written, let w = p.written { p.writeRate = Double(max(0, w - a)) / (at - b.t) }
                     } else if p.start >= b.t, p.start < at {
                         p.cpu = max(0, p.cpuTime / (at - p.start) * 100)          // started in between
+                        p.writeRate = p.written.map { Double($0) / max(at - p.start, 1) }
                     }
                 }
                 out.append(p)

@@ -188,7 +188,8 @@ The Events tab's switch (**Events · Running Now**, or *View ▸ Running Now*, �
 process running at this moment, refreshed every 3 s while the window is on screen:
 
 - **Columns:** process (with its app's icon; ✦ when Hostwatch saw it start), PID, user (root in orange), % CPU
-  (since the previous refresh; orange from 50%), CPU time, memory (physical footprint, as Activity Monitor's
+  (since the previous refresh; orange from 50%), *Writing* (bytes per second written to disk since the previous
+  refresh; orange from 1 MB/s), CPU time, memory (physical footprint, as Activity Monitor's
   *Memory*), threads, running for, parent. Sort by any column; the search field matches name, path, command line,
   user or PID. The footer totals CPU and memory.
 - **Information** (double-click a row, or right-click ▸ *Show Info*): opens below the list and follows the selection

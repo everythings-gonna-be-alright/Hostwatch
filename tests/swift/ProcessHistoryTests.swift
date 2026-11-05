@@ -79,6 +79,26 @@ import Testing
         #expect(mid.processes.first { $0.pid == 2 }?.written == 1_500_000_100)
     }
 
+    /// What was writing at a moment: bytes per second between the lists around it, not the total since start.
+    @Test func writeRateAroundTheMoment() throws {
+        let mb: Int64 = 1_000_000
+        let lines = record([
+            [proc(1, written: 90_000 * mb), proc(2, written: 10 * mb)],
+            [proc(1, written: 90_000 * mb), proc(2, written: 70 * mb)],
+            [proc(1, written: 90_000 * mb), proc(2, written: 70 * mb), proc(3, start: t0 + 90, written: 30 * mb)],
+        ])
+        let at30 = try #require(ProcessHistory.rebuild(lines, at: t0 + 30))
+        #expect(at30.processes.first { $0.pid == 1 }?.writeRate == 0)              // huge total, writing nothing
+        #expect(at30.processes.first { $0.pid == 2 }?.writeRate == 1_000_000)       // 60 MB in 60 s
+        let at100 = try #require(ProcessHistory.rebuild(lines, at: t0 + 100))
+        let three = try #require(at100.processes.first { $0.pid == 3 })            // started at +90, 30 MB by +120
+        #expect(three.writeRate == 1_000_000)
+        #expect(abs((three.written ?? 0) - 10 * mb) <= 1)
+        // The newest list (no next one): the minute before it.
+        let at150 = try #require(ProcessHistory.rebuild(lines, at: t0 + 150))
+        #expect(at150.processes.first { $0.pid == 2 }?.writeRate == 0)
+    }
+
     @Test func aReusedPIDIsANewProcess() throws {
         let lines = record([[proc(7, name: "old")], [proc(7, start: t0 + 30, name: "new")]])
         let s = try #require(ProcessHistory.rebuild(lines, at: t0 + 60))
