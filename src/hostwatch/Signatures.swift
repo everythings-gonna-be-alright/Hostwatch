@@ -96,6 +96,15 @@ enum SignatureFilter: String, CaseIterable {
     }
 }
 
+extension SignatureEntry {
+    /// Seen often enough, over enough time, to call it regular behaviour: only such patterns may teach a Safe rule.
+    /// Five sightings, the first and last at least an hour apart (a loop running something 50 times in a second
+    /// isn't regular; an app used through a session is).
+    static let regularCount = 5
+    static let regularSpan: TimeInterval = 3600
+    var isRegular: Bool { count >= Self.regularCount && lastSeen.timeIntervalSince(firstSeen) >= Self.regularSpan }
+}
+
 struct SignatureEntry: Codable, Identifiable {
     var id: String              // signature key
     var kind: EventKind
