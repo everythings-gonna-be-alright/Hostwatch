@@ -185,15 +185,17 @@ struct RunningProcessesView: View {
         let launchEvent = { (pid: Int, start: Double) in launches[pid].flatMap { TimeTravel.launch(in: $0, pid: pid, start: start) } }
         VStack(spacing: 0) {
             if running.rows.isEmpty {
-                placeholder
+                // Fills the space like the table would: otherwise the window's column shrinks to the
+                // placeholder's height and floats in the middle.
+                placeholder.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 table(rows, launchEvent)
-            }
-            Divider()
-            if let row = running.selected {
-                detail(row, launchEvent).transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                footer(rows)
+                Divider()
+                if let row = running.selected {
+                    detail(row, launchEvent).transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    footer(rows)
+                }
             }
         }
         .animation(.smooth(duration: 0.2), value: running.selection)
