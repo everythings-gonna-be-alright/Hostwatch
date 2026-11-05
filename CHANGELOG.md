@@ -6,7 +6,8 @@
   shown window: newest first, with their day and tick marks on the timeline. Capped at the newest 1,000 matches,
   so memory and the list stay small. Double-click one to open its moment. **All History / This Window** switches
   the scope.
-- **Running Now in Time Travel:** switch to *Running Now* while traveling to see what was running at the playhead,
+- **Running Now in Time Travel:** switch to *Running Now* while traveling (or turn Time Travel on from Running Now: it
+  stays there) to see what was running at the playhead,
   with CPU, CPU time, memory, threads and how long each had run, following the playhead as you drag or play.
   Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
   a few tens of MB a day before compression, inside the history size limit), so this works from now on, not for
