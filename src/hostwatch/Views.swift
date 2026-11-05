@@ -627,7 +627,8 @@ struct ActivityWindowView: View {
     /// Time Travel rows, derived only when the events or a filter change (not on every playhead or hover update).
     @StateObject private var travelRows = TravelRowsCache()
     /// Events ▸ Running Now instead of the event list.
-    private var runningNow: Bool { running.showing && model.windowTab == 0 && !traveling }
+    /// In Time Travel it shows what was running at the playhead.
+    private var runningNow: Bool { running.showing && model.windowTab == 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -636,10 +637,11 @@ struct ActivityWindowView: View {
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 && !runningNow { heavySection }
             if traveling {
-                if model.searchText.trimmingCharacters(in: .whitespaces).count >= TimeTravel.minSearchLength {
+                if !runningNow, model.searchText.trimmingCharacters(in: .whitespaces).count >= TimeTravel.minSearchLength {
                     HistorySearchScopeBar(travel: travel, query: model.searchText); Divider()
                 }
-                TimeTravelBanner(travel: travel, shown: travel.listed.count); Divider()
+                TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
+                                 noun: runningNow ? "processes" : "events"); Divider()
             }
             switch model.windowTab {
             case 0:
@@ -677,8 +679,15 @@ struct ActivityWindowView: View {
         }
         .animation(.smooth(duration: 0.25), value: traveling)
         // Time Travel searches all recorded history (scope All History), in the background.
-        .onChange(of: model.searchText) { _, text in if traveling { travel.search(text) } }
-        .onChange(of: traveling) { _, on in if on { travel.search(model.searchText) } }
+        .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
+        .onChange(of: traveling) { _, on in
+            if on && !runningNow { travel.search(model.searchText) }
+            syncRunningMoment()
+        }
+        .onChange(of: runningNow) { _, on in
+            if traveling && !on { travel.search(model.searchText) }
+            syncRunningMoment()
+        }
         // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
@@ -686,6 +695,12 @@ struct ActivityWindowView: View {
                              "Domain, host, program", "Not used on Rules", "Not used on Overview"][min(model.windowTab, 5)])
         .navigationTitle("Hostwatch")
         .navigationSubtitle(subtitle)
+    }
+
+    /// Running Now follows the playhead while traveling, the present otherwise.
+    private func syncRunningMoment() {
+        travel.processesWanted = traveling && runningNow
+        if !travel.processesWanted { running.showLive() }
     }
 
     /// One search field, routed to whichever tab is showing.
@@ -796,11 +811,14 @@ struct ActivityWindowView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .disabled(traveling)
-            .help(traveling ? "Running Now shows the present: leave Time Travel first"
+            .help(traveling ? "Events: what happened in the window · Running Now: what was running at the playhead (⌥⌘R)"
                   : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
             if runningNow {
-                if let updated = running.updated {
+                if running.isRecorded {
+                    Text(running.updated.map { "Recorded \($0.formatted(date: .omitted, time: .standard)) · once a minute" }
+                         ?? "Nothing recorded at this moment")
+                        .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                } else if let updated = running.updated {
                     Text("Updated \(updated.formatted(date: .omitted, time: .standard)) · every \(Int(RunningProcesses.interval)) s")
                         .font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 }

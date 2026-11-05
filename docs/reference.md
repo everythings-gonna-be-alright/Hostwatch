@@ -201,7 +201,15 @@ process running at this moment, refreshed every 3 s while the window is on scree
   Copy Path, Copy PID.
 - **How:** the app asks the collector, which (as root) reads every process with libproc (`proc_pid_rusage`, the
   task info and `KERN_PROCARGS2` for command lines) and answers with one list. CPU % is the difference between two
-  lists. Nothing is asked while the list is closed or the window is hidden.
+  lists. Nothing is asked while the list is closed or the window is hidden, except the once-a-minute list recorded for
+  Time Travel (below).
+- **In Time Travel:** Running Now shows what was running at the playhead: the list recorded at or just before it,
+  with CPU % over the minute before, CPU time, memory and threads as they were then, and "running for" counted to
+  that moment. It follows the playhead as you drag or play. Hostwatch records the list once a minute while the
+  collector runs and history is on (Settings ▸ History), into `History/processes-YYYYMMDD.jsonl`: every process each
+  30 minutes, only what changed in between (about 15–20 MB a day, compressed when the day is over, removed together
+  with the activity history). Moments from before this recording started, or more than 3 minutes after the last
+  list (Hostwatch closed), say so.
 
 ### Heavy processes
 
@@ -1088,7 +1096,7 @@ request is anonymous (a `Hostwatch/<version>` user agent); nothing is downloaded
 | `~/Library/Application Support/Hostwatch/` | patterns (`signatures-v2.json`), stories, domains, rules, signing facts, `collector.token` (0600), `claude-guard.json`, `firewall-watch.json` |
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
-| `~/Library/Logs/Hostwatch/` | `agent.log` (collector) and the `History` folder (by default) |
+| `~/Library/Logs/Hostwatch/` | `agent.log` (collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/local.hostwatch.app.plist` | settings and exclusions |
 
 Nothing is sent anywhere, except what you send to an AI you chose, a daily anonymous update check (if on) and the
@@ -1141,7 +1149,7 @@ daily threat-list downloads (if on).
   your rules, signing facts, MCP token) and the baseline's state.
 - **Settings:** HUD, window, detection, AI, exclusions and history options (`local.hostwatch.app` defaults).
 - **Event history and logs:** `~/Library/Logs/Hostwatch`, and in a custom history folder only Hostwatch's
-  `activity-*` and `metrics-*` files.
+  `activity-*`, `metrics-*` and `processes-*` files.
 
 Hostwatch stops the collector, removes the settings, exits, and a small helper deletes the files once the app
 has quit (so nothing is saved back) and opens it again. Full Disk Access stays granted.

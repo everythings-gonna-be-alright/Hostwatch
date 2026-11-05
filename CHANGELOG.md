@@ -6,6 +6,10 @@
   shown window: newest first, with their day and tick marks on the timeline. Capped at the newest 1,000 matches,
   so memory and the list stay small. Double-click one to open its moment. **All History / This Window** switches
   the scope.
+- **Running Now in Time Travel:** switch to *Running Now* while traveling to see what was running at the playhead,
+  with CPU, CPU time, memory, threads and how long each had run, following the playhead as you drag or play.
+  Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
+  about 15–20 MB a day, removed with the history), so this works from now on, not for moments before.
 - **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.

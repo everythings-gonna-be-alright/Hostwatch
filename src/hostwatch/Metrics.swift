@@ -142,6 +142,8 @@ private extension SystemSampler.Reading {
 /// (`metrics-YYYYMMDD.jsonl`, about 2-5 MB a day); past days are gzip-compressed (~10x smaller).
 struct MetricsArchive: Sendable {
     let directory: URL
+    /// File name prefix: "metrics" (resource samples) or "processes" (process lists for Time Travel).
+    var prefix = "metrics"
 
     static func dayName(_ date: Date) -> String {
         let f = DateFormatter()
@@ -150,22 +152,28 @@ struct MetricsArchive: Sendable {
         return f.string(from: date)
     }
 
-    func plainURL(day: String) -> URL { directory.appendingPathComponent("metrics-\(day).jsonl") }
+    func plainURL(day: String) -> URL { directory.appendingPathComponent("\(prefix)-\(day).jsonl") }
     func gzURL(day: String) -> URL { plainURL(day: day).appendingPathExtension("gz") }
 
     /// Day names with a metrics file, oldest first.
     func days() -> [String] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-        return Array(Set(names.filter { $0.hasPrefix("metrics-") }.compactMap { name -> String? in
-            let day = name.dropFirst("metrics-".count).prefix(8)
+        return Array(Set(names.filter { $0.hasPrefix(prefix + "-") }.compactMap { name -> String? in
+            let day = name.dropFirst(prefix.count + 1).prefix(8)
             return day.count == 8 ? String(day) : nil
         })).sorted()
     }
 
     func append(_ sample: MetricSample) {
-        guard var line = try? JSONEncoder().encode(sample) else { return }
+        guard let line = try? JSONEncoder().encode(sample) else { return }
+        append(line: line, day: Self.dayName(sample.date))
+    }
+
+    /// One line (without its newline) at the end of a day's file.
+    func append(line raw: Data, day: String) {
+        var line = raw
         line.append(0x0A)
-        let url = plainURL(day: Self.dayName(sample.date))
+        let url = plainURL(day: day)
         if let handle = try? FileHandle(forWritingTo: url) {
             _ = try? handle.seekToEnd()
             try? handle.write(contentsOf: line)
@@ -176,14 +184,20 @@ struct MetricsArchive: Sendable {
         }
     }
 
-    /// Every sample of one day, in time order.
-    func samples(day: String) -> [MetricSample] {
+    /// A day's file, plain or decompressed (empty when there is none).
+    func data(day: String) -> Data {
         var data = Data()
         if let plain = try? Data(contentsOf: plainURL(day: day)) {
             data = plain
         } else if let gz = try? Data(contentsOf: gzURL(day: day)) {
             HistoryFiles.gunzipMembers(gz) { data.append($0) }
         }
+        return data
+    }
+
+    /// Every sample of one day, in time order.
+    func samples(day: String) -> [MetricSample] {
+        let data = data(day: day)
         let decoder = JSONDecoder()
         return data.split(separator: 0x0A).compactMap { try? decoder.decode(MetricSample.self, from: $0) }
     }
