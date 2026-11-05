@@ -191,10 +191,11 @@ process running at this moment, refreshed every 3 s while the window is on scree
   (since the previous refresh; orange from 50%), CPU time, memory (physical footprint, as Activity Monitor's
   *Memory*), threads, running for, parent. Sort by any column; the search field matches name, path, command line,
   user or PID. The footer totals CPU and memory.
-- **Details** (select a row): path, parent, user, started, running for, CPU now, CPU time, average CPU share since it
+- **Information** (double-click a row, or right-click ▸ *Show Info*): opens below the list and follows the selection
+  until you close it: path, parent, user, started, running for, CPU now, CPU time, average CPU share since it
   started, memory, threads, the full command line (secrets masked), and the pattern status of its launch when
   Hostwatch recorded it.
-- **Show Spawn in Timeline** (double-click, or the button): opens Time Travel at the moment the process started, with
+- **Show Spawn in Timeline** (only in the information, so a double-click never leaves the list): opens Time Travel at the moment the process started, with
   its launch selected (the search, *Only These* and a Show filter that would hide it are cleared). A process that
   started before the recording began can't be shown there.
 - Also: Watch Closely…, Ask AI… (when its launch was recorded this session), Reveal in Finder, Copy Command Line,
