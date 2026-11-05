@@ -226,16 +226,23 @@
   .cvechart .pt circle:first-of-type { fill: var(--bar); stroke: var(--bg-raise); stroke-width: 2; }
   .cvechart .pt circle.hollow { fill: var(--bg-raise); stroke: var(--bar); stroke-width: 2; }
   .cvechart .pt:hover circle:first-of-type { r: 5; }
-  .chart figcaption, .stats dd a { font-size: 12px; color: var(--dim); }
+  .chart figcaption { font-size: 12px; color: var(--dim); }
   .chart figcaption { padding: 12px 28px 24px; }
-  .chart figcaption a, .stats dd a { color: var(--muted); margin-left: 6px; white-space: nowrap; }
-  .chart figcaption a:hover, .stats dd a:hover { color: var(--text); }
+  .chart figcaption a { color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .chart figcaption a:hover { color: var(--text); }
   .chart .text p b { color: var(--text); font-weight: 500; }
   .stats { min-height: 0; }
-  .stats dl { margin: 20px 28px 28px; display: grid; gap: 0; }
-  .stats dl div { padding: 16px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: baseline; }
-  .stats dt { font-size: 32px; font-weight: 500; letter-spacing: -0.03em; color: var(--text); }
-  .stats dd { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .stats dl { margin: 22px 28px 28px; display: grid; gap: 10px; flex: 1; align-content: space-evenly; }
+  .stats .stat { display: grid; grid-template-columns: 96px 1fr; gap: 18px; align-items: center; padding: 18px 18px;
+                 border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; background: rgba(255,255,255,0.015); }
+  .stats dt { font-size: 34px; font-weight: 500; letter-spacing: -0.035em; color: var(--text); line-height: 1; }
+  .stats dd { margin: 0; display: grid; gap: 8px; min-width: 0; }
+  .stats .what { color: var(--text); font-size: 15px; line-height: 1.35; letter-spacing: -0.01em; }
+  .stats .bar { display: block; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .stats .bar i { display: block; height: 100%; border-radius: 2px; background: var(--bar); }
+  .stats .meta { font: 500 11.5px var(--mono); color: var(--dim); letter-spacing: 0; }
+  .stats .meta a { color: var(--muted); text-decoration: none; white-space: nowrap; }
+  .stats .meta a:hover { color: var(--text); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* The "why" picture: three trusted things flowing into one machine, which Hostwatch watches. White line art, still. */
   .why-wrap { display: grid; gap: 28px; justify-items: start; }
@@ -432,9 +439,24 @@
       <div class="tile t-5 stats">
         <div class="text"><h3>Mac malware is growing too</h3><p>Trojans and stealers target the Macs developers work on.</p></div>
         <dl>
-          <div><dt>+67%</dt><dd>new macOS backdoor variants in 2025. <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></dd></div>
-          <div><dt>+17%</dt><dd>new macOS stealer variants in 2025. <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></dd></div>
-          <div><dt>54%</dt><dd>of Mac malware samples are trojans and infostealers (Q3 2026, 37,898 samples). <a href="https://www.pointwild.com/threat-intelligence/mac-malware-trend-report/" target="_blank" rel="noopener">Point Wild ↗</a></dd></div>
+          <div class="stat">
+            <dt>+67%</dt>
+            <dd><span class="what">new macOS backdoor variants</span>
+              <span class="bar" aria-hidden="true"><i style="width:67%"></i></span>
+              <span class="meta">2025 · <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></span></dd>
+          </div>
+          <div class="stat">
+            <dt>+17%</dt>
+            <dd><span class="what">new macOS stealer variants</span>
+              <span class="bar" aria-hidden="true"><i style="width:17%"></i></span>
+              <span class="meta">2025 · <a href="https://moonlock.com/mid-2026-macos-threat-report" target="_blank" rel="noopener">Moonlock ↗</a></span></dd>
+          </div>
+          <div class="stat">
+            <dt>54%</dt>
+            <dd><span class="what">of Mac malware samples are trojans and infostealers</span>
+              <span class="bar" aria-hidden="true"><i style="width:54%"></i></span>
+              <span class="meta">Q3 2026 · 37,898 samples · <a href="https://www.pointwild.com/threat-intelligence/mac-malware-trend-report/" target="_blank" rel="noopener">Point Wild ↗</a></span></dd>
+          </div>
         </dl>
       </div>
     </div>
