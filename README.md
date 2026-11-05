@@ -25,7 +25,7 @@
   <a href="#whats-new">What's new</a> ·
   <a href="#what-it-does">Features</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="docs/reference.md">Reference</a> ·
+  <a href="https://everythings-gonna-be-alright.github.io/Hostwatch/docs/"><b>Docs</b></a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -60,6 +60,11 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 **0.10.0**
 - **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
   parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
+- **✨ A new look** – a new app icon (the activity list, the flagged row brightest), the same mark in the menu bar.
+- **📖 Website and docs** – [everythings-gonna-be-alright.github.io/Hostwatch](https://everythings-gonna-be-alright.github.io/Hostwatch/)
+  with searchable [documentation](https://everythings-gonna-be-alright.github.io/Hostwatch/docs/) of every feature
+  and setting; *Help ▸ Hostwatch Help* opens it.
+- **🩹 Fix** – the menu bar's *known-bad matches this week* clears when you dismiss or delete those stories.
 
 **0.9.0**
 - **🔬 Watch Closely** – not sure what a program is up to? Right-click it (or ⌥⌘W) and Hostwatch records for a
