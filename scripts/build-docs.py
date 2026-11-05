@@ -168,12 +168,12 @@ def toc_html(toc):
             elif num:
                 parts.append("</li>")
             num += 1
-            parts.append(f'<li><a href="#{sid}"><span class="n">{num:02d}</span>{html.escape(text)}</a>')
+            parts.append(f'<li><a href="#{sid}"><span class="n">{num:02d}</span>{text}</a>')
         elif level == 3:
             if not open_sub:
                 parts.append("<ol>")
                 open_sub = True
-            parts.append(f'<li><a href="#{sid}">{html.escape(text)}</a></li>')
+            parts.append(f'<li><a href="#{sid}">{text}</a></li>')
     parts.append("</ol></li>" if open_sub else "</li>")
     parts.append("</ol>")
     return "".join(parts)

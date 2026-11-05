@@ -562,7 +562,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
-        let knownBad = intel.hits.filter { $0.date > Date().addingTimeInterval(-7 * 86400) }.count
+        // Counts what it opens: known-bad matches in open stories this week (dismissed or deleted ones don't count).
+        let knownBad = stories.openKnownBadMatches(since: Date().addingTimeInterval(-7 * 86400))
         if knownBad > 0 {
             menu.addItem(item("\(knownBad) known-bad \(knownBad == 1 ? "match" : "matches") this week…", #selector(openStories),
                               symbol: "xmark.octagon.fill"))

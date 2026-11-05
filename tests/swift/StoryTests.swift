@@ -302,3 +302,24 @@ import Testing
         #expect(s.stories.openChains.allSatisfy { !($0.stages.contains(.drop) && $0.stages.contains(.network)) })
     }
 }
+
+/// The menu bar's "known-bad matches this week" counts what it opens: open stories.
+@MainActor @Suite struct KnownBadInMenu {
+    @Test func dismissingOrDeletingTheStoryClearsTheCount() throws {
+        _ = TestEnv.ready
+        let engine = StoryEngine(persistent: false)
+        engine.liveLookups = false
+        let e = net("/tmp/x/evil", pid: 4242, to: "45.33.12.7:443", host: "bad.example")
+        _ = engine.ingest(e, decidedSafe: false, extra: [(.knownBad, "ThreatFox: test")])
+        let story = try #require(engine.stories.first)
+        let since = Date().addingTimeInterval(-7 * 86400)
+        #expect(engine.openKnownBadMatches(since: since) == 1)
+        engine.dismiss(story.id)
+        #expect(engine.openKnownBadMatches(since: since) == 0)
+        _ = engine.ingest(net("/tmp/x/evil2", pid: 4343, to: "45.33.12.8:443", host: "bad2.example"), decidedSafe: false,
+                          extra: [(.knownBad, "ThreatFox: test")])
+        let second = try #require(engine.stories.first { !$0.dismissed })
+        engine.delete(second.id)
+        #expect(engine.openKnownBadMatches(since: since) == 0)
+    }
+}

@@ -224,6 +224,12 @@ final class StoryEngine: ObservableObject {
     }
 
     var activeCount: Int { stories.filter { !$0.dismissed }.count }
+    /// Known-bad matches in open stories seen since `date`: what the menu bar's "known-bad matches" line counts, so
+    /// dismissing or deleting those stories clears it (the matches themselves stay in the threat log).
+    func openKnownBadMatches(since date: Date) -> Int {
+        stories.filter { !$0.dismissed && $0.lastSeen >= date }
+            .reduce(0) { $0 + $1.steps.filter { $0.stage == .knownBad }.count }
+    }
 
     /// Undismissed stories that changed recently, for the HUD.
     func recent(within seconds: TimeInterval = 30 * 60) -> [Story] {
