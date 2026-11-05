@@ -271,16 +271,17 @@ extension Agent {
             let started = ProcessInfo.processInfo.systemUptime
             var parsed = 0, meta = "", header = "", unparsedLogged = 0
             let reader = LineReader(fd: child.stdout!)
-            while let line = reader.nextString() {
-                if isStopped { break }
+            reader.forEach { raw in
+                let line = String(decoding: raw, as: UTF8.self)
+                if isStopped { return false }
                 parsed += 1
                 // Metadata "(en0, proc curl:123, out, …)" is on the packet's first line.
                 if line.first?.isNumber == true { header = line; meta = AgentParse.metadata(line) }
                 if let dns = AgentParse.dnsLine(line), !dns.ips.isEmpty {
                     rememberDNS(dns.name, dns.ips)
-                    continue
+                    return true
                 }
-                guard connects else { continue }
+                guard connects else { return true }
                 let syn = AgentParse.synLine(line, meta: meta)
                 if line.contains("Flags [S]"), syn == nil, !header.contains("(in)"), unparsedLogged < 3 {
                     unparsedLogged += 1
@@ -289,6 +290,7 @@ extension Agent {
                 if let syn, syn.outgoing {                   // incoming is left to the socket list
                     publishConnection(pid: syn.pid, remote: syn.remote, proto: "TCP", nameHint: syn.hint)
                 }
+                return true
             }
             child.wait()
             unignore(Int(child.pid))
@@ -335,14 +337,18 @@ extension Agent {
         _ = try? Spawned.run("/usr/bin/pkill", ["-P", "1", "-x", "-f", (["/usr/bin/nettop"] + nettopArgs).joined(separator: " ")])
     }
 
-    /// A shell script that runs `command` (with the shell's stdin) for as long as `owner` lives, then stops it.
-    static func whileAlive(_ command: String, owner: pid_t, every seconds: Int = 3) -> String {
+    /// A shell script that runs `command` with the shell's stdin (a pipe the collector holds open and never writes)
+    /// and stops it when that pipe ends, i.e. when the collector is gone however it ended; it also ends when the
+    /// command does. Nothing polls (it used to spawn `sleep` every 3 s).
+    static func whileAlive(_ command: String) -> String {
         """
         exec 3<&0
         \(command) <&3 &
         n=$!
-        while kill -0 \(owner) 2>/dev/null && kill -0 $n 2>/dev/null; do sleep \(seconds); done
-        kill $n 2>/dev/null
+        ( while read -r _; do :; done <&3; kill $n 2>/dev/null ) &
+        w=$!
+        wait $n
+        kill $w 2>/dev/null
         """
     }
 
@@ -356,7 +362,7 @@ extension Agent {
             // the collector and stops nettop as soon as the collector is gone, however it ended.
             // Per connection (no -P): each process line is followed by its connections and their addresses.
             let command = (["/usr/bin/nettop"] + Self.nettopArgs).joined(separator: " ")
-            child = try Spawned.start("/bin/sh", ["-c", Self.whileAlive(command, owner: getpid())], stdin: .pipe)
+            child = try Spawned.start("/bin/sh", ["-c", Self.whileAlive(command)], stdin: .pipe)
         } catch {
             Agent.logError("nettop backstop disabled: \(error)")
             return
@@ -371,15 +377,16 @@ extension Agent {
         var flows: [Int: [String: Int]] = [:]
         var current = 0
         let reader = LineReader(fd: child.stdout!)
-        while let line = reader.nextString() {
-            if isStopped { break }
+        reader.forEach { raw in
+            let line = String(decoding: raw, as: UTF8.self)
+            if isStopped { return false }
             if let flow = AgentParse.nettopFlow(line) {
                 if current > 0, pending[current] != nil || !known.contains(current) {
                     flows[current, default: [:]][flow.remote] = max(flow.bytes, flows[current]?[flow.remote] ?? 0)
                 }
-                continue
+                return true
             }
-            guard let p = AgentParse.nettopLine(line) else { continue }
+            guard let p = AgentParse.nettopLine(line) else { return true }
             current = p.pid
             let now = ProcessInfo.processInfo.systemUptime
             if !known.contains(p.pid), p.rx + p.tx > 0 {
@@ -417,6 +424,7 @@ extension Agent {
             }
             if known.count > 50_000 { known.removeAll() }
             if flows.count > 5_000 { flows = flows.filter { pending[$0.key] != nil } }
+            return true
         }
         child.wait()
     }
@@ -425,6 +433,7 @@ extension Agent {
     func pollNetwork(interval: TimeInterval) {
         var previous: [LsofConnection: (ppid: Int, command: String)]?
         while !isStopped {
+          autoreleasepool {
             let current = SocketOwner.connections()
             if let previous {
                 let new = current.keys.filter {
@@ -446,6 +455,7 @@ extension Agent {
                 }
             }
             previous = current
+          }
             if wait(interval) { return }
         }
     }
@@ -544,11 +554,13 @@ func runCollectorAgent(_ args: [String]) -> Never {
     }
 
     let reader = LineReader(fd: eslogger.stdout!)
-    while let line = reader.next() {
-        if agent.isStopped { break }
+    // One autorelease pool per event: this loop has no run loop to drain one (it kept GBs per hour).
+    reader.forEach { line in
+        if agent.isStopped { return false }
         guard let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
-              let ev = agent.normalize(raw) else { continue }
+              let ev = agent.normalize(raw) else { return true }
         agent.publish(ev)
+        return true
     }
     agent.requestShutdown()
     eslogger.terminate()

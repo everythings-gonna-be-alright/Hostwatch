@@ -119,18 +119,19 @@ final class AgentWatch: @unchecked Sendable {
         let reader = LineReader(fd: child.stdout!)
         var markers: [Data] = []
         var treeSize = 0
-        while let line = reader.next() {
+        reader.forEach { line in
             lock.lock()
-            if s.stopped { lock.unlock(); break }
+            if s.stopped { lock.unlock(); return false }
             if s.recorder.tree.count != treeSize { markers = s.recorder.markers; treeSize = s.recorder.tree.count }
             lock.unlock()
             guard markers.contains(where: { line.range(of: $0) != nil }),
-                  let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { continue }
+                  let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return true }
             lock.lock()
             s.recorder.add(raw)
             let tooMany = s.recorder.profile.events >= Self.maxEvents
             lock.unlock()
             if tooMany { stop(id: s.id, why: "event limit reached") }
+            return true
         }
         child.wait()
         agent.unignore(Int(child.pid))

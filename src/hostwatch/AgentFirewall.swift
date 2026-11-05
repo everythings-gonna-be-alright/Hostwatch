@@ -104,7 +104,7 @@ final class AgentFirewall: @unchecked Sendable {
             relay = r
         }
         let mdns = getpwnam("_mdnsresponder")?.pointee.pw_uid ?? 65
-        let (l, problem) = PFRedirect.load(PFRedirect.rules(port: Self.port, exemptUIDs: [0, mdns]), failsafe: .whenGone(getpid()))
+        let (l, problem) = PFRedirect.load(PFRedirect.rules(port: Self.port, exemptUIDs: [0, mdns]), failsafe: .whenThisProcessEnds)
         guard let l else {
             Agent.logError("firewall: pf refused the rules: \(problem)")
             status("failed", "pf refused the rules.")

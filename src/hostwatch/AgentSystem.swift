@@ -89,6 +89,9 @@ struct Spawned {
         let rc = posix_spawn(&pid, path, &actions, &attr, argv, environ)
         if inPipe[0] >= 0 { close(inPipe[0]) }
         if outPipe[1] >= 0 { close(outPipe[1]) }
+        // Our ends never go to other children (Foundation's Process included): a watchdog waiting for the end
+        // of its stdin must see it when this process exits, not when the last child holding a copy does.
+        for fd in [inPipe[1], outPipe[0]] where fd >= 0 { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
         guard rc == 0 else {
             if inPipe[1] >= 0 { close(inPipe[1]) }
             if outPipe[0] >= 0 { close(outPipe[0]) }
@@ -152,6 +155,19 @@ final class LineReader {
     }
 
     func nextString() -> String? { next().map { String(decoding: $0, as: UTF8.self) } }
+
+    /// Every line, each handled in its own autorelease pool; `body` returns false to stop. The collector's
+    /// loops run on the main thread without a run loop or on detached threads, where nothing ever drains the
+    /// pool: every JSON object and bridged string Foundation made per line was kept (~3 MB/s, GBs per hour).
+    func forEach(_ body: (Data) -> Bool) {
+        while true {
+            let more: Bool = autoreleasepool {
+                guard let line = next() else { return false }
+                return body(line)
+            }
+            if !more { return }
+        }
+    }
 }
 
 // MARK: - The socket
@@ -268,24 +284,29 @@ extension Agent {
             while let nl = buffer.firstIndex(of: 0x0A) {
                 let line = buffer[buffer.startIndex..<nl]
                 buffer = Data(buffer[(nl + 1)...])
-                guard let cfg = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { continue }
+                autoreleasepool { handleConfigLine(line, from: client) }
+            }
+        }
+        dropClient(client)
+    }
+
+    /// One config line from a client (in its own autorelease pool: this thread has no run loop).
+    private func handleConfigLine(_ line: Data, from client: AgentClient) {
+                guard let cfg = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return }
                 if cfg["cmd"] as? String == "shutdown" {
                     if let token = shutdownToken, !token.isEmpty, cfg["token"] as? String == token {
                         Agent.log("shutdown requested by client")
                         requestShutdown()
                     }
-                    continue
+                    return
                 }
                 if let fw = cfg["firewall"] as? [String: Any] { firewall.configure(fw, from: client) }
                 if let answer = cfg["fw_answer"] as? [String: Any] { firewall.answer(answer) }
                 if let w = cfg["watch"] as? [String: Any] { watch.handle(w, from: client) }
-                if cfg["processes"] as? Bool == true { sendProcessList(to: client); continue }
+                if cfg["processes"] as? Bool == true { sendProcessList(to: client); return }
                 client.lock.lock()
                 client.configure(cfg)
                 client.lock.unlock()
-            }
-        }
-        dropClient(client)
     }
 
     /// Exits when the app that launched us goes away.
@@ -390,6 +411,7 @@ extension Agent {
         var started = ProcessInfo.processInfo.systemUptime
         while !wait(interval) {
             guard anyClientWantsTop else { before = nil; continue }
+          autoreleasepool {
             let now = ProcessInfo.processInfo.systemUptime
             let snap = TopSampler.snapshot()
             if let before {
@@ -416,6 +438,7 @@ extension Agent {
             }
             before = snap
             started = now
+          }
         }
     }
 }
