@@ -113,10 +113,19 @@ struct BoundedMap<Key: Hashable, Value> {
                 if values[k]?.1 == s { values[k] = nil }
             }
             if head > 4096, head * 2 > order.count { order.removeFirst(head); head = 0 }
+            // Rewriting keys that are already here adds to `order` without ever going over `limit`, so the loop
+            // above never trims it: the collector grew by every connection and DNS answer it saw (300 MB → 2 GB).
+            // Drop the stale entries once they outnumber the live ones.
+            if order.count - head > 2 * max(values.count, 1024) {
+                order = values.map { ($0.key, $0.value.1) }.sorted { $0.1 < $1.1 }
+                head = 0
+            }
         }
     }
 
     var count: Int { values.count }
+    /// Bookkeeping entries kept (for tests: must stay proportional to `count`, never to the number of writes).
+    var storage: Int { order.count - head }
 }
 
 /// Remembers keys for `ttl` seconds, so repeated opens or connections are reported once.
@@ -136,6 +145,17 @@ final class RecentSet<Key: Hashable>: @unchecked Sendable {
         if let t = map[key], now - t < ttl { return true }
         map[key] = now
         return false
+    }
+}
+
+/// This process's memory as Activity Monitor counts it (physical footprint), for leak checks.
+enum MemoryFootprint {
+    static func current() -> UInt64 {
+        var info = rusage_info_v4()
+        let ok = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0) }
+        }
+        return ok == 0 ? info.ri_phys_footprint : 0
     }
 }
 
