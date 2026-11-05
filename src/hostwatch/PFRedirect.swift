@@ -113,10 +113,10 @@ enum PFRedirect {
 
     // MARK: Loading
 
-    struct Loaded { var token: String; var watchdog: pid_t }
+    struct Loaded { var token: String; var watchdog: pid_t; var lifeline: Int32 = -1 }
 
-    /// When the rules go away on their own: after a time, or when a process (the collector) is gone.
-    enum Failsafe { case after(TimeInterval), whenGone(pid_t) }
+    /// When the rules go away on their own: after a time, or when this process (the collector) is gone.
+    enum Failsafe { case after(TimeInterval), whenThisProcessEnds }
 
     /// Enables pf (reference-counted token), loads the rules, and starts a watchdog in its own session (so it
     /// outlives a crash of this process and of its launchd job) that removes them per `failsafe`.
@@ -124,27 +124,34 @@ enum PFRedirect {
         let enable = run("/sbin/pfctl", ["-E"])
         let token = (enable.out + enable.err).split(separator: "\n").first { $0.contains("Token") }?
             .split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
+        // Waiting for this process to end: the watchdog's stdin is a pipe only we hold the write end of, and we
+        // never write. However this process ends (even SIGKILL), the kernel closes it and `read` returns: no
+        // polling (it used to spawn kill and sleep every 2 s, ~60 processes a minute in every recording).
         let wait: String
         switch failsafe {
         case .after(let seconds): wait = "sleep \(Int(seconds))"
-        case .whenGone(let pid): wait = "while /bin/kill -0 \(pid) 2>/dev/null; do sleep 2; done"
+        case .whenThisProcessEnds: wait = "while read -r _; do :; done"
         }
         let script = "trap '' INT HUP TERM; \(wait); /sbin/pfctl -a '\(anchor)' -F all >/dev/null 2>&1; "
             + (token.isEmpty ? "true" : "/sbin/pfctl -X \(token) >/dev/null 2>&1")
-        let watchdog = (try? Spawned.start("/bin/sh", ["-c", script], stdout: .null))?.pid ?? 0
+        let input: Spawned.Input
+        if case .whenThisProcessEnds = failsafe { input = .pipe } else { input = .null }
+        let child = try? Spawned.start("/bin/sh", ["-c", script], stdin: input, stdout: .null)
+        let watchdog = child?.pid ?? 0, lifeline = child?.stdin ?? -1
         let load = run("/sbin/pfctl", ["-a", anchor, "-f", "-"], input: rules)
         let shown = run("/sbin/pfctl", ["-a", anchor, "-s", "rules"]).out
         guard load.status == 0, shown.contains("route-to") else {
-            unload(Loaded(token: token, watchdog: watchdog))
+            unload(Loaded(token: token, watchdog: watchdog, lifeline: lifeline))
             return (nil, load.err + shown)
         }
-        return (Loaded(token: token, watchdog: watchdog), "")
+        return (Loaded(token: token, watchdog: watchdog, lifeline: lifeline), "")
     }
 
     static func unload(_ l: Loaded) {
         _ = run("/sbin/pfctl", ["-a", anchor, "-F", "all"])
         if !l.token.isEmpty { _ = run("/sbin/pfctl", ["-X", l.token]) }
         if l.watchdog > 0 { kill(l.watchdog, SIGKILL); var st: Int32 = 0; waitpid(l.watchdog, &st, WNOHANG) }
+        if l.lifeline >= 0 { close(l.lifeline) }
     }
 
     /// Rules left by a collector that crashed (its watchdog normally removes them).

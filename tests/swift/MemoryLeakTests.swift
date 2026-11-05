@@ -49,3 +49,68 @@ import Testing
         #expect(netPids.storage <= 2 * 1024 + 1 && dnsNames.storage <= 2 * 12_550 + 1)
     }
 }
+
+/// Foundation hands out autoreleased objects for every parsed line; the collector's loops never run a run loop,
+/// so only an explicit pool per line returns that memory.
+@Suite(.serialized) struct CollectorLineLoops {
+    /// A file-open event as eslogger writes it (trimmed, same shape and size class).
+    static func esloggerLine(_ i: Int) -> Data {
+        let process: [String: Any] = [
+            "audit_token": ["pid": 400 + i % 300, "euid": 501, "ruid": 501, "pidversion": i],
+            "ppid": 1, "original_ppid": 1, "group_id": 400, "session_id": 400, "is_platform_binary": false,
+            "executable": ["path": "/Applications/Some App.app/Contents/MacOS/Some App \(i % 50)", "path_truncated": false,
+                           "stat": ["st_size": 123_456, "st_mode": 33261, "st_ino": 9_876_543 + i]],
+            "signing_id": "com.example.someapp", "team_id": "ABCDE12345", "cdhash": String(repeating: "ab", count: 20),
+            "start_time": "2026-11-05T21:00:00.000000Z",
+        ]
+        let event: [String: Any] = ["open": ["fflag": 1, "file": ["path": "/Users/alex/Library/Caches/com.example/file\(i).db",
+                                                                  "path_truncated": false]]]
+        let raw: [String: Any] = ["process": process, "event": event, "event_type": 10, "version": 8, "seq_num": i,
+                                  "time": "2026-11-05T21:00:00.123456789Z", "mach_time": 123_456_789 + i]
+        var data = try! JSONSerialization.data(withJSONObject: raw)
+        data.append(0x0A)
+        return data
+    }
+
+    /// Feeds `count` lines through a pipe to a LineReader on a thread with no run loop (like the collector's) and
+    /// returns how much this process's footprint grew while it parsed them like the collector does.
+    func growth(lines count: Int, pooled: Bool) throws -> Int64 {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        let writer = Thread {
+            for i in 0..<count { let d = Self.esloggerLine(i); d.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, d.count) } }
+            close(fds[1])
+        }
+        let done = DispatchSemaphore(value: 0)
+        var grown: Int64 = 0
+        let before = MemoryFootprint.current()
+        Thread.detachNewThread {
+            let reader = LineReader(fd: fds[0])
+            func handle(_ line: Data) {
+                guard let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return }
+                let process = raw["process"] as? [String: Any] ?? [:]
+                let exe = (process["executable"] as? [String: Any])?["path"] as? String ?? ""
+                _ = (exe as NSString).lastPathComponent
+            }
+            if pooled {
+                reader.forEach { handle($0); return true }
+            } else {
+                while let line = reader.next() { handle(line) }
+            }
+            grown = Int64(MemoryFootprint.current()) - Int64(before)
+            close(fds[0])
+            done.signal()
+        }
+        writer.start()
+        done.wait()
+        return grown
+    }
+
+    @Test func eachLineDrainsItsAutoreleasePool() throws {
+        // The measurement can see the leak: without pools these lines keep hundreds of MB (365 MB measured).
+        let leaked = try growth(lines: 60_000, pooled: false)
+        #expect(leaked > 100_000_000, "without pools only \(leaked / 1_000_000) MB: the test can't see a leak")
+        let grown = try growth(lines: 60_000, pooled: true)
+        #expect(grown < 30_000_000, "parsing 60,000 lines kept \(grown / 1_000_000) MB")
+    }
+}

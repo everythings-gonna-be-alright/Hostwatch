@@ -111,20 +111,42 @@ import Testing
         #expect(count == 1)                                                       // once, not again when it closes
     }
 
-    /// The nettop fallback runs under a shell that stops it when the collector is gone, however it ended.
+    /// The nettop fallback runs under a shell that stops it when the collector is gone, however it ended: the
+    /// collector's end of the shell's stdin closes (here closed by hand, as the kernel does when it exits).
     @Test func fallbackStopsWhenItsOwnerIsGone() throws {
-        let owner = try run("/bin/sleep", ["60"])
-        let shell = try Spawned.start("/bin/sh", ["-c", Agent.whileAlive("/bin/sleep 77", owner: owner.processIdentifier, every: 1)],
-                                      stdin: .pipe)
-        defer { kill(-shell.pid, SIGKILL); shell.wait() }
+        let shell = try Spawned.start("/bin/sh", ["-c", Agent.whileAlive("/bin/sleep 77")], stdin: .pipe)
+        defer { kill(-shell.pid, SIGKILL); var st: Int32 = 0; waitpid(shell.pid, &st, 0) }
         Thread.sleep(forTimeInterval: 0.5)
-        let child = try #require(children(of: shell.pid).first)
-        #expect(kill(child, 0) == 0)
-        kill(owner.processIdentifier, SIGKILL)                                     // the collector dies
-        owner.waitUntilExit()                                                      // (and is reaped, as launchd would)
+        let sleeper = try #require(children(of: shell.pid).first { processName($0) == "sleep" })
+        // Waiting spawns nothing: the same two children (the command and the reader) after a few seconds.
+        let before = Set(children(of: shell.pid))
+        Thread.sleep(forTimeInterval: 3.5)
+        #expect(Set(children(of: shell.pid)) == before && before.count == 2)
+        close(try #require(shell.stdin))                                          // the collector is gone
         var gone = false
-        for _ in 0..<40 where !gone { Thread.sleep(forTimeInterval: 0.1); gone = kill(child, 0) != 0 }
+        for _ in 0..<40 where !gone { Thread.sleep(forTimeInterval: 0.1); gone = kill(sleeper, 0) != 0 }
         #expect(gone)
+    }
+
+    /// The firewall's failsafe waits the same way: it acts once our end of its stdin closes, even while another
+    /// child of ours (which must not have inherited that end) is still running.
+    @Test func lifelineEndsWithUsNotWithOtherChildren() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-lifeline-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let flag = dir.appendingPathComponent("cleaned").path
+        let watchdog = try Spawned.start("/bin/sh", ["-c", "trap '' INT HUP TERM; while read -r _; do :; done; touch '\(flag)'"],
+                                         stdin: .pipe, stdout: .null)
+        defer { kill(watchdog.pid, SIGKILL); var st: Int32 = 0; waitpid(watchdog.pid, &st, 0) }
+        let other = try run("/bin/sleep", ["30"])                                  // started after: must not hold the pipe
+        defer { other.terminate() }
+        Thread.sleep(forTimeInterval: 1)
+        #expect(!FileManager.default.fileExists(atPath: flag))
+        #expect(children(of: watchdog.pid).isEmpty)                               // no kill/sleep loop
+        close(try #require(watchdog.stdin))
+        var done = false
+        for _ in 0..<40 where !done { Thread.sleep(forTimeInterval: 0.1); done = FileManager.default.fileExists(atPath: flag) }
+        #expect(done)
     }
 
     /// The collector ignores SIGTERM (it handles it itself); its helpers mustn't inherit that, or they can't be stopped.
@@ -138,6 +160,11 @@ import Testing
         for _ in 0..<30 where !done { Thread.sleep(forTimeInterval: 0.1); done = waitpid(child.pid, &status, WNOHANG) == child.pid }
         if !done { kill(child.pid, SIGKILL); waitpid(child.pid, &status, 0) }
         #expect(done && (status & 0x7f) == SIGTERM)
+    }
+
+    func processName(_ pid: pid_t) -> String {
+        let out = (try? Spawned.run("/bin/ps", ["-o", "comm=", "-p", "\(pid)"])) ?? Data()
+        return (String(decoding: out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) as NSString).lastPathComponent
     }
 
     func children(of pid: pid_t) -> [pid_t] {
