@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private let hold = ProcessHold()
     private let updates = UpdateChecker()
     private lazy var metrics = MetricsStore(directory: { [history] in history.directory })
+    private lazy var processRecorder = ProcessRecorder(directory: { [history] in history.directory })
     private lazy var travel = TimeTravel(history: history, stories: stories, domains: domains, metrics: metrics)
     private var heldPanel: NSPanel?
     private var panel: NSPanel?
@@ -107,7 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
         model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
-        model.onProcessList = { [weak self] list in self?.running.receive(list) }
+        model.onProcessList = { [weak self] list in
+            self?.running.receive(list)
+            self?.processRecorder.receive(list)             // about once a minute, for Running Now in Time Travel
+        }
+        travel.onProcesses = { [weak self] snapshot, moment in self?.running.showRecorded(snapshot, at: moment) }
         running.historyDirectory = history.directory
         // Asked for only while the window is on screen.
         running.request = { [weak self] in
@@ -166,6 +171,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             _ = self.stories.ingest(launch.event, decidedSafe: false, extra: [(.heavyUntrusted, note)])
         }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
+        if !AppPaths.isDemo {
+            processRecorder.enabled = { [weak self] in self?.history.enabled == true }
+            processRecorder.request = { [weak self] in _ = self?.model.requestProcesses() }
+            processRecorder.start()           // the process list once a minute (Running Now in Time Travel)
+        }
         if !AppPaths.isDemo {
             updates.schedule()            // daily, if allowed in Settings ▸ General
             model.connect()
@@ -428,13 +438,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Delete all history files?"
-        alert.informativeText = "This removes all recorded activity and resource history (activity-*, metrics-*) in \(history.directory.path)."
+        alert.informativeText = "This removes all recorded activity, resource and process history (activity-*, metrics-*, processes-*) in \(history.directory.path)."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
             history.clearHistory()
             metrics.archive.removeAll()
+            ProcessHistory(directory: history.directory).archive.removeAll()
+            processRecorder.reset()
         }
     }
 
@@ -755,7 +767,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         case #selector(clearEvents):
             return !travel.active
         case #selector(toggleRunningNow):
-            mi.state = running.showing && model.windowTab == 0 && !travel.active ? .on : .off
+            mi.state = running.showing && model.windowTab == 0 ? .on : .off
         case #selector(togglePause):
             mi.title = model.paused ? "Resume Live Stream" : "Pause Live Stream"
         case #selector(toggleCollector):
@@ -835,8 +847,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func toggleRunningNow() {
-        if travel.active { travel.exit() }
-        model.windowTab = 0
+        model.windowTab = 0                   // in Time Travel: what was running at the playhead
         running.showing.toggle()
         openActivityWindow(fullScreen: false)
     }
@@ -851,8 +862,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc private func toggleTimeTravel() {
         if travel.active { travel.exit(); return }
-        running.showing = false
-        model.windowTab = 0
+        model.windowTab = 0                   // Running Now stays: it then shows the playhead's moment
         openActivityWindow(fullScreen: false)
         travel.enter()
     }

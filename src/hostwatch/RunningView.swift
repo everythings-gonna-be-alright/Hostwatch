@@ -51,6 +51,9 @@ final class RunningProcesses: ObservableObject {
     @Published var sortOrder: [KeyPathComparator<RunningRow>] = [KeyPathComparator(\RunningRow.cpu, order: .reverse)]
     /// When Hostwatch's recorded history begins: a process started before can't be shown at its launch.
     @Published private(set) var recordingStart: Date?
+    /// Time Travel: the moment shown (nil: live). The list is then a recorded one and live lists are ignored.
+    @Published private(set) var moment: Date?
+    var isRecorded: Bool { moment != nil }
 
     var request: () -> Bool = { false }
     var historyDirectory: URL?
@@ -84,13 +87,34 @@ final class RunningProcesses: ObservableObject {
         timer = nil
     }
 
-    private func ask() { unavailable = !request() }
+    private func ask() {
+        guard moment == nil else { return }
+        unavailable = !request()
+    }
 
     func receive(_ list: [RunningProcessInfo]) {
-        guard showing else { return }
+        guard showing, moment == nil else { return }
         rows = RunningRow.rows(list)
         updated = Date()
         unavailable = false
+    }
+
+    /// Time Travel: the list recorded at or just before `at` (nil: nothing recorded near it).
+    func showRecorded(_ snapshot: ProcessHistory.Snapshot?, at: Date) {
+        guard showing else { return }
+        moment = at
+        rows = snapshot.map { RunningRow.rows($0.processes) } ?? []
+        updated = snapshot?.at
+        unavailable = false
+    }
+
+    /// Back from Time Travel: the next live list replaces the recorded one.
+    func showLive() {
+        guard moment != nil else { return }
+        moment = nil
+        rows = []
+        updated = nil
+        if showing { ask() }
     }
 
     /// Whether the launch is inside the recorded history.
@@ -176,7 +200,10 @@ struct RunningProcessesView: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        if running.unavailable {
+        if running.isRecorded {
+            ContentUnavailableView("No Process List Here", systemImage: "clock.badge.questionmark",
+                                   description: Text("Hostwatch records the running processes once a minute while the collector runs and history is on. Nothing was recorded in the 3 minutes before this moment."))
+        } else if running.unavailable {
             ContentUnavailableView("Collector Off", systemImage: "bolt.horizontal.circle",
                                    description: Text("Running processes come from the collector. Start it to see them."))
         } else {
@@ -310,7 +337,7 @@ struct RunningProcessesView: View {
                 GridRow {
                     fact("Started", row.started.map { $0.formatted(date: .abbreviated, time: .standard) } ?? "–")
                     fact("Running for", row.started.map { RunningFormat.duration(now.timeIntervalSince($0)) } ?? "–")
-                    fact("CPU now", info.cpu.map { String(format: "%.1f%%", $0) } ?? "–")
+                    fact(running.isRecorded ? "CPU then" : "CPU now", info.cpu.map { String(format: "%.1f%%", $0) } ?? "–")
                     fact("CPU time", RunningFormat.cpuTime(info.cpuTime))
                 }
                 GridRow {

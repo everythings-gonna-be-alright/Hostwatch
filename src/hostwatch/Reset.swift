@@ -25,7 +25,7 @@ struct ResetPlan: Equatable {
         if plan.data { lines.append("/bin/rm -rf \(quote(support.path))") }
         if plan.history {
             // A custom history folder may hold other files: only Hostwatch's own.
-            lines.append("/usr/bin/find \(quote(historyDir.path)) -maxdepth 1 -type f \\( -name 'activity-*' -o -name 'metrics-*' \\) -delete 2>/dev/null")
+            lines.append("/usr/bin/find \(quote(historyDir.path)) -maxdepth 1 -type f \\( -name 'activity-*' -o -name 'metrics-*' -o -name 'processes-*' \\) -delete 2>/dev/null")
             lines.append("/bin/rm -rf \(quote(logs.path))")
         }
         lines.append("/usr/bin/open -n \(quote(app.path))")

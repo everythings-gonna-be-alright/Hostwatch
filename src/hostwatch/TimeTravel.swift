@@ -401,6 +401,15 @@ final class TimeTravel: ObservableObject {
     @Published private(set) var playing = false
     @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
+    /// Running Now while traveling: what was running at the playhead (nil: nothing recorded near it).
+    @Published private(set) var processSnapshot: ProcessHistory.Snapshot?
+    /// Set while Running Now is shown in Time Travel: the list follows the playhead.
+    var processesWanted = false { didSet { if processesWanted != oldValue { loadProcesses() } } }
+    /// Receives each process list loaded for the playhead (Running Now shows it).
+    var onProcesses: (ProcessHistory.Snapshot?, Date) -> Void = { _, _ in }
+    private let processCache = ProcessDayCache()
+    private var processTask: Task<Void, Never>?
+
     /// Bumped whenever the listed events change (slice or search hits): the event list re-derives its rows only then.
     @Published private(set) var revision = 0
     /// CPU and memory over the whole recording, per timeline bucket (0...1; nil where nothing was recorded).
@@ -491,6 +500,9 @@ final class TimeTravel: ObservableObject {
         cancelSearch()
         searchQuery = ""
         revision += 1
+        processTask?.cancel()
+        processSnapshot = nil
+        processCache.clear()
     }
 
     func toggle() { active ? exit() : enter() }
@@ -513,6 +525,22 @@ final class TimeTravel: ObservableObject {
         searchAll = false
         let at = Date(timeIntervalSince1970: event.ts)
         enter(at: at.addingTimeInterval(min(30, span / 4)))
+    }
+
+    // MARK: Running Now at the playhead
+
+    private func loadProcesses() {
+        processTask?.cancel()
+        guard active, processesWanted else { return }
+        let history = ProcessHistory(directory: self.history.directory), cache = processCache, at = playhead
+        processTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(60))          // coalesce drags
+            guard !Task.isCancelled else { return }
+            let snapshot = await Task.detached(priority: .userInitiated) { history.snapshot(at: at, cache: cache) }.value
+            guard let self, !Task.isCancelled, self.active else { return }
+            self.processSnapshot = snapshot
+            self.onProcesses(snapshot, at)
+        }
     }
 
     // MARK: Searching all history
@@ -638,6 +666,7 @@ final class TimeTravel: ObservableObject {
     }
 
     private func scheduleLoad() {
+        loadProcesses()
         guard active, !segments.isEmpty else { return }
         let archive = archive, segments = segments, from = windowStart, to = playhead
         loadTask?.cancel()
@@ -921,6 +950,7 @@ final class ScrubberPointer: ObservableObject {
 struct TimeTravelBanner: View {
     @ObservedObject var travel: TimeTravel
     let shown: Int
+    var noun = "events"
 
     var body: some View {
         HStack(spacing: 10) {
@@ -929,10 +959,10 @@ struct TimeTravelBanner: View {
             Text("\(travel.windowStart.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute().second())) – \(travel.playhead.formatted(.dateTime.hour().minute().second()))")
                 .monospacedDigit()
             Text("·").foregroundStyle(.secondary)
-            Text(travel.clipped ? "newest \(shown) events" : "\(shown) events")
+            Text(noun == "events" && travel.clipped ? "newest \(shown) events" : "\(shown) \(noun)")
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .help(travel.clipped ? "This slice is very busy; only its newest part is shown. Choose a shorter window." : "")
+                .help(noun == "events" && travel.clipped ? "This slice is very busy; only its newest part is shown. Choose a shorter window." : "")
             if let s = travel.sampleAtPlayhead {
                 Text("·").foregroundStyle(.secondary)
                 Text("CPU \(Int(s.cpu.rounded()))% · Memory \(Int((s.mem * 100).rounded()))%"
