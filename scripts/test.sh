@@ -6,13 +6,25 @@ cd "$(dirname "$0")/.."
 log=$(mktemp -t hostwatch-tests)
 status=0
 
+# Tests that measure this process's memory run alone afterwards: in the parallel run other tests' allocations
+# land in the same measurement.
+alone="CollectorLineLoops"
+
 echo "== Swift tests"
-if swift test >"$log" 2>&1; then
+if swift test --skip "$alone" >"$log" 2>&1; then
   grep -E "^✔ Test run with" "$log"
 else
   status=1
   grep -E "error:|✘|Expectation failed|recorded an issue" "$log" | head -40
   grep -qE "✘ Test run with" "$log" || tail -20 "$log"   # build failure: show the end of the log
+fi
+
+echo "== Memory tests (alone)"
+if swift test --filter "$alone" --no-parallel >"$log" 2>&1; then
+  grep -E "^✔ Test run with" "$log"
+else
+  status=1
+  grep -E "error:|✘|Expectation failed|recorded an issue" "$log" | head -20
 fi
 
 echo "== Demo build (demo mode compiled in)"
