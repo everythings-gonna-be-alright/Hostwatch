@@ -535,7 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "Hostwatch")
+        item.button?.image = MenuBarIcon.image
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
