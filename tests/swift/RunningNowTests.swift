@@ -101,3 +101,27 @@ import Testing
         #expect(e.kind == .exec && e.pid == 9 && e.target == "/usr/bin/node" && e.args == "node server.js" && e.pstart == 1_800_000_000)
     }
 }
+
+/// Running Now's Writing column, live: bytes per second between two lists of the same process.
+@MainActor @Suite struct RunningNowWriteRate {
+    func info(_ pid: Int, start: Double, written: Int64?) -> RunningProcessInfo {
+        RunningProcessInfo(pid: pid, ppid: 1, start: start, uid: 501, user: "alex", name: "p\(pid)", path: "/bin/p\(pid)",
+                           args: "", cpu: nil, cpuTime: 1, mem: 1, threads: 1, written: written)
+    }
+
+    @Test func rateFromTwoLists() {
+        let running = RunningProcesses()
+        running.showing = true
+        defer { running.showing = false }
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        running.receive([info(1, start: 10, written: 1000), info(2, start: 10, written: nil)], at: t)
+        #expect(running.rows.allSatisfy { $0.info.writeRate == nil })               // nothing to compare yet
+        running.receive([info(1, start: 10, written: 7000), info(2, start: 10, written: nil), info(3, start: 20, written: 50)],
+                        at: t.addingTimeInterval(3))
+        #expect(running.rows.first { $0.pid == 1 }?.info.writeRate == 2000)
+        #expect(running.rows.first { $0.pid == 2 }?.info.writeRate == nil)          // not known (older collector)
+        #expect(running.rows.first { $0.pid == 3 }?.info.writeRate == nil)          // new: next refresh
+        running.receive([info(1, start: 99, written: 10)], at: t.addingTimeInterval(6))   // PID reused
+        #expect(running.rows.first?.info.writeRate == nil)
+    }
+}

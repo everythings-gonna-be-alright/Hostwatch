@@ -1095,6 +1095,8 @@ func runTimeTravelProbe(_ path: String?) -> Never {
                 let total = snap?.processes.reduce(0) { $0 + $1.cpuTime } ?? 0
                 print("processes at +\(step * 20) s:", t, "\(snap?.processes.count ?? 0) running,",
                       "CPU time \(Int(total)) s, busiest \(busiest?.name ?? "–") \(Int(busiest?.cpu ?? 0))%")
+                let writer = snap?.processes.max { ($0.writeRate ?? 0) < ($1.writeRate ?? 0) }
+                print("   writing most: \(writer?.name ?? "–") pid \(writer?.pid ?? 0) \(writer?.args.prefix(60) ?? "") \(Int((writer?.writeRate ?? 0) / 1000)) KB/s")
             }
         }
     }

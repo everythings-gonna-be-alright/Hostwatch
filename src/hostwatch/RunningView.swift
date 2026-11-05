@@ -20,6 +20,7 @@ struct RunningRow: Identifiable, Equatable {
     var mem: Int64 { info.mem }
     var threads: Int { info.threads }
     var written: Int64 { info.written ?? -1 }
+    var writeRate: Double { info.writeRate ?? -1 }
     var start: Double { info.start }
 
     init(info: RunningProcessInfo, parentName: String) {
@@ -98,10 +99,24 @@ final class RunningProcesses: ObservableObject {
         unavailable = !request()
     }
 
-    func receive(_ list: [RunningProcessInfo]) {
+    /// Each process's bytes written in the previous list, for the write rate.
+    private var lastWritten: [String: (bytes: Int64, at: Date)] = [:]
+
+    func receive(_ list: [RunningProcessInfo], at now: Date = Date()) {
         guard showing, moment == nil else { return }
+        var list = list
+        var seen: [String: (bytes: Int64, at: Date)] = [:]
+        for i in list.indices {
+            guard let w = list[i].written else { continue }
+            let key = "\(list[i].pid)-\(list[i].start)"
+            if let prev = lastWritten[key], now.timeIntervalSince(prev.at) > 0.5 {
+                list[i].writeRate = Double(max(0, w - prev.bytes)) / now.timeIntervalSince(prev.at)
+            }
+            seen[key] = (w, now)
+        }
+        lastWritten = seen
         rows = RunningRow.rows(list)
-        updated = Date()
+        updated = now
         unavailable = false
     }
 
@@ -262,10 +277,14 @@ struct RunningProcessesView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 44, ideal: 54, max: 64)
-            TableColumn("Disk Written", value: \.written) { row in
-                Text(row.info.written.map(RunningFormat.bytes) ?? "–").monospacedDigit()
+            TableColumn("Writing", value: \.writeRate) { row in
+                let rate = row.info.writeRate
+                Text(rate.map { $0 >= 1 ? Rate.text($0) : "0" } ?? "–").monospacedDigit()
+                    .foregroundStyle((rate ?? 0) >= 1_000_000 ? Color.orange : (rate ?? 0) >= 1 ? .primary : .secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .help("Bytes this process has written to disk since it started (files it later deleted count too)")
+                    .help(row.info.written.map { "Writing to disk now: bytes per second over the last refresh (or the minute "
+                        + "around the Time Travel moment). \(RunningFormat.bytes($0)) written since it started." }
+                        ?? "Not known for this moment: disk writes are recorded from version 0.10 on")
             }
             .width(min: 64, ideal: 84, max: 100)
             TableColumn("Running For", value: \.start) { row in
@@ -358,6 +377,7 @@ struct RunningProcessesView: View {
                 GridRow {
                     fact("Memory", RunningFormat.bytes(info.mem))
                     fact("Disk written", info.written.map(RunningFormat.bytes) ?? "–")
+                    fact(running.isRecorded ? "Writing then" : "Writing now", info.writeRate.map(Rate.text) ?? "–")
                     fact("CPU share", row.started.map { start in
                         let alive = now.timeIntervalSince(start)
                         return alive > 0 ? String(format: "%.1f%% average", 100 * info.cpuTime / alive) : "–"
