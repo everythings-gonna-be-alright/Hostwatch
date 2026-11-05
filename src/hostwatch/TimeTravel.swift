@@ -998,6 +998,31 @@ func runTimeTravelProbe(_ path: String?) -> Never {
         let t = clock.measure { result = archive.events(segments, from: mid.addingTimeInterval(-span), to: mid) }
         print("slice \(Int(span / 60)) min:", t, "\(result.events.count) events", result.clipped ? "(clipped)" : "")
     }
+    // What counts toward the history size limit (read only).
+    let kept = HistoryFiles.kept(in: dir, current: nil, today: MetricsArchive.dayName(Date()))
+    func sum(_ prefix: String) -> String {
+        HistoryRecorder.format(kept.filter { $0.url.lastPathComponent.hasPrefix(prefix) }.reduce(0) { $0 + $1.bytes })
+    }
+    print("counted toward the limit: \(HistoryRecorder.format(kept.reduce(0) { $0 + $1.bytes }))",
+          "(activity \(sum("activity-")), metrics \(sum("metrics-")), processes \(sum("processes-")))")
+    // Running Now at moments 20 s apart over the newest recorded process lists.
+    let processes = ProcessHistory(directory: dir)
+    let cache = ProcessDayCache()
+    if let day = processes.archive.days().last {
+        let lines = cache.lines(day: day, archive: processes.archive)
+        if lines.count >= 2 {
+            let from = lines[lines.count - 2].t - 30
+            for step in 0..<5 {
+                let at = Date(timeIntervalSince1970: from + Double(step) * 20)
+                var snap: ProcessHistory.Snapshot?
+                let t = clock.measure { snap = processes.snapshot(at: at, cache: cache) }
+                let busiest = snap?.processes.max { ($0.cpu ?? 0) < ($1.cpu ?? 0) }
+                let total = snap?.processes.reduce(0) { $0 + $1.cpuTime } ?? 0
+                print("processes at +\(step * 20) s:", t, "\(snap?.processes.count ?? 0) running,",
+                      "CPU time \(Int(total)) s, busiest \(busiest?.name ?? "–") \(Int(busiest?.cpu ?? 0))%")
+            }
+        }
+    }
     // Search all history: a common word (stops at the cap) and one that is rarely there (reads everything).
     for query in ["curl", "zz-not-recorded-zz"] {
         var hits = 0, back: Date?

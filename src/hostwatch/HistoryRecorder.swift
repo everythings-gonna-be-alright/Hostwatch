@@ -48,6 +48,7 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     private var currentURL: URL?
     private var currentSize: Int64 = 0
     private var otherSegmentsSize: Int64 = 0
+    private var lastEnforce = Date.distantPast
     private var pending = Data()
     private var config: [String: Any] = [:]
     private var lastStatusPublish = Date.distantPast
@@ -230,17 +231,19 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     }
 
     /// Deletes oldest files so finished files plus a full current file fit within the cap.
+    /// One limit for everything recorded here: activity, resource samples (metrics-*) and process lists
+    /// (processes-*). The oldest day goes first, in every form (.jsonl, .gz, .idx).
     private func enforceLimit() {
         guard let current = currentURL else { return }
-        let others = segments(in: current.deletingLastPathComponent()).filter { $0 != current }
-        var sizes = others.map { ($0, size(of: $0)) }
-        var total = sizes.reduce(0) { $0 + $1.1 }
-        while total + segmentBytes > limit, !sizes.isEmpty {
-            let (oldest, bytes) = sizes.removeFirst()
-            try? FileManager.default.removeItem(at: oldest)
-            total -= bytes
+        lastEnforce = Date()
+        let files = HistoryFiles.kept(in: current.deletingLastPathComponent(), current: current,
+                                      today: MetricsArchive.dayName(Date()))
+        let others = files.filter { $0.url != current }
+        let plan = HistoryFiles.trimPlan(others, limit: limit, reserve: segmentBytes)
+        for f in plan.delete {
+            if f.kind == .activity { HistoryFiles.remove(f.url) } else { try? FileManager.default.removeItem(at: f.url) }
         }
-        otherSegmentsSize = total
+        otherSegmentsSize = plan.remaining
         publishStatus(force: true)
     }
 
@@ -257,6 +260,8 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             openSegment(finished.deletingLastPathComponent().appendingPathComponent(Self.newSegmentName()))
             compressLater(finished)
             enforceLimit()
+        } else if Date().timeIntervalSince(lastEnforce) > 10 * 60 {
+            enforceLimit()          // metrics and process lists grow between segments too
         }
         publishStatus(force: false)
     }

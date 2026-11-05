@@ -9,11 +9,15 @@
 - **Running Now in Time Travel:** switch to *Running Now* while traveling to see what was running at the playhead,
   with CPU, CPU time, memory, threads and how long each had run, following the playhead as you drag or play.
   Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
-  about 15–20 MB a day, removed with the history), so this works from now on, not for moments before.
+  a few tens of MB a day before compression, inside the history size limit), so this works from now on, not for
+  moments before. Playing moves the list smoothly between the once-a-minute lists.
 - **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.
 - **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
+- **Fix: the history size limit now holds.** It counts activity, resource samples and process lists together,
+  and deletes the oldest compressed history for real (it removed only the plain file name, so compressed files
+  were never deleted and history could grow past the limit).
 
 ## 0.10.0 – Running Now, a new look
 

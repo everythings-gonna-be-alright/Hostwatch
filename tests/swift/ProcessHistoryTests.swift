@@ -26,29 +26,42 @@ import Testing
     @Test func rebuildsEachMomentFromAKeyframeAndChanges() throws {
         let lines = record([
             [proc(1), proc(2), proc(3)],
-            [proc(1, cpuTime: 31), proc(2), proc(4, start: t0 + 70)],            // 3 ended, 4 started, 1 busy
-            [proc(1, cpuTime: 31), proc(4, start: t0 + 70, cpuTime: 2), proc(5, start: t0 + 100)],
+            [proc(1, cpuTime: 31), proc(2), proc(4, start: t0 + 50)],            // 3 ended, 4 started, 1 busy
+            [proc(1, cpuTime: 31), proc(4, start: t0 + 50, cpuTime: 2), proc(5, start: t0 + 100)],
         ])
         #expect(lines.map(\.key) == [true, false, false])
         #expect(lines[1].bytes.count < lines[0].bytes.count)                     // only the change
         let first = try #require(ProcessHistory.rebuild(lines, at: t0 + 30))
-        #expect(first.processes.map(\.pid) == [1, 2, 3])
-        #expect(first.processes.allSatisfy { $0.cpu == nil })                      // nothing to compare yet
+        #expect(first.processes.map(\.pid) == [1, 2, 3])                        // 3 is gone only by the next list
         #expect(first.processes[0].args == "p1 --flag" && first.processes[0].user == "alex")
-        let second = try #require(ProcessHistory.rebuild(lines, at: t0 + 60))
-        #expect(second.processes.map(\.pid) == [1, 2, 4])
-        #expect(abs((second.processes[0].cpu ?? 0) - 50) < 0.01)                  // 30 s of CPU in 60 s
-        #expect(second.processes[1].cpu == 0)
-        #expect(second.processes[0].cpuTime == 31)
+        #expect(abs((first.processes[0].cpu ?? 0) - 50) < 0.01)                   // 30 s of CPU in 60 s
+        #expect(abs(first.processes[0].cpuTime - 16) < 0.01)                      // halfway between 1 and 31
+        #expect(first.recordedAt == Date(timeIntervalSince1970: t0))
+        #expect(first.at == Date(timeIntervalSince1970: t0 + 30))
         let third = try #require(ProcessHistory.rebuild(lines, at: t0 + 150))
         #expect(third.processes.map(\.pid) == [1, 4, 5])
-        #expect(third.at == Date(timeIntervalSince1970: t0 + 120))
+        #expect(third.recordedAt == Date(timeIntervalSince1970: t0 + 120))
+        #expect(third.processes[1].cpu.map { abs($0 - 1.0 / 60 * 100) < 0.01 } == true)   // last minute's rate
+    }
+
+    /// Playing through a minute: the list changes between recorded lists (it used to stay frozen).
+    @Test func aMinuteBetweenListsMoves() throws {
+        let lines = record([[proc(1, cpuTime: 0)], [proc(1, cpuTime: 60), proc(9, start: t0 + 45, cpuTime: 3)]])
+        let at10 = try #require(ProcessHistory.rebuild(lines, at: t0 + 10))
+        let at50 = try #require(ProcessHistory.rebuild(lines, at: t0 + 50))
+        #expect(at10.processes.map(\.pid) == [1])                               // 9 hasn't started yet
+        #expect(at50.processes.map(\.pid) == [1, 9])                            // 9 appears at its start
+        #expect(at10.processes[0].cpuTime < at50.processes[0].cpuTime)
+        #expect(abs(at50.processes[1].cpuTime - 1) < 0.01)                       // 5 s of its 15 s so far
+        #expect(abs((at50.processes[1].cpu ?? 0) - 20) < 0.01)
     }
 
     @Test func aReusedPIDIsANewProcess() throws {
         let lines = record([[proc(7, name: "old")], [proc(7, start: t0 + 30, name: "new")]])
         let s = try #require(ProcessHistory.rebuild(lines, at: t0 + 60))
         #expect(s.processes.map(\.name) == ["new"])
+        let before = try #require(ProcessHistory.rebuild(lines, at: t0 + 40))     // the new one started at +30
+        #expect(before.processes.map(\.name) == ["new"])
     }
 
     @Test func memoryAndThreadChangesAreKept() throws {
@@ -90,5 +103,52 @@ import Testing
         // Other files in the folder are not process lists.
         #expect(MetricsArchive(directory: dir).days().isEmpty)
         #expect(history.archive.days() == [day])
+    }
+}
+
+/// The history size limit covers activity, metrics and process lists together.
+@Suite struct HistorySizeLimit {
+    func file(_ dir: URL, _ name: String, _ bytes: Int) throws {
+        try Data(count: bytes).write(to: dir.appendingPathComponent(name))
+    }
+
+    @Test func oldestDayGoesFirstInEveryForm() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-limit-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try file(dir, "activity-20270101-080000-000.jsonl.gz", 1000)
+        try file(dir, "activity-20270101-080000-000.jsonl.idx", 10)
+        try file(dir, "metrics-20270101.jsonl.gz", 300)
+        try file(dir, "processes-20270101.jsonl.gz", 400)
+        try file(dir, "activity-20270102-080000-000.jsonl.gz", 1000)
+        try file(dir, "activity-20270102-080000-000.jsonl.idx", 10)
+        try file(dir, "processes-20270102.jsonl.gz", 400)
+        try file(dir, "activity-20270103-080000-000.jsonl", 500)              // being written
+        try file(dir, "processes-20270103.jsonl", 900)                       // today
+        try file(dir, "notes.txt", 5000)                                    // not ours: never counted
+        let current = dir.appendingPathComponent("activity-20270103-080000-000.jsonl")
+        let kept = HistoryFiles.kept(in: dir, current: current, today: "20270103")
+        #expect(kept.reduce(0) { $0 + $1.bytes } == 4520)
+        // Everything but the file being written must fit in 3000 with 500 free for it.
+        let others = kept.filter { $0.url != current }
+        let plan = HistoryFiles.trimPlan(others, limit: 3000, reserve: 500)
+        #expect(plan.delete.map(\.url.lastPathComponent) == ["activity-20270101-080000-000.jsonl",
+                                                              "metrics-20270101.jsonl.gz", "processes-20270101.jsonl.gz"])
+        #expect(plan.remaining == 1410 + 900)
+        for f in plan.delete where f.kind == .activity { HistoryFiles.remove(f.url) }
+        let left = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        #expect(!left.contains { $0.hasPrefix("activity-20270101") })          // .gz and .idx both gone
+    }
+
+    @Test func todayAndTheCurrentFileStayEvenOverTheLimit() {
+        let dir = URL(fileURLWithPath: "/h")
+        let files = [
+            HistoryFiles.Kept(url: dir.appendingPathComponent("processes-20270103.jsonl"), bytes: 9000, day: "20270103",
+                              kind: .daily, removable: false),
+            HistoryFiles.Kept(url: dir.appendingPathComponent("metrics-20270102.jsonl.gz"), bytes: 10, day: "20270102",
+                              kind: .daily, removable: true),
+        ]
+        let plan = HistoryFiles.trimPlan(files, limit: 1000, reserve: 0)
+        #expect(plan.delete.count == 1 && plan.remaining == 9000)
     }
 }

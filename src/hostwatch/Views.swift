@@ -815,7 +815,7 @@ struct ActivityWindowView: View {
                   : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
             if runningNow {
                 if running.isRecorded {
-                    Text(running.updated.map { "Recorded \($0.formatted(date: .omitted, time: .standard)) · once a minute" }
+                    Text(running.recordedAt.map { "Recorded \($0.formatted(date: .omitted, time: .standard)) · once a minute" }
                          ?? "Nothing recorded at this moment")
                         .font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 } else if let updated = running.updated {

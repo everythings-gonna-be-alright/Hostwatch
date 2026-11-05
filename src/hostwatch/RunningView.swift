@@ -53,6 +53,8 @@ final class RunningProcesses: ObservableObject {
     @Published private(set) var recordingStart: Date?
     /// Time Travel: the moment shown (nil: live). The list is then a recorded one and live lists are ignored.
     @Published private(set) var moment: Date?
+    /// Time Travel: when the list shown was recorded (the moment is rebuilt from it and the next one).
+    @Published private(set) var recordedAt: Date?
     var isRecorded: Bool { moment != nil }
 
     var request: () -> Bool = { false }
@@ -105,6 +107,7 @@ final class RunningProcesses: ObservableObject {
         moment = at
         rows = snapshot.map { RunningRow.rows($0.processes) } ?? []
         updated = snapshot?.at
+        recordedAt = snapshot?.recordedAt
         unavailable = false
     }
 
