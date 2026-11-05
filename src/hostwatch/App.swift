@@ -234,6 +234,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let safeKeys = model.history.filter { ["git", "ssh", "python3"].contains($0.name) }.map(\.signatureKey)
             signatures.set(.safe, keys: Array(Set(safeKeys)), note: "demo")
             let cleanerLaunch = model.history.first { $0.kind == .exec && $0.name == "CleanMyDisk" }
+            // DEMO_SEARCH=text: the search field filled in (screenshots of a filtered list).
+            if let q = ProcessInfo.processInfo.environment["DEMO_SEARCH"], !q.isEmpty { model.searchText = q }
             switch Demo.scene {
             case "hud":
                 model.overlayEnabled = true
@@ -243,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 running.showing = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
                     running.selection = running.rows.first { $0.name == "CleanMyDisk" }?.id
+                    running.showInfo = true
                 }
             case "patterns": model.windowTab = 1
             case "stories":

@@ -634,12 +634,12 @@ struct ActivityWindowView: View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             VulnerabilityBanner(intel: intel, sheets: sheets)
+            // A search left in the field filters quietly: say so where you look, with the way out.
+            if searchFiltering && !showsHistoryScope { SearchActiveBar(text: searchText); Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 && !runningNow { heavySection }
             if traveling {
-                if !runningNow, model.searchText.trimmingCharacters(in: .whitespaces).count >= TimeTravel.minSearchLength {
-                    HistorySearchScopeBar(travel: travel, query: model.searchText); Divider()
-                }
+                if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
                 TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
                                  noun: runningNow ? "processes" : "events"); Divider()
             }
@@ -701,6 +701,16 @@ struct ActivityWindowView: View {
     private func syncRunningMoment() {
         travel.processesWanted = traveling && runningNow
         if !travel.processesWanted { running.showLive() }
+    }
+
+    /// The search field holds text on a tab it filters (Rules has no search).
+    private var searchFiltering: Bool {
+        model.windowTab != 4 && !searchText.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Time Travel's search bar (with its All History / This Window scope) takes the place of the plain one.
+    private var showsHistoryScope: Bool {
+        traveling && !runningNow && model.searchText.trimmingCharacters(in: .whitespaces).count >= TimeTravel.minSearchLength
     }
 
     /// One search field, routed to whichever tab is showing.
@@ -1008,6 +1018,8 @@ struct ActivityWindowView: View {
                 }
                 Text(rows.count == total ? "\(total) events" : "\(rows.count) of \(total) events")
                     .monospacedDigit()
+                    .foregroundStyle(searchFiltering && rows.count != total ? Color.accentColor : .secondary)
+                    .fontWeight(searchFiltering && rows.count != total ? .medium : .regular)
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
@@ -1269,14 +1281,52 @@ final class TravelRowsCache: ObservableObject {
     }
 }
 
-/// Finder-style scope while traveling with a search: everything recorded, or only the shown window.
-struct HistorySearchScopeBar: View {
-    @ObservedObject var travel: TimeTravel
-    let query: String
+/// Under the toolbar while the search field filters the list: what it's filtered by, in the accent color, and Clear.
+/// `accessory` adds controls (Time Travel's search scope).
+struct SearchActiveBar<Accessory: View>: View {
+    @Binding var text: String
+    @ViewBuilder var accessory: Accessory
+
+    init(text: Binding<String>, @ViewBuilder accessory: () -> Accessory = { EmptyView() }) {
+        _text = text
+        self.accessory = accessory()
+    }
 
     var body: some View {
         HStack(spacing: 10) {
-            Text("Search:").foregroundStyle(.secondary)
+            Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(.tint)
+            Text("Showing only matches for").foregroundStyle(.secondary)
+            Text(text.trimmingCharacters(in: .whitespaces))
+                .fontWeight(.semibold)
+                .foregroundStyle(.tint)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.horizontal, 8).padding(.vertical, 2)
+                .background(Capsule().fill(Color.accentColor.opacity(0.16)))
+                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 0.5))
+            accessory
+            Spacer(minLength: 8)
+            Button("Clear Search") { text = "" }
+                .help("Show everything again")
+        }
+        .font(.system(size: 12))
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Filtered by search: \(text)")
+    }
+}
+
+/// Finder-style scope while traveling with a search: everything recorded, or only the shown window.
+struct HistorySearchScopeBar: View {
+    @ObservedObject var travel: TimeTravel
+    @Binding var text: String
+
+    var body: some View {
+        SearchActiveBar(text: $text) {
+            Text("in").foregroundStyle(.secondary)
             Picker("Search", selection: $travel.searchAll) {
                 Text("All History").tag(true)
                 Text("This Window").tag(false)
@@ -1289,12 +1339,7 @@ struct HistorySearchScopeBar: View {
                 if travel.searching { ProgressView().controlSize(.small) }
                 Text(status).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
             }
-            Spacer(minLength: 0)
         }
-        .font(.system(size: 12))
-        .controlSize(.small)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
     }
 
     private var status: String {

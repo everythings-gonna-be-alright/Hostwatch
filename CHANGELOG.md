@@ -11,6 +11,9 @@
   Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
   a few tens of MB a day before compression, inside the history size limit), so this works from now on, not for
   moments before. Playing moves the list smoothly between the once-a-minute lists.
+- **A search you typed stays in sight.** While the search field filters a tab, a bar under the toolbar says
+  *Showing only matches for "…"* in the accent color, with **Clear Search**; the event count in the footer turns
+  accent too. In Time Travel the same bar holds the All History / This Window choice.
 - **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
   below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
 - **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
