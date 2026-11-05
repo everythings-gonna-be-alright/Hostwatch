@@ -19,6 +19,12 @@
 - **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
   its trend over the last hour or day and the programs that **wrote the most** to disk then (ended ones too).
   Running Now has a *Disk Written* column.
+- **Who's writing to disk:** Running Now's *Writing* column shows bytes per second now (or around the Time Travel
+  moment, from the minute lists), so a process writing hard stands out; the total since it started is in its
+  information. It showed only that total, which barely moves, so nothing seemed to write.
+- **Far fewer disk writes:** Hostwatch rewrote its whole pattern store (10 MB on a busy Mac) every 10 seconds,
+  because every event updates a pattern's counter: about 1 MB/s, and a memory jump each time it was encoded. Counters
+  and newly learned patterns are now saved every 5 minutes (and at quit); your decisions still within seconds.
 - **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
   up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
   lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.

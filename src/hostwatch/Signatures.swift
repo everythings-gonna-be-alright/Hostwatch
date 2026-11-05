@@ -759,6 +759,11 @@ final class SignatureStore: ObservableObject {
 
     private let fileURL: URL
     private var dirty = false
+    /// Only counters, last-seen times, examples and newly learned patterns changed: saved every 5 minutes, not every
+    /// 10 s. Every event marks this, and rewriting the whole store (10 MB with ~20,000 patterns) every 10 s wrote
+    /// ~1 MB/s to disk and made the app's memory jump while encoding it.
+    private var statsDirty = false
+    nonisolated static let statsSaveEvery = 300
     private var pendingRevision = false
     private var timer: Timer?
     private let maxEntries = 50_000
@@ -867,6 +872,7 @@ final class SignatureStore: ObservableObject {
             // from a download… back to you.
             reopen(&entry, "now high-risk" + (reason.isEmpty ? "" : ": " + reason))
         }
+        dirty = true                                  // a raised risk (maybe a reopened decision) is saved soon
         pendingRevision = true
     }
 
@@ -1445,8 +1451,9 @@ final class SignatureStore: ObservableObject {
     /// Writes signatures.json; `sync` is used at quit so the write finishes before exit.
     func save(sync: Bool = false) {
         SigningCache.shared.save()
-        guard dirty else { return }
+        guard dirty || statsDirty else { return }
         dirty = false
+        statsDirty = false
         let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values),
                             merges: merges, aliases: aliases)
         let url = fileURL
@@ -1460,10 +1467,15 @@ final class SignatureStore: ObservableObject {
         if sync { write() } else { DispatchQueue.global(qos: .utility).async(execute: write) }
     }
 
+    /// What every observed event changes (counts, last seen, new patterns): saved on the slow schedule.
     private func markDirty() {
-        dirty = true
+        statsDirty = true
         pendingRevision = true
     }
+
+    /// When the store will be written next: soon after a decision, later for statistics only.
+    enum SaveUrgency { case none, soon, later }
+    var saveUrgency: SaveUrgency { dirty ? .soon : statsDirty ? .later : .none }
 
     private func changedNow() {
         dirty = true
@@ -1474,7 +1486,8 @@ final class SignatureStore: ObservableObject {
     private func tick() {
         if pendingRevision { pendingRevision = false; revision += 1 }
         ticks += 1
-        if ticks % 10 == 0 { save() }
+        if ticks % 10 == 0, dirty { save() }
+        if ticks % Self.statsSaveEvery == 0, statsDirty { save() }
         if ticks % 3600 == 30 { tidyIfDue() }        // 30 s after launch, then hourly checks for "a day passed"
     }
 

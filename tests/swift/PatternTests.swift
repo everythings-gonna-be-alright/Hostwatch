@@ -346,3 +346,28 @@ import Testing
         }
     }
 }
+
+/// The pattern store is ~10 MB on a busy Mac: seeing events only updates counters, saved every few minutes;
+/// your decisions are saved within seconds.
+@MainActor @Suite(.serialized) struct PatternStoreSaving {
+    @Test func eventsWaitDecisionsDont() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-save-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = SignatureStore(directory: dir)
+        let e = ActivityEvent(kind: .file, time: "", pid: 1, ppid: 0, name: "tool", proc: "/Users/alex/bin/tool",
+                              target: "/Users/alex/Documents/work/a/b.txt", extra: "r", parent: "")
+        #expect(store.saveUrgency == .none)
+        store.observe(e)                                   // a new pattern
+        store.observe(e)                                   // and its counter
+        #expect(store.saveUrgency == .later)
+        store.set(.safe, keys: [e.signatureKey])           // your decision
+        #expect(store.saveUrgency == .soon)
+        store.save(sync: true)
+        #expect(store.saveUrgency == .none)
+        #expect(SignatureStatus.allCases.contains(SignatureStore(directory: dir).status(for: e)))
+        #expect(SignatureStore(directory: dir).status(for: e) == .safe)
+        #expect(SignatureStore.statsSaveEvery >= 300)
+    }
+}
