@@ -133,9 +133,139 @@ struct HistoryArchive: Sendable {
             }
             lines.insert(contentsOf: chunk, at: 0)
         }
-        let decoder = JSONDecoder()
-        let events = lines.reversed().compactMap { try? decoder.decode(ActivityEvent.self, from: $0) }
+        let events = lines.reversed().compactMap(ActivityEvent.parse)
         return (events, clipped)
+    }
+
+    // MARK: Searching everything
+
+    /// What a search scan reports after each chunk: new hits (newest first) and how far back it has read.
+    struct SearchProgress: Sendable {
+        var hits: [ActivityEvent]
+        var reachedBack: Date
+    }
+
+    /// Every recorded event matching `query` (the event list's search rules), newest first, at most `limit`.
+    /// Reads newest to oldest one ~4 MB chunk at a time; lines are matched as bytes first, so only matching
+    /// lines are parsed. `report` gets each chunk's hits; `stop` is checked between chunks. Returns whether
+    /// the scan stopped at `limit` (older matches exist or may exist).
+    @discardableResult
+    func search(_ segments: [Segment], query: String, limit: Int,
+                stop: () -> Bool, report: (SearchProgress) -> Void) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty, limit > 0 else { return false }
+        let needle = Self.searchNeedle(q)
+        var found = 0
+        // One chunk of whole lines in time order: its matches, newest first.
+        func scan(_ data: Data, start: Date) -> Bool {
+            var hits = Self.matches(in: data, needle: needle, query: q)
+            hits.reverse()
+            if found + hits.count > limit { hits = Array(hits.prefix(limit - found)) }
+            found += hits.count
+            report(SearchProgress(hits: hits, reachedBack: start))
+            return found < limit && !stop()
+        }
+        for seg in segments.reversed() {
+            if let index = seg.index {
+                for block in index.blocks.reversed() {
+                    guard !stop() else { return false }
+                    guard let data = HistoryFiles.read(block, from: seg.url) else { continue }
+                    if !scan(data, start: block.start) { return found >= limit }
+                }
+                continue
+            }
+            // The file being written: read backwards in whole-line chunks.
+            guard let handle = try? FileHandle(forReadingFrom: seg.url) else { continue }
+            defer { try? handle.close() }
+            var end = seg.size
+            while end > 0 {
+                guard !stop() else { return false }
+                let start = max(0, end - Int64(HistoryFiles.blockBytes))
+                try? handle.seek(toOffset: UInt64(start))
+                guard var data = try? handle.read(upToCount: Int(end - start)), !data.isEmpty else { break }
+                var next = start
+                if start > 0 {                     // begins mid-line: that line goes with the older chunk
+                    guard let nl = data.firstIndex(of: 0x0A) else { end = start; continue }
+                    next = start + Int64(nl - data.startIndex) + 1
+                    data = data[(nl + 1)...]
+                }
+                let first = data.split(separator: 0x0A, maxSplits: 1).first.flatMap { Self.timestamp(Data($0)) } ?? seg.start
+                if !scan(Data(data), start: first) { return found >= limit }
+                end = next
+            }
+        }
+        return false
+    }
+
+    /// Bytes to look for in the raw lines. Lines are lowercased ASCII-only before the search, so a query with
+    /// other letters is found by its longest ASCII stretch and then checked exactly.
+    static func searchNeedle(_ query: String) -> [UInt8] {
+        if query.allSatisfy(\.isASCII) { return Array(query.utf8) }
+        let pieces = query.split(whereSeparator: { !$0.isASCII }).map(String.init)
+        if let longest = pieces.max(by: { $0.count < $1.count }), longest.count >= 2 { return Array(longest.utf8) }
+        return Array(query.utf8)
+    }
+
+    /// Lines of `data` containing `needle` (lowercase; matched ASCII case-insensitively) that also match `query`
+    /// exactly, in order. No copy and no lowercasing pass: memchr (SIMD) finds the needle's rarest byte in either
+    /// case, and only those places are compared. Reads at several GB/s.
+    static func matches(in data: Data, needle: [UInt8], query: String) -> [ActivityEvent] {
+        guard !needle.isEmpty else { return [] }
+        let pivot = needle.indices.min { rarity(needle[$0]) < rarity(needle[$1]) }!
+        let lowerPivot = needle[pivot]
+        let isLetter = lowerPivot >= 97 && lowerPivot <= 122
+        var lines: [Range<Int>] = []                 // line ranges with a hit, offsets into the buffer
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+            let count = raw.count
+            func equalsNeedle(at at: Int) -> Bool {
+                for k in 0..<needle.count {
+                    var c = base[at + k]
+                    if c &- 65 < 26 { c |= 0x20 }
+                    if c != needle[k] { return false }
+                }
+                return true
+            }
+            for pivotByte in isLetter ? [lowerPivot, lowerPivot - 32] : [lowerPivot] {
+                var from = pivot
+                while from < count, let p = memchr(base + from, Int32(pivotByte), count - from) {
+                    let at = base.distance(to: p.assumingMemoryBound(to: UInt8.self)) - pivot
+                    from = at + pivot + 1
+                    guard at >= 0, at + needle.count <= count, equalsNeedle(at: at) else { continue }
+                    var lineStart = at
+                    while lineStart > 0, base[lineStart - 1] != 0x0A { lineStart -= 1 }
+                    var lineEnd = at
+                    while lineEnd < count, base[lineEnd] != 0x0A { lineEnd += 1 }
+                    lines.append(lineStart..<lineEnd)
+                    from = lineEnd + 1 + pivot
+                }
+            }
+        }
+        // Both case passes can find the same line: once each, in file order.
+        lines.sort { $0.lowerBound < $1.lowerBound }
+        var out: [ActivityEvent] = []
+        var last = -1
+        for r in lines where r.lowerBound != last {
+            last = r.lowerBound
+            let line = data[(data.startIndex + r.lowerBound)..<(data.startIndex + r.upperBound)]
+            if let e = ActivityEvent.parse(line), e.matches(query) { out.append(e) }
+        }
+        return out
+    }
+
+    /// Rough frequency of a byte in recorded lines (JSON keys, paths): lower is rarer.
+    private static func rarity(_ b: UInt8) -> Int {
+        switch b {
+        case UInt8(ascii: "\""), UInt8(ascii: "/"), UInt8(ascii: ":"), UInt8(ascii: ","): return 100
+        case UInt8(ascii: "e"), UInt8(ascii: "a"), UInt8(ascii: "i"), UInt8(ascii: "r"), UInt8(ascii: "s"),
+             UInt8(ascii: "t"), UInt8(ascii: "o"), UInt8(ascii: "n"), UInt8(ascii: "l"): return 60
+        case UInt8(ascii: "0")...UInt8(ascii: "9"): return 50
+        case UInt8(ascii: "c"), UInt8(ascii: "p"), UInt8(ascii: "m"), UInt8(ascii: "d"), UInt8(ascii: "u"),
+             UInt8(ascii: "h"), UInt8(ascii: "b"), UInt8(ascii: "."), UInt8(ascii: "-"), UInt8(ascii: "_"): return 40
+        case UInt8(ascii: "f"), UInt8(ascii: "g"), UInt8(ascii: "y"), UInt8(ascii: "w"), UInt8(ascii: "k"), UInt8(ascii: "v"): return 20
+        case UInt8(ascii: "j"), UInt8(ascii: "x"), UInt8(ascii: "q"), UInt8(ascii: "z"): return 5
+        default: return 10
+        }
     }
 
     // MARK: Byte offsets
@@ -271,7 +401,8 @@ final class TimeTravel: ObservableObject {
     @Published private(set) var playing = false
     @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
-    @Published var hoverX: CGFloat?             // pointer over the scrubber (for the time label)
+    /// Bumped whenever the listed events change (slice or search hits): the event list re-derives its rows only then.
+    @Published private(set) var revision = 0
     /// CPU and memory over the whole recording, per timeline bucket (0...1; nil where nothing was recorded).
     @Published private(set) var cpuLane: [Double?] = []
     @Published private(set) var memLane: [Double?] = []
@@ -280,6 +411,29 @@ final class TimeTravel: ObservableObject {
     /// The launch event to select once the slice is loaded (Running Now ▸ Show Spawn in Timeline).
     @Published private(set) var focusID: UUID?
     private var pendingFocus: (pid: Int, start: Double)?
+    private var pendingEvent: ActivityEvent?
+
+    // Search across all recorded history (the toolbar search field, scope All History).
+    /// Search everything (true) or only the shown window (false).
+    @Published var searchAll = true { didSet { if searchAll != oldValue { revision += 1 } } }
+    /// Matches, newest first; never more than `maxSearchHits`.
+    @Published private(set) var searchHits: [ActivityEvent] = []
+    @Published private(set) var searchQuery = ""
+    @Published private(set) var searching = false
+    /// The scan has read everything from now back to here.
+    @Published private(set) var searchReachedBack: Date?
+    /// Stopped at `maxSearchHits`: older matches may exist.
+    @Published private(set) var searchCapped = false
+    private var searchTask: Task<Void, Never>?
+    /// Enough to scroll through and see a pattern; more would only cost memory and a slower list.
+    nonisolated static let maxSearchHits = 1000
+    /// One or two letters would match nearly every line.
+    nonisolated static let minSearchLength = 2
+
+    /// Whether the event list shows search hits from all history rather than the window.
+    var showingSearch: Bool { active && searchAll && searchQuery.count >= Self.minSearchLength }
+    /// What the event list shows while traveling.
+    var listed: [ActivityEvent] { showingSearch ? searchHits : events }
     /// The last sample at or before the playhead.
     var sampleAtPlayhead: MetricSample? { windowSamples.last { $0.date <= playhead } }
 
@@ -332,7 +486,11 @@ final class TimeTravel: ObservableObject {
         refreshTimer = nil
         events = []
         pendingFocus = nil
+        pendingEvent = nil
         focusID = nil
+        cancelSearch()
+        searchQuery = ""
+        revision += 1
     }
 
     func toggle() { active ? exit() : enter() }
@@ -344,6 +502,73 @@ final class TimeTravel: ObservableObject {
         pendingFocus = (pid, start.timeIntervalSince1970)
         // The slice ends a little after the launch, so it's near the top of the newest-first list.
         enter(at: start.addingTimeInterval(min(30, span / 4)))
+    }
+
+    /// Shows the window around a recorded event (a search hit) with it selected.
+    func reveal(_ event: ActivityEvent) {
+        guard event.ts > 0 else { return }
+        pause()
+        focusID = nil
+        pendingEvent = event
+        searchAll = false
+        let at = Date(timeIntervalSince1970: event.ts)
+        enter(at: at.addingTimeInterval(min(30, span / 4)))
+    }
+
+    // MARK: Searching all history
+
+    /// Searches all recorded history for `text` (debounced; the same query isn't searched twice).
+    func search(_ text: String) {
+        let q = text.trimmingCharacters(in: .whitespaces).lowercased()
+        guard q != searchQuery else { return }
+        cancelSearch()
+        searchQuery = q
+        searchHits = []
+        searchCapped = false
+        searchReachedBack = nil
+        revision += 1
+        guard active, q.count >= Self.minSearchLength else { return }
+        searching = true
+        let archive = archive
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))           // typing
+            guard !Task.isCancelled, let self else { return }
+            // Fresh file list: the search may run long after the overview was read.
+            let segments = await Task.detached(priority: .userInitiated) { archive.segments() }.value
+            guard !Task.isCancelled else { return }
+            let stream = AsyncStream<HistoryArchive.SearchProgress> { continuation in
+                let worker = Task.detached(priority: .userInitiated) {
+                    archive.search(segments, query: q, limit: Self.maxSearchHits,
+                                   stop: { Task.isCancelled }, report: { continuation.yield($0) })
+                    continuation.finish()
+                }
+                continuation.onTermination = { _ in worker.cancel() }
+            }
+            var pending: [ActivityEvent] = []
+            var lastPublish = ContinuousClock.now
+            for await progress in stream {
+                guard !Task.isCancelled else { return }
+                pending += progress.hits
+                self.searchReachedBack = progress.reachedBack
+                // Publish hits a few times a second at most: each publish rebuilds the list.
+                if !pending.isEmpty, ContinuousClock.now - lastPublish > .milliseconds(250) || self.searchHits.isEmpty {
+                    self.searchHits += pending
+                    pending = []
+                    lastPublish = .now
+                    self.revision += 1
+                }
+            }
+            guard !Task.isCancelled else { return }
+            if !pending.isEmpty { self.searchHits += pending; self.revision += 1 }
+            self.searchCapped = self.searchHits.count >= Self.maxSearchHits
+            self.searching = false
+        }
+    }
+
+    private func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        searching = false
     }
 
     /// The launch event of `pid` that started at `start` (s since 1970; 0 or unknown on either side: any).
@@ -426,6 +651,13 @@ final class TimeTravel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             self.events = result.events
             self.clipped = result.clipped
+            self.revision += 1
+            if let target = self.pendingEvent {
+                self.pendingEvent = nil
+                self.focusID = result.events.first {
+                    abs($0.ts - target.ts) < 0.001 && $0.pid == target.pid && $0.kind == target.kind && $0.target == target.target
+                }?.id
+            }
             if let f = self.pendingFocus {
                 self.pendingFocus = nil
                 self.focusID = Self.launch(in: result.events, pid: f.pid, start: f.start)?.id
@@ -470,7 +702,10 @@ final class TimeTravel: ObservableObject {
 /// The floating Liquid Glass timeline: activity histogram, markers, playhead and controls.
 struct TimelineBar: View {
     @ObservedObject var travel: TimeTravel
-    private var hover: CGFloat? { travel.hoverX }
+    /// Pointer over the scrubber, for the time label. Local: publishing it from the model re-rendered the
+    /// whole window on every mouse move.
+    @StateObject private var pointer = ScrubberPointer()
+    private var hover: CGFloat? { pointer.x }
 
     private static let dayTime: Date.FormatStyle = .dateTime.weekday(.abbreviated).day().month(.abbreviated)
         .hour().minute()
@@ -527,6 +762,18 @@ struct TimelineBar: View {
                     let a = x(travel.windowStart), b = x(travel.playhead)
                     ctx.fill(Path(roundedRect: CGRect(x: a, y: 8, width: max(2, b - a), height: base - 8), cornerRadius: 3),
                              with: .color(.accentColor.opacity(0.18)))
+                    // Search hits along the bottom, so you see when the matches happened.
+                    if travel.showingSearch {
+                        var ticks = Path()
+                        var lastX = -1.0
+                        for e in travel.searchHits where e.ts > 0 {
+                            let hx = x(Date(timeIntervalSince1970: e.ts))
+                            if abs(hx - lastX) < 1 { continue }       // one tick per point is enough
+                            lastX = hx
+                            ticks.addRect(CGRect(x: hx - 0.5, y: base - 10, width: 1, height: 10))
+                        }
+                        ctx.fill(ticks, with: .color(.primary.opacity(0.7)))
+                    }
                     // Story and new-domain marks along the top.
                     for m in travel.markers {
                         let color: Color = m.kind == .dangerous ? .red : m.kind == .suspicious ? .orange : .purple
@@ -553,7 +800,7 @@ struct TimelineBar: View {
                 travel.move(to: snapped(date(g.location.x), x: x, at: g.location.x))
             })
             .onContinuousHover { phase in
-                if case .active(let p) = phase { travel.hoverX = p.x } else { travel.hoverX = nil }
+                if case .active(let p) = phase { pointer.x = p.x } else { pointer.x = nil }
             }
             .help(markerHelp(near: hover, x: x) ?? "Drag to travel through recorded activity")
         }
@@ -665,6 +912,11 @@ struct TimelineBar: View {
     }
 }
 
+/// The pointer's place over the scrubber, owned by the timeline bar alone.
+final class ScrubberPointer: ObservableObject {
+    @Published var x: CGFloat?
+}
+
 /// Above the event list while traveling: which slice is shown, and the way back.
 struct TimeTravelBanner: View {
     @ObservedObject var travel: TimeTravel
@@ -715,6 +967,17 @@ func runTimeTravelProbe(_ path: String?) -> Never {
         var result: (events: [ActivityEvent], clipped: Bool) = ([], false)
         let t = clock.measure { result = archive.events(segments, from: mid.addingTimeInterval(-span), to: mid) }
         print("slice \(Int(span / 60)) min:", t, "\(result.events.count) events", result.clipped ? "(clipped)" : "")
+    }
+    // Search all history: a common word (stops at the cap) and one that is rarely there (reads everything).
+    for query in ["curl", "zz-not-recorded-zz"] {
+        var hits = 0, back: Date?
+        var capped = false
+        let t = clock.measure {
+            capped = archive.search(segments, query: query, limit: TimeTravel.maxSearchHits, stop: { false }) {
+                hits += $0.hits.count; back = $0.reachedBack
+            }
+        }
+        print("search \"\(query)\":", t, "\(hits) hits", capped ? "(capped)" : "", "back to", back.map { "\($0)" } ?? "–")
     }
     exit(0)
 }

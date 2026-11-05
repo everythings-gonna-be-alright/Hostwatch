@@ -182,8 +182,20 @@ enum SignatureBuilder {
         return normalize(ns.deletingLastPathComponent) + "/" + (volatile ? normalize(name) : name)
     }
 
-    /// Collapses volatile parts of a path: home, temp dirs, UUIDs, hashes, numbers.
+    /// Collapses volatile parts of a path: home, temp dirs, UUIDs, hashes, numbers. Pure, and called several
+    /// times per event with the same few thousand paths, so results are remembered (the regexes are the
+    /// slowest part of reading history).
     static func normalize(_ path: String) -> String {
+        if let hit = normalized.get(path) { return hit }
+        let out = normalizeUncached(path)
+        normalized.set(path, out)
+        return out
+    }
+
+    private static let normalized = MemoCache<String, String>(limit: 50_000)
+    private static let filePatterns = MemoCache<String, (String, PatternRisk, String)>(limit: 50_000)
+
+    private static func normalizeUncached(_ path: String) -> String {
         var s = path
         if s.hasPrefix(home) { s = "~" + s.dropFirst(home.count) }
         for (regex, template) in rewrites {
@@ -660,10 +672,16 @@ enum SignatureBuilder {
             return withSigning(make(e.kind, actor, pattern, risk, reason), e)
 
         case .file:
-            var (pattern, risk, reason) = fileTarget(e.target, mode: e.extra, actor: rawActor)
-            if risk != .high, let why = BuiltInSafe.reason(kind: .file, parent: rawActor, pattern: pattern) {
-                risk = .routine; reason = why
-            }
+            // Pure in (actor, mode, path), and file events repeat those all day: remembered.
+            let memoKey = rawActor + "\u{0}" + e.extra + "\u{0}" + e.target
+            let (pattern, risk, reason) = filePatterns.get(memoKey) ?? {
+                var (pattern, risk, reason) = fileTarget(e.target, mode: e.extra, actor: rawActor)
+                if risk != .high, let why = BuiltInSafe.reason(kind: .file, parent: rawActor, pattern: pattern) {
+                    risk = .routine; reason = why
+                }
+                filePatterns.set(memoKey, (pattern, risk, reason))
+                return (pattern, risk, reason)
+            }()
             return withSigning(make(e.kind, actor, pattern, risk, reason), e)
         }
     }
@@ -1923,5 +1941,26 @@ enum BuiltInSafe {
             item.kind == kind && Glob.match(item.pattern, pattern)
                 && (item.parent.map { $0 == parent && SignatureBuilder.isSealedSystem(parent) } ?? true)
         }?.reason
+    }
+}
+
+/// A small thread-safe memo for pure functions; forgets everything when full (cheap, and the working set
+/// refills in milliseconds).
+final class MemoCache<Key: Hashable, Value>: @unchecked Sendable {
+    private var store: [Key: Value] = [:]
+    private let lock = NSLock()
+    private let limit: Int
+
+    init(limit: Int) { self.limit = limit }
+
+    func get(_ key: Key) -> Value? {
+        lock.lock(); defer { lock.unlock() }
+        return store[key]
+    }
+
+    func set(_ key: Key, _ value: Value) {
+        lock.lock(); defer { lock.unlock() }
+        if store.count >= limit { store.removeAll(keepingCapacity: true) }
+        store[key] = value
     }
 }

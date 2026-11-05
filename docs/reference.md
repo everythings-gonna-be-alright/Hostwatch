@@ -261,14 +261,22 @@ from the live stream to recorded history. Live collection carries on in the back
 - **The slice:** the list shows the window ending at the playhead (1 min, 5 min, 15 min or 1 hour), newest
   first, with the same Show filter, kind toggles, exclusions and search as live. A very busy slice shows
   its newest ~20,000 events and says so.
+- **Search all history:** type in the toolbar search field (two characters or more) and the list shows matches
+  from everything recorded, not only the slice: newest first, with the day in the Time column, and tick marks
+  on the timeline where they happened. It matches what the live search matches (name, path, detail, host, or
+  the exact PID). The search runs in the background and the list fills as it goes (≈5 s for 20 GB of history).
+  It stops at the newest **1,000 matches** and says how far back it got; a more specific search reaches
+  older ones. Double-click a match (or *Show in Timeline*) to open its moment, with it selected. The scope bar
+  switches between **All History** and **This Window** (only the shown slice).
 - **Moving:** ⌘[ and ⌘] (or ◀︎ ▶︎) step one window; ▶︎ plays forward at 1× (real time), 10×, 60× or 600×; the date
   picker jumps anywhere. **Return to Live** (Esc) goes back.
 - **From a story:** *Show in Timeline* opens the slice around it.
 - **How it reads history:** in the plain (current) file lines are in time order, so the offset of any
   moment is a binary search away; compressed files are found through their block index, and bar
   heights come from byte counts (per-minute counts for compressed files). Nothing is loaded except the slice
-  you look at (≈0.2 s for the overview of 14 hours / 1.3 GB, ≈0.1 s per 5-minute slice).
-  `Hostwatch --time-travel-probe [dir]` prints these timings.
+  you look at (the overview takes milliseconds; a busy slice of ~20,000 events ≈0.3 s). A search reads blocks
+  newest first and parses only lines whose bytes contain the search text.
+  `Hostwatch --time-travel-probe [dir]` prints these timings, searches included.
 
 The banner has the window (1 min, 5 min, 15 min, 1 hour), the playback speed (1×, 10×, 60×, 600×) and a date
 picker.
@@ -1011,7 +1019,7 @@ Run as `Hostwatch.app/Contents/MacOS/Hostwatch <flag>`. Most are for testing; th
 | `--story-replay <history.jsonl>` | Replays history through the story engine (`REPLAY_LEARN_MINUTES`, `HOSTWATCH_OWN_BUNDLE`). |
 | `--metrics-probe` | Prints CPU, memory, network and disk samples. |
 | `--compress-history <folder>` | Compresses plain history files by hand. |
-| `--time-travel-probe [dir]` | Times reading history for Time Travel. |
+| `--time-travel-probe [dir]` | Times reading history and searching it for Time Travel. |
 | `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely and prints the result. |
 | `sudo … --firewall-probe` | Checks that the firewall's redirect works. |
 | `sudo … --firewall-relay-test [seconds]` | Runs the relay and reports what passes through it. |

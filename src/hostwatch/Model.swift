@@ -50,6 +50,7 @@ struct ActivityEvent: Identifiable, Decodable {
     let inferred: Bool           // net only: seen via traffic stats after it closed; target inferred
     let note: String             // collector's remark (e.g. why a connection is inferred)
     var pstart: Double = 0       // exec only: when the process started (s since 1970), 0 if unknown
+    var ts: Double = 0           // when it was recorded (s since 1970), 0 if unknown
     private(set) var signatureKey = ""
     private(set) var signatureProcess = ""
     private(set) var signaturePattern = ""
@@ -82,20 +83,58 @@ struct ActivityEvent: Identifiable, Decodable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         kind = try c.decode(EventKind.self, forKey: .kind)
-        time = (try? c.decode(String.self, forKey: .time)) ?? ""
-        pid = (try? c.decode(Int.self, forKey: .pid)) ?? 0
-        ppid = (try? c.decode(Int.self, forKey: .ppid)) ?? 0
-        name = (try? c.decode(String.self, forKey: .name)) ?? "?"
-        proc = (try? c.decode(String.self, forKey: .proc)) ?? ""
-        target = (try? c.decode(String.self, forKey: .target)) ?? ""
-        extra = (try? c.decode(String.self, forKey: .extra)) ?? ""
-        parent = (try? c.decode(String.self, forKey: .parent)) ?? ""
-        host = (try? c.decode(String.self, forKey: .host)) ?? ""
-        hostSource = (try? c.decode(String.self, forKey: .hostSource)) ?? ""
-        args = (try? c.decode(String.self, forKey: .args)) ?? ""
-        inferred = (try? c.decode(Bool.self, forKey: .inferred)) ?? false
-        note = (try? c.decode(String.self, forKey: .note)) ?? ""
-        pstart = (try? c.decode(Double.self, forKey: .pstart)) ?? 0
+        time = ((try? c.decodeIfPresent(String.self, forKey: .time)) ?? nil) ?? ""
+        pid = ((try? c.decodeIfPresent(Int.self, forKey: .pid)) ?? nil) ?? 0
+        ppid = ((try? c.decodeIfPresent(Int.self, forKey: .ppid)) ?? nil) ?? 0
+        name = ((try? c.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "?"
+        proc = ((try? c.decodeIfPresent(String.self, forKey: .proc)) ?? nil) ?? ""
+        target = ((try? c.decodeIfPresent(String.self, forKey: .target)) ?? nil) ?? ""
+        extra = ((try? c.decodeIfPresent(String.self, forKey: .extra)) ?? nil) ?? ""
+        parent = ((try? c.decodeIfPresent(String.self, forKey: .parent)) ?? nil) ?? ""
+        host = ((try? c.decodeIfPresent(String.self, forKey: .host)) ?? nil) ?? ""
+        hostSource = ((try? c.decodeIfPresent(String.self, forKey: .hostSource)) ?? nil) ?? ""
+        args = ((try? c.decodeIfPresent(String.self, forKey: .args)) ?? nil) ?? ""
+        inferred = ((try? c.decodeIfPresent(Bool.self, forKey: .inferred)) ?? nil) ?? false
+        note = ((try? c.decodeIfPresent(String.self, forKey: .note)) ?? nil) ?? ""
+        pstart = ((try? c.decodeIfPresent(Double.self, forKey: .pstart)) ?? nil) ?? 0
+        applySignature()
+    }
+
+    /// "Tue 3 Nov 14:02:11" for a recorded event; the clock time when the day is unknown.
+    var dayTime: String {
+        guard ts > 0 else { return time }
+        return Date(timeIntervalSince1970: ts).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)
+            .hour(.twoDigits(amPM: .omitted)).minute().second())
+    }
+
+    /// The event list's search: `query` (already lowercased) in the name, path, detail or host, or the exact PID.
+    func matches(_ query: String) -> Bool {
+        name.lowercased().contains(query) || proc.lowercased().contains(query)
+            || target.lowercased().contains(query) || host.contains(query) || String(pid) == query
+    }
+
+    /// One recorded or streamed line. Same result as `JSONDecoder` but several times faster
+    /// (`JSONSerialization` plus plain casts): Time Travel and history search parse tens of thousands of lines.
+    static func parse(_ line: Data) -> ActivityEvent? {
+        guard let obj = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return nil }
+        return ActivityEvent(record: obj)
+    }
+
+    init?(record r: [String: Any]) {
+        guard let raw = r["kind"] as? String, let kind = EventKind(rawValue: raw) else { return nil }
+        func str(_ k: String) -> String { r[k] as? String ?? "" }
+        func int(_ k: String) -> Int { (r[k] as? NSNumber)?.intValue ?? 0 }
+        self.kind = kind
+        time = str("time"); pid = int("pid"); ppid = int("ppid")
+        name = r["name"] as? String ?? "?"
+        proc = str("proc"); target = str("target"); extra = str("extra"); parent = str("parent")
+        host = str("host"); hostSource = str("host_src"); args = str("args")
+        inferred = (r["inferred"] as? NSNumber)?.boolValue ?? false
+        note = str("note")
+        pstart = (r["pstart"] as? NSNumber)?.doubleValue ?? 0
+        if let stamp = r["ts"] as? String, let date = HistoryArchive.parseISO(Data(stamp.utf8)) {
+            ts = date.timeIntervalSince1970
+        }
         applySignature()
     }
 
@@ -547,10 +586,7 @@ final class HUDModel: ObservableObject {
                 && (only?.contains(e.pid) ?? true)
         }
         guard !q.isEmpty else { return visible }
-        return visible.filter {
-            $0.name.lowercased().contains(q) || $0.proc.lowercased().contains(q)
-                || $0.target.lowercased().contains(q) || $0.host.contains(q) || String($0.pid) == q
-        }
+        return visible.filter { $0.matches(q) }
     }
 
     // MARK: Exclusions
@@ -756,7 +792,7 @@ final class HUDModel: ObservableObject {
                 continue
             }
             guard !paused,
-                  var event = try? decoder.decode(ActivityEvent.self, from: Data(line)),
+                  var event = ActivityEvent.parse(Data(line)),
                   !rules.excludes(event)
             else { continue }
             event.isFirst = signatures.observe(event)
