@@ -23,8 +23,8 @@ import Testing
         #expect(map.storage <= 2 * 1024 + 1)
     }
 
-    /// The real thing, measured: a long stretch of collector-like churn (connections from the same programs,
-    /// repeated DNS answers, file opens) through the collector's caches, then the process's footprint.
+    /// A long stretch of collector-like churn (connections from the same programs, repeated DNS answers, file opens)
+    /// through the collector's caches.
     @Test func collectorCachesDoNotLeakUnderChurn() {
         var netPids = BoundedMap<Int, TimeInterval>(limit: 8192)
         var dnsNames = BoundedMap<String, String>(limit: 50_000)
@@ -40,13 +40,11 @@ import Testing
                 _ = opens.seen(PidKey(pid: pid, text: "/Users/alex/Library/Caches/app/file\(i % 5000)"), now: Double(i))
             }
         }
-        churn(300_000, from: 0)                                         // warm up: caches reach their working size
-        let before = MemoryFootprint.current()
-        churn(800_000, from: 300_000)
-        let grown = Int64(MemoryFootprint.current()) - Int64(before)
-        // With the leak this grew by well over 100 MB; bounded caches stay within a few MB of noise.
-        #expect(grown < 24_000_000, "collector caches grew by \(grown / 1_000_000) MB under churn")
+        churn(1_100_000, from: 0)
+        // The caches' own bookkeeping, not the process's footprint (other tests run alongside): with the leak these
+        // held one entry per write, 1.1 million each.
         #expect(netPids.storage <= 2 * 1024 + 1 && dnsNames.storage <= 2 * 12_550 + 1)
+        #expect(dnsByName.storage <= 2 * 1024 + 1)
     }
 }
 
