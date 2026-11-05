@@ -19,8 +19,9 @@ struct ProcessHistory: Sendable {
 
     /// What was running at one moment.
     struct Snapshot: Sendable, Equatable {
-        var at: Date                          // when this list was recorded (at or before the asked moment)
-        var processes: [RunningProcessInfo]   // `cpu`: % of one core over the minute before `at` (nil: unknown)
+        var at: Date                          // the moment shown ("running for" counts to it)
+        var recordedAt: Date                  // the recorded list it is built from (at or before `at`)
+        var processes: [RunningProcessInfo]   // `cpu`: % of one core around `at` (nil: unknown)
     }
 
     // MARK: Writing
@@ -106,43 +107,74 @@ struct ProcessHistory: Sendable {
         }
     }
 
+    /// The moment `t`, from the list recorded at or before it and the next one: processes that started in
+    /// between appear at their start, CPU time and memory move between the two lists, CPU % is the rate across
+    /// them. Without a next list (the newest moment, or Hostwatch was closed) the minute before is used.
     static func rebuild(_ lines: [Line], at t: Double) -> Snapshot? {
         guard let end = lines.lastIndex(where: { $0.t <= t }), t - lines[end].t <= maxAge,
               let start = lines[...end].lastIndex(where: \.key) else { return nil }
         var alive: [Int: RunningProcessInfo] = [:]
-        var previousCPU: [Int: Double] = [:]
-        var previousT: Double?
-        var lineT = lines[start].t
-        for line in lines[start...end] {
-            guard let obj = (try? JSONSerialization.jsonObject(with: line.bytes)) as? [String: Any] else { continue }
-            previousCPU = alive.mapValues(\.cpuTime)
-            previousT = line.key ? nil : lineT
-            lineT = line.t
-            if line.key { alive = [:] }
-            for pid in obj["gone"] as? [Int] ?? [] { alive[pid] = nil }
-            if let new = obj["new"], let json = try? JSONSerialization.data(withJSONObject: new),
-               let rows = try? JSONDecoder().decode([RunningProcessInfo].self, from: json) {
-                for r in rows { alive[r.pid] = r }
-            }
-            for v in obj["v"] as? [[NSNumber]] ?? [] where v.count == 4 {
-                let pid = v[0].intValue
-                alive[pid]?.cpuTime = v[1].doubleValue
-                alive[pid]?.mem = v[2].int64Value
-                alive[pid]?.threads = v[3].intValue
-            }
+        var before: (alive: [Int: RunningProcessInfo], t: Double)?
+        for i in start...end {
+            before = lines[i].key ? nil : (alive, lines[i - 1].t)
+            apply(lines[i], to: &alive)
         }
-        // CPU % over the minute before: CPU time used between the last two lines.
-        var out = Array(alive.values)
-        if let previousT, lineT > previousT {
-            for i in out.indices {
-                if let before = previousCPU[out[i].pid] {
-                    out[i].cpu = max(0, (out[i].cpuTime - before) / (lineT - previousT) * 100)
-                } else if out[i].start >= previousT, out[i].start < lineT {
-                    out[i].cpu = max(0, out[i].cpuTime / (lineT - out[i].start) * 100)     // started in between
+        let at = lines[end].t
+        var out: [RunningProcessInfo] = []
+        if end + 1 < lines.count, lines[end + 1].t - at <= maxAge, lines[end + 1].t > at {
+            var next = alive
+            apply(lines[end + 1], to: &next)
+            let nextT = lines[end + 1].t
+            let f = (t - at) / (nextT - at)
+            for var p in alive.values {
+                if let n = next[p.pid], n.start == p.start {
+                    p.cpu = max(0, (n.cpuTime - p.cpuTime) / (nextT - at) * 100)
+                    p.cpuTime += (n.cpuTime - p.cpuTime) * f
+                    p.mem += Int64(Double(n.mem - p.mem) * f)
+                } else {
+                    p.cpu = before.flatMap { b in b.alive[p.pid].map { max(0, (p.cpuTime - $0.cpuTime) / (at - b.t) * 100) } }
                 }
+                out.append(p)
+            }
+            // Started after the earlier list, by now: shown from their start, CPU time growing to the next list's.
+            for var n in next.values where alive[n.pid]?.start != n.start && n.start > 0 && n.start <= t {
+                let lived = max(nextT - n.start, 1)
+                n.cpu = n.cpuTime / lived * 100
+                n.cpuTime *= min(1, max(0, t - n.start) / lived)
+                out.removeAll { $0.pid == n.pid }
+                out.append(n)
+            }
+        } else {
+            for var p in alive.values {
+                if let b = before, at > b.t {
+                    if let old = b.alive[p.pid], old.start == p.start {
+                        p.cpu = max(0, (p.cpuTime - old.cpuTime) / (at - b.t) * 100)
+                    } else if p.start >= b.t, p.start < at {
+                        p.cpu = max(0, p.cpuTime / (at - p.start) * 100)          // started in between
+                    }
+                }
+                out.append(p)
             }
         }
-        return Snapshot(at: Date(timeIntervalSince1970: lineT), processes: out.sorted { $0.pid < $1.pid })
+        return Snapshot(at: Date(timeIntervalSince1970: t), recordedAt: Date(timeIntervalSince1970: at),
+                        processes: out.sorted { $0.pid < $1.pid })
+    }
+
+    /// One line's changes, applied to the processes alive before it (a keyframe replaces them).
+    private static func apply(_ line: Line, to alive: inout [Int: RunningProcessInfo]) {
+        guard let obj = (try? JSONSerialization.jsonObject(with: line.bytes)) as? [String: Any] else { return }
+        if line.key { alive = [:] }
+        for pid in obj["gone"] as? [Int] ?? [] { alive[pid] = nil }
+        if let new = obj["new"], let json = try? JSONSerialization.data(withJSONObject: new),
+           let rows = try? JSONDecoder().decode([RunningProcessInfo].self, from: json) {
+            for r in rows { alive[r.pid] = r }
+        }
+        for v in obj["v"] as? [[NSNumber]] ?? [] where v.count == 4 {
+            let pid = v[0].intValue
+            alive[pid]?.cpuTime = v[1].doubleValue
+            alive[pid]?.mem = v[2].int64Value
+            alive[pid]?.threads = v[3].intValue
+        }
     }
 }
 

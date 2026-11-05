@@ -84,6 +84,54 @@ enum HistoryFiles {
         }
     }
 
+    // MARK: One size limit for everything recorded
+
+    /// One file (or one history segment in all its forms) that counts toward the history size limit.
+    struct Kept: Equatable {
+        enum Kind { case activity, daily }        // activity-* segment; metrics-* / processes-* day file
+        var url: URL                              // segment stem, or the day file
+        var bytes: Int64
+        var day: String                           // "20261105"
+        var kind: Kind
+        var removable: Bool                       // not the segment or day files being written now
+    }
+
+    /// Everything Hostwatch keeps in `directory`: activity segments (all forms of each), and the metrics and
+    /// process-list day files. `current` (the segment being written) and `today`'s day files can't be removed.
+    static func kept(in directory: URL, current: URL?, today: String) -> [Kept] {
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
+        var out: [Kept] = []
+        let stems = Set(names.filter(isHistoryName).map { stem(directory.appendingPathComponent($0)).lastPathComponent })
+        for name in stems.sorted() {
+            let url = directory.appendingPathComponent(name)
+            let day = MetricsStore.day(ofHistory: name) ?? ""
+            out.append(Kept(url: url, bytes: diskSize(url), day: day, kind: .activity, removable: url != current))
+        }
+        for name in names.sorted() where name.hasPrefix("metrics-") || name.hasPrefix(ProcessHistory.prefix + "-") {
+            let day = String(name.drop { $0 != "-" }.dropFirst().prefix(8))
+            let url = directory.appendingPathComponent(name)
+            let bytes = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+            out.append(Kept(url: url, bytes: bytes, day: day, kind: .daily, removable: day != today && day.count == 8))
+        }
+        return out
+    }
+
+    /// What to delete, oldest day first (a day's activity before its metrics and process lists), so the total
+    /// plus `reserve` (room for the file being written) fits in `limit`. Returns the files and what remains.
+    static func trimPlan(_ files: [Kept], limit: Int64, reserve: Int64) -> (delete: [Kept], remaining: Int64) {
+        var total = files.reduce(0) { $0 + $1.bytes }
+        let order = files.filter(\.removable).sorted {
+            ($0.day, $0.kind == .activity ? 0 : 1, $0.url.lastPathComponent) < ($1.day, $1.kind == .activity ? 0 : 1, $1.url.lastPathComponent)
+        }
+        var delete: [Kept] = []
+        for f in order where total + reserve > limit {
+            delete.append(f)
+            total -= f.bytes
+        }
+        return (delete, total)
+    }
+
     static func remove(_ stem: URL) {
         for url in [stem, gzURL(stem), indexURL(stem), gzURL(stem).appendingPathExtension("tmp"),
                     indexURL(stem).appendingPathExtension("tmp")] {

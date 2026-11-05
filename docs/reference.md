@@ -204,11 +204,12 @@ process running at this moment, refreshed every 3 s while the window is on scree
   lists. Nothing is asked while the list is closed or the window is hidden, except the once-a-minute list recorded for
   Time Travel (below).
 - **In Time Travel:** Running Now shows what was running at the playhead: the list recorded at or just before it,
-  with CPU % over the minute before, CPU time, memory and threads as they were then, and "running for" counted to
-  that moment. It follows the playhead as you drag or play. Hostwatch records the list once a minute while the
+  rebuilt between that list and the next: processes appear at the moment they started, CPU time and memory move
+  between the two lists, CPU % is the rate across them, and "running for" counts to the playhead. It follows the
+  playhead as you drag or play. Hostwatch records the list once a minute while the
   collector runs and history is on (Settings ▸ History), into `History/processes-YYYYMMDD.jsonl`: every process each
-  30 minutes, only what changed in between (about 15–20 MB a day, compressed when the day is over, removed together
-  with the activity history). Moments from before this recording started, or more than 3 minutes after the last
+  30 minutes, only what changed in between (a few tens of MB a day, compressed when the day is over, counted in
+  the history size limit and removed together with the activity history). Moments from before this recording started, or more than 3 minutes after the last
   list (Hostwatch closed), say so.
 
 ### Heavy processes
@@ -992,7 +993,11 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
     file removed. A `.gz` without an index is ignored, and the plain file stays authoritative.
 - **Max size** (default **5 GB**) caps the bytes on disk of all history files (compressed files count
   compressed, so the cap holds roughly 10–20× more history than before). Files rotate at about 1/20 of
-  the cap (1–100 MB of plain text each; 100 MB with the default cap). The oldest files are deleted so the total never goes over.
+  the cap (1–100 MB of plain text each; 100 MB with the default cap). The cap covers everything recorded in the
+  folder together: activity (`activity-*`), resource samples (`metrics-*`) and process lists (`processes-*`); there
+  is no separate limit for any of them. When the total would go over, the oldest day goes first (its activity,
+  then its samples and process lists), checked when a file rotates and every 10 minutes. Today's files and the
+  file being written are never deleted.
 - The recorder has its own connection with the 40/s display cap turned off. It keeps recording
   while the overlay is paused or a kind is hidden.
 - **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record
