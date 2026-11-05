@@ -773,7 +773,8 @@ struct ActivityWindowView: View {
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
-                if on { model.windowTab = 0; running.showing = false; travel.enter() } else { travel.exit() }
+                // Running Now stays on: in Time Travel it shows what was running at the playhead.
+                if on { model.windowTab = 0; travel.enter() } else { travel.exit() }
             })) {
                 Label("Time Travel", systemImage: "clock.arrow.circlepath")
             }
