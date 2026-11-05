@@ -15,6 +15,11 @@
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.
 - **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
+- **Fix: the collector's memory leak.** Its bounded caches (connections per program, DNS answers, process paths)
+  kept one bookkeeping entry per write when the same keys were written again, so the root collector grew from
+  ~300 MB to 2 GB over days. They now stay proportional to what they hold; expired firewall answers are dropped too.
+  A leak test drives the caches through a million-write churn and checks the process's memory. The collector logs
+  its memory hourly in `agent.log`.
 - **Fix: known bad shows everywhere.** An event on a threat list says *Known bad* in the Status column (it showed
   the pattern's status, often Safe, beside the KNOWN BAD tag) and sorts first; the Ask AI window shows the match
   (chip and a *Threat list* row), and the AI now gets Hostwatch's signals: threat-list match, beacon, new domain,

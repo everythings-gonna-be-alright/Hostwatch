@@ -65,6 +65,8 @@ final class AgentFirewall: @unchecked Sendable {
         let ttl = (a["ttl"] as? NSNumber)?.doubleValue ?? 60
         lock.lock()
         answers[key] = FirewallAnswer(pass: pass, until: now + ttl)
+        // Answers expire; forget expired ones instead of keeping one per connection ever answered.
+        if answers.count > 2000 { let t = now; answers = answers.filter { $0.value.until > t } }
         let entry = waiting.removeValue(forKey: key)
         lock.unlock()
         if let entry { for _ in 0..<max(entry.waiters, 1) { entry.done.signal() } }

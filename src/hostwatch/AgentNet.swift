@@ -519,6 +519,13 @@ func runCollectorAgent(_ args: [String]) -> Never {
     Agent.log("eslogger \(events.joined(separator: " ")) started (PID \(eslogger.pid))")
     if ownerPid > 0 { Thread.detachNewThread { agent.watchOwner(ownerPid) } }
     Thread.detachNewThread { agent.runTopSampler() }
+    // Its own memory once an hour in agent.log: a leak shows as a steady climb.
+    Thread.detachNewThread {
+        while true {
+            Agent.log("collector memory: \(MemoryFootprint.current() / 1_000_000) MB")
+            Thread.sleep(forTimeInterval: 3600)
+        }
+    }
     if kinds.contains("net") {
         Thread.detachNewThread { agent.runPacketSniffer() }
         Thread.detachNewThread { agent.runConnectionStats() }
