@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Search all history in Time Travel:** the search field finds matches in everything recorded, not only the
+  shown window: newest first, with their day and tick marks on the timeline. Capped at the newest 1,000 matches,
+  so memory and the list stay small. Double-click one to open its moment. **All History / This Window** switches
+  the scope.
+- **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
+  without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
+  window keeps up. The live stream parses events faster too.
+- **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
+
 ## 0.10.0 – Running Now, a new look
 
 - **Running Now** (Events tab ▸ *Running Now*, ⌥⌘R): every process running at this moment, with % CPU, CPU time,

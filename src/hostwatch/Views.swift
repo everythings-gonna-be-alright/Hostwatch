@@ -624,6 +624,8 @@ struct ActivityWindowView: View {
     let actions: HUDActions
 
     private var traveling: Bool { travel.active && model.windowTab == 0 }
+    /// Time Travel rows, derived only when the events or a filter change (not on every playhead or hover update).
+    @StateObject private var travelRows = TravelRowsCache()
     /// Events ▸ Running Now instead of the event list.
     private var runningNow: Bool { running.showing && model.windowTab == 0 && !traveling }
 
@@ -633,7 +635,12 @@ struct ActivityWindowView: View {
             VulnerabilityBanner(intel: intel, sheets: sheets)
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 && !runningNow { heavySection }
-            if traveling { TimeTravelBanner(travel: travel, shown: travel.events.count); Divider() }
+            if traveling {
+                if model.searchText.trimmingCharacters(in: .whitespaces).count >= TimeTravel.minSearchLength {
+                    HistorySearchScopeBar(travel: travel, query: model.searchText); Divider()
+                }
+                TimeTravelBanner(travel: travel, shown: travel.listed.count); Divider()
+            }
             switch model.windowTab {
             case 0:
                 if runningNow {
@@ -669,6 +676,9 @@ struct ActivityWindowView: View {
             if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
         .animation(.smooth(duration: 0.25), value: traveling)
+        // Time Travel searches all recorded history (scope All History), in the background.
+        .onChange(of: model.searchText) { _, text in if traveling { travel.search(text) } }
+        .onChange(of: traveling) { _, on in if on { travel.search(model.searchText) } }
         // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
@@ -798,7 +808,7 @@ struct ActivityWindowView: View {
             } else {
                 Divider().frame(height: 16)
                 ShowFilterPicker(filter: $model.signatureFilter,
-                                 counts: model.showCounts(traveling ? travel.events : model.history, applyExclusions: traveling))
+                                 counts: traveling ? travelDerived.counts : model.showCounts(model.history))
                 Spacer(minLength: 0)
                 ClassifyAllButton(classifier: classifier, signatures: signatures)
             }
@@ -839,15 +849,27 @@ struct ActivityWindowView: View {
 
     /// Show Spawn in Timeline: the launch selected, with whatever filter would hide it relaxed.
     private func revealLaunch(_ event: ActivityEvent) {
-        model.searchText = ""
+        let q = model.searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if !q.isEmpty && !event.matches(q) { model.searchText = "" }
         model.onlyPids = nil
         if !model.visibleKinds.contains(.exec) { model.toggle(.exec) }
         if !model.passes(event, model.signatureFilter) { model.signatureFilter = .all }
         model.eventSelection = [event.id]
     }
 
-    private var eventsList: some View {
-        let events = traveling ? model.filtered(travel.events, applyExclusions: true) : model.searchResults
+    /// Rows (and Show counts) for the Time Travel list, from the cache when nothing they depend on changed.
+    private var travelDerived: TravelRowsCache.Result {
+        let key = TravelRowsCache.Key(revision: travel.revision, showingSearch: travel.showingSearch,
+                                      kinds: model.visibleKinds, filter: model.signatureFilter,
+                                      search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
+                                      signatures: signatures.revision, order: model.eventOrder)
+        return travelRows.result(for: key) {
+            TravelRowsCache.Result(rows: makeRows(model.filtered(travel.listed, applyExclusions: true)),
+                                   counts: model.showCounts(travel.listed, applyExclusions: true))
+        }
+    }
+
+    private func makeRows(_ events: [ActivityEvent]) -> [EventItem] {
         let items = events.map { e -> EventItem in
             let status = signatures.status(for: e)
             return EventItem(event: e, status: status, statusRank: signatures.rank(status))
@@ -855,14 +877,20 @@ struct ActivityWindowView: View {
         // The list is already newest first: only sort for another column or direction.
         let newestFirst = model.eventOrder.count == 1 && model.eventOrder[0].keyPath == \EventItem.seq
             && model.eventOrder[0].order == .reverse
-        let rows = newestFirst ? items : items.sorted(using: model.eventOrder)
+        return newestFirst ? items : items.sorted(using: model.eventOrder)
+    }
+
+    private var eventsList: some View {
+        let rows = traveling ? travelDerived.rows : makeRows(model.searchResults)
+        // Search hits span days: their Time column shows the day too.
+        let withDay = traveling && travel.showingSearch
         return VStack(spacing: 0) {
           ScrollViewReader { proxy in
             Table(rows, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
-                    Text(item.event.time).foregroundStyle(.secondary).monospacedDigit()
+                    Text(withDay ? item.event.dayTime : item.event.time).foregroundStyle(.secondary).monospacedDigit()
                 }
-                .width(min: 56, ideal: 60, max: 72)
+                .width(min: 56, ideal: withDay ? 104 : 60, max: withDay ? 130 : 72)
                 TableColumn("Kind", value: \.kind) { item in
                     Image(systemName: item.event.kind.symbol)
                         .font(.system(size: 10, weight: .bold))
@@ -928,9 +956,11 @@ struct ActivityWindowView: View {
             }
             .font(.system(size: 12, design: .monospaced))
             .contextMenu(forSelectionType: UUID.self) { ids in
-                if let id = ids.first, let event = model.history.first(where: { $0.id == id }) { rowMenu(event) }
+                if let id = ids.first, let item = rows.first(where: { $0.id == id }) { rowMenu(item.event) }
             } primaryAction: { ids in
-                if let id = ids.first, let event = model.history.first(where: { $0.id == id }) { actions.askAI(event) }
+                guard let id = ids.first, let item = rows.first(where: { $0.id == id }) else { return }
+                // A search hit opens its moment; elsewhere a double-click asks the AI.
+                if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
             }
             .onChange(of: travel.focusID) { _, id in
                 guard let id, let event = travel.events.first(where: { $0.id == id }) else { return }
@@ -946,7 +976,7 @@ struct ActivityWindowView: View {
                     .buttonStyle(.link)
                     .help("Show history files in Finder")
                 Text("·")
-                let total = traveling ? travel.events.count : model.history.count
+                let total = traveling ? travel.listed.count : model.history.count
                 if !traveling, model.restoredCount > 0 {
                     Text("\(model.restoredCount) from before the restart ·")
                         .help("Loaded from recorded history at launch, so the list isn't empty. Time Travel shows all of it.")
@@ -963,6 +993,10 @@ struct ActivityWindowView: View {
 
     @ViewBuilder
     private func rowMenu(_ event: ActivityEvent) -> some View {
+        if traveling && travel.showingSearch && event.ts > 0 {
+            Button("Show in Timeline") { travel.reveal(event) }
+            Divider()
+        }
         Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
         Button("Watch \(event.name) Closely…") { actions.watch(event) }
         Divider()
@@ -1155,4 +1189,79 @@ struct ClassifyAllButton: View {
 final class ClassifyAllState: ObservableObject {
     @Published var show = false
     @Published var apply = true
+}
+
+
+/// The Time Travel list's derived rows, kept between renders. Not observed: SwiftUI re-renders the window for
+/// the playhead, hover and progress many times a second, and re-filtering ~20,000 events each time was the lag.
+final class TravelRowsCache: ObservableObject {
+    struct Key: Equatable {
+        var revision: Int
+        var showingSearch: Bool
+        var kinds: Set<EventKind>
+        var filter: SignatureFilter
+        var search: String
+        var only: Set<Int>?
+        var exclusions: String
+        var signatures: Int
+        var order: [KeyPathComparator<EventItem>]
+    }
+
+    struct Result {
+        var rows: [EventItem] = []
+        var counts: [SignatureFilter: Int] = [:]
+    }
+
+    private var key: Key?
+    private var cached = Result()
+
+    func result(for key: Key, _ make: () -> Result) -> Result {
+        if key != self.key {
+            cached = make()
+            self.key = key
+        }
+        return cached
+    }
+}
+
+/// Finder-style scope while traveling with a search: everything recorded, or only the shown window.
+struct HistorySearchScopeBar: View {
+    @ObservedObject var travel: TimeTravel
+    let query: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("Search:").foregroundStyle(.secondary)
+            Picker("Search", selection: $travel.searchAll) {
+                Text("All History").tag(true)
+                Text("This Window").tag(false)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("All History searches everything recorded (newest first, up to \(TimeTravel.maxSearchHits.formatted()) matches) · This Window filters the shown slice")
+            if travel.searchAll {
+                if travel.searching { ProgressView().controlSize(.small) }
+                Text(status).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 12))
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    private var status: String {
+        let n = travel.searchHits.count
+        let matches = n == 1 ? "1 match" : "\(n.formatted()) matches"
+        let back = travel.searchReachedBack.map {
+            $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+        }
+        if travel.searching { return back.map { "\(matches) · searching, back to \($0)…" } ?? "Searching…" }
+        if travel.searchCapped {
+            return "Newest \(matches), back to \(back ?? "–"). Refine the search to reach older ones."
+        }
+        return n == 0 ? "No matches in recorded history" : "\(matches) in all recorded history · double-click one to open its moment"
+    }
 }

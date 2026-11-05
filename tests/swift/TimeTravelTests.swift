@@ -104,3 +104,85 @@ import Testing
         #expect(abs(parsed.timeIntervalSince(expected)) < 0.001)
     }
 }
+
+/// Searching all of history: exact matches, newest first, capped, across compressed and plain files.
+@Suite struct HistorySearch {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
+    /// File 1 (compressed into small blocks) and file 2 (plain, being written): `tool<i>` every second;
+    /// every 10th event runs Curl (mixed case), the rest `true`.
+    func makeArchive(count: Int = 2000) throws -> (HistoryArchive, URL) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-search-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func line(_ i: Int) -> String {
+            let target = i % 10 == 0 ? "/usr/bin/Curl" : "/usr/bin/true"
+            return #"{"kind":"exec","time":"12:00:00","pid":\#(1000 + i),"ppid":1,"name":"tool\#(i)","proc":"\#(target)","target":"\#(target)","ts":"\#(f.string(from: t0.addingTimeInterval(Double(i))))"}"#
+        }
+        let first = dir.appendingPathComponent("activity-20270115-080000-000.jsonl")
+        try ((0..<count).map(line).joined(separator: "\n") + "\n").write(to: first, atomically: true, encoding: .utf8)
+        try HistoryFiles.compress(first, blockBytes: 16_384)
+        try ((count..<count * 2).map(line).joined(separator: "\n") + "\n")
+            .write(to: dir.appendingPathComponent("activity-20270115-090000-000.jsonl"), atomically: true, encoding: .utf8)
+        return (HistoryArchive(directory: dir), dir)
+    }
+
+    func run(_ archive: HistoryArchive, _ query: String, limit: Int = 10_000) -> ([ActivityEvent], Bool) {
+        var hits: [ActivityEvent] = []
+        let capped = archive.search(archive.segments(), query: query, limit: limit, stop: { false }) { hits += $0.hits }
+        return (hits, capped)
+    }
+
+    @Test func findsEveryMatchInBothFilesNewestFirstIgnoringCase() throws {
+        let (archive, dir) = try makeArchive()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (hits, capped) = run(archive, "curl")
+        #expect(!capped)
+        #expect(hits.count == 400)
+        #expect(hits.allSatisfy { $0.target == "/usr/bin/Curl" })
+        #expect(hits.map(\.ts) == hits.map(\.ts).sorted(by: >))
+        #expect(hits.first?.pid == 1000 + 3990 && hits.last?.pid == 1000)
+        #expect(abs(hits[0].ts - t0.addingTimeInterval(3990).timeIntervalSince1970) < 0.01)
+    }
+
+    @Test func stopsAtTheLimitWithTheNewestMatches() throws {
+        let (archive, dir) = try makeArchive()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (hits, capped) = run(archive, "CURL", limit: 25)
+        #expect(capped)
+        #expect(hits.count == 25)
+        #expect(hits.first?.pid == 1000 + 3990 && hits.last?.pid == 1000 + 3750)
+    }
+
+    @Test func matchesLikeTheEventListSearch() throws {
+        let (archive, dir) = try makeArchive()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // A PID matches exactly (1234), a name by its text (tool1234 is PID 2234); never a part of a longer
+        // PID or the timestamp.
+        let (byNumber, _) = run(archive, "1234")
+        #expect(byNumber.map(\.pid) == [2234, 1234])
+        // Bytes in the line that aren't a searched field ("ppid", the kind) are not matches.
+        #expect(run(archive, "ppid").0.isEmpty)
+        #expect(run(archive, "no-such-thing").0.isEmpty)
+    }
+
+    @Test func cancellingStopsTheScan() throws {
+        let (archive, dir) = try makeArchive()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var reports = 0
+        archive.search(archive.segments(), query: "curl", limit: 10_000, stop: { reports > 0 }) { _ in reports += 1 }
+        #expect(reports == 1)
+    }
+
+    @Test func fastParserAgreesWithTheDecoder() throws {
+        let line = #"{"kind":"net","time":"10:00:01","pid":42,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"1.2.3.4:443","extra":"tcp","host":"example.com","host_src":"dns","inferred":true,"note":"n","ts":"2027-01-15T08:00:00.500+02:00"}"#
+        let a = try #require(ActivityEvent.parse(Data(line.utf8)))
+        let b = try JSONDecoder().decode(ActivityEvent.self, from: Data(line.utf8))
+        #expect(a.kind == b.kind && a.pid == b.pid && a.ppid == b.ppid && a.name == b.name && a.proc == b.proc)
+        #expect(a.target == b.target && a.extra == b.extra && a.host == b.host && a.hostSource == b.hostSource)
+        #expect(a.inferred == b.inferred && a.note == b.note && a.signatureKey == b.signatureKey)
+        #expect(a.ts == HistoryArchive.parseISO(Data("2027-01-15T08:00:00.500+02:00".utf8))!.timeIntervalSince1970)
+        #expect(ActivityEvent.parse(Data(#"{"kind":"bogus"}"#.utf8)) == nil)
+    }
+}
