@@ -114,3 +114,26 @@ import Testing
         #expect(grown < 30_000_000, "parsing 60,000 lines kept \(grown / 1_000_000) MB")
     }
 }
+
+/// The line reader under the collector's busiest stream: its buffer must stay the size of the unread part.
+@Suite(.serialized) struct LineReaderMemory {
+    @Test func readingHundredsOfMegabytesKeepsNoneOfThem() throws {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        let line = Data((String(repeating: "x", count: 1999) + "\n").utf8)
+        let block = Data((0..<64).map { _ in line }.joined())            // 128 KB of whole lines
+        let writer = Thread {
+            for _ in 0..<2400 { block.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, block.count) } }   // 300 MB
+            close(fds[1])
+        }
+        let reader = LineReader(fd: fds[0])
+        var count = 0
+        var most = 0
+        writer.start()
+        reader.forEach { _ in count += 1; most = max(most, reader.retainedBytes); return true }
+        close(fds[0])
+        #expect(count == 2400 * 64)
+        // The storage, not the process's footprint (other tests run alongside): the bug kept all 300 MB here.
+        #expect(most < 2_000_000, "the reader's buffer held \(most / 1_000_000) MB")
+    }
+}

@@ -140,7 +140,9 @@ final class LineReader {
             if let nl = buffer[(buffer.startIndex + start)...].firstIndex(of: 0x0A) {
                 let line = buffer[(buffer.startIndex + start)..<nl]
                 start = nl - buffer.startIndex + 1
-                if start > 1 << 20 { buffer.removeFirst(start); start = 0 }
+                // Read lines go into a fresh buffer: Data.removeFirst only moves the start of the same storage, so
+                // the collector kept every byte eslogger ever printed (2.5 GB in one buffer after half an hour).
+                if start > 1 << 20 { buffer = Data(buffer[(buffer.startIndex + start)...]); start = 0 }
                 return Data(line)
             }
             let n = read(fd, &chunk, chunk.count)
@@ -155,6 +157,9 @@ final class LineReader {
     }
 
     func nextString() -> String? { next().map { String(decoding: $0, as: UTF8.self) } }
+
+    /// Bytes the buffer's storage still holds, read or not (for tests: must stay near the unread part).
+    var retainedBytes: Int { buffer.endIndex }
 
     /// Every line, each handled in its own autorelease pool; `body` returns false to stop. The collector's
     /// loops run on the main thread without a run loop or on detached threads, where nothing ever drains the
