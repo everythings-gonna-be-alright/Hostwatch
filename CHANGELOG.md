@@ -11,6 +11,8 @@
   Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
   a few tens of MB a day before compression, inside the history size limit), so this works from now on, not for
   moments before. Playing moves the list smoothly between the once-a-minute lists.
+- **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
+  below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
 - **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
   without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
   window keeps up. The live stream parses events faster too.

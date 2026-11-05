@@ -48,6 +48,9 @@ final class RunningProcesses: ObservableObject {
     @Published private(set) var updated: Date?
     @Published private(set) var unavailable = false        // the collector isn't connected
     @Published var selection: RunningRow.ID?
+    /// The selected process's information below the list: opened by double-click (or Show Info), then it follows
+    /// the selection until closed. The way to its launch in the timeline is only offered there.
+    @Published var showInfo = false
     @Published var sortOrder: [KeyPathComparator<RunningRow>] = [KeyPathComparator(\RunningRow.cpu, order: .reverse)]
     /// When Hostwatch's recorded history begins: a process started before can't be shown at its launch.
     @Published private(set) var recordingStart: Date?
@@ -194,14 +197,14 @@ struct RunningProcessesView: View {
             } else {
                 table(rows, launchEvent)
                 Divider()
-                if let row = running.selected {
+                if running.showInfo, let row = running.selected {
                     detail(row, launchEvent).transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
                     footer(rows)
                 }
             }
         }
-        .animation(.smooth(duration: 0.2), value: running.selection)
+        .animation(.smooth(duration: 0.2), value: running.showInfo)
     }
 
     @ViewBuilder private var placeholder: some View {
@@ -274,14 +277,14 @@ struct RunningProcessesView: View {
         .contextMenu(forSelectionType: RunningRow.ID.self) { ids in
             if let id = ids.first, let row = running.rows.first(where: { $0.id == id }) { menu(row, launchEvent(row.pid, row.start)) }
         } primaryAction: { ids in
-            if let id = ids.first, let row = running.rows.first(where: { $0.id == id }), running.launchRecorded(row) {
-                showSpawn(row)
-            }
+            guard let id = ids.first else { return }
+            running.selection = id
+            running.showInfo = true
         }
     }
 
     @ViewBuilder private func menu(_ row: RunningRow, _ launch: ActivityEvent?) -> some View {
-        Button("Show Spawn in Timeline") { showSpawn(row) }.disabled(!running.launchRecorded(row))
+        Button("Show Info") { running.selection = row.id; running.showInfo = true }
         Button("Watch \(row.name) Closely…") { actions.watch(Self.event(for: row)) }
         if let e = launch {
             Button("Ask AI: Is This Dangerous?…") { actions.askAI(e) }
@@ -302,7 +305,7 @@ struct RunningProcessesView: View {
             Text("CPU \(String(format: "%.0f", cpu))%").monospacedDigit()
             Text("Memory \(RunningFormat.bytes(mem))").monospacedDigit()
             Spacer()
-            Text("Select a process for details · double-click to see its launch in the timeline")
+            Text("Double-click a process for its information")
                 .foregroundStyle(.tertiary)
         }
         .font(.callout)
@@ -329,7 +332,7 @@ struct RunningProcessesView: View {
                         .font(.callout).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer()
-                Button { running.selection = nil } label: { Image(systemName: "xmark.circle.fill") }
+                Button { running.showInfo = false } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.secondary).help("Close details")
             }
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 4) {
