@@ -484,7 +484,7 @@ final class StoryEngine: ObservableObject {
         else { return [] }
         var paths = (dict["ProgramArguments"] as? [String]) ?? []
         if let program = dict["Program"] as? String { paths.insert(program, at: 0) }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = AppPaths.userHome
         let found = paths.map { $0.hasPrefix("~/") ? home + $0.dropFirst() : $0 }
             .filter { $0.hasPrefix("/") && !SignatureBuilder.isSealedSystem($0) }
         plistPrograms[plist] = found

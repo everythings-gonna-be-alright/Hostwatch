@@ -478,7 +478,7 @@ final class StreamParser: @unchecked Sendable {
 /// Finds the `claude` CLI and a usable environment; GUI apps don't inherit the shell PATH.
 enum ClaudeLocator {
     static let path: String? = {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = AppPaths.userHome
         let candidates = [
             ProcessInfo.processInfo.environment["CLAUDE_PATH"],
             "\(home)/.local/bin/claude",
@@ -499,7 +499,7 @@ enum ClaudeLocator {
 
     static var environment: [String: String] {
         var env = ProcessInfo.processInfo.environment
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = AppPaths.userHome
         let extra = ["\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
         env["PATH"] = (extra + (env["PATH"]?.split(separator: ":").map(String.init) ?? [])).joined(separator: ":")
         env["HOME"] = home

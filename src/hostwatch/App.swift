@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
-        baseline.schedule()               // first run: waves at 5, 15 and 60 minutes
+        if !Demo.active { baseline.schedule() }               // first run: waves at 5, 15 and 60 minutes
         // Only draw events while the window or the HUD is actually on screen.
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
                                                object: nil, queue: .main) { [weak self] _ in
@@ -149,8 +149,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 _ = self.stories.ingest(past, decidedSafe: false)
             }
         }
-        intel.start()
-        setUpClaudeGuard()
+        if !Demo.active {
+            intel.start()
+            setUpClaudeGuard()
+        }
         setUpFirewall()
         // A pattern an open story points at is kept while the story is open, even a one-off.
         signatures.inUse = { [weak self] in
@@ -164,8 +166,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             _ = self.stories.ingest(launch.event, decidedSafe: false, extra: [(.heavyUntrusted, note)])
         }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
-        updates.schedule()                // daily, if allowed in Settings ▸ General
-        model.connect()
+        if Demo.active {
+            model.demoConnect()
+        } else {
+            updates.schedule()            // daily, if allowed in Settings ▸ General
+            model.connect()
+        }
         setUpHistory()
         // The list isn't empty after a restart; launches from before it are still followed if running.
         model.restoreRecent(from: history.directory) { [weak self] in
@@ -185,11 +191,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // The main window opens with the app (the setup window, if needed, comes in front of it).
         openActivityWindow(fullScreen: false)
 
+        if Demo.active { runDemo(); return }
         // Start the bundled collector unless one (e.g. run-agent.sh) is already serving.
         if collector.startAtLaunch {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, !self.model.connected else { return }
                 self.startCollector()
+            }
+        }
+    }
+
+    // MARK: Demo (screenshots)
+
+    /// Fills the app with Demo's made-up activity and opens the scene asked for.
+    private func runDemo() {
+        domains.endLearning()
+        firewall.mode = .ask
+        for line in Demo.lines() { model.receive(line) }
+        model.flushUI()
+        firewall.relayStatus("on", "")
+        signatures.showSeenOnce = true
+        running.request = { [weak self] in
+            self?.running.receive(Demo.runningList())
+            return true
+        }
+        if let frame = NSScreen.main?.visibleFrame, let window = activityWindow {
+            window.setFrame(NSRect(x: frame.midX - 640, y: frame.midY - 390, width: 1280, height: 780), display: true)
+        }
+        model.overlayEnabled = Demo.scene == "hud"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+            // A few decisions, as if made over the past days.
+            let safeKeys = model.history.filter { ["git", "ssh", "python3"].contains($0.name) }.map(\.signatureKey)
+            signatures.set(.safe, keys: Array(Set(safeKeys)), note: "demo")
+            let cleanerLaunch = model.history.first { $0.kind == .exec && $0.name == "CleanMyDisk" }
+            switch Demo.scene {
+            case "hud":
+                model.overlayEnabled = true
+                activityWindow?.orderOut(nil)
+            case "running":
+                model.windowTab = 0
+                running.showing = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
+                    running.selection = running.rows.first { $0.name == "CleanMyDisk" }?.id
+                }
+            case "patterns": model.windowTab = 1
+            case "stories":
+                model.windowTab = 2
+                if let story = stories.stories.first { openStoryDetails(story) }
+            case "network": model.windowTab = 3
+            case "firewall":
+                model.windowTab = 3
+                let ask = ActivityEvent(kind: .net, time: "", pid: 4471, ppid: 3306, name: "node",
+                                        proc: "/usr/local/bin/node", target: "104.16.24.35:443", extra: "TCP", parent: "/bin/zsh",
+                                        host: "registry.npmjs.org", hostSource: "dns")
+                firewall.handleAsk(key: "demo", event: ask)
+            case "watch":
+                if let e = cleanerLaunch {
+                    openWatch(for: e)
+                    if let (id, w) = watches.first {
+                        w.session.receive(WatchMessage(id: id, state: "done", detail: "time limit", profile: Demo.watchProfile()))
+                    }
+                }
+            case "live":
+                // New events keep arriving, like a real Mac (for the website's video).
+                model.windowTab = 0
+                var i = 0
+                Timer.scheduledTimer(withTimeInterval: 0.9, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.model.receive(Demo.liveLine(i))
+                        i += 1
+                    }
+                }
+            default:
+                model.windowTab = 0
+                if let e = cleanerLaunch { model.eventSelection = [e.id] }
             }
         }
     }
@@ -1032,7 +1107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let path = event.kind == .exec ? event.target : event.proc
         let session = WatchSession(pid: event.pid, name: event.name, path: path.isEmpty ? ProcessList.path(event.pid) : path,
                                    seconds: seconds)
-        session.send = { [weak self] watch in self?.model.sendWatch(watch) ?? false }
+        session.send = Demo.active ? { _ in true } : { [weak self] watch in self?.model.sendWatch(watch) ?? false }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 860),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Watch Closely: \(event.name)"
@@ -1148,6 +1223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 enum Entry {
     static func main() {
         let args = CommandLine.arguments
+        Demo.configure(args)                                 // --demo <folder>: made-up data, nothing real touched
         // Claude Code's PreToolUse hook: first, and before anything else loads (it runs for every tool call).
         if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
         if args.contains(FirewallProbe.flag) { FirewallProbe.run() }

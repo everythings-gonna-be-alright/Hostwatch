@@ -50,7 +50,7 @@ struct BehaviorProfile: Codable, Equatable, Sendable {
     var system: [String: Int] = [:]            // "kernel extension: …", "privacy permission (TCC) changed: …"
     var execMemory = 0                         // memory made executable (mmap/mprotect with execute)
     /// The user's home folder, for ~ in paths (the collector runs as root).
-    var home = NSHomeDirectory()
+    var home = AppPaths.userHome
     /// Endpoint Security events by type (exec, open, write…), and in total.
     var counts: [String: Int] = [:]
     var events = 0
@@ -112,7 +112,7 @@ final class BehaviorRecorder {
     ]
 
     init(pid: Int, name: String, path: String, args: String = "", ppid: Int = 0, limit: Double = 60,
-         home: String = NSHomeDirectory()) {
+         home: String = AppPaths.userHome) {
         profile = BehaviorProfile(pid: pid, name: name, path: path, limit: limit)
         profile.home = home
         profile.processes = [.init(pid: pid, ppid: ppid, path: path, args: args)]
@@ -501,7 +501,7 @@ struct FileGroup: Identifiable, Sendable {
 
     /// Busiest folders first; changes before reads.
     /// Routine system reads are left out (`routine: true` lists only them).
-    static func groups(_ files: [String: BehaviorProfile.FileUse], home: String = NSHomeDirectory(), routine: Bool = false) -> [FileGroup] {
+    static func groups(_ files: [String: BehaviorProfile.FileUse], home: String = AppPaths.userHome, routine: Bool = false) -> [FileGroup] {
         var byFolder: [String: [Item]] = [:]
         for (p, use) in files where BehaviorProfile.isRoutineRead(p, use) == routine {
             let folder = BehaviorProfile.display((p as NSString).deletingLastPathComponent, home: home)

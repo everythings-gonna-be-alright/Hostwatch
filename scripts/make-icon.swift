@@ -1,5 +1,6 @@
-// Renders assets/AppIcon.icns: a dark HUD panel with activity rows in Hostwatch's event colours
-// (cyan process, green connection, orange file) and one flagged row.
+// Renders assets/AppIcon.icns: a near-black tile (the website's look) with the activity list in white: soft
+// grey rows, the flagged row in full white, the dots above it joined by a thin timeline (signs connected into a
+// story). Monochrome.
 // Usage: swift scripts/make-icon.swift   (run from the repo root)
 import AppKit
 
@@ -39,82 +40,57 @@ func render(_ px: Int) -> Data {
     ctx.addPath(shape); ctx.setFillColor(NSColor.black.cgColor); ctx.fillPath()
     ctx.restoreGState()
 
-    // Body gradient.
+    // Body: near-black with light from above, like the website.
     ctx.saveGState()
     ctx.addPath(shape); ctx.clip()
     let space = CGColorSpaceCreateDeviceRGB()
     let bg = CGGradient(colorsSpace: space, colors: [
-        NSColor(srgbRed: 0.16, green: 0.22, blue: 0.40, alpha: 1).cgColor,
-        NSColor(srgbRed: 0.03, green: 0.04, blue: 0.10, alpha: 1).cgColor,
+        NSColor(srgbRed: 0.115, green: 0.117, blue: 0.122, alpha: 1).cgColor,
+        NSColor(srgbRed: 0.031, green: 0.035, blue: 0.039, alpha: 1).cgColor,
     ] as CFArray, locations: [0, 1])!
     ctx.drawLinearGradient(bg, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 100), options: [])
-
-    // Subtle top sheen.
-    let sheen = CGGradient(colorsSpace: space, colors: [
-        NSColor.white.withAlphaComponent(0.16).cgColor, NSColor.white.withAlphaComponent(0).cgColor,
+    // A faint neutral light behind the mark.
+    let glow = CGGradient(colorsSpace: space, colors: [
+        NSColor.white.withAlphaComponent(0.07).cgColor,
+        NSColor.white.withAlphaComponent(0).cgColor,
     ] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(sheen, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 600), options: [])
+    ctx.drawRadialGradient(glow, startCenter: CGPoint(x: 520, y: 500), startRadius: 0,
+                           endCenter: CGPoint(x: 520, y: 500), endRadius: 430, options: [])
 
-    // Activity rows: dot colour, line length, flagged.
-    let cyan = NSColor(srgbRed: 0.25, green: 0.85, blue: 0.95, alpha: 1)
-    let green = NSColor(srgbRed: 0.30, green: 0.88, blue: 0.45, alpha: 1)
-    let orange = NSColor(srgbRed: 1.00, green: 0.62, blue: 0.20, alpha: 1)
-    let red = NSColor(srgbRed: 1.00, green: 0.27, blue: 0.27, alpha: 1)
-    let rows: [(NSColor, CGFloat, Bool)] = [
-        (cyan, 430, false), (green, 520, false), (orange, 360, false),
-        (red, 470, true), (cyan, 300, false),
+    // The mark: the original activity list, reduced to white rows. The third row is the flagged one: brighter
+    // and with a solid dot; the others are soft grey.
+    let rows: [(y: CGFloat, length: CGFloat, flagged: Bool)] = [
+        (668, 330, false), (564, 410, false), (460, 380, true), (356, 250, false),
     ]
-    // Frosted glass card holding the rows, with a specular top edge.
-    let card = CGRect(x: 150, y: 196, width: 724, height: 632)
-    let cardPath = CGPath(roundedRect: card, cornerWidth: 96, cornerHeight: 96, transform: nil)
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 40, color: NSColor.black.withAlphaComponent(0.5).cgColor)
-    ctx.addPath(cardPath); ctx.setFillColor(NSColor.white.withAlphaComponent(0.07).cgColor); ctx.fillPath()
-    ctx.restoreGState()
-    ctx.saveGState()
-    ctx.addPath(cardPath); ctx.clip()
-    let cardSheen = CGGradient(colorsSpace: space, colors: [
-        NSColor.white.withAlphaComponent(0.14).cgColor, NSColor.white.withAlphaComponent(0.0).cgColor,
-    ] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(cardSheen, start: CGPoint(x: 512, y: card.maxY), end: CGPoint(x: 512, y: card.midY), options: [])
-    ctx.restoreGState()
-    ctx.addPath(cardPath)
-    ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.22).cgColor)
-    ctx.setLineWidth(3); ctx.strokePath()
-
-    let left: CGFloat = 215, rowH: CGFloat = 112
-    var y: CGFloat = 742
-    for (color, length, flagged) in rows {
-        if flagged {
-            // Highlight band with a red stripe, like a flagged HUD row.
-            let band = CGRect(x: 160, y: y - 44, width: 704, height: 88)
-            let bandPath = CGPath(roundedRect: band, cornerWidth: 22, cornerHeight: 22, transform: nil)
-            ctx.saveGState()
-            ctx.addPath(bandPath); ctx.clip()
-            ctx.setFillColor(red.withAlphaComponent(0.22).cgColor); ctx.fill(band)
-            ctx.setFillColor(red.cgColor)
-            ctx.fill(CGRect(x: 160, y: y - 44, width: 16, height: 88))
-            ctx.restoreGState()
-        }
-        // Glowing dot.
-        ctx.saveGState()
-        ctx.setShadow(offset: .zero, blur: 26, color: color.withAlphaComponent(0.9).cgColor)
-        ctx.setFillColor(color.cgColor)
-        ctx.fillEllipse(in: CGRect(x: left, y: y - 26, width: 52, height: 52))
-        ctx.restoreGState()
-        // Text line.
-        let line = CGRect(x: left + 90, y: y - 15, width: length, height: 30)
-        ctx.addPath(CGPath(roundedRect: line, cornerWidth: 15, cornerHeight: 15, transform: nil))
-        ctx.setFillColor(NSColor.white.withAlphaComponent(flagged ? 0.92 : 0.55).cgColor)
+    // A thin timeline joins the dots from the first row to the flagged one: signs connected into a story.
+    for i in 0..<2 {
+        let top = rows[i].y - 22 - 10, bottom = rows[i + 1].y + (rows[i + 1].flagged ? 28 : 22) + 10
+        ctx.addPath(CGPath(roundedRect: CGRect(x: 300 - 5, y: bottom, width: 10, height: top - bottom),
+                           cornerWidth: 5, cornerHeight: 5, transform: nil))
+        ctx.setFillColor(NSColor.white.withAlphaComponent(i == 1 ? 0.75 : 0.45).cgColor)
         ctx.fillPath()
-        y -= rowH
     }
+    for row in rows {
+        let dotR: CGFloat = row.flagged ? 28 : 22
+        ctx.setFillColor(NSColor.white.withAlphaComponent(row.flagged ? 1 : 0.5).cgColor)
+        ctx.fillEllipse(in: CGRect(x: 300 - dotR, y: row.y - dotR, width: 2 * dotR, height: 2 * dotR))
+        let bar = CGRect(x: 370, y: row.y - 15, width: row.length, height: 30)
+        ctx.addPath(CGPath(roundedRect: bar, cornerWidth: 15, cornerHeight: 15, transform: nil))
+        ctx.setFillColor(NSColor.white.withAlphaComponent(row.flagged ? 1 : 0.32).cgColor)
+        ctx.fillPath()
+    }
+
+    // Light catching the top edge.
+    let edge = CGGradient(colorsSpace: space, colors: [
+        NSColor.white.withAlphaComponent(0.10).cgColor, NSColor.white.withAlphaComponent(0).cgColor,
+    ] as CFArray, locations: [0, 1])!
+    ctx.drawLinearGradient(edge, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 760), options: [])
     ctx.restoreGState()
 
     // Hairline border.
     ctx.addPath(shape)
-    ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.12).cgColor)
-    ctx.setLineWidth(4); ctx.strokePath()
+    ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.14).cgColor)
+    ctx.setLineWidth(3); ctx.strokePath()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!

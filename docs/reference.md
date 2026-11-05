@@ -959,6 +959,16 @@ xcode-select --install
 open dist/Hostwatch.app      # prompts for an admin password to start the collector
 ```
 
+### Demo mode (screenshots)
+
+`Hostwatch --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]` fills the app with made-up
+activity of a made-up user (`/Users/alex`): everyday work plus a fake download that removes its quarantine, reads
+cookies and the keychain, adds a launch agent and calls home. It opens the scene asked for. Everything it keeps goes
+to `<folder>`, it never connects to the collector and starts nothing as root, and it refuses to run under the real
+bundle id (so it can't touch your settings): run it from a copy whose `CFBundleIdentifier` is changed and re-signed
+ad hoc. The website's screenshots are made this way. `live` keeps adding events about once a second, for the website's background video (recorded with
+`screencapture -v` and encoded with ffmpeg).
+
 ## Test
 
 ```bash

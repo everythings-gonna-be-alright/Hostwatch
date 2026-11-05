@@ -114,7 +114,7 @@ enum StoryText {
     static func base(_ path: String) -> String { (path as NSString).lastPathComponent }
 
     static func short(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = AppPaths.userHome
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
