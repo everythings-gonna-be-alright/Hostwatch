@@ -251,6 +251,13 @@ memory footprint, disk throughput).
   processes and disk throughput come from the collector: as root it can see every user's processes
   (`proc_pid_rusage`), which the app can't (about a third of processes, all of them system ones). It sends
   them every 5 s only to the live window, never into the event history.
+- **Disk space:** the strip shows the startup disk's free space (as Finder counts it, purgeable space included).
+  Click it for free space over the last hour or 24 hours (live, or ending at the playhead in Time Travel) and the
+  programs that **wrote the most** to disk in that period, with bytes and how many processes. Writes come from the
+  collector (each process's bytes written since it started, also a *Disk Written* column in Running Now) and the
+  once-a-minute process lists, so programs that already ended count too; a process that lived less than a minute
+  between two lists isn't seen. macOS doesn't track the space each program occupies, so bytes written is the
+  measure: temporary files that were deleted again count too.
 - **Recording:** one line per sample in `History/metrics-YYYYMMDD.jsonl` (a few MB per day); past days are
   gzip-compressed, and days older than the oldest activity history are deleted with it. *Clear History*
   removes them too. Resource use is recorded while Hostwatch is open.

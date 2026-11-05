@@ -19,6 +19,7 @@ struct RunningRow: Identifiable, Equatable {
     var cpuTime: Double { info.cpuTime }
     var mem: Int64 { info.mem }
     var threads: Int { info.threads }
+    var written: Int64 { info.written ?? -1 }
     var start: Double { info.start }
 
     init(info: RunningProcessInfo, parentName: String) {
@@ -261,6 +262,12 @@ struct RunningProcessesView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 44, ideal: 54, max: 64)
+            TableColumn("Disk Written", value: \.written) { row in
+                Text(row.info.written.map(RunningFormat.bytes) ?? "–").monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .help("Bytes this process has written to disk since it started (files it later deleted count too)")
+            }
+            .width(min: 64, ideal: 84, max: 100)
             TableColumn("Running For", value: \.start) { row in
                 Text(row.started.map { RunningFormat.duration(now.timeIntervalSince($0)) } ?? "–")
                     .foregroundStyle(.secondary).monospacedDigit()
@@ -350,6 +357,7 @@ struct RunningProcessesView: View {
                 }
                 GridRow {
                     fact("Memory", RunningFormat.bytes(info.mem))
+                    fact("Disk written", info.written.map(RunningFormat.bytes) ?? "–")
                     fact("CPU share", row.started.map { start in
                         let alive = now.timeIntervalSince(start)
                         return alive > 0 ? String(format: "%.1f%% average", 100 * info.cpuTime / alive) : "–"

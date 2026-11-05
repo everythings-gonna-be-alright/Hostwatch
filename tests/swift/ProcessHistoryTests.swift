@@ -7,9 +7,10 @@ import Testing
     let t0: Double = 1_800_000_000
 
     func proc(_ pid: Int, start: Double = 1_799_990_000, cpuTime: Double = 1, mem: Int64 = 10_000_000,
-              threads: Int = 2, name: String? = nil) -> RunningProcessInfo {
+              threads: Int = 2, name: String? = nil, written: Int64? = nil) -> RunningProcessInfo {
         RunningProcessInfo(pid: pid, ppid: 1, start: start, uid: 501, user: "alex", name: name ?? "p\(pid)",
-                           path: "/usr/bin/p\(pid)", args: "p\(pid) --flag", cpu: 12, cpuTime: cpuTime, mem: mem, threads: threads)
+                           path: "/usr/bin/\(name ?? "p\(pid)")", args: "p\(pid) --flag", cpu: 12, cpuTime: cpuTime, mem: mem,
+                           threads: threads, written: written)
     }
 
     /// Writes `lists` one minute apart (same day) and returns the indexed lines.
@@ -54,6 +55,28 @@ import Testing
         #expect(at10.processes[0].cpuTime < at50.processes[0].cpuTime)
         #expect(abs(at50.processes[1].cpuTime - 1) < 0.01)                       // 5 s of its 15 s so far
         #expect(abs((at50.processes[1].cpu ?? 0) - 20) < 0.01)
+    }
+
+    /// Which programs wrote to disk in a period: from the minute lists, per program, ended processes included.
+    @Test func writersCountBytesWrittenInThePeriod() throws {
+        let gb: Int64 = 1_000_000_000
+        let lines = record([
+            [proc(1, written: 5 * gb), proc(2, name: "backupd", written: 100)],
+            [proc(1, written: 6 * gb), proc(2, name: "backupd", written: 3 * gb + 100), proc(3, start: t0 + 70, name: "tool", written: gb)],
+            [proc(1, written: 6 * gb), proc(3, start: t0 + 70, name: "tool", written: 2 * gb),
+             proc(4, start: t0 + 130, name: "tool", written: gb / 2)],              // 2 ended; a second "tool"
+        ])
+        let all = ProcessHistory.writers(lines, from: t0 + 1, to: t0 + 200)
+        #expect(all.map(\.name) == ["backupd", "tool", "p1"])
+        #expect(all[0].bytes == 3 * gb)                                         // ended, still counted
+        #expect(all[1].bytes == 2 * gb + gb / 2 && all[1].processes == 2)       // started in the period: from zero
+        #expect(all[2].bytes == gb)                                             // running at the start: only the growth
+        let lastMinute = ProcessHistory.writers(lines, from: t0 + 60, to: t0 + 200)
+        #expect(lastMinute.map(\.name) == ["tool"])
+        #expect(lastMinute[0].bytes == gb + gb / 2)
+        // Interpolated between lists like CPU time.
+        let mid = try #require(ProcessHistory.rebuild(lines, at: t0 + 30))
+        #expect(mid.processes.first { $0.pid == 2 }?.written == 1_500_000_100)
     }
 
     @Test func aReusedPIDIsANewProcess() throws {

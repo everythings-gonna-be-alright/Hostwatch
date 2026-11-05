@@ -15,6 +15,8 @@ struct RunningProcessInfo: Codable, Sendable, Equatable {
     var cpuTime: Double          // CPU seconds used since it started
     var mem: Int64               // physical footprint
     var threads: Int
+    /// Bytes written to disk since it started (nil: an older collector, or not readable).
+    var written: Int64? = nil
 }
 
 /// {"kind":"proc_list","list":[…]}: the answer to {"processes": true}.
@@ -80,7 +82,8 @@ enum ProcessTable {
             out.append(RunningProcessInfo(pid: pid, ppid: ProcessList.parent(pid), start: ProcessList.start(pid) ?? 0,
                                           uid: uid, user: uid < 0 ? "" : userName(uid, cache: &users), name: name,
                                           path: path, args: args, cpu: cpu, cpuTime: (usage.cpuNanos / 1e7).rounded() / 100,
-                                          mem: Int64(usage.footprint), threads: threads(pid)))
+                                          mem: Int64(usage.footprint), threads: threads(pid),
+                                          written: Int64(clamping: usage.written)))
         }
         return out.sorted { $0.pid < $1.pid }
     }
