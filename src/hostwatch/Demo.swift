@@ -1,3 +1,5 @@
+// Demo mode exists only in the demo build: DEMO=1 ./scripts/build-app.sh (Swift flag -DDEMO).
+#if DEMO
 import Foundation
 
 /// `Hostwatch --demo <folder> [scene]`: the app filled with made-up activity of a made-up user, for screenshots.
@@ -265,3 +267,4 @@ enum Demo {
         return r.profile
     }
 }
+#endif

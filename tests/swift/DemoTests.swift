@@ -1,3 +1,4 @@
+#if DEMO
 import Foundation
 import Testing
 @testable import Hostwatch
@@ -29,3 +30,4 @@ import Testing
         #expect(p.network.count == 3 && p.processes.count == 3)
     }
 }
+#endif

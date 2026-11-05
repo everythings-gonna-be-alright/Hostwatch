@@ -8,10 +8,17 @@ ARCH_FLAGS=()
 if [ "${UNIVERSAL:-0}" = 1 ]; then ARCH_FLAGS=(--arch arm64 --arch x86_64); fi
 # Map this folder to "." so source paths in the binary don't contain your home folder.
 SWIFT_FLAGS=(-Xswiftc -file-prefix-map -Xswiftc "$PWD=.")
+# DEMO=1 builds "Hostwatch Demo.app": demo mode compiled in (-DDEMO), its own bundle id and build folder, so it can
+# never touch the real app's settings. Releases never set it: the normal build has no demo code at all.
+NAME="Hostwatch"; BUNDLE_ID="local.hostwatch.app"
+if [ "${DEMO:-0}" = 1 ]; then
+  SWIFT_FLAGS+=(-Xswiftc -DDEMO --build-path .build-demo)
+  NAME="Hostwatch Demo"; BUNDLE_ID="local.hostwatch.demo"
+fi
 swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}"
 BIN="$(swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}" --show-bin-path)/Hostwatch"
 
-APP="$PWD/dist/Hostwatch.app"
+APP="$PWD/dist/$NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Hostwatch"
@@ -28,8 +35,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>Hostwatch</string>
-  <key>CFBundleIdentifier</key><string>local.hostwatch.app</string>
-  <key>CFBundleName</key><string>Hostwatch</string>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
+  <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>NSHumanReadableCopyright</key><string>MIT License</string>

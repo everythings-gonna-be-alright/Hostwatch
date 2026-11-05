@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
-        if !Demo.active { baseline.schedule() }               // first run: waves at 5, 15 and 60 minutes
+        if !AppPaths.isDemo { baseline.schedule() }               // first run: waves at 5, 15 and 60 minutes
         // Only draw events while the window or the HUD is actually on screen.
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
                                                object: nil, queue: .main) { [weak self] _ in
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 _ = self.stories.ingest(past, decidedSafe: false)
             }
         }
-        if !Demo.active {
+        if !AppPaths.isDemo {
             intel.start()
             setUpClaudeGuard()
         }
@@ -166,9 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             _ = self.stories.ingest(launch.event, decidedSafe: false, extra: [(.heavyUntrusted, note)])
         }
         metrics.start()                   // CPU, memory, network every 5 s (recorded for Time Travel)
-        if Demo.active {
-            model.demoConnect()
-        } else {
+        if !AppPaths.isDemo {
             updates.schedule()            // daily, if allowed in Settings ▸ General
             model.connect()
         }
@@ -191,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // The main window opens with the app (the setup window, if needed, comes in front of it).
         openActivityWindow(fullScreen: false)
 
-        if Demo.active { runDemo(); return }
+        if AppPaths.isDemo { runDemo(); return }
         // Start the bundled collector unless one (e.g. run-agent.sh) is already serving.
         if collector.startAtLaunch {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
@@ -205,6 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     /// Fills the app with Demo's made-up activity and opens the scene asked for.
     private func runDemo() {
+        #if DEMO
+        model.demoConnect()
         domains.endLearning()
         firewall.mode = .ask
         for line in Demo.lines() { model.receive(line) }
@@ -267,6 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 if let e = cleanerLaunch { model.eventSelection = [e.id] }
             }
         }
+        #endif
     }
 
     // MARK: Hold
@@ -1107,7 +1108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let path = event.kind == .exec ? event.target : event.proc
         let session = WatchSession(pid: event.pid, name: event.name, path: path.isEmpty ? ProcessList.path(event.pid) : path,
                                    seconds: seconds)
-        session.send = Demo.active ? { _ in true } : { [weak self] watch in self?.model.sendWatch(watch) ?? false }
+        session.send = AppPaths.isDemo ? { _ in true } : { [weak self] watch in self?.model.sendWatch(watch) ?? false }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 860),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Watch Closely: \(event.name)"
@@ -1223,7 +1224,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 enum Entry {
     static func main() {
         let args = CommandLine.arguments
-        Demo.configure(args)                                 // --demo <folder>: made-up data, nothing real touched
+        #if DEMO
+        Demo.configure(args)                                 // --demo <folder>: made-up data (demo build only)
+        #endif
         // Claude Code's PreToolUse hook: first, and before anything else loads (it runs for every tool call).
         if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
         if args.contains(FirewallProbe.flag) { FirewallProbe.run() }
