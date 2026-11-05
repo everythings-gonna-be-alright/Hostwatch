@@ -141,7 +141,7 @@ struct ActivityEvent: Identifiable, Decodable {
     }
 }
 
-private let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+private let homeDir = AppPaths.userHome
 
 private func abbreviate(_ path: String) -> String {
     path.hasPrefix(homeDir) ? "~" + path.dropFirst(homeDir.count) : path
@@ -579,6 +579,9 @@ final class HUDModel: ObservableObject {
     }
 
     // MARK: Networking
+
+    /// Demo mode: shown as live, with no collector behind it.
+    func demoConnect() { connected = true }
 
     func connect() {
         reconnectScheduled = false

@@ -162,7 +162,7 @@ struct Signature {
 // MARK: - Normalization
 
 enum SignatureBuilder {
-    private static let home = FileManager.default.homeDirectoryForCurrentUser.path
+    private static let home = AppPaths.userHome
 
     private static let rewrites: [(NSRegularExpression, String)] = [
         (#"^/(private/)?var/folders/[^/]+/[^/]+/[A-Za-z0-9]+"#, #"\$TMPDIR"#),
