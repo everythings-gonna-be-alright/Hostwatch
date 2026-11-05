@@ -949,7 +949,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc private func openHelp() {
-        if let url = URL(string: "https://github.com/\(UpdateChecker.repository)/blob/main/docs/reference.md") {
+        // The docs on the website (built from docs/reference.md).
+        if let url = URL(string: "https://everythings-gonna-be-alright.github.io/Hostwatch/docs/") {
             NSWorkspace.shared.open(url)
         }
     }
