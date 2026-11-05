@@ -158,3 +158,21 @@ import Testing
     }
 }
 
+
+/// Big threat lists are kept as sorted hashes: same answers as a set of strings, a fraction of the memory.
+@Suite struct HashedSetLookups {
+    @Test func answersLikeASetOfStrings() {
+        let listed = (0..<50_000).map { "bad\($0).example\($0 % 97).net" }
+        let set = HashedSet(listed + listed.prefix(100))                     // duplicates are kept once
+        #expect(set.count == 50_000)
+        #expect(listed.allSatisfy(set.contains))
+        #expect(!set.contains("good.example.net") && !set.contains("bad50000.example1.net") && !set.contains(""))
+        #expect(!HashedSet().contains("anything"))
+    }
+
+    @Test func theHashIsStable() {
+        // FNV-1a, not Swift's per-run seeded hash: the same on every launch.
+        #expect(HashedSet.hash("") == 0xcbf2_9ce4_8422_2325)
+        #expect(HashedSet.hash("a") == 0xaf63_dc4c_8601_ec8c)
+    }
+}

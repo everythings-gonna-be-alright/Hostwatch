@@ -397,7 +397,17 @@ final class TimeTravel: ObservableObject {
     @Published private(set) var activity: [Double] = []
     @Published private(set) var events: [ActivityEvent] = []
     @Published private(set) var loading = false
+    /// Older events of the shown window are still on disk (scrolling to the end of the list loads them).
     @Published private(set) var clipped = false
+    /// The window is loaded as far as Hostwatch goes for one window (`maxSliceBytes`): a shorter one shows the rest.
+    @Published private(set) var capped = false
+    @Published private(set) var loadingMore = false
+    /// A window is read a page at a time, newest first: about 3,000 events each. Reading a busy hour at once
+    /// (up to ~19,000 events and their rows) made the app's memory jump by 100–250 MB.
+    nonisolated static let pageBytes: Int64 = 1_000_000
+    nonisolated static let maxSliceBytes: Int64 = 6_000_000
+    private var loadedBytes: Int64 = 0
+    private var moreTask: Task<Void, Never>?
     @Published private(set) var playing = false
     @Published var speed: Double = 1            // history seconds per real second
     @Published private(set) var markers: [TimelineMarker] = []
@@ -490,6 +500,8 @@ final class TimeTravel: ObservableObject {
         pause()
         active = false
         loadTask?.cancel()
+        moreTask?.cancel()
+        loadingMore = false
         overviewTask?.cancel()
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -675,24 +687,81 @@ final class TimeTravel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(90))          // coalesce drags
             guard !Task.isCancelled else { return }
             let result = await Task.detached(priority: .userInitiated) {
-                archive.events(segments, from: from, to: to)
+                archive.events(segments, from: from, to: to, maxBytes: Self.pageBytes)
             }.value
             guard let self, !Task.isCancelled else { return }
+            self.moreTask?.cancel()
+            self.loadingMore = false
             self.events = result.events
             self.clipped = result.clipped
+            self.capped = false
+            self.loadedBytes = Self.pageBytes
             self.revision += 1
-            if let target = self.pendingEvent {
-                self.pendingEvent = nil
-                self.focusID = result.events.first {
-                    abs($0.ts - target.ts) < 0.001 && $0.pid == target.pid && $0.kind == target.kind && $0.target == target.target
-                }?.id
-            }
-            if let f = self.pendingFocus {
-                self.pendingFocus = nil
-                self.focusID = Self.launch(in: result.events, pid: f.pid, start: f.start)?.id
-            }
+            self.resolveFocus()
             self.windowSamples = await self.metrics.samples(from: from, to: to)
             self.loading = false
+        }
+    }
+
+    /// The next older page of the shown window (the list scrolled to its end, or a focus not found yet).
+    func loadMore() {
+        guard active, clipped, !loadingMore, let oldest = events.last, oldest.ts > 0 else { return }
+        guard loadedBytes < Self.maxSliceBytes else { clipped = false; capped = true; return }
+        let archive = archive, segments = segments, from = windowStart
+        // Up to and including the oldest loaded moment: lines sharing its timestamp may have been cut off.
+        let to = Self.nextPageEnd(after: events)
+        let loaded = events
+        loadingMore = true
+        moreTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                archive.events(segments, from: from, to: to, maxBytes: Self.pageBytes)
+            }.value
+            guard let self, !Task.isCancelled, self.loadingMore else { return }
+            let older = Self.newOnly(result.events, after: loaded)
+            self.events += older
+            self.loadedBytes += Self.pageBytes
+            // Nothing new although more was said to be there (one moment busier than a page): stop here.
+            self.clipped = result.clipped && !older.isEmpty
+            if self.clipped && self.loadedBytes >= Self.maxSliceBytes { self.clipped = false; self.capped = true }
+            self.loadingMore = false
+            self.revision += 1
+            self.resolveFocus()
+        }
+    }
+
+    /// Where the next older page ends: at the oldest loaded moment, inclusive (lines sharing its timestamp may have
+    /// been cut off by the page size).
+    nonisolated static func nextPageEnd(after loaded: [ActivityEvent]) -> Date {
+        Date(timeIntervalSince1970: (loaded.last?.ts ?? 0) + 0.0005)
+    }
+
+    /// The events of a next page that aren't loaded yet (it overlaps the loaded ones at the boundary moment).
+    nonisolated static func newOnly(_ page: [ActivityEvent], after loaded: [ActivityEvent]) -> [ActivityEvent] {
+        guard let oldest = loaded.last?.ts else { return page }
+        let boundary = Set(loaded.lazy.filter { $0.ts == oldest }.map(identity))
+        return page.filter { $0.ts < oldest || !boundary.contains(identity($0)) }
+    }
+
+    /// A recorded line's identity across two reads of it (each read makes new event IDs).
+    nonisolated static func identity(_ e: ActivityEvent) -> String {
+        "\(e.ts)|\(e.pid)|\(e.kind.rawValue)|\(e.target)|\(e.extra)"
+    }
+
+    /// Selects the event a reveal asked for once it's loaded; reads older pages until it is, or there are none.
+    private func resolveFocus() {
+        if let target = pendingEvent {
+            if let hit = events.first(where: {
+                abs($0.ts - target.ts) < 0.001 && $0.pid == target.pid && $0.kind == target.kind && $0.target == target.target
+            }) {
+                pendingEvent = nil
+                focusID = hit.id
+            } else if clipped { loadMore() } else { pendingEvent = nil }
+        }
+        if let f = pendingFocus {
+            if let hit = Self.launch(in: events, pid: f.pid, start: f.start) {
+                pendingFocus = nil
+                focusID = hit.id
+            } else if clipped { loadMore() } else { pendingFocus = nil }
         }
     }
 
@@ -959,10 +1028,12 @@ struct TimeTravelBanner: View {
             Text("\(travel.windowStart.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute().second())) – \(travel.playhead.formatted(.dateTime.hour().minute().second()))")
                 .monospacedDigit()
             Text("·").foregroundStyle(.secondary)
-            Text(noun == "events" && travel.clipped ? "newest \(shown) events" : "\(shown) \(noun)")
+            Text(noun == "events" && (travel.clipped || travel.capped) ? "newest \(shown) events" : "\(shown) \(noun)")
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .help(noun == "events" && travel.clipped ? "This slice is very busy; only its newest part is shown. Choose a shorter window." : "")
+                .help(noun != "events" ? "" : travel.capped ? "This window is very busy; only its newest part is shown. Choose a shorter window for the rest."
+                      : travel.clipped ? "Older events of this window load as you scroll to the end of the list." : "")
+            if noun == "events" && travel.loadingMore { ProgressView().controlSize(.mini) }
             if let s = travel.sampleAtPlayhead {
                 Text("·").foregroundStyle(.secondary)
                 Text("CPU \(Int(s.cpu.rounded()))% · Memory \(Int((s.mem * 100).rounded()))%"
@@ -998,6 +1069,10 @@ func runTimeTravelProbe(_ path: String?) -> Never {
         let t = clock.measure { result = archive.events(segments, from: mid.addingTimeInterval(-span), to: mid) }
         print("slice \(Int(span / 60)) min:", t, "\(result.events.count) events", result.clipped ? "(clipped)" : "")
     }
+    // What Time Travel reads first: one page.
+    var page: (events: [ActivityEvent], clipped: Bool) = ([], false)
+    let pt = clock.measure { page = archive.events(segments, from: mid.addingTimeInterval(-3600), to: mid, maxBytes: TimeTravel.pageBytes) }
+    print("first page of 1 hour:", pt, "\(page.events.count) events", page.clipped ? "(more on scroll)" : "")
     // What counts toward the history size limit (read only).
     let kept = HistoryFiles.kept(in: dir, current: nil, today: MetricsArchive.dayName(Date()))
     func sum(_ prefix: String) -> String {

@@ -186,3 +186,42 @@ import Testing
         #expect(ActivityEvent.parse(Data(#"{"kind":"bogus"}"#.utf8)) == nil)
     }
 }
+
+/// A busy window is read a page at a time: every event exactly once, newest first, whatever the page size.
+@Suite struct TimeTravelPaging {
+    @Test func pagesCoverTheWindowWithoutGapsOrRepeats() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-pages-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // 7 events per moment (same timestamp), 600 moments: page edges land inside groups.
+        var lines: [String] = []
+        for second in 0..<600 {
+            for k in 0..<7 {
+                lines.append(#"{"kind":"file","time":"12:00:00","pid":\#(second * 10 + k),"ppid":1,"name":"t","proc":"/usr/bin/t","target":"/tmp/f\#(k)","extra":"r","ts":"\#(f.string(from: t0.addingTimeInterval(Double(second))))"}"#)
+            }
+        }
+        let url = dir.appendingPathComponent("activity-20270115-080000-000.jsonl")
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try HistoryFiles.compress(url, blockBytes: 16_384)
+        let archive = HistoryArchive(directory: dir)
+        let segments = archive.segments()
+        let from = t0, to = t0.addingTimeInterval(600)
+        var (loaded, more) = archive.events(segments, from: from, to: to, maxBytes: 9_000)
+        var pages = 1
+        while more {
+            let page = archive.events(segments, from: from, to: TimeTravel.nextPageEnd(after: loaded), maxBytes: 9_000)
+            let fresh = TimeTravel.newOnly(page.events, after: loaded)
+            #expect(!fresh.isEmpty)
+            loaded += fresh
+            more = page.clipped && !fresh.isEmpty
+            pages += 1
+        }
+        #expect(pages > 10)
+        #expect(loaded.count == 4200)
+        #expect(Set(loaded.map(TimeTravel.identity)).count == 4200)
+        #expect(loaded.map(\.ts) == loaded.map(\.ts).sorted(by: >))
+    }
+}
