@@ -140,7 +140,9 @@ final class LineReader {
             if let nl = buffer[(buffer.startIndex + start)...].firstIndex(of: 0x0A) {
                 let line = buffer[(buffer.startIndex + start)..<nl]
                 start = nl - buffer.startIndex + 1
-                if start > 1 << 20 { buffer.removeFirst(start); start = 0 }
+                // Read lines go into a fresh buffer: Data.removeFirst only moves the start of the same storage, so
+                // the collector kept every byte eslogger ever printed (2.5 GB in one buffer after half an hour).
+                if start > 1 << 20 { buffer = Data(buffer[(buffer.startIndex + start)...]); start = 0 }
                 return Data(line)
             }
             let n = read(fd, &chunk, chunk.count)

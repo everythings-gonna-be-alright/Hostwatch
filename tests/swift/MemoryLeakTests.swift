@@ -114,3 +114,26 @@ import Testing
         #expect(grown < 30_000_000, "parsing 60,000 lines kept \(grown / 1_000_000) MB")
     }
 }
+
+/// The line reader under the collector's busiest stream: its buffer must stay the size of the unread part.
+@Suite(.serialized) struct LineReaderMemory {
+    @Test func readingHundredsOfMegabytesKeepsNoneOfThem() throws {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        let line = Data((String(repeating: "x", count: 1999) + "\n").utf8)
+        let block = Data((0..<64).map { _ in line }.joined())            // 128 KB of whole lines
+        let writer = Thread {
+            for _ in 0..<2400 { block.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, block.count) } }   // 300 MB
+            close(fds[1])
+        }
+        let reader = LineReader(fd: fds[0])
+        var count = 0
+        let before = MemoryFootprint.current()
+        writer.start()
+        reader.forEach { _ in count += 1; return true }
+        let grown = Int64(MemoryFootprint.current()) - Int64(before)
+        close(fds[0])
+        #expect(count == 2400 * 64)
+        #expect(grown < 40_000_000, "reading 300 MB of lines kept \(grown / 1_000_000) MB")
+    }
+}

@@ -25,7 +25,9 @@
 - **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
 - **Fix: the collector's memory leak.** The root collector grew by ~3 MB a second (GBs within hours): its loops
   run without a run loop, so the autorelease pool that holds Foundation's per-event objects (parsed JSON, strings)
-  was never drained. Each event now gets its own pool. Its bounded caches also kept a bookkeeping entry per
+  was never drained. Each event now gets its own pool. The bigger part: the reader of eslogger's output trimmed its
+  buffer with `Data.removeFirst`, which only moves the start of the same storage, so every byte eslogger printed
+  stayed in memory (one 2.5 GB buffer after half an hour). It now keeps only the unread part. Its bounded caches also kept a bookkeeping entry per
   rewrite, and expired firewall answers were never dropped; both fixed. Leak tests measure the process's memory
   while parsing eslogger-like events and under cache churn (and check they would see the old leak). The collector
   logs its memory hourly in `agent.log`.
