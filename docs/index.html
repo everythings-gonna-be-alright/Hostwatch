@@ -232,12 +232,12 @@
   .chart figcaption a:hover { color: var(--text); }
   .chart .text p b { color: var(--text); font-weight: 500; }
   .stats { min-height: 0; }
-  .stats dl { margin: 18px 28px 24px; display: grid; gap: 0; }
-  .stats .stat { display: grid; grid-template-columns: 104px 1fr; gap: 20px; align-items: baseline; padding: 18px 0;
+  .stats dl { margin: 18px 28px 8px; display: grid; gap: 0; flex: 1; grid-auto-rows: 1fr; }
+  .stats .stat { display: grid; grid-template-columns: 88px 1fr; gap: 16px; align-items: start; align-content: center; padding: 18px 0;
                  border-top: 1px solid var(--line); }
-  .stats dt { font-size: 36px; font-weight: 400; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
+  .stats dt { font-size: 34px; font-weight: 400; letter-spacing: -0.03em; color: var(--text); line-height: 0.9; }
   .stats dd { margin: 0; display: grid; gap: 8px; min-width: 0; }
-  .stats .what { color: var(--muted); font-size: 15px; line-height: 1.45; }
+  .stats .what { color: var(--muted); font-size: 15px; line-height: 1.45; margin-top: -1px; }
   .stats .bar { display: block; height: 2px; border-radius: 1px; background: var(--line); overflow: hidden; }
   .stats .bar i { display: block; height: 100%; background: var(--muted); }
   .stats .meta { font: 500 11.5px var(--mono); color: var(--dim); letter-spacing: 0; }
