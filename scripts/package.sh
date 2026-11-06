@@ -16,7 +16,7 @@ ditto -c -k --sequesterRsrc --keepParent Hostwatch.app "$ZIP"
 
 # Notarization (Developer ID builds): Apple checks the app, then the ticket is stapled to it so Gatekeeper opens it
 # without asking, even offline. Credentials: `xcrun notarytool store-credentials hostwatch-notary` (NOTARY_PROFILE).
-if codesign -dv Hostwatch.app 2>&1 | grep -q "Authority=Developer ID Application"; then
+if codesign -dvv Hostwatch.app 2>&1 | grep -q "Authority=Developer ID Application"; then
   xcrun notarytool submit "$ZIP" --keychain-profile "${NOTARY_PROFILE:-hostwatch-notary}" --wait
   xcrun stapler staple Hostwatch.app
   rm -f "$ZIP"
