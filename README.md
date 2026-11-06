@@ -57,6 +57,9 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.11.1** – signed and notarized by Apple: no more *“Apple could not verify Hostwatch”*, and Full Disk Access
+survives updates.
+
 **0.11.0**
 - **🔍 Search all of history** – Time Travel finds matches in everything recorded; double-click one to jump there.
 - **⏱️ Running Now in the past** – which processes were running at any moment, with CPU, memory and disk writes.
@@ -122,9 +125,9 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 1. Download `Hostwatch-<version>-macOS-universal.zip` from
    [Releases](https://github.com/everythings-gonna-be-alright/Hostwatch/releases), unzip, move
    `Hostwatch.app` to `/Applications`.
-2. It isn't notarized: allow it in **System Settings → Privacy & Security → Open Anyway**.
-3. Open it. A short setup window helps you turn on **Full Disk Access**.
-4. Enter your administrator password to start the collector. Done.
+2. Open it. It's signed and notarized by Apple, so macOS opens it without a warning. A short setup window helps you
+   turn on **Full Disk Access**.
+3. Enter your administrator password to start the collector. Done.
 
 Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or the Command Line Tools).
 

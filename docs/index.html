@@ -316,7 +316,7 @@
   .closing h2 { margin: 0 auto 32px; }
   .closing .actions { justify-content: center; }
 
-  /* "Apple could not verify": a quiet note under the Download button that opens into a short how-to. */
+  /* "Signed and notarized": a quiet note under the Download button that opens into how to check the download. */
   .gk { margin-top: 22px; max-width: 560px; }
   .gk summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; color: var(--muted);
                 font-size: 14px; line-height: 1.4; }
@@ -325,6 +325,7 @@
   .gk summary i { font-style: normal; color: var(--text); }
   .gk .warn { width: 16px; height: 16px; flex: none; fill: none; stroke: #f0b44c; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
   .gk .warn circle { fill: #f0b44c; stroke: none; }
+  .gk .ok { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
   .gk .chev { display: inline-block; transition: transform .2s; color: var(--dim); }
   .gk[open] .chev { transform: rotate(90deg); }
   .gk-body { margin-top: 14px; padding: 18px 20px; border-radius: var(--r-surface); background: var(--bg-raise);
@@ -393,18 +394,14 @@
       <a class="link-arrow" href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span>↗</span></a>
     </div>
     <details class="gk" id="open-it">
-      <summary><svg class="warn" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 L15 14.2 H1 Z"/><path d="M8 6.2 V9.6"/><circle cx="8" cy="11.9" r="0.6"/></svg>
-        <span>macOS will say <i>“Apple could not verify Hostwatch”</i>. Here's how to open it <span class="chev" aria-hidden="true">›</span></span></summary>
+      <summary><svg class="ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 L6.6 11.6 L12.8 4.6"/></svg>
+        <span><i>Signed and notarized by Apple</i>, so it opens without a warning. How to check it's genuine <span class="chev" aria-hidden="true">›</span></span></summary>
       <div class="gk-body">
-        <p><b>Why you see it.</b> Hostwatch is free and open source, and it isn't notarized by Apple (that needs a paid Apple
-          developer account). The message means Apple hasn't checked this app, not that anything was found in it.</p>
-        <ol>
-          <li>In the message, click <b>Done</b> (not <i>Move to Trash</i>).</li>
-          <li>Open <b>System Settings ▸ Privacy &amp; Security</b> and scroll down to <i>“Hostwatch” was blocked…</i></li>
-          <li>Click <b>Open Anyway</b>, confirm with your password, then <b>Open</b>. You only do this once.</li>
-        </ol>
-        <p class="gk-check">Want to be sure it's the real file first? Compare <code>shasum -a 256 Hostwatch-*.zip</code> with the
-          <code>.sha256</code> on the <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest" target="_blank" rel="noopener">release page ↗</a>.
+        <p><b>What that means.</b> Hostwatch is signed with a Developer ID and notarized: Apple scanned this exact app for
+          malicious content before it was published, and macOS checks that it hasn't been changed since.</p>
+        <p class="gk-check">Check it yourself: compare <code>shasum -a 256 Hostwatch-*.zip</code> with the <code>.sha256</code>
+          on the <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest" target="_blank" rel="noopener">release page ↗</a>,
+          and <code>spctl -a -vv /Applications/Hostwatch.app</code> should say <i>Notarized Developer ID</i>.
           Or build it yourself from the source.</p>
       </div>
     </details>
@@ -621,7 +618,7 @@
     <h2>Two minutes to set up. <span class="quiet">macOS 26 or later.</span></h2>
     <div class="install">
       <div><small>01</small><h3>Download</h3><p>From <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Releases</a>, then move it to Applications.</p></div>
-      <div><small>02</small><h3>Allow it</h3><p>Privacy &amp; Security → Open Anyway. It isn't notarized.</p></div>
+      <div><small>02</small><h3>Open it</h3><p>Signed and notarized by Apple, so macOS opens it without a warning.</p></div>
       <div><small>03</small><h3>Full Disk Access</h3><p>A short setup window walks you through it.</p></div>
       <div><small>04</small><h3>Start watching</h3><p>Your password once, to start the collector.</p></div>
     </div>
@@ -649,18 +646,14 @@
     </div>
     <div class="notices">
     <details class="gk" id="open-it-end">
-      <summary><svg class="warn" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 L15 14.2 H1 Z"/><path d="M8 6.2 V9.6"/><circle cx="8" cy="11.9" r="0.6"/></svg>
-        <span>macOS will say <i>“Apple could not verify Hostwatch”</i>. Here's how to open it <span class="chev" aria-hidden="true">›</span></span></summary>
+      <summary><svg class="ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 L6.6 11.6 L12.8 4.6"/></svg>
+        <span><i>Signed and notarized by Apple</i>, so it opens without a warning. How to check it's genuine <span class="chev" aria-hidden="true">›</span></span></summary>
       <div class="gk-body">
-        <p><b>Why you see it.</b> Hostwatch is free and open source, and it isn't notarized by Apple (that needs a paid Apple
-          developer account). The message means Apple hasn't checked this app, not that anything was found in it.</p>
-        <ol>
-          <li>In the message, click <b>Done</b> (not <i>Move to Trash</i>).</li>
-          <li>Open <b>System Settings ▸ Privacy &amp; Security</b> and scroll down to <i>“Hostwatch” was blocked…</i></li>
-          <li>Click <b>Open Anyway</b>, confirm with your password, then <b>Open</b>. You only do this once.</li>
-        </ol>
-        <p class="gk-check">Want to be sure it's the real file first? Compare <code>shasum -a 256 Hostwatch-*.zip</code> with the
-          <code>.sha256</code> on the <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest" target="_blank" rel="noopener">release page ↗</a>.
+        <p><b>What that means.</b> Hostwatch is signed with a Developer ID and notarized: Apple scanned this exact app for
+          malicious content before it was published, and macOS checks that it hasn't been changed since.</p>
+        <p class="gk-check">Check it yourself: compare <code>shasum -a 256 Hostwatch-*.zip</code> with the <code>.sha256</code>
+          on the <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest" target="_blank" rel="noopener">release page ↗</a>,
+          and <code>spctl -a -vv /Applications/Hostwatch.app</code> should say <i>Notarized Developer ID</i>.
           Or build it yourself from the source.</p>
       </div>
     </details>

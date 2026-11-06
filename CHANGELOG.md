@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1 – Signed and notarized
+
+- **No more “Apple could not verify Hostwatch”.** Hostwatch is now signed with a Developer ID and notarized by Apple,
+  so macOS opens it like any other app: no trip to *Privacy & Security ▸ Open Anyway*.
+- **Full Disk Access survives updates from now on.** The signature stays the same from one version to the next, so
+  macOS keeps the access you granted. Coming from 0.11.0 or earlier, grant it once more after this update.
+
 ## 0.11.0 – Lighter, faster, sees further back
 
 **New**
