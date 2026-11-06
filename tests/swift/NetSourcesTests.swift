@@ -189,7 +189,9 @@ import Testing
     @Test func waitsBrieflyForTheStatisticsToArrive() {
         let s = RecentSockets()
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { s.note(.init(pid: 7, name: "curl"), tcp: true, port: 50_001) }
-        #expect(s.owner(tcp: true, port: 50_001, wait: 0.5)?.pid == 7)
+        // It returns as soon as the note arrives; the long limit only matters on a loaded machine (the gate runs
+        // hundreds of tests at once), where a 0.5 s limit sometimes expired first.
+        #expect(s.owner(tcp: true, port: 50_001, wait: 5)?.pid == 7)
         #expect(s.owner(tcp: true, port: 50_002, wait: 0.05) == nil)
     }
 
