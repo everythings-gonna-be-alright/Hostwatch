@@ -307,7 +307,10 @@
   .install h3 { font-size: 16px; font-weight: 500; margin: 10px 0 6px; }
   .install p { margin: 0; color: var(--muted); font-size: 15px; }
   .install a { color: var(--text); border-bottom: 1px solid var(--line-strong); }
-  @media (max-width: 900px) { .install { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
+  .install.road { grid-template-columns: repeat(3, 1fr); }
+  .install.road small { text-transform: uppercase; letter-spacing: 0.06em; }
+  .install.road .now small { color: var(--text); }
+  @media (max-width: 900px) { .install, .install.road { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
 
   .closing { text-align: center; padding: 200px 0 160px; position: relative; }
   .closing h2 { margin: 0 auto 32px; }
@@ -618,6 +621,18 @@
       <div><small>02</small><h3>Allow it</h3><p>Privacy &amp; Security → Open Anyway. It isn't notarized.</p></div>
       <div><small>03</small><h3>Full Disk Access</h3><p>A short setup window walks you through it.</p></div>
       <div><small>04</small><h3>Start watching</h3><p>Your password once, to start the collector.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="label"><span class="num">7.0</span> What next</div>
+    <h2>Today, one Mac. Next, every Mac in a company. <span class="quiet">The Mac app stays free.</span></h2>
+    <div class="install road">
+      <div class="now"><small>Now</small><h3>Hostwatch for Mac</h3><p>Everything on this page. Free for personal use, open source, all on your Mac.</p></div>
+      <div><small>Planned</small><h3>Hostwatch Server</h3><p>For companies: every Mac sends its events to one server you run. One timeline, stories and analytics across the whole fleet.</p></div>
+      <div><small>Planned</small><h3>Hostwatch Cloud</h3><p>The same server as a service (SaaS), run for you. Nothing to install or maintain.</p></div>
     </div>
   </div>
 </section>
