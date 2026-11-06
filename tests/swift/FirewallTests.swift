@@ -57,3 +57,23 @@ import Testing
         #expect(again.entries.keys == fw.entries.keys && again.entries.values.first?.count == 2 && again.allowedCount == 1)
     }
 }
+
+/// When the relay fails, the firewall falls back to Watch and says so until you pick a mode again.
+@MainActor @Suite struct FirewallFallbackWarning {
+    @Test func failingRelayFallsBackAndWarnsUntilYouChoose() {
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-fw-fallback"),
+                                 fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("fwf-\(UUID()).json"))
+        fw.mode = .ask
+        fw.relayStatus("on", "")
+        #expect(fw.fallback == nil)
+        fw.relayStatus("failed", "The web check through the relay failed twice, so the firewall turned itself off.")
+        #expect(fw.mode == .watch)
+        #expect(fw.fallback?.from == .ask && fw.fallback?.why.contains("failed twice") == true)
+        #expect(FirewallFallbackBanner.reason(fw.fallback!).hasPrefix("Ask stopped blocking: "))
+        fw.mode = .ask                                         // "Turn Ask Back On", or any mode you pick
+        #expect(fw.fallback == nil)
+        fw.mode = .watch
+        fw.relayStatus("failed", "x")                          // already in Watch: nothing turned off, no warning
+        #expect(fw.fallback == nil)
+    }
+}

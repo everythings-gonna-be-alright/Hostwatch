@@ -158,11 +158,21 @@ final class FirewallMonitor: ObservableObject {
     @Published var mode: FirewallMode {
         didSet {
             defaults.set(mode.rawValue, forKey: "firewallMode")
+            if !fallingBack { fallback = nil }                // you chose a mode: the warning has done its job
             // Leaving Ask: the collector decides the waiting connections by the new mode; the questions go.
             if mode != .ask, !prompts.isEmpty { dropAdvice(prompts.map(\.id)); prompts = []; onPromptsChange?() }
             onModeChange?(mode)
         }
     }
+    /// Set when the firewall turned itself to Watch (its relay failed): shown until you pick a mode or dismiss it.
+    struct Fallback: Equatable {
+        var from: FirewallMode
+        var at: Date
+        var why: String
+    }
+    @Published var fallback: Fallback?
+    private var fallingBack = false
+
     /// The relay in the collector: "off", "on" or "failed", and why.
     @Published private(set) var relayState = "off"
     @Published private(set) var relayDetail = ""
@@ -275,7 +285,13 @@ final class FirewallMonitor: ObservableObject {
     func relayStatus(_ state: String, _ detail: String) {
         relayState = state
         relayDetail = detail
-        if state == "failed", mode == .ask || mode == .strict { mode = .watch }      // it turned itself off
+        if state == "failed", mode == .ask || mode == .strict {                       // it turned itself off
+            let from = mode
+            fallingBack = true
+            mode = .watch
+            fallingBack = false
+            fallback = Fallback(from: from, at: Date(), why: detail)
+        }
     }
 
     /// The collector asks about a new connection: allowed ones pass at once, the rest are blocked (Strict) or

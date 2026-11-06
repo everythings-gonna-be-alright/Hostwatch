@@ -577,6 +577,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                             #selector(showHeld), symbol: "pause.circle.fill")
             menu.addItem(held)
         }
+        if firewall.fallback != nil {
+            menu.addItem(item("Firewall turned itself to Watch…", #selector(openFirewallPane), symbol: "exclamationmark.triangle.fill"))
+        }
         // Counts what it opens: known-bad matches in open stories this week (dismissed or deleted ones don't count).
         let knownBad = stories.openKnownBadMatches(since: Date().addingTimeInterval(-7 * 86400))
         if knownBad > 0 {
@@ -956,6 +959,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     @objc private func showCollectorLog() { collector.openLog() }
 
     func openSettings(_ pane: SettingsPane?) { settings.show(pane) }
+
+    @objc private func openFirewallPane() { openSettings(.firewall) }
 
     @objc private func showHeld() {
         refreshHeldPanel()

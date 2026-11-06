@@ -350,3 +350,39 @@ struct FirewallAdviceView: View {
         }
     }
 }
+
+/// Above every tab of the window when the firewall turned itself to Watch: what happened, why, and the way back.
+struct FirewallFallbackBanner: View {
+    @ObservedObject var firewall: FirewallMonitor
+    let openSettings: () -> Void
+
+    var body: some View {
+        if let f = firewall.fallback {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.title3).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("The firewall turned itself to Watch").font(.callout.weight(.semibold))
+                    Text(Self.reason(f) + " · \(f.at.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Spacer()
+                Button("Firewall Settings", action: openSettings).buttonStyle(.glass)
+                Button("Turn \(f.from.short) Back On") { firewall.mode = f.from }.buttonStyle(.glassProminent)
+                    .help("Try again: the relay restarts and runs its web check")
+                Button { firewall.fallback = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Hide (the firewall stays in Watch)")
+            }
+            .controlSize(.small)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Color.orange.opacity(0.10))
+            .accessibilityElement(children: .contain)
+        }
+    }
+
+    /// Why, in a sentence: the relay's own reason, or the usual one.
+    static func reason(_ f: FirewallMonitor.Fallback) -> String {
+        let why = f.why.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = "\(f.from.short) stopped blocking: "
+        return base + (why.isEmpty ? "its web check through the relay failed twice, so nothing is blocked now." : why)
+    }
+}

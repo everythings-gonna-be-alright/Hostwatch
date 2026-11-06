@@ -634,6 +634,7 @@ struct ActivityWindowView: View {
         VStack(spacing: 0) {
             if !collector.isRunning && !model.connected { collectorBanner; Divider() }
             VulnerabilityBanner(intel: intel, sheets: sheets)
+            FirewallFallbackBanner(firewall: firewall, openSettings: actions.openFirewallSettings)
             // A search left in the field filters quietly: say so where you look, with the way out.
             if searchFiltering && !showsHistoryScope { SearchActiveBar(text: searchText); Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
