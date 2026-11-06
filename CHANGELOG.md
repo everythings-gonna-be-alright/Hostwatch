@@ -17,6 +17,12 @@
   accent too. In Time Travel the same bar holds the All History / This Window choice.
 - **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
   below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
+- **MCP server: find and trace processes.** `find_processes` lists what ran in a time range (start, end, CPU,
+  memory, disk writes, user, parent, command line); `trace_process` follows one process's whole life: ancestors,
+  child tree, resource use, and what it ran, opened and connected to. The instructions and tool list stay small
+  (a test keeps them under 800 characters and 9 KB).
+- **Fix: the MCP server found nothing right after a history file started** (a new compressed file has no finished
+  block for up to 30 s, and the search stopped there).
 - **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
   its trend over the last hour or day and the programs that **wrote the most** to disk then (ended ones too).
   Running Now shows what is writing now (*Writing*).

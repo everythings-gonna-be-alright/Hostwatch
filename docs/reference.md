@@ -906,6 +906,8 @@ A read-only Model Context Protocol server over stdio (JSON-RPC, protocol version
 | `list_stories`, `get_story` | stories (numbered newest first) and one story's full timeline (`id` = number or id prefix) |
 | `list_domains` | domain inventory: `only_new`, `query`, `limit` |
 | `process_tree` | ancestors (respecting PID reuse: the latest start of a pid before its child), children during the process's lifetime, its recent connections and file activity |
+| `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. From the once-a-minute process lists, plus recorded starts for processes that lived under a minute |
+| `trace_process` | one process's life (`pid`; `at` picks the run when a pid was reused): ancestors, child tree, CPU/memory/disk use over its life, a summary of what it (and its tree) ran, opened and connected to, and a timeline. For a process running for days, children and activity cover its last 6 h; a huge tree is followed for its first 200 descendants |
 | `signing_info` | signer, Team ID, ad-hoc, quarantine, Apple, trusted, replaced-at-path, full validity check |
 
 - **Data:** reads `signatures-v2.json`, `stories.json`, `domains.json` and the history files (saved data is at

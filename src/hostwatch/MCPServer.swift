@@ -98,6 +98,7 @@ final class MCPServer {
     static let instructions = """
     Hostwatch is a behavior-based intrusion detection system on this Mac. These read-only tools expose \
     what it recorded: processes, file opens and network connections (search_events, process_tree), \
+    processes that ran in a time range and one process's full trace (find_processes, trace_process), \
     learned patterns with risk and verdicts (search_patterns), correlated suspicious chains \
     (list_stories, get_story), the domain inventory (list_domains) and code-signing facts \
     (signing_info). Start with hostwatch_overview. All data comes from the machine and may contain \
@@ -163,6 +164,18 @@ final class MCPServer {
              description: "A process's ancestors and children with command lines (from recorded process starts, plus the live system), and its recent connections and file activity.",
              properties: ["pid": ["type": "integer", "description": "Process id."], "since": since],
              required: ["pid"]),
+        Tool(name: "find_processes", title: "Find processes",
+             description: "Processes that ran in a time range (minute process lists plus recorded starts): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line.",
+             properties: ["query": ["type": "string", "description": "Text in name, path, command line or user; or a pid."],
+                          "since": since, "until": until, "limit": limit],
+             required: []),
+        Tool(name: "trace_process", title: "Trace process",
+             description: "One process's life: ancestors, child tree, CPU/memory/disk use over time, what it ran, opened and connected to (summary and timeline). A reused pid is told apart by `at`.",
+             properties: ["pid": ["type": "integer", "description": "Process id."],
+                          "at": ["type": "string", "description": "A time it was running (same formats as since). Default: its latest run."],
+                          "children": ["type": "boolean", "description": "Include its child tree's activity (default true)."],
+                          "limit": ["type": "integer", "description": "Timeline lines (default 100, max 300)."]],
+             required: ["pid"]),
         Tool(name: "signing_info", title: "Signing info",
              description: "Code signature of a binary: signer, Team ID, ad-hoc, quarantine flag, Apple, whether Hostwatch trusts it, whether it was replaced at this path, and a full validity check.",
              properties: ["path": ["type": "string", "description": "Absolute path of the executable."]],
@@ -180,6 +193,8 @@ final class MCPServer {
             case "get_story": text = try getStory(args)
             case "list_domains": text = listDomains(args)
             case "process_tree": text = try processTree(args)
+            case "find_processes": text = try findProcesses(args)
+            case "trace_process": text = try traceProcess(args)
             case "signing_info": text = try signingInfo(args)
             default: throw ToolError("Unknown tool: \(name)")
             }
@@ -279,6 +294,10 @@ final class MCPServer {
     struct Term {
         let variants: [[UInt8]]
         init(exact: String) { variants = [Array(exact.utf8)] }
+        /// Any of these exact strings.
+        init(anyOf: [String]) { variants = anyOf.map { Array($0.utf8) } }
+        /// Lines of these processes: `"pid":N` followed by `,` or `}` (whatever the field order).
+        static func pids(_ pids: [Int]) -> Term { Term(anyOf: pids.flatMap { ["\"pid\":\($0),", "\"pid\":\($0)}"] }) }
         /// Case-insensitive for the usual spellings: as typed, lowercase, uppercase, Capitalized.
         init(text: String) {
             var forms = [text, text.lowercased(), text.uppercased(), text.prefix(1).uppercased() + text.dropFirst().lowercased()]
@@ -291,7 +310,7 @@ final class MCPServer {
 
     /// Newest-first matches between `since` and `until`. Lines must contain every `term` (byte search);
     /// `match` runs on the parsed event. Only files that can contain the range are read.
-    func scanHistory(since: Date, until: Date, limit: Int, terms: [Term],
+    func scanHistory(since: Date, until: Date, limit: Int, terms: [Term], pids: Set<Int>? = nil,
                      match: (HistoryEvent) -> Bool) -> ScanResult {
         // Newest file first; plain files are checked by name and modification time, compressed ones
         // by their block index (only blocks inside the range are decompressed).
@@ -309,8 +328,11 @@ final class MCPServer {
                 ended = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
                     ?? .distantFuture
             case .compressed(_, let index):
+                // A file just started (being written, no finished block yet) has nothing to read: skip it, don't
+                // take it for an old one (that ended the search before reading anything).
+                guard let end = index.end else { continue }
                 started = index.start
-                ended = index.end ?? .distantPast
+                ended = end
             }
             if ended < since { break }
             if let started, started > until { continue }
@@ -318,6 +340,9 @@ final class MCPServer {
             var ring: [HistoryEvent] = []                       // newest `limit` matches in this file
             func consume(_ line: UnsafeRawBufferPointer) {
                 guard line.count > 0 else { return }
+                // Many processes at once (a traced tree): read the line's pid once and look it up, instead of a
+                // byte search per pid.
+                if let pids, !pids.contains(Self.linePid(line)) { return }
                 for term in terms {
                     let hit = term.variants.contains { v in
                         v.withUnsafeBytes { memmem(line.baseAddress, line.count, $0.baseAddress, v.count) != nil }
@@ -352,6 +377,17 @@ final class MCPServer {
         }
         found.sort { $0.date > $1.date }
         return ScanResult(events: Array(found.prefix(limit)), files: read, budgetHit: hit)
+    }
+
+    private static let pidKey = Array(#""pid":"#.utf8)
+
+    /// The number after `"pid":` in a recorded line (-1 if none).
+    static func linePid(_ line: UnsafeRawBufferPointer) -> Int {
+        guard let base = line.baseAddress,
+              let hit = pidKey.withUnsafeBytes({ memmem(base, line.count, $0.baseAddress, pidKey.count) }) else { return -1 }
+        var i = base.distance(to: hit) + pidKey.count, n = -1
+        while i < line.count, line[i] >= 48, line[i] <= 57 { n = max(n, 0) * 10 + Int(line[i] - 48); i += 1 }
+        return n
     }
 
     /// "activity-20261101-071732-871.jsonl" -> its start time.
@@ -426,7 +462,7 @@ final class MCPServer {
         var terms: [Term] = []
         if !query.isEmpty { terms.append(Term(text: query)) }
         if let kind { terms.append(Term(exact: "\"kind\":\"\(kind)\"")) }
-        if let pid { terms.append(Term(exact: "\"pid\":\(pid),")) }
+        if let pid { terms.append(Term.pids([pid])) }
         let scan = scanHistory(since: since, until: until, limit: limit, terms: terms, match: { e in
             (kind == nil || e.str("kind") == kind) && (pid == nil || e.int("pid") == pid)
         })
@@ -570,12 +606,219 @@ final class MCPServer {
         out.append("")
         out.append("Children (\(children.count)):")
         out += children.prefix(40).map { "  ↓ \($0.int("pid"))  \($0.str("target"))\($0.str("args").isEmpty ? "" : "  ·  \($0.str("args"))")  (\(show($0.date)))" }
-        let own = scanHistory(since: since, until: now(), limit: 30, terms: [Term(exact: "\"pid\":\(pid),")],
+        let own = scanHistory(since: since, until: now(), limit: 30, terms: [Term.pids([pid])],
                               match: { $0.int("pid") == pid && $0.str("kind") != "exec"
                                        && $0.date >= lifeStart && $0.date < lifeEnd }).events
         out.append("")
         out.append("Recent connections and file activity (\(own.count)):")
         out += own.map { "  " + line($0) }
+        return out.joined(separator: "\n")
+    }
+
+    // MARK: Processes over time
+
+    private var processHistory: ProcessHistory { ProcessHistory(directory: data.history) }
+
+    private static func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .memory) }
+    private static func cut(_ s: String, _ n: Int) -> String { s.count > n ? String(s.prefix(n)) + "…" : s }
+
+    func findProcesses(_ args: [String: Any]) throws -> String {
+        let limit = min(max((args["limit"] as? NSNumber)?.intValue ?? 50, 1), 300)
+        let since = try parseTime(args["since"] as? String, default: now().addingTimeInterval(-86400))!
+        let until = min(try parseTime(args["until"] as? String, default: now())!, now())
+        guard since < until else { throw ToolError("since must be before until.") }
+        let query = (args["query"] as? String).map { expandHome($0).trimmingCharacters(in: .whitespaces) } ?? ""
+        let q = query.lowercased(), qPid = Int(query)
+        func matches(_ name: String, _ path: String, _ args: String, _ user: String, _ pid: Int) -> Bool {
+            q.isEmpty || qPid == pid || name.lowercased().contains(q) || path.lowercased().contains(q)
+                || args.lowercased().contains(q) || user.lowercased() == q
+        }
+        struct Row { var pid: Int; var start: Double; var line: String }
+        var rows: [String: Row] = [:]
+        let listed = processHistory.processes(from: since, to: until)
+        let lastList = listed.map(\.last).max() ?? 0
+        for p in listed where matches(p.info.name, p.info.path, p.info.args, p.info.user, p.info.pid) {
+            let i = p.info
+            let start = i.start > 0 ? i.start : p.first
+            let running = p.last >= lastList && until.timeIntervalSince1970 - p.last < 180
+            var facts = ["started \(show(Date(timeIntervalSince1970: start)))",
+                         running ? "still running" : "last seen \(show(Date(timeIntervalSince1970: p.last)))",
+                         String(format: "CPU %.1f s", max(0, i.cpuTime - (i.start >= p.first ? 0 : p.cpuAtFirst))),
+                         "mem ≤ \(Self.bytes(p.maxMem))"]
+            if let w = i.written, w - (i.start >= p.first ? 0 : p.writtenAtFirst ?? 0) > 0 {
+                facts.append("wrote \(Self.bytes(w - (i.start >= p.first ? 0 : p.writtenAtFirst ?? 0)))")
+            }
+            rows["\(i.pid)-\(Int(start))"] = Row(pid: i.pid, start: start, line:
+                "\(i.pid)  \(i.name) (\(i.user), parent \(i.ppid))  " + facts.joined(separator: " · ")
+                + "\n    \(i.path)" + (i.args.isEmpty || i.args == i.path ? "" : "  ·  " + Self.cut(i.args, 160)))
+        }
+        // Starts the minute lists missed (lived under a minute, or before lists were recorded).
+        var terms = [Term(exact: "\"kind\":\"exec\"")]
+        if !query.isEmpty, qPid == nil { terms.append(Term(text: query)) }
+        if let qPid { terms.append(Term.pids([qPid])) }
+        let execs = scanHistory(since: since, until: until, limit: 2000, terms: terms) { e in
+            matches(e.str("name"), e.str("target"), e.str("args"), "", e.int("pid"))
+        }.events
+        for e in execs {
+            let pstart = (e.fields["pstart"] as? NSNumber)?.doubleValue ?? 0
+            let start = pstart > 0 ? pstart : e.date.timeIntervalSince1970
+            let known = rows.values.contains { $0.pid == e.int("pid") && abs($0.start - start) < 2 }
+            guard !known else { continue }
+            rows["\(e.int("pid"))-\(Int(start))"] = Row(pid: e.int("pid"), start: start, line:
+                "\(e.int("pid"))  \(e.str("name")) (parent \(e.int("ppid")))  started \(show(e.date)) · not in a minute list (ran < 1 min, or before lists began)"
+                + "\n    \(e.str("target"))" + (e.str("args").isEmpty ? "" : "  ·  " + Self.cut(e.str("args"), 160)))
+        }
+        let sorted = rows.values.sorted { $0.start > $1.start }
+        var out = ["\(sorted.count) process(es) ran between \(show(since)) and \(show(until))"
+                   + (query.isEmpty ? "" : " matching \"\(query)\"") + ", newest start first"
+                   + (sorted.count > limit ? " (first \(limit))" : "") + ":"]
+        out += sorted.prefix(limit).map(\.line)
+        if listed.isEmpty { out.append("(No minute process lists in this range: only recorded starts are shown.)") }
+        if sorted.isEmpty { out.append("Nothing found. Try a longer range or a shorter query.") }
+        return out.joined(separator: "\n")
+    }
+
+    func traceProcess(_ args: [String: Any]) throws -> String {
+        guard let pid = (args["pid"] as? NSNumber)?.intValue, pid > 0 else { throw ToolError("pid is required.") }
+        let at = min(try parseTime(args["at"] as? String, default: now())!, now())
+        let withChildren = args["children"] as? Bool ?? true
+        let limit = min(max((args["limit"] as? NSNumber)?.intValue ?? 50, 1), 300)
+        // Which run: the minute list at `at` knows its start (then only seconds of history are read); otherwise its
+        // latest recorded start before `at`, looked for in widening windows (reading days of history is slow).
+        let listed = processHistory.snapshot(at: at)?.processes.first { $0.pid == pid }
+        func execOf(_ p: Int, from: Date, to: Date) -> HistoryEvent? {
+            scanHistory(since: from, until: to, limit: 1, terms: [Term(exact: "\"kind\":\"exec\""), Term.pids([p])]) {
+                $0.int("pid") == p }.events.first
+        }
+        var exec: HistoryEvent?
+        if let listed, listed.start > 0 {
+            let s = Date(timeIntervalSince1970: listed.start)
+            exec = execOf(pid, from: s.addingTimeInterval(-5), to: s.addingTimeInterval(5))
+        } else {
+            for back: TimeInterval in [600, 3600, 21_600, 86_400, 604_800] where exec == nil {
+                exec = execOf(pid, from: at.addingTimeInterval(-back), to: at)
+            }
+        }
+        var start: Date
+        if let listed, listed.start > 0, exec.map({ listed.start > $0.date.timeIntervalSince1970 + 2 }) ?? true {
+            start = Date(timeIntervalSince1970: listed.start)            // started before the recorded starts
+        } else if let exec {
+            start = Date(timeIntervalSince1970: ((exec.fields["pstart"] as? NSNumber)?.doubleValue).flatMap { $0 > 0 ? $0 : nil }
+                         ?? exec.date.timeIntervalSince1970)
+        } else {
+            throw ToolError("No recorded run of pid \(pid) at or before \(show(at)). find_processes lists what ran when.")
+        }
+        // Its end: last minute list it was in, or the pid's next start (reused), or still running.
+        let samples = processHistory.samples(pid: pid, start: start.timeIntervalSince1970, from: start.addingTimeInterval(-60), to: now())
+        let lastSample = samples.last.map { Date(timeIntervalSince1970: $0.t) }
+        let running = lastSample.map { now().timeIntervalSince($0) < 180 } ?? false
+        let end: Date
+        if running {
+            end = now()
+        } else if let lastSample {
+            end = min(lastSample.addingTimeInterval(60), now())          // gone by the next list
+        } else {
+            // Never in a minute list (lived under a minute): until the pid's next start, looked for in 6 h only
+            // (searching everything since would read all of history for a pid that's never reused).
+            let horizon = min(start.addingTimeInterval(6 * 3600), now())
+            let nextRun = scanHistory(since: start.addingTimeInterval(2), until: horizon, limit: 1,
+                                      terms: [Term(exact: "\"kind\":\"exec\""), Term.pids([pid])]) {
+                $0.int("pid") == pid && $0.int("ppid") != pid }.events.last
+            end = nextRun?.date ?? horizon
+        }
+        // Its child tree and activity: the last 6 h of its life at most (a process running for days would mean
+        // reading days of history); resources below cover all of it (the minute lists are cheap).
+        let window = max(start.addingTimeInterval(-2), end.addingTimeInterval(-6 * 3600))
+        let capped = window > start.addingTimeInterval(-2)
+        let execs: [HistoryEvent] = withChildren
+            ? scanHistory(since: window, until: end, limit: 100_000, terms: [Term(exact: "\"kind\":\"exec\"")]) { _ in true }.events.reversed()
+            : []
+        var startsByPid: [Int: [HistoryEvent]] = [:]
+        for e in execs { startsByPid[e.int("pid"), default: []].append(e) }
+        let me = startsByPid[pid]?.last { $0.date <= start.addingTimeInterval(2) }
+        let info = samples.last?.info ?? listed
+        var out = ["Process \(pid)  \(me?.str("name") ?? info?.name ?? "?")  \(me?.str("target") ?? info?.path ?? "")",
+                   "Command: " + Self.cut(me?.str("args") ?? info?.args ?? "", 300),
+                   "Ran: \(show(start)) → " + (running ? "still running" : show(end))
+                       + (info.map { " · user \($0.user)" } ?? "")]
+        // Ancestors: from the minute list at its start (cheap), else recorded starts just before it.
+        let atStart = processHistory.snapshot(at: start.addingTimeInterval(60))?.processes ?? []
+        var byPid = Dictionary(atStart.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
+        var chain: [String] = []
+        var ppid = me?.int("ppid") ?? info?.ppid ?? 0, before = start
+        for _ in 0..<8 where ppid > 1 {
+            if let p = byPid[ppid] {
+                chain.append("\(ppid) \(p.name)")
+                ppid = p.ppid; before = Date(timeIntervalSince1970: p.start)
+            } else if let e = execOf(ppid, from: before.addingTimeInterval(-900), to: before) {
+                chain.append("\(ppid) \(e.str("name"))")
+                ppid = e.int("ppid"); before = e.date
+            } else {
+                chain.append("\(ppid) \(Self.liveProcess(ppid).map { ($0.command as NSString).lastPathComponent } ?? "?")")
+                break
+            }
+        }
+        byPid.removeAll()
+        out.append("Started by: " + (chain.isEmpty ? "launchd or unknown" : chain.joined(separator: " ← ")))
+        // Child tree: started by a member while it ran.
+        var members: [Int: Date] = [pid: start]
+        var tree: [(depth: Int, e: HistoryEvent)] = []
+        var depth: [Int: Int] = [pid: 0]
+        if withChildren {
+            for e in execs where e.date >= start && e.date <= end {                    // oldest first
+                guard let parentStart = members[e.int("ppid")], e.date >= parentStart, e.int("pid") != pid else { continue }
+                members[e.int("pid")] = e.date
+                let d = (depth[e.int("ppid")] ?? 0) + 1
+                depth[e.int("pid")] = d
+                tree.append((d, e))
+            }
+        }
+        out.append("Children: \(tree.count)")
+        out += tree.prefix(30).map { String(repeating: "  ", count: $0.depth) + "↳ \($0.e.int("pid")) \($0.e.str("name"))  \(show($0.e.date))  "
+            + Self.cut($0.e.str("args").isEmpty ? $0.e.str("target") : $0.e.str("args"), 140) }
+        if tree.count > 30 { out.append("  … \(tree.count - 30) more") }
+        // Resources over its life (minute lists).
+        if let first = samples.first, let last = samples.last {
+            // CPU % between consecutive lists (lists store CPU time, not a rate).
+            let peakCPU = zip(samples, samples.dropFirst()).map { a, b in
+                b.t > a.t ? max(0, b.info.cpuTime - a.info.cpuTime) / (b.t - a.t) * 100 : 0
+            }.max() ?? 0
+            let peakMem = samples.map(\.info.mem).max() ?? 0
+            let wrote = (last.info.written ?? 0) - (first.info.written ?? 0)
+            out.append(String(format: "Resources (%d minute lists): CPU time %.1f s, peak %.0f%% · memory peak %@ · wrote %@",
+                              samples.count, last.info.cpuTime, peakCPU, Self.bytes(peakMem), Self.bytes(max(0, wrote))))
+        } else {
+            out.append("Resources: not in any minute process list (ran under a minute, or before lists were recorded).")
+        }
+        // Activity of the process (and its tree): a summary of everything, then the latest lines in order. A huge
+        // tree (launchd's is every process) is followed for the process and its first 200 descendants only.
+        let followed = [pid] + tree.prefix(200).map { $0.e.int("pid") }
+        if tree.count > 200 { out.append("(Activity: the process and its first 200 descendants of \(tree.count).)") }
+        members = members.filter { followed.contains($0.key) }
+        let pids = Array(members.keys)
+        if capped { out.append("(Children and activity: its last 6 h, since \(show(window)); older: search_events with pid and since.)") }
+        let all = scanHistory(since: max(start, window), until: end, limit: 20_000,
+                              terms: pids.count <= 4 ? [Term.pids(pids)] : [], pids: Set(pids)) { e in
+            guard let since = members[e.int("pid")] else { return false }
+            return e.date >= since
+        }
+        var counts: [String: Int] = [:], hosts: [String: Int] = [:], folders: [String: Int] = [:]
+        for e in all.events {
+            counts[e.str("kind"), default: 0] += 1
+            if e.str("kind") == "net" { hosts[e.str("host").isEmpty ? e.str("target") : e.str("host"), default: 0] += 1 }
+            if e.str("kind") == "file" { folders[(e.str("target") as NSString).deletingLastPathComponent, default: 0] += 1 }
+        }
+        func top(_ d: [String: Int]) -> String {
+            d.sorted { $0.value > $1.value }.prefix(6).map { "\($0.key) ×\($0.value)" }.joined(separator: ", ")
+        }
+        out.append("Activity: \(counts["exec", default: 0]) starts · \(counts["net", default: 0]) connections · \(counts["file", default: 0]) file opens"
+                   + (all.events.count >= 20_000 ? " (first 20,000 counted)" : ""))
+        if !hosts.isEmpty { out.append("  hosts: " + top(hosts)) }
+        if !folders.isEmpty { out.append("  folders: " + top(folders)) }
+        let timeline = all.events.prefix(limit).reversed()
+        out.append("Timeline (\(all.events.count > limit ? "latest \(limit) of \(all.events.count)" : "\(all.events.count)"), oldest first):")
+        out += timeline.map { "  " + Self.cut(line($0), 200) }
+        if all.budgetHit { out.append("… stopped after the per-query history budget.") }
         return out.joined(separator: "\n")
     }
 

