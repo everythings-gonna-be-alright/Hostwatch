@@ -307,7 +307,10 @@
   .install h3 { font-size: 16px; font-weight: 500; margin: 10px 0 6px; }
   .install p { margin: 0; color: var(--muted); font-size: 15px; }
   .install a { color: var(--text); border-bottom: 1px solid var(--line-strong); }
-  @media (max-width: 900px) { .install { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
+  .install.road { grid-template-columns: repeat(3, 1fr); }
+  .install.road small { text-transform: uppercase; letter-spacing: 0.06em; }
+  .install.road .now small { color: var(--text); }
+  @media (max-width: 900px) { .install, .install.road { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
 
   .closing { text-align: center; padding: 200px 0 160px; position: relative; }
   .closing h2 { margin: 0 auto 32px; }
@@ -334,6 +337,10 @@
   .gk-body li::marker { color: var(--dim); }
   .gk-body code { font: 12px var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 6px; }
   .gk-body a { color: var(--text); }
+  /* The closing's two notices: each line centered on the page's middle, like the rest of the closing. */
+  .closing .notices { margin: 28px auto 0; text-align: center; }
+  .closing .notices .gk { margin: 0 auto; max-width: 760px; }
+  .closing .notices .gk-body { text-align: left; max-width: 560px; margin-left: auto; margin-right: auto; }
   .gk-check { font-size: 13px; color: var(--dim); margin: 0 !important; }
   .closing .note a { color: var(--muted); }
   .closing .note { margin: 28px auto 0; font-size: 13px; color: var(--dim); max-width: 560px; }
@@ -621,6 +628,18 @@
   </div>
 </section>
 
+<section id="roadmap">
+  <div class="wrap">
+    <div class="label"><span class="num">7.0</span> What next</div>
+    <h2>Today, one Mac. Next, every Mac in a company. <span class="quiet">The Mac app stays free.</span></h2>
+    <div class="install road">
+      <div class="now"><small>Now</small><h3>Hostwatch for Mac</h3><p>Everything on this page. Free for personal use, open source, all on your Mac.</p></div>
+      <div><small>Planned</small><h3>Hostwatch Server</h3><p>For companies: every Mac sends its events to one server you run. One timeline, stories and analytics across the whole fleet.</p></div>
+      <div><small>Planned</small><h3>Hostwatch Cloud</h3><p>The same server as a service (SaaS), run for you. Nothing to install or maintain.</p></div>
+    </div>
+  </div>
+</section>
+
 <div class="closing">
   <div class="wrap">
     <h2>Know what your Mac is doing.<br><span class="quiet">Starting now.</span></h2>
@@ -628,9 +647,25 @@
       <a class="btn light lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
       <a class="btn ghost lg" href="docs/">Read the docs</a>
     </div>
-    <p class="note"><a href="#open-it" onclick="document.getElementById('open-it').open = true">macOS says it can't verify the app? Here's how to open it.</a></p>
-    <p class="note">Always check what you download: compare <code>shasum -a 256 Hostwatch-*.zip</code> with the SHA&#8209;256 listed next to the zip on the release page.</p>
-    <p class="ua"><b>Free, always.</b><br>Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</p>
+    <div class="notices">
+    <details class="gk" id="open-it-end">
+      <summary><svg class="warn" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 L15 14.2 H1 Z"/><path d="M8 6.2 V9.6"/><circle cx="8" cy="11.9" r="0.6"/></svg>
+        <span>macOS will say <i>“Apple could not verify Hostwatch”</i>. Here's how to open it <span class="chev" aria-hidden="true">›</span></span></summary>
+      <div class="gk-body">
+        <p><b>Why you see it.</b> Hostwatch is free and open source, and it isn't notarized by Apple (that needs a paid Apple
+          developer account). The message means Apple hasn't checked this app, not that anything was found in it.</p>
+        <ol>
+          <li>In the message, click <b>Done</b> (not <i>Move to Trash</i>).</li>
+          <li>Open <b>System Settings ▸ Privacy &amp; Security</b> and scroll down to <i>“Hostwatch” was blocked…</i></li>
+          <li>Click <b>Open Anyway</b>, confirm with your password, then <b>Open</b>. You only do this once.</li>
+        </ol>
+        <p class="gk-check">Want to be sure it's the real file first? Compare <code>shasum -a 256 Hostwatch-*.zip</code> with the
+          <code>.sha256</code> on the <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest" target="_blank" rel="noopener">release page ↗</a>.
+          Or build it yourself from the source.</p>
+      </div>
+    </details>
+    </div>
+    <p class="ua"><b>Free for personal use, always.</b><br>Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</p>
     <a class="link-arrow" href="https://u24.gov.ua/" target="_blank" rel="noopener">Help Ukraine on United24 <span>↗</span></a>
   </div>
 </div>
