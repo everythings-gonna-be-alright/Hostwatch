@@ -15,7 +15,9 @@ let package = Package(
         .executable(name: "Hostwatch", targets: ["Hostwatch"])
     ],
     targets: [
-        .executableTarget(name: "Hostwatch", path: "src/hostwatch"),
+        // shm_open for the history write buffer (variadic in C, so not callable from Swift directly).
+        .target(name: "HostwatchShim", path: "src/shim"),
+        .executableTarget(name: "Hostwatch", dependencies: ["HostwatchShim"], path: "src/hostwatch"),
         .testTarget(name: "HostwatchTests", dependencies: ["Hostwatch"], path: "tests/swift",
                     swiftSettings: testSettings),
     ]

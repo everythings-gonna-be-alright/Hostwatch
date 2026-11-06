@@ -44,9 +44,12 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     private var active = false
     private var limit: Int64
     private var connection: NWConnection?
-    private var handle: FileHandle?
-    private var currentURL: URL?
-    private var currentSize: Int64 = 0
+    /// The file being written, compressed as it goes (`HistoryStream`).
+    private var stream: HistoryStream?
+    private var pendingBuffer: PendingBuffer?
+    private var flushTimer: DispatchSourceTimer?
+    private var currentURL: URL? { stream?.stem }
+    private var currentSize: Int64 { stream?.diskBytes ?? 0 }
     private var otherSegmentsSize: Int64 = 0
     private var lastEnforce = Date.distantPast
     private var pending = Data()
@@ -185,42 +188,64 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             report("Cannot create \(dir.path): \(error.localizedDescription)")
             return
         }
-        // Continue the newest file if it is still plain and has room, else start a new one.
         let fm = FileManager.default
-        if let newest = segments(in: dir).last, fm.fileExists(atPath: newest.path),
-           !fm.fileExists(atPath: HistoryFiles.gzURL(newest).path), size(of: newest) < segmentBytes {
-            openSegment(newest)
-        } else {
-            openSegment(dir.appendingPathComponent(Self.newSegmentName()))
+        // Events waiting in shared memory survive an app crash (see PendingBuffer); ordinary memory if unavailable.
+        let buffer = pendingBuffer ?? PendingBuffer(name: PendingBuffer.name(for: dir)) ?? PendingBuffer()
+        pendingBuffer = buffer
+        // Files an earlier run left open-ended (.blocks, no index). The newest one continues if it has room; the one
+        // the waiting events belong to is opened with them (so they're written); the rest just get their index.
+        let open = segments(in: dir).filter {
+            fm.fileExists(atPath: HistoryFiles.blocksURL($0).path) && !fm.fileExists(atPath: HistoryFiles.indexURL($0).path)
+                && !fm.fileExists(atPath: $0.path)
         }
-        // Finished files still plain (older versions, or compression interrupted): compress them.
+        var continued: HistoryStream?
+        for stem in open {
+            let newest = stem == open.last
+            if HistoryStream.id(stem) == buffer.segment || newest {
+                guard let s = try? HistoryStream(stem: stem, buffer: buffer) else { continue }
+                if newest && s.rawBytes < segmentBytes { continued = s } else { try? s.finish() }
+            } else {
+                HistoryStream.finishOrphan(stem)
+            }
+        }
+        if let continued { stream = continued } else { openStream(dir.appendingPathComponent(Self.newSegmentName())) }
+        // Finished files still plain (older versions, or compression interrupted): compress them once.
         for stem in segments(in: dir) where stem != currentURL && fm.fileExists(atPath: stem.path) {
             compressLater(stem)
         }
+        startFlushTimer()
         enforceLimit()
     }
 
-    private func openSegment(_ url: URL) {
-        closeFile()
-        if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
-        }
+    private func openStream(_ stem: URL) {
+        guard let buffer = pendingBuffer else { return }
         do {
-            let h = try FileHandle(forWritingTo: url)
-            currentSize = Int64(try h.seekToEnd())
-            handle = h
-            currentURL = url
+            stream = try HistoryStream(stem: stem, buffer: buffer)
             report(nil)
         } catch {
-            report("Cannot open \(url.lastPathComponent): \(error.localizedDescription)")
+            stream = nil
+            report("Cannot open \(stem.lastPathComponent): \(error.localizedDescription)")
         }
     }
 
+    /// Quiet times too: what's waiting is written within ~30 s.
+    private func startFlushTimer() {
+        guard flushTimer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + 5, repeating: 5, leeway: .seconds(2))
+        t.setEventHandler { [weak self] in
+            do { try self?.stream?.flushIfDue() } catch { self?.report("Write failed: \(error.localizedDescription)") }
+        }
+        t.resume()
+        flushTimer = t
+    }
+
+    /// Writes what's waiting and lets go of the file (it stays open-ended and is continued next time).
     private func closeFile() {
-        try? handle?.close()
-        handle = nil
-        currentURL = nil
-        currentSize = 0
+        flushTimer?.cancel()
+        flushTimer = nil
+        do { try stream?.close() } catch { report("Write failed: \(error.localizedDescription)") }
+        stream = nil
     }
 
     private static func newSegmentName() -> String {
@@ -248,17 +273,19 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     }
 
     private func write(_ chunk: Data) {
-        guard let handle else { return }
+        guard let stream else { return }
         do {
-            try handle.write(contentsOf: chunk)
+            try stream.append(Data(chunk))
         } catch {
             report("Write failed: \(error.localizedDescription)")
             return
         }
-        currentSize += Int64(chunk.count)
-        if currentSize >= segmentBytes, let finished = currentURL {
-            openSegment(finished.deletingLastPathComponent().appendingPathComponent(Self.newSegmentName()))
-            compressLater(finished)
+        if stream.rawBytes >= segmentBytes {
+            // Full: its index replaces the block list, and a new file starts (already compressed: nothing to redo).
+            do { try stream.finish() } catch { report("Finishing \(stream.stem.lastPathComponent) failed") }
+            let dir = stream.stem.deletingLastPathComponent()
+            self.stream = nil
+            openStream(dir.appendingPathComponent(Self.newSegmentName()))
             enforceLimit()
         } else if Date().timeIntervalSince(lastEnforce) > 10 * 60 {
             enforceLimit()          // metrics and process lists grow between segments too

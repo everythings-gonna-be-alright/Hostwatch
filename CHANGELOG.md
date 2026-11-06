@@ -32,6 +32,10 @@
 - **Safe rules only from regular behaviour.** A learned Safe rule needs patterns seen at least 5 times, over an
   hour or more: one-off Safe decisions aren't sent to Claude, and a proposal backed only by them is refused. Dangerous
   and Suspicious decisions still teach rules from a single sighting.
+- **History written compressed, as it arrives:** events go to disk every 30 s as compressed blocks appended to the
+  file (no plain copy written and compressed again later): about 1/22 of the bytes. Waiting events are kept in
+  shared memory that outlives an app crash, so the next launch writes them; a crash at any moment loses nothing and
+  doubles nothing.
 - **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
   up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
   lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.
