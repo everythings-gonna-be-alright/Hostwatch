@@ -49,13 +49,21 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Full Disk Access is tied to the code signature. Ad-hoc signatures change on every
-# rebuild, so the grant must be redone. Set CODESIGN_IDENTITY (e.g. "Apple Development: …")
-# to keep a stable identity, and with it the grant.
-# Hardened runtime (free, works with ad-hoc signing too): macOS ignores DYLD_INSERT_LIBRARIES and
+# Signing: a "Developer ID Application" certificate in the keychain is used automatically (releases are then
+# notarized by package.sh); CODESIGN_IDENTITY picks another one, CODESIGN_IDENTITY=- forces ad-hoc. A stable identity
+# also keeps the Full Disk Access grant across rebuilds (ad-hoc signatures change every time).
+# Hardened runtime (works with ad-hoc signing too): macOS ignores DYLD_INSERT_LIBRARIES and
 # friends for Hostwatch and loads only Apple-signed libraries into it, so no code can be injected.
-if [ -n "${CODESIGN_IDENTITY:-}" ]; then
-  codesign --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP"
+if [ -z "${CODESIGN_IDENTITY:-}" ]; then
+  CODESIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)"
+fi
+# Notarization needs Apple's secure timestamp (RELEASE=1, set by package.sh); local builds skip the network call.
+TIMESTAMP="--timestamp=none"
+if [ "${RELEASE:-0}" = 1 ]; then TIMESTAMP="--timestamp"; fi
+if [ -n "${CODESIGN_IDENTITY:-}" ] && [ "$CODESIGN_IDENTITY" != "-" ]; then
+  codesign --force --options runtime $TIMESTAMP --sign "$CODESIGN_IDENTITY" "$APP"
+  echo "Signed: $CODESIGN_IDENTITY" | sed -E 's/\([A-Z0-9]{10}\)/(team)/'
 else
   codesign --force --options runtime --sign - "$APP" >/dev/null 2>&1 || true
   echo "Note: ad-hoc signed. Re-grant Full Disk Access to Hostwatch after each rebuild."

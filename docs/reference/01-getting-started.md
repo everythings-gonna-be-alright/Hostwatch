@@ -22,8 +22,9 @@ xcode-select --install
 2. Check the download: `shasum -a 256 Hostwatch-*.zip` must match the `.sha256` file next to it.
 3. Unzip and move `Hostwatch.app` to `/Applications`. Keep it somewhere only you can write to, because the collector
    runs from it as root.
-4. Open it once. It isn't notarized, so macOS blocks it the first time. Allow it in
-   **System Settings ▸ Privacy & Security ▸ Open Anyway**.
+4. Open it. It's signed with a Developer ID and notarized by Apple, so macOS opens it without a warning. To check:
+   `spctl -a -vv /Applications/Hostwatch.app` says *Notarized Developer ID*. Builds from 0.11.0 and earlier weren't
+   notarized and need **System Settings ▸ Privacy & Security ▸ Open Anyway** once.
 5. A setup window asks for **Full Disk Access**. Click *Open Settings…*, turn access on, then click **Quit & Reopen**.
    Your other choices in this window:
    - **Start Without Access** watches the network only.
