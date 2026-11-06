@@ -75,8 +75,6 @@ enum Reset {
                 return
             }
             plan.clearDefaults(.standard, domain: AppPaths.bundleID)
-            // exit() skips the normal quit that removes the history write buffer: remove it here.
-            if plan.history { PendingBuffer.remove(name: PendingBuffer.name(for: historyDir)) }
             exit(0)   // not terminate(): quitting normally would save the stores again
         }
         if collector.isRunning {

@@ -46,7 +46,6 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     private var connection: NWConnection?
     /// The file being written, compressed as it goes (`HistoryStream`).
     private var stream: HistoryStream?
-    private var pendingBuffer: PendingBuffer?
     private var flushTimer: DispatchSourceTimer?
     private var currentURL: URL? { stream?.stem }
     private var currentSize: Int64 { stream?.diskBytes ?? 0 }
@@ -130,7 +129,6 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         let dir = directory, on = enabled
         queue.async {
             self.closeFile()
-            self.dropPendingBuffer()
             for stem in self.segments(in: dir) { HistoryFiles.remove(stem) }
             self.otherSegmentsSize = 0
             if on { self.openFiles(in: dir) }
@@ -190,11 +188,8 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
             return
         }
         let fm = FileManager.default
-        // Events waiting in shared memory survive an app crash (see PendingBuffer); ordinary memory if unavailable.
-        let buffer = pendingBuffer ?? PendingBuffer(name: PendingBuffer.name(for: dir)) ?? PendingBuffer()
-        pendingBuffer = buffer
-        // Files an earlier run left open-ended (.blocks, no index). The newest one continues if it has room; the one
-        // the waiting events belong to is opened with them (so they're written); the rest just get their index.
+        // Files an earlier run left open-ended (.blocks, no index; after a crash also an unfinished last block). The
+        // newest one continues if it has room; the others are finished (their unfinished tail recovered first).
         let open = segments(in: dir).filter {
             fm.fileExists(atPath: HistoryFiles.blocksURL($0).path) && !fm.fileExists(atPath: HistoryFiles.indexURL($0).path)
                 && !fm.fileExists(atPath: $0.path)
@@ -202,9 +197,8 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         var continued: HistoryStream?
         for stem in open {
             let newest = stem == open.last
-            if HistoryStream.id(stem) == buffer.segment || newest {
-                guard let s = try? HistoryStream(stem: stem, buffer: buffer) else { continue }
-                if newest && s.rawBytes < segmentBytes { continued = s } else { try? s.finish() }
+            if newest, let s = try? HistoryStream(stem: stem), s.rawBytes < segmentBytes {
+                continued = s
             } else {
                 HistoryStream.finishOrphan(stem)
             }
@@ -219,9 +213,8 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     }
 
     private func openStream(_ stem: URL) {
-        guard let buffer = pendingBuffer else { return }
         do {
-            stream = try HistoryStream(stem: stem, buffer: buffer)
+            stream = try HistoryStream(stem: stem)
             report(nil)
         } catch {
             stream = nil
@@ -229,13 +222,14 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// Quiet times too: what's waiting is written within ~30 s.
+    /// Every second: what arrived goes into the file (an app crash loses at most this second); blocks are
+    /// finished every 30 s.
     private func startFlushTimer() {
         guard flushTimer == nil else { return }
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + 5, repeating: 5, leeway: .seconds(2))
+        t.schedule(deadline: .now() + HistoryStream.syncInterval, repeating: HistoryStream.syncInterval, leeway: .milliseconds(200))
         t.setEventHandler { [weak self] in
-            do { try self?.stream?.flushIfDue() } catch { self?.report("Write failed: \(error.localizedDescription)") }
+            do { try self?.stream?.tick() } catch { self?.report("Write failed: \(error.localizedDescription)") }
         }
         t.resume()
         flushTimer = t
@@ -362,17 +356,9 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         connection = nil
         pending.removeAll()
         closeFile()
-        dropPendingBuffer()
         setRecording(false)
     }
 
-    /// Everything waiting is written (or the history is gone): the shared memory goes too, so it outlasts the app
-    /// only after a crash, when the next launch needs it.
-    private func dropPendingBuffer() {
-        guard let b = pendingBuffer else { return }
-        pendingBuffer = nil
-        if !b.name.isEmpty { PendingBuffer.remove(name: b.name) }
-    }
 
     // MARK: Status
 
