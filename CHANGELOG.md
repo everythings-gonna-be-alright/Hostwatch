@@ -25,7 +25,10 @@
   information. It showed only that total, which barely moves, so nothing seemed to write.
 - **Far fewer disk writes:** Hostwatch rewrote its whole pattern store (10 MB on a busy Mac) every 10 seconds,
   because every event updates a pattern's counter: about 1 MB/s, and a memory jump each time it was encoded. Counters
-  and newly learned patterns are now saved every 5 minutes (and at quit); your decisions still within seconds.
+  and newly learned patterns are now saved every 5 minutes (and at quit), and only the patterns that changed: they're
+  appended to a journal (`signatures-v2.journal`, a few hundred KB) instead of rewriting the store; your decisions
+  still write a new snapshot within seconds. Crash-safe: journal lines carry the snapshot's generation and stale
+  ones are ignored.
 - **Safe rules only from regular behaviour.** A learned Safe rule needs patterns seen at least 5 times, over an
   hour or more: one-off Safe decisions aren't sent to Claude, and a proposal backed only by them is refused. Dangerous
   and Suspicious decisions still teach rules from a single sighting.

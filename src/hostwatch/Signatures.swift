@@ -847,6 +847,7 @@ final class SignatureStore: ObservableObject {
             entry.exampleTarget = e.target
             if !e.host.isEmpty { entry.exampleHost = e.host; entry.exampleHostSource = e.hostSource }
             entries[e.signatureKey] = entry
+            changedKeys.insert(e.signatureKey)
             markDirty()
             return false
         }
@@ -866,6 +867,7 @@ final class SignatureStore: ObservableObject {
             entries[e.signatureKey] = created
         }
         if entries.count > maxEntries { evict() }
+        changedKeys.insert(e.signatureKey)
         markDirty()
         return !routine
     }
@@ -1443,7 +1445,28 @@ final class SignatureStore: ObservableObject {
         var processRules: [SignatureEntry]
         var merges: [PatternMerge]?
         var aliases: [String: String]?
+        /// Which journal lines belong to this snapshot (nil: written before the journal existed).
+        var generation: Int?
     }
+
+    /// One journal line: a pattern as it is now, for the snapshot of generation `g`.
+    private struct JournalLine: Codable {
+        var g: Int
+        var e: SignatureEntry
+    }
+
+    // The store is a snapshot (signatures-v2.json) plus a journal of patterns changed since (one JSON line each).
+    // Events only change counters and add patterns: those go to the journal every 5 minutes, a few hundred KB
+    // instead of rewriting the whole 10 MB file. Decisions, removals and a journal grown past the snapshot's size
+    // write a new snapshot. Crash-safe: the snapshot is replaced atomically and carries a generation; journal lines
+    // of an older generation (a crash between the two writes) are ignored.
+    private var generation = 0
+    private var snapshotKeys = Set<String>()
+    private var changedKeys = Set<String>()
+    private var journalBytes = 0
+    private var hasSnapshot = false
+    private var journalURL: URL { fileURL.deletingPathExtension().appendingPathExtension("journal") }
+    private static let writer = DispatchQueue(label: "hostwatch.patterns.save", qos: .utility)
 
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
@@ -1454,26 +1477,86 @@ final class SignatureStore: ObservableObject {
         processRules = Dictionary(snap.processRules.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         merges = snap.merges ?? []
         aliases = snap.aliases ?? [:]
+        generation = snap.generation ?? 0
+        snapshotKeys = Set(entries.keys)
+        hasSnapshot = true
+        if let journal = try? Data(contentsOf: journalURL) {
+            journalBytes = journal.count
+            for line in journal.split(separator: 0x0A) {
+                guard let j = try? decoder.decode(JournalLine.self, from: line), j.g == generation else { continue }
+                entries[j.e.id] = j.e
+            }
+        }
         PatternMerges.shared.set(merges)
     }
 
-    /// Writes signatures.json; `sync` is used at quit so the write finishes before exit.
+    /// The saved patterns and process rules, snapshot plus journal, without a store (MCP server, command-line tools:
+    /// they read while the app runs). nil when nothing is saved.
+    nonisolated static func readSaved(from directory: URL) -> (entries: [SignatureEntry], processRules: [SignatureEntry])? {
+        let file = directory.appendingPathComponent("signatures-v2.json")
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let snap = try? decoder.decode(Snapshot.self, from: data) else { return nil }
+        var entries = Dictionary(snap.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let g = snap.generation ?? 0
+        if let journal = try? Data(contentsOf: file.deletingPathExtension().appendingPathExtension("journal")) {
+            for line in journal.split(separator: 0x0A) {
+                if let j = try? decoder.decode(JournalLine.self, from: line), j.g == g { entries[j.e.id] = j.e }
+            }
+        }
+        return (Array(entries.values), snap.processRules)
+    }
+
+    /// Saves: changed patterns to the journal, or a new snapshot when needed (see above). `sync` at quit.
     func save(sync: Bool = false) {
         SigningCache.shared.save()
         guard dirty || statsDirty else { return }
+        // A full snapshot after a decision, when the journal outgrew the snapshot (~500 bytes a pattern), or when
+        // any pattern of the snapshot is gone (a removal the journal can't express).
+        let full = dirty || !hasSnapshot || journalBytes > max(entries.count * 500, 1_000_000) || !snapshotKeys.isSubset(of: entries.keys)
         dirty = false
         statsDirty = false
-        let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values),
-                            merges: merges, aliases: aliases)
-        let url = fileURL
-        let write = {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            if let data = try? encoder.encode(snap) {
-                try? data.write(to: url, options: .atomic)
+        let url = fileURL, journal = journalURL
+        let write: () -> Void
+        if full {
+            generation += 1
+            let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values),
+                                merges: merges, aliases: aliases, generation: generation)
+            snapshotKeys = Set(entries.keys)
+            journalBytes = 0
+            hasSnapshot = true
+            write = {
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                guard let data = try? encoder.encode(snap), (try? data.write(to: url, options: .atomic)) != nil else { return }
+                try? FileManager.default.removeItem(at: journal)       // its lines were for the previous generation
+            }
+        } else {
+            let changed = changedKeys.compactMap { entries[$0] }, g = generation
+            journalBytes += changed.count * 600
+            write = {
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                var out = Data()
+                for e in changed {
+                    guard let line = try? encoder.encode(JournalLine(g: g, e: e)) else { continue }
+                    out += line
+                    out.append(0x0A)
+                }
+                guard !out.isEmpty else { return }
+                if let h = try? FileHandle(forWritingTo: journal) {
+                    _ = try? h.seekToEnd()
+                    try? h.write(contentsOf: out)
+                    try? h.close()
+                } else {
+                    FileManager.default.createFile(atPath: journal.path, contents: out, attributes: [.posixPermissions: 0o600])
+                }
             }
         }
-        if sync { write() } else { DispatchQueue.global(qos: .utility).async(execute: write) }
+        changedKeys.removeAll()
+        // One queue: a journal append never lands after (or interleaved with) a newer snapshot.
+        if sync { Self.writer.sync(execute: write) } else { Self.writer.async(execute: write) }
     }
 
     /// What every observed event changes (counts, last seen, new patterns): saved on the slow schedule.
@@ -1507,6 +1590,7 @@ final class SignatureStore: ObservableObject {
             .sorted { $0.lastSeen < $1.lastSeen }
             .prefix(entries.count - maxEntries + 1000)
         for v in victims { entries[v.id] = nil }
+        dirty = true                                  // removals need a new snapshot
     }
 }
 

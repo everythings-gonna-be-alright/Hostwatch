@@ -204,12 +204,10 @@ final class MCPServer {
         return d
     }
 
-    private struct PatternFile: Decodable { var entries: [SignatureEntry]; var processRules: [SignatureEntry] }
 
     private func patterns() -> (entries: [SignatureEntry], rules: [String: SignatureEntry]) {
-        guard let data = try? Data(contentsOf: data.support.appendingPathComponent("signatures-v2.json")),
-              let file = try? decoder().decode(PatternFile.self, from: data) else { return ([], [:]) }
-        return (file.entries, Dictionary(file.processRules.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
+        guard let saved = SignatureStore.readSaved(from: data.support) else { return ([], [:]) }   // snapshot + journal
+        return (saved.entries, Dictionary(saved.processRules.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
     }
 
     private func status(_ e: SignatureEntry, _ rules: [String: SignatureEntry]) -> SignatureStatus {

@@ -412,7 +412,8 @@ about 50 high-risk. The old per-folder scheme produced about 20k, all of them Ne
 
 Each pattern has a status: **New / Safe / Suspicious / Dangerous**, plus who set it (you, Claude,
 auto or baseline) and a short reason. Patterns are saved to
-`~/Library/Application Support/Hostwatch/signatures-v2.json`. The old `signatures.json` is not
+`~/Library/Application Support/Hostwatch/signatures-v2.json` plus a journal of patterns changed since
+(`signatures-v2.journal`, folded into a new snapshot after a decision or when it grows). The old `signatures.json` is not
 migrated and can be deleted.
 
 - **Show filter**: one setting, the same control on the Events and Patterns tabs and in the menu
