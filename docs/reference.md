@@ -3,6 +3,10 @@
 Every feature, setting and rule of Hostwatch, in the order you'll meet them. For a short overview, see the
 [README](../README.md); the same text is on the website at <https://everythings-gonna-be-alright.github.io/Hostwatch/docs/>.
 
+**Free for personal use, always.** A paid edition will be only for companies: a server that watches a whole fleet
+of Macs from one place, and a hosted cloud (SaaS) version. The Mac app described here stays free and open source
+(MIT license).
+
 ## Getting started
 
 ### Requirements
