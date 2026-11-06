@@ -437,8 +437,9 @@ enum HistoryFiles {
         return result
     }
 
-    /// Every member of a (multi-member) gzip stream, in order.
-    static func gunzipMembers(_ data: Data, sizeHint: Int = blockBytes, _ body: (Data) -> Void) {
+    /// Every member of a (multi-member) gzip stream, in order. `partial`: a member cut short (a block still being
+    /// written when the app crashed) hands over what decompressed before the end.
+    static func gunzipMembers(_ data: Data, sizeHint: Int = blockBytes, partial: Bool = false, _ body: (Data) -> Void) {
         var stream = z_stream()
         guard inflateInit2_(&stream, 31, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return }
         defer { inflateEnd(&stream) }
@@ -462,6 +463,7 @@ enum HistoryFiles {
                     if stream.avail_in == 0 { return }
                     inflateReset(&stream)
                 } else if status != Z_OK || (stream.avail_in == 0 && stream.avail_out > 0) {
+                    if partial && !member.isEmpty { body(member) }
                     return                               // damaged or truncated
                 }
             }

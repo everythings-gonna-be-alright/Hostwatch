@@ -998,20 +998,18 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
 {"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
 ```
 
-- **Compressed as it's written:** events wait in memory and are appended every 30 seconds (or 4 MB) as one gzip
-  member to `activity-….jsonl.gz`, with a line per member in `activity-….jsonl.blocks` (where it is and which
-  time it covers). Nothing is rewritten and nothing is written twice: about 1/22 of the raw bytes reach the disk
-  (activity logs are very repetitive; 30-second members compress almost as well as 4 MB ones). When the file is
-  full (see Max size below) its final index `activity-….jsonl.idx` replaces the `.blocks` list. Plain files left
-  from older versions are compressed on the next start.
-- **Crash safety:** the waiting events are kept in POSIX shared memory, which is never written to disk but outlives
-  an app crash; the next launch writes them. Each member is appended before its line in the block list, and the
-  buffer records how long the file was when the events started waiting, so a crash at any step loses nothing and
-  writes nothing twice (a half-written last member is cut off). A kernel panic or power loss can lose the last
-  ~30 seconds, as with any write the system hadn't flushed. Time Travel shows events once they're written.
-  The shared memory is owner-only (0600, like the history files: other users can't open it), events are wiped
-  from it as soon as they're written, and it's removed at a normal quit, when history is deleted or turned off,
-  and on Reset: it holds at most the last ~30 s and outlasts the app only after a crash.
+- **Compressed as it's written:** events are compressed as they arrive into the current block of
+  `activity-….jsonl.gz` (a gzip member); a block is finished every 30 seconds (or 4 MB) and gets a line in
+  `activity-….jsonl.blocks` (where it is and which time it covers). Nothing is rewritten and nothing is written
+  twice: about 1/22 of the raw bytes reach the disk. When the file is full (see Max size below) its final index
+  `activity-….jsonl.idx` replaces the `.blocks` list. Plain files left from older versions are compressed on the
+  next start.
+- **Crash safety:** the open block is flushed into the file every second (zlib's sync flush, which keeps the
+  compression dictionary: no measurable size cost). After an app crash those bytes are in the file, so the next
+  launch decompresses the unfinished block up to its last whole event and writes it as a finished block. An app
+  crash loses at most the last second; a kernel panic or power loss the last few seconds, as with any write the
+  system hadn't flushed. Nothing is written twice, and a torn tail is cut off. Time Travel shows events once their
+  block is finished (within 30 s).
   - The `.gz` is a series of independent gzip members of ≈4 MB of whole lines, so it is a normal gzip
     file (`zcat`, `zgrep`, `gzip -d` work).
   - The index records each block's earliest and latest timestamp, offset and sizes, plus bytes per

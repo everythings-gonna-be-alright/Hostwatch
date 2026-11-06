@@ -1,47 +1,179 @@
-import Darwin
 import Foundation
-import HostwatchShim
+import zlib
 
 // MARK: - Writing history compressed, as it arrives
 
-/// Events wait in a `PendingBuffer` and go to disk as one gzip member every 30 s (or 4 MB), appended to
-/// `activity-<start>.jsonl.gz`; a line per member goes to `activity-<start>.jsonl.blocks` (where it is and which
-/// time it covers). Nothing is rewritten, and nothing is written twice (it used to be written plain, then again
-/// compressed): about an eighth of the bytes reach the disk. A finished file gets its `.idx` and loses `.blocks`.
+/// The history file being written, compressed as events arrive: `activity-<start>.jsonl.gz` grows by gzip members
+/// ("blocks") of up to 30 s or 4 MB of events, and `activity-<start>.jsonl.blocks` gets a line per finished block
+/// (where it is, which time it covers). Nothing is rewritten or written twice: ~1/22 of the raw bytes reach the disk.
+/// When the file is full its `.idx` replaces the block list.
 final class HistoryStream {
-    static let flushInterval: TimeInterval = 30
+    // Crash safety without an extra copy: the open block is one compressed stream, flushed into the file every
+    // second (zlib's sync flush keeps its dictionary, so it costs ~nothing in size). After an app crash those bytes
+    // are in the file, so the next launch decompresses that unfinished tail up to the last whole event and writes it
+    // as a finished block. An app crash loses at most the last second; a panic or power loss the last few seconds.
+    static let blockInterval: TimeInterval = 30
+    static let syncInterval: TimeInterval = 1
 
     let stem: URL
-    /// Uncompressed bytes in the file, flushed or waiting: when it's full.
+    /// Uncompressed bytes in the file (finished blocks and the open one): when it's full.
     private(set) var rawBytes: Int64 = 0
-    /// Bytes on disk (compressed members and the block list).
+    /// Bytes on disk (the .gz and the block list).
     private(set) var diskBytes: Int64 = 0
-    private let buffer: PendingBuffer
+
     private var gz: FileHandle
     private var blockList: FileHandle
-    private var gzLength: Int64 = 0
     private var blocks: [HistoryFiles.Block] = []
     private var minutes: [Int64: Int64] = [:]
-    private var lastFlush = Date()
+    private var gzLength: Int64 = 0              // where the open block starts (the end of the finished ones)
 
-    /// Opens `stem` for appending (creating it, or recovering it after a crash: see `recover`).
-    init(stem: URL, buffer: PendingBuffer) throws {
+    // The open block.
+    private var stream = z_stream()
+    private var streamOpen = false
+    private var blockWritten: Int64 = 0          // compressed bytes of it in the file so far
+    private var blockRaw: Int64 = 0
+    private var blockFirst: Date?, blockLast: Date?
+    private var blockMinutes: [Int64: Int64] = [:]
+    private var blockStarted = Date()
+    private var unsynced = false
+
+    /// Opens `stem` for appending: creates it, or continues it, finishing what a crash left unfinished.
+    init(stem: URL) throws {
         self.stem = stem
-        self.buffer = buffer
         let fm = FileManager.default
-        let gzURL = HistoryFiles.gzURL(stem), listURL = HistoryFiles.blocksURL(stem)
-        for url in [gzURL, listURL] where !fm.fileExists(atPath: url.path) {
+        for url in [HistoryFiles.gzURL(stem), HistoryFiles.blocksURL(stem)] where !fm.fileExists(atPath: url.path) {
             fm.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
         }
-        gz = try FileHandle(forUpdating: gzURL)
-        blockList = try FileHandle(forUpdating: listURL)
+        gz = try FileHandle(forUpdating: HistoryFiles.gzURL(stem))
+        blockList = try FileHandle(forUpdating: HistoryFiles.blocksURL(stem))
         try recover()
     }
 
-    deinit { try? gz.close(); try? blockList.close() }
+    /// Without `close()` (a crash, or a test pretending to be one): the open block stays unfinished in the file.
+    deinit {
+        if streamOpen { deflateEnd(&stream) }
+        try? gz.close()
+        try? blockList.close()
+    }
 
-    /// After a crash: the block list may end in a half-written line and the .gz in a half-written member (both
-    /// cut back to the last complete block), and the buffer may hold events that never reached the file.
+    // MARK: Writing
+
+    /// Whole lines, as they arrive: compressed into the open block at once.
+    func append(_ lines: Data) throws {
+        guard !lines.isEmpty else { return }
+        if !streamOpen { try openBlock() }
+        var perMinute: [Int64: Int64] = [:]
+        if let (first, last) = HistoryFiles.timeRange(lines, perMinute: &perMinute) {
+            blockFirst = min(blockFirst ?? first, first)
+            blockLast = max(blockLast ?? last, last)
+            for (m, b) in perMinute { blockMinutes[m, default: 0] += b }
+        }
+        try deflateWrite(lines, flush: Z_NO_FLUSH)
+        blockRaw += Int64(lines.count)
+        rawBytes += Int64(lines.count)
+        unsynced = true
+        if blockRaw >= Int64(HistoryFiles.blockBytes) { try seal() }
+    }
+
+    /// Every second (the recorder's timer): what arrived goes into the file; a block 30 s old is finished.
+    func tick(now: Date = Date()) throws {
+        guard streamOpen else { return }
+        if now.timeIntervalSince(blockStarted) >= Self.blockInterval { try seal() } else { try sync() }
+    }
+
+    /// Pushes everything compressed so far into the file (the open block stays open).
+    func sync() throws {
+        guard streamOpen, unsynced else { return }
+        try deflateWrite(Data(), flush: Z_SYNC_FLUSH)
+        unsynced = false
+    }
+
+    /// Finishes the open block: its gzip trailer, then its line in the block list (in that order: a crash between
+    /// the two leaves a whole member that recovery reads back, once).
+    func seal() throws {
+        guard streamOpen else { return }
+        try deflateWrite(Data(), flush: Z_FINISH)
+        deflateEnd(&stream)
+        streamOpen = false
+        unsynced = false
+        guard blockRaw > 0, let first = blockFirst, let last = blockLast else {
+            // Nothing with a timestamp: drop the empty member.
+            try gz.truncate(atOffset: UInt64(gzLength))
+            try gz.seekToEnd()
+            diskBytes -= blockWritten
+            return
+        }
+        let block = HistoryFiles.Block(start: first, end: last, offset: gzLength, length: blockWritten, size: blockRaw)
+        try addToList(block, minutes: blockMinutes)
+        gzLength += blockWritten
+    }
+
+    /// The file is full: everything written, the final index in place of the block list.
+    @discardableResult
+    func finish() throws -> HistoryFiles.Index {
+        try seal()
+        try gz.synchronize()
+        let index = HistoryFiles.Index(blocks: blocks, minutes: minutes.keys.sorted().map { [$0, minutes[$0]!] })
+        try HistoryFiles.writeIndex(index, for: stem)
+        try? FileManager.default.removeItem(at: HistoryFiles.blocksURL(stem))
+        return index
+    }
+
+    /// Stops writing (quit): the open block is finished; the file stays open-ended and continues next launch.
+    func close() throws { try seal() }
+
+    // MARK: Blocks
+
+    private func openBlock() throws {
+        stream = z_stream()
+        guard deflateInit2_(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION,
+                            Int32(MemoryLayout<z_stream>.size)) == Z_OK else { throw HistoryFiles.ZError.failed(-1) }
+        streamOpen = true
+        blockWritten = 0
+        blockRaw = 0
+        blockFirst = nil
+        blockLast = nil
+        blockMinutes = [:]
+        blockStarted = Date()
+    }
+
+    private func deflateWrite(_ input: Data, flush: Int32) throws {
+        var out = Data()
+        var chunk = [UInt8](repeating: 0, count: 65_536)
+        var status: Int32 = Z_OK
+        input.withUnsafeBytes { src in
+            stream.next_in = UnsafeMutablePointer(mutating: src.bindMemory(to: Bytef.self).baseAddress)
+            stream.avail_in = uInt(src.count)
+            repeat {
+                chunk.withUnsafeMutableBytes { dst in
+                    stream.next_out = dst.bindMemory(to: Bytef.self).baseAddress
+                    stream.avail_out = uInt(dst.count)
+                    status = deflate(&stream, flush)
+                    out.append(dst.bindMemory(to: UInt8.self).baseAddress!, count: dst.count - Int(stream.avail_out))
+                }
+            } while stream.avail_out == 0 || (flush == Z_FINISH && status == Z_OK)
+        }
+        stream.next_in = nil
+        guard status >= 0 || status == Z_BUF_ERROR else { throw HistoryFiles.ZError.failed(status) }
+        guard !out.isEmpty else { return }
+        try gz.write(contentsOf: out)
+        blockWritten += Int64(out.count)
+        diskBytes += Int64(out.count)
+    }
+
+    private func addToList(_ block: HistoryFiles.Block, minutes perMinute: [Int64: Int64]) throws {
+        var line = HistoryFiles.blockLine(block, minutes: perMinute)
+        line.append(0x0A)
+        try blockList.write(contentsOf: line)
+        diskBytes += Int64(line.count)
+        blocks.append(block)
+        for (m, b) in perMinute { minutes[m, default: 0] += b }
+    }
+
+    // MARK: After a crash
+
+    /// The block list may end in a half-written line (cut), and the .gz in an unfinished block: everything in it up to
+    /// the last whole event is written again as one finished block (and nothing after it, so nothing twice).
     private func recover() throws {
         let listData = try blockList.readToEnd() ?? Data()
         let (parsed, validBytes) = HistoryFiles.parseBlockList(listData)
@@ -50,211 +182,37 @@ final class HistoryStream {
         blocks = parsed.blocks
         for pair in parsed.minutes ?? [] where pair.count == 2 { minutes[pair[0], default: 0] += pair[1] }
         gzLength = blocks.last.map { $0.offset + $0.length } ?? 0
-        let onDisk = Int64(try gz.seekToEnd())
-        if onDisk > gzLength { try gz.truncate(atOffset: UInt64(gzLength)) }
-        try gz.seekToEnd()
         rawBytes = blocks.reduce(0) { $0 + $1.size }
         diskBytes = gzLength + Int64(validBytes)
-        // Waiting events for this file, never written: the .gz is still as long as when they started waiting.
-        // Longer means they were written just before the crash (only the buffer reset was lost): drop them.
-        if buffer.segment == Self.id(stem), buffer.used > 0 {
-            if buffer.base == gzLength { try flush() } else { buffer.reset(segment: Self.id(stem), base: gzLength) }
-        } else {
-            buffer.reset(segment: Self.id(stem), base: gzLength)
+        try gz.seek(toOffset: UInt64(gzLength))
+        let tail = try gz.readToEnd() ?? Data()
+        try gz.truncate(atOffset: UInt64(gzLength))
+        try gz.seekToEnd()
+        let rescued = Self.wholeLines(Self.inflatePartial(tail))
+        if !rescued.isEmpty {
+            try append(rescued)
+            try seal()
         }
     }
 
-    /// Whole lines, as they arrive.
-    func append(_ lines: Data) throws {
-        guard !lines.isEmpty else { return }
-        if buffer.used + lines.count > HistoryFiles.blockBytes { try flush() }
-        if !buffer.append(lines) {                      // larger than the whole buffer: straight to disk
-            try writeMember(lines)
-        }
-        rawBytes += Int64(lines.count)
-        if Date().timeIntervalSince(lastFlush) >= Self.flushInterval { try flush() }
+    /// As much of a (possibly unfinished, possibly torn) gzip stream as decompresses.
+    static func inflatePartial(_ data: Data) -> Data {
+        guard !data.isEmpty else { return Data() }
+        var out = Data()
+        HistoryFiles.gunzipMembers(data, partial: true) { out.append($0) }
+        return out
     }
 
-    /// Writes what's waiting when it has waited long enough (called every few seconds, also when it's quiet).
-    func flushIfDue(now: Date = Date()) throws {
-        if buffer.used > 0, now.timeIntervalSince(lastFlush) >= Self.flushInterval { try flush() }
+    /// Up to and including the last line break (a torn last event is dropped).
+    static func wholeLines(_ data: Data) -> Data {
+        guard let nl = data.lastIndex(of: 0x0A) else { return Data() }
+        return Data(data[data.startIndex...nl])
     }
 
-    /// Writes what's waiting as one member. Order matters for crash safety: the member, then its line in the block
-    /// list, then the buffer is emptied (`used` first, then the new base).
-    func flush() throws {
-        lastFlush = Date()
-        guard buffer.used > 0 else { return }
-        try writeMember(buffer.contents())
-        buffer.markWritten(newBase: gzLength)
-    }
-
-    private func writeMember(_ data: Data) throws {
-        var perMinute: [Int64: Int64] = [:]
-        guard let (first, last) = HistoryFiles.timeRange(data, perMinute: &perMinute) else { return }
-        let member = try HistoryFiles.gzip(data)
-        try gz.write(contentsOf: member)
-        let block = HistoryFiles.Block(start: first, end: last, offset: gzLength, length: Int64(member.count),
-                                       size: Int64(data.count))
-        var line = HistoryFiles.blockLine(block, minutes: perMinute)
-        line.append(0x0A)
-        try blockList.write(contentsOf: line)
-        gzLength += Int64(member.count)
-        diskBytes += Int64(member.count + line.count)
-        blocks.append(block)
-        for (m, b) in perMinute { minutes[m, default: 0] += b }
-    }
-
-    /// The file is full or recording stops for good: everything written, the final index in place of the list.
-    @discardableResult
-    func finish() throws -> HistoryFiles.Index {
-        try flush()
-        try gz.synchronize()
-        let index = HistoryFiles.Index(blocks: blocks, minutes: minutes.keys.sorted().map { [$0, minutes[$0]!] })
-        try HistoryFiles.writeIndex(index, for: stem)
-        try? FileManager.default.removeItem(at: HistoryFiles.blocksURL(stem))
-        buffer.reset(segment: 0, base: 0)
-        return index
-    }
-
-    /// Stops writing without finishing (quit): the file stays open-ended (.blocks), continued next launch.
-    func close() throws {
-        try flush()
-    }
-
-    /// A file left open-ended by an earlier run that isn't continued (it's full, or another one is newer): its final
-    /// index from the block list, without touching the waiting events (they belong to the file being written).
+    /// A file an earlier run left open-ended that isn't continued: its unfinished tail recovered, its final index.
     static func finishOrphan(_ stem: URL) {
-        guard let list = try? Data(contentsOf: HistoryFiles.blocksURL(stem)) else { return }
-        let index = HistoryFiles.parseBlockList(list).index
-        if let last = index.blocks.last, let gz = try? FileHandle(forUpdating: HistoryFiles.gzURL(stem)) {
-            try? gz.truncate(atOffset: UInt64(last.offset + last.length))      // a half-written last member
-            try? gz.close()
-        }
-        guard !index.blocks.isEmpty else { HistoryFiles.remove(stem); return }
-        guard (try? HistoryFiles.writeIndex(index, for: stem)) != nil else { return }
-        try? FileManager.default.removeItem(at: HistoryFiles.blocksURL(stem))
+        guard let s = try? HistoryStream(stem: stem) else { return }
+        if s.blocks.isEmpty { HistoryFiles.remove(stem); return }
+        _ = try? s.finish()
     }
-
-    /// A short, stable number for a file: which file the waiting events belong to.
-    static func id(_ stem: URL) -> UInt64 { HashedSet.hash(stem.lastPathComponent) | 1 }
-}
-
-// MARK: - The waiting events, in memory that outlives a crash
-
-/// POSIX shared memory: like the app's own memory it never touches the disk, but it stays after the app crashes
-/// (until it's removed, or the Mac restarts), so the next launch writes what was waiting. A kernel panic or power
-/// loss loses it, as it loses any write the system hadn't flushed yet.
-///
-/// Privacy: owner-only (0600; other users can't open it, the same as the history files), and short-lived: written
-/// events are wiped from it at once, and it's removed at a normal quit, when history is deleted or turned off, and on
-/// Reset. So it holds at most the last ~30 s of events, and outlasts the app only after a crash.
-final class PendingBuffer {
-    static let capacity = 8 << 20
-    private struct Header {
-        var magic: UInt64
-        var segment: UInt64          // which file these events are for (HistoryStream.id)
-        var base: Int64              // that file's .gz length when they started waiting
-        var used: Int64              // bytes waiting
-    }
-    private static let magic: UInt64 = 0x4857_4842_5546_0001      // "HWBUF", v1
-    private static let headerSize = 64
-
-    let name: String
-    private let memory: UnsafeMutableRawPointer
-    private let size: Int
-
-    /// One per history folder (a demo or test folder gets its own). Names are short: macOS allows 31 characters.
-    static func name(for directory: URL) -> String {
-        String(format: "/hw.%u.%016llx", getuid(), HashedSet.hash(directory.standardizedFileURL.path))
-    }
-
-    /// Ordinary memory, when shared memory can't be had: works the same, but a crash loses what was waiting.
-    init(localCapacity: Int = PendingBuffer.capacity) {
-        name = ""
-        size = Self.headerSize + localCapacity
-        memory = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 16)
-        isLocal = true
-        header = Header(magic: Self.magic, segment: 0, base: 0, used: 0)
-    }
-    private var isLocal = false
-
-    init?(name: String) {
-        self.name = name
-        let fd = hw_shm_open(name, O_RDWR | O_CREAT, 0o600)
-        guard fd >= 0 else { return nil }
-        defer { close(fd) }
-        var st = stat()
-        guard fstat(fd, &st) == 0 else { return nil }
-        if st.st_size == 0, ftruncate(fd, off_t(Self.headerSize + Self.capacity)) != 0 { return nil }
-        guard fstat(fd, &st) == 0, Int(st.st_size) >= Self.headerSize + 4096 else { return nil }
-        size = Int(st.st_size)
-        let p = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
-        guard let p, p != MAP_FAILED else { return nil }
-        memory = p
-        if header.magic != Self.magic { header = Header(magic: Self.magic, segment: 0, base: 0, used: 0) }
-    }
-
-    deinit { if isLocal { memory.deallocate() } else { munmap(memory, size) } }
-
-    private var header: Header {
-        get { memory.load(as: Header.self) }
-        set { memory.storeBytes(of: newValue, as: Header.self) }
-    }
-
-    var segment: UInt64 { header.segment }
-    var base: Int64 { header.base }
-    var used: Int { Int(header.used) }
-    private var room: Int { size - Self.headerSize }
-
-    /// Adds bytes after the waiting ones; false if they don't fit. The count is updated after the copy, so a crash
-    /// in between loses only these bytes, never corrupts what was waiting.
-    func append(_ data: Data) -> Bool {
-        let at = used
-        guard at + data.count <= room else { return false }
-        data.withUnsafeBytes { memory.advanced(by: Self.headerSize + at).copyMemory(from: $0.baseAddress!, byteCount: data.count) }
-        memory.storeBytes(of: Int64(at + data.count), toByteOffset: MemoryLayout<UInt64>.size * 3, as: Int64.self)
-        return true
-    }
-
-    func contents() -> Data { Data(bytes: memory.advanced(by: Self.headerSize), count: min(used, room)) }
-
-    /// After a flush: empty first (so a crash here can't write them twice), then the file's new length.
-    func markWritten(newBase: Int64) {
-        let written = used
-        memory.storeBytes(of: Int64(0), toByteOffset: MemoryLayout<UInt64>.size * 3, as: Int64.self)
-        memory.storeBytes(of: newBase, toByteOffset: MemoryLayout<UInt64>.size * 2, as: Int64.self)
-        wipe(written)                                   // written events don't linger in memory
-    }
-
-    private func wipe(_ count: Int) {
-        guard count > 0 else { return }
-        memset(memory.advanced(by: Self.headerSize), 0, min(count, room))
-    }
-
-    /// Non-zero bytes in the event area (tests: nothing must linger after a flush).
-    func residue() -> Int {
-        let p = memory.advanced(by: Self.headerSize).assumingMemoryBound(to: UInt8.self)
-        var n = 0
-        for i in 0..<room where p[i] != 0 { n += 1 }
-        return n
-    }
-
-    /// The permission bits of a shared memory object (tests).
-    static func mode(name: String) -> mode_t? {
-        let fd = hw_shm_open(name, O_RDONLY, 0)
-        guard fd >= 0 else { return nil }
-        defer { close(fd) }
-        var st = stat()
-        return fstat(fd, &st) == 0 ? st.st_mode & 0o777 : nil
-    }
-
-    func reset(segment: UInt64, base: Int64) {
-        let old = used
-        header = Header(magic: Self.magic, segment: segment, base: base, used: 0)
-        wipe(old)
-    }
-
-    /// Removes the shared memory (tests; history cleared).
-    static func remove(name: String) { _ = hw_shm_unlink(name) }
 }

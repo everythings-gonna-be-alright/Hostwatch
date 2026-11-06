@@ -212,19 +212,18 @@ enum PerfWorkload {
 
     private func measureHistoryWriting() throws -> ResourceCost {
         let dir = try tempDir("history")
-        let name = PendingBuffer.name(for: dir)
-        defer { try? FileManager.default.removeItem(at: dir); PendingBuffer.remove(name: name) }
-        let buffer = PendingBuffer(name: name) ?? PendingBuffer()
+        defer { try? FileManager.default.removeItem(at: dir) }
         let stem = dir.appendingPathComponent("activity-20270115-080000-000.jsonl")
         let chunks = PerfWorkload.chunks(100_000, by: 500)
         let (cost, raw) = try ResourceCost.measure { () -> Int in
-            let stream = try HistoryStream(stem: stem, buffer: buffer)
+            let stream = try HistoryStream(stem: stem)
             var raw = 0
             for (n, chunk) in chunks.enumerated() {
                 raw += chunk.count
                 try autoreleasepool {
                     try stream.append(chunk)
-                    if n % 8 == 0 { try stream.flush() }
+                    try stream.sync()                                    // as every second
+                    if n % 8 == 0 { try stream.seal() }
                 }
             }
             try stream.finish()
@@ -267,11 +266,9 @@ enum PerfWorkload {
 
     private func measureTimeTravelReading() throws -> ResourceCost {
         let dir = try tempDir("travel")
-        let name = PendingBuffer.name(for: dir)
-        defer { try? FileManager.default.removeItem(at: dir); PendingBuffer.remove(name: name) }
-        let stream = try HistoryStream(stem: dir.appendingPathComponent("activity-20270115-080000-000.jsonl"),
-                                       buffer: PendingBuffer(name: name) ?? PendingBuffer())
-        for chunk in PerfWorkload.chunks(100_000, by: 2000) { try stream.append(chunk); try stream.flush() }
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let stream = try HistoryStream(stem: dir.appendingPathComponent("activity-20270115-080000-000.jsonl"))
+        for chunk in PerfWorkload.chunks(100_000, by: 2000) { try stream.append(chunk); try stream.seal() }
         try stream.finish()
         let archive = HistoryArchive(directory: dir)
         let (cost, found) = ResourceCost.measure { () -> (Int, Int) in
