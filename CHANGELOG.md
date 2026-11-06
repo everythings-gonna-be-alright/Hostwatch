@@ -1,77 +1,46 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 – Lighter, faster, sees further back
 
-- **Search all history in Time Travel:** the search field finds matches in everything recorded, not only the
-  shown window: newest first, with their day and tick marks on the timeline. Capped at the newest 1,000 matches,
-  so memory and the list stay small. Double-click one to open its moment. **All History / This Window** switches
-  the scope.
-- **Running Now in Time Travel:** switch to *Running Now* while traveling (or turn Time Travel on from Running Now: it
-  stays there) to see what was running at the playhead,
-  with CPU, CPU time, memory, threads and how long each had run, following the playhead as you drag or play.
-  Hostwatch now records the process list once a minute (every process each 30 minutes, only changes in between;
-  a few tens of MB a day before compression, inside the history size limit), so this works from now on, not for
-  moments before. Playing moves the list smoothly between the once-a-minute lists.
-- **A search you typed stays in sight.** While the search field filters a tab, a bar under the toolbar says
-  *Showing only matches for "…"* in the accent color, with **Clear Search**; the event count in the footer turns
-  accent too. In Time Travel the same bar holds the All History / This Window choice.
-- **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
-  below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
-- **Open at login** (Settings ▸ General ▸ Startup, off by default): Hostwatch as a macOS login item, listed in
-  System Settings ▸ General ▸ Login Items.
-- **A warning when the firewall turns itself to Watch.** If the relay's web check fails twice, Ask or Strict falls back
-  to Watch (nothing blocked): a banner above every tab now says so and why, with *Turn Ask Back On* and *Firewall
-  Settings*, and the menu bar menu shows it too, until you pick a mode.
-- **MCP server: find and trace processes.** `find_processes` lists what ran in a time range (start, end, CPU,
-  memory, disk writes, user, parent, command line); `trace_process` follows one process's whole life: ancestors,
-  child tree, resource use, and what it ran, opened and connected to. The instructions and tool list stay small
-  (a test keeps them under 800 characters and 9 KB).
-- **Fix: the MCP server found nothing right after a history file started** (a new compressed file has no finished
-  block for up to 30 s, and the search stopped there).
-- **Disk space:** free space on the startup disk in the resource strip, recorded with every sample. Click it for
-  its trend over the last hour or day and the programs that **wrote the most** to disk then (ended ones too).
-  Running Now shows what is writing now (*Writing*).
-- **Who's writing to disk:** Running Now's *Writing* column shows bytes per second now (or around the Time Travel
-  moment, from the minute lists), so a process writing hard stands out; the total since it started is in its
-  information. It showed only that total, which barely moves, so nothing seemed to write.
-- **Far fewer disk writes:** Hostwatch rewrote its whole pattern store (10 MB on a busy Mac) every 10 seconds,
-  because every event updates a pattern's counter: about 1 MB/s, and a memory jump each time it was encoded. Counters
-  and newly learned patterns are now saved every 5 minutes (and at quit), and only the patterns that changed: they're
-  appended to a journal (`signatures-v2.journal`, a few hundred KB) instead of rewriting the store; your decisions
-  still write a new snapshot within seconds. Crash-safe: journal lines carry the snapshot's generation and stale
-  ones are ignored.
-- **Safe rules only from regular behaviour.** A learned Safe rule needs patterns seen at least 5 times, over an
-  hour or more: one-off Safe decisions aren't sent to Claude, and a proposal backed only by them is refused. Dangerous
-  and Suspicious decisions still teach rules from a single sighting.
-- **History written compressed, as it arrives:** events are compressed straight into the history file (no plain
-  copy written and compressed again later): about 1/22 of the bytes. The open block is flushed into the file every
-  second, and the next launch recovers it after a crash: an app crash loses at most the last second, and nothing is
-  written twice.
-- **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
-  up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
-  lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.
-- **Faster Time Travel:** a slice loads about 6× faster (patterns from paths are remembered, lines are parsed
-  without the slow decoder), and hovering or dragging the timeline no longer re-filters the whole list, so the
-  window keeps up. The live stream parses events faster too.
-- **Fix:** the right-click menu works on Time Travel rows (it looked only in the live list).
-- **Fix: the collector's memory leak.** The root collector grew by ~3 MB a second (GBs within hours): its loops
-  run without a run loop, so the autorelease pool that holds Foundation's per-event objects (parsed JSON, strings)
-  was never drained. Each event now gets its own pool. The bigger part: the reader of eslogger's output trimmed its
-  buffer with `Data.removeFirst`, which only moves the start of the same storage, so every byte eslogger printed
-  stayed in memory (one 2.5 GB buffer after half an hour). It now keeps only the unread part. Its bounded caches also kept a bookkeeping entry per
-  rewrite, and expired firewall answers were never dropped; both fixed. Leak tests measure the process's memory
-  while parsing eslogger-like events and under cache churn (and check they would see the old leak). The collector
-  logs its memory hourly in `agent.log`.
-- **Fix: no more `sleep`/`kill` every 2 seconds.** The firewall's cleanup watchdog and the nettop helper waited for
-  the collector by polling, spawning about 60 processes a minute (all recorded as events). They now wait on a
-  pipe that closes when the collector ends, however it ends.
-- **Fix: known bad shows everywhere.** An event on a threat list says *Known bad* in the Status column (it showed
-  the pattern's status, often Safe, beside the KNOWN BAD tag) and sorts first; the Ask AI window shows the match
-  (chip and a *Threat list* row), and the AI now gets Hostwatch's signals: threat-list match, beacon, new domain,
-  raw IP, first seen.
-- **Fix: the history size limit now holds.** It counts activity, resource samples and process lists together,
-  and deletes the oldest compressed history for real (it removed only the plain file name, so compressed files
-  were never deleted and history could grow past the limit).
+**New**
+- **Search all of history in Time Travel.** Type in the search field and Hostwatch finds matches in everything it
+  recorded, not just the window on screen. Double-click a match to jump to that moment.
+- **Running Now in Time Travel.** See which processes were running at any past moment, with their CPU, memory and
+  disk writes. Hostwatch now records the process list once a minute, so this works from this version on.
+- **Who's writing to your disk.** Running Now has a *Writing* column (bytes per second), and the resource strip
+  shows free disk space. Click it to see the trend and the programs that wrote the most.
+- **Open at login** – a new option in Settings ▸ General (off by default).
+- **A clear warning when the firewall turns itself to Watch** (its relay failed a check): a banner and the menu bar
+  say so and why, with a button to turn it back on.
+- **A search you forgot about can't hide events anymore.** While the search field filters a list, a highlighted bar
+  says so, with *Clear Search*.
+- **Running Now:** double-click a process for its details; *Show Spawn in Timeline* is offered there.
+- **Known bad is shown everywhere:** a process or connection on a threat list now says *Known bad* in the Status
+  column and in the Ask AI window, and the AI is told about it.
+- **Safe rules learn only from regular behaviour** (seen at least 5 times, over an hour or more), never from a
+  one-off.
+
+**Faster and lighter**
+- **Up to 10× less writing to your SSD.** History is compressed as it's written, and the pattern store saves only
+  what changed instead of rewriting itself every few seconds.
+- **Less memory.** Time Travel loads a window page by page, and the threat lists take ~3 MB instead of ~50 MB.
+- **Time Travel loads about 6× faster** and stays smooth while you drag or play.
+- **Crash-safe history:** if the app crashes, at most the last second of events is lost.
+
+**Fixes**
+- **The collector no longer grows to gigabytes of memory** over hours of running.
+- **No more short-lived `sleep`/`kill` processes every 2 seconds** from Hostwatch's own helpers.
+- **The history size limit holds again**, and now covers everything Hostwatch records.
+- Right-clicking a row in Time Travel works; the empty Running Now screen fills the window.
+
+**Website**
+- The site says it plainly: Hostwatch for Mac is **free for personal use, always**, and shows what's planned next.
+
+**For developers**
+- **MCP server:** `find_processes` (what ran in a time range) and `trace_process` (one process's whole life: who
+  started it, its children, resources, and what it ran, opened and connected to).
+- **Performance tests:** CPU, disk writes and memory of the main paths are checked against a baseline, so a release
+  that gets heavier fails the tests.
 
 ## 0.10.0 – Running Now, a new look
 
