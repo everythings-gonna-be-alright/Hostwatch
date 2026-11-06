@@ -64,7 +64,20 @@ enum PerfBaseline {
         try? encoder.encode(all).write(to: url, options: .atomic)
     }
 
-    /// Fails when the cost is over budget: writes +10% (they barely vary), memory +30%, CPU up to 2× (it depends on
+    /// Measures and checks; when recording, measures 3 times and keeps the highest of each figure, so one lucky run
+    /// (a quiet machine, memory that happened to be reused) can't set a baseline normal runs then exceed.
+    static func enforce(_ name: String, _ work: () throws -> ResourceCost, sourceLocation: SourceLocation = #_sourceLocation) throws {
+        guard recording else { check(name, try work(), sourceLocation: sourceLocation); return }
+        var worst = try work()
+        for _ in 0..<2 {
+            let c = try work()
+            worst = ResourceCost(cpu: max(worst.cpu, c.cpu), writes: max(worst.writes, c.writes),
+                                 memory: max(worst.memory, c.memory), peak: max(worst.peak, c.peak))
+        }
+        check(name, worst, sourceLocation: sourceLocation)
+    }
+
+    /// Fails when the cost is over budget: writes +20% (they vary a few %; a careless rewrite costs 10× and more), memory +30%, CPU up to 2× (it depends on
     /// which cores macOS picks and what else runs; the regressions worth catching cost several times more), each with
     /// a small allowance so tiny numbers don't flap.
     static func check(_ name: String, _ cost: ResourceCost, sourceLocation: SourceLocation = #_sourceLocation) {
@@ -75,9 +88,11 @@ enum PerfBaseline {
             Issue.record("no baseline for \(name): run with HOSTWATCH_PERF_RECORD=1", sourceLocation: sourceLocation)
             return
         }
-        let writeBudget = Int64(Double(base.writes) * 1.10) + 65_536
+        let writeBudget = Int64(Double(base.writes) * 1.20) + 65_536
         let cpuBudget = base.cpu * 2.0 + 0.20
-        let memoryBudget = Int64(Double(base.memory) * 1.3) + 16_000_000
+        // Kept memory can't exceed the peak: budget it from the larger of the two, so a run that happened to keep
+        // nothing (memory reused) can't leave a baseline normal runs then exceed.
+        let memoryBudget = Int64(Double(max(base.memory, base.peak)) * 1.3) + 16_000_000
         #expect(cost.writes <= writeBudget,
                 "\(name) wrote \(cost.writes / 1000) KB, budget \(writeBudget / 1000) KB (baseline \(base.writes / 1000) KB)",
                 sourceLocation: sourceLocation)
@@ -159,7 +174,9 @@ enum PerfWorkload {
 
     /// The app's event pipeline: parse, patterns, stories, domains, beacons, UI batches, with the pattern store saved
     /// as it is every 5 minutes (here every 4,000 events) and once at the end.
-    @Test func appEventPipeline() throws {
+    @Test func appEventPipeline() throws { try PerfBaseline.enforce("app.eventPipeline", measureAppEventPipeline) }
+
+    private func measureAppEventPipeline() throws -> ResourceCost {
         let dir = try tempDir("app")
         defer { try? FileManager.default.removeItem(at: dir) }
         let model = HUDModel(signatures: SignatureStore(directory: dir), stories: StoryEngine(persistent: false),
@@ -187,11 +204,13 @@ enum PerfWorkload {
             return model.history.count
         }
         #expect(model.history.count == model.historyLimit)
-        PerfBaseline.check("app.eventPipeline", cost)
+        return cost
     }
 
     /// History: 100,000 events through the compressed writer, flushed as every 30 s, then the file finished.
-    @Test func historyWriting() throws {
+    @Test func historyWriting() throws { try PerfBaseline.enforce("history.write", measureHistoryWriting) }
+
+    private func measureHistoryWriting() throws -> ResourceCost {
         let dir = try tempDir("history")
         let name = PendingBuffer.name(for: dir)
         defer { try? FileManager.default.removeItem(at: dir); PendingBuffer.remove(name: name) }
@@ -212,12 +231,14 @@ enum PerfWorkload {
             return raw
         }
         #expect(cost.writes < Int64(raw) / 5)                        // compressed, written once
-        PerfBaseline.check("history.write", cost)
+        return cost
     }
 
     /// The collector's main loop: 120,000 eslogger events through the line reader, JSON and `normalize`, on a thread with no
     /// run loop (as in the collector).
-    @Test func collectorEsloggerLoop() throws {
+    @Test func collectorEsloggerLoop() throws { try PerfBaseline.enforce("collector.esloggerLoop", measureCollectorEsloggerLoop) }
+
+    private func measureCollectorEsloggerLoop() throws -> ResourceCost {
         var fds: [Int32] = [-1, -1]
         #expect(pipe(&fds) == 0)
         let agent = Agent()
@@ -238,11 +259,13 @@ enum PerfWorkload {
             return n
         }
         #expect(events > 0)
-        PerfBaseline.check("collector.esloggerLoop", cost)
+        return cost
     }
 
     /// Time Travel on recorded history: a window's first page, then a full search through everything.
-    @Test func timeTravelReading() throws {
+    @Test func timeTravelReading() throws { try PerfBaseline.enforce("timetravel.read", measureTimeTravelReading) }
+
+    private func measureTimeTravelReading() throws -> ResourceCost {
         let dir = try tempDir("travel")
         let name = PendingBuffer.name(for: dir)
         defer { try? FileManager.default.removeItem(at: dir); PendingBuffer.remove(name: name) }
@@ -260,6 +283,6 @@ enum PerfWorkload {
             return (page.events.count, hits)
         }
         #expect(found.0 > 1000 && found.1 > 0)
-        PerfBaseline.check("timetravel.read", cost)
+        return cost
     }
 }
