@@ -174,6 +174,62 @@ struct ProcessHistory: Sendable {
                         processes: out.sorted { $0.pid < $1.pid })
     }
 
+    // MARK: Over a time range
+
+    /// Every recorded list between `from` and `to`, oldest first: its time and the processes alive then. `body`
+    /// returns false to stop. Lists before `from` are read only to rebuild the first moment.
+    func forEachList(from: Date, to: Date, _ body: (Double, [Int: RunningProcessInfo]) -> Bool) {
+        let a = from.timeIntervalSince1970, b = to.timeIntervalSince1970
+        var day = Calendar.current.startOfDay(for: from)
+        var alive: [Int: RunningProcessInfo] = [:]
+        while day <= to {
+            let lines = Self.index(archive.data(day: MetricsArchive.dayName(day)))
+            let start = lines.lastIndex { $0.key && $0.t <= a } ?? lines.firstIndex(where: \.key) ?? lines.count
+            for line in lines[start...] where line.t <= b {
+                Self.apply(line, to: &alive)
+                if line.t >= a, !body(line.t, alive) { return }
+            }
+            day = Calendar.current.date(byAdding: .day, value: 1, to: day) ?? to.addingTimeInterval(1)
+        }
+    }
+
+    /// One process (pid + start) as the lists saw it over a range.
+    struct Seen: Sendable {
+        var info: RunningProcessInfo          // as last seen
+        var first: Double, last: Double       // first and last list it was in
+        var maxMem: Int64
+        var cpuAtFirst: Double                // CPU time when first seen (used = info.cpuTime - this)
+        var writtenAtFirst: Int64?
+    }
+
+    /// Every process alive in some list between `from` and `to`.
+    func processes(from: Date, to: Date) -> [Seen] {
+        var seen: [String: Seen] = [:]
+        forEachList(from: from, to: to) { t, alive in
+            for p in alive.values {
+                let key = "\(p.pid)-\(p.start)"
+                if var s = seen[key] {
+                    s.info = p; s.last = t; s.maxMem = max(s.maxMem, p.mem)
+                    seen[key] = s
+                } else {
+                    seen[key] = Seen(info: p, first: t, last: t, maxMem: p.mem, cpuAtFirst: p.cpuTime, writtenAtFirst: p.written)
+                }
+            }
+            return true
+        }
+        return Array(seen.values)
+    }
+
+    /// One process's samples (time, state) between `from` and `to`, for its resource use over its life.
+    func samples(pid: Int, start: Double, from: Date, to: Date) -> [(t: Double, info: RunningProcessInfo)] {
+        var out: [(Double, RunningProcessInfo)] = []
+        forEachList(from: from, to: to) { t, alive in
+            if let p = alive[pid], start <= 0 || abs(p.start - start) < 2 { out.append((t, p)) }
+            return true
+        }
+        return out
+    }
+
     // MARK: Who wrote to disk
 
     /// One program's disk writes over a period.
