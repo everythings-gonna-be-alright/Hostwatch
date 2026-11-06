@@ -57,6 +57,13 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.11.0**
+- **🔍 Search all of history** – Time Travel finds matches in everything recorded; double-click one to jump there.
+- **⏱️ Running Now in the past** – which processes were running at any moment, with CPU, memory and disk writes.
+- **💾 Who's writing to your disk** – a *Writing* column and free disk space with the programs that wrote the most.
+- **🪶 Lighter** – up to 10× fewer SSD writes, much less memory, and the collector's memory leak fixed.
+- **🚀 Open at login**, a firewall warning when it turns itself to Watch, and new MCP tools to find and trace processes.
+
 **0.10.0**
 - **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
   parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
