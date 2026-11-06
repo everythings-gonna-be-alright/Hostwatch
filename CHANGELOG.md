@@ -37,6 +37,9 @@
   shared memory that outlives an app crash, so the next launch writes them; a crash at any moment loses nothing and
   doubles nothing. That memory is owner-only, wiped as soon as events are written, and removed at quit, when
   history is deleted or turned off, and on Reset.
+- **Performance budget in the tests:** fixed workloads measure CPU, disk writes and memory (kept and peak) of the
+  event pipeline, history writing, the collector's main loop and Time Travel against a recorded baseline; a release
+  that writes, computes or keeps noticeably more fails the tests.
 - **Less memory:** Time Travel reads a window a page at a time (about 3,000 events, more as you scroll) instead of
   up to ~20,000 at once, which made the app's memory jump by 100–250 MB; a first page takes ~0.08 s. The threat
   lists keep their hundreds of thousands of entries as 8-byte hashes: ~3 MB instead of ~50 MB.
