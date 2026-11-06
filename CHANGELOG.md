@@ -17,6 +17,9 @@
   accent too. In Time Travel the same bar holds the All History / This Window choice.
 - **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
   below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
+- **A warning when the firewall turns itself to Watch.** If the relay's web check fails twice, Ask or Strict falls back
+  to Watch (nothing blocked): a banner above every tab now says so and why, with *Turn Ask Back On* and *Firewall
+  Settings*, and the menu bar menu shows it too, until you pick a mode.
 - **MCP server: find and trace processes.** `find_processes` lists what ran in a time range (start, end, CPU,
   memory, disk writes, user, parent, command line); `trace_process` follows one process's whole life: ancestors,
   child tree, resource use, and what it ran, opened and connected to. The instructions and tool list stay small
