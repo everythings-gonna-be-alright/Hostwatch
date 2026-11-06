@@ -115,6 +115,24 @@ import Testing
         #expect(recorded(s.dir) == Array(0..<90))
     }
 
+    /// The waiting events are as private as the history files and don't linger once written.
+    @Test func theBufferIsOwnerOnlyAndWipedAfterWriting() throws {
+        let s = try setup()
+        defer { cleanup(s) }
+        let buffer = try #require(PendingBuffer(name: s.name))
+        #expect(PendingBuffer.mode(name: s.name) == 0o600)                 // other users can't open it
+        let stream = try HistoryStream(stem: s.stem, buffer: buffer)
+        try stream.append(lines(0..<200))
+        #expect(buffer.residue() > 0)
+        try stream.flush()
+        #expect(buffer.residue() == 0)                                     // written: wiped from memory
+        try stream.append(lines(200..<210))
+        buffer.reset(segment: 0, base: 0)                                  // discarded (history cleared): wiped too
+        #expect(buffer.residue() == 0)
+        PendingBuffer.remove(name: s.name)
+        #expect(PendingBuffer.mode(name: s.name) == nil)                   // removed: gone, not just empty
+    }
+
     /// A file an earlier run left open-ended and that isn't continued gets its final index.
     @Test func leftoverFilesAreFinished() throws {
         let s = try setup()

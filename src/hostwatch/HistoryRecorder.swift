@@ -130,6 +130,7 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         let dir = directory, on = enabled
         queue.async {
             self.closeFile()
+            self.dropPendingBuffer()
             for stem in self.segments(in: dir) { HistoryFiles.remove(stem) }
             self.otherSegmentsSize = 0
             if on { self.openFiles(in: dir) }
@@ -361,7 +362,16 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
         connection = nil
         pending.removeAll()
         closeFile()
+        dropPendingBuffer()
         setRecording(false)
+    }
+
+    /// Everything waiting is written (or the history is gone): the shared memory goes too, so it outlasts the app
+    /// only after a crash, when the next launch needs it.
+    private func dropPendingBuffer() {
+        guard let b = pendingBuffer else { return }
+        pendingBuffer = nil
+        if !b.name.isEmpty { PendingBuffer.remove(name: b.name) }
     }
 
     // MARK: Status

@@ -145,6 +145,10 @@ final class HistoryStream {
 /// POSIX shared memory: like the app's own memory it never touches the disk, but it stays after the app crashes
 /// (until it's removed, or the Mac restarts), so the next launch writes what was waiting. A kernel panic or power
 /// loss loses it, as it loses any write the system hadn't flushed yet.
+///
+/// Privacy: owner-only (0600; other users can't open it, the same as the history files), and short-lived: written
+/// events are wiped from it at once, and it's removed at a normal quit, when history is deleted or turned off, and on
+/// Reset. So it holds at most the last ~30 s of events, and outlasts the app only after a crash.
 final class PendingBuffer {
     static let capacity = 8 << 20
     private struct Header {
@@ -217,12 +221,38 @@ final class PendingBuffer {
 
     /// After a flush: empty first (so a crash here can't write them twice), then the file's new length.
     func markWritten(newBase: Int64) {
+        let written = used
         memory.storeBytes(of: Int64(0), toByteOffset: MemoryLayout<UInt64>.size * 3, as: Int64.self)
         memory.storeBytes(of: newBase, toByteOffset: MemoryLayout<UInt64>.size * 2, as: Int64.self)
+        wipe(written)                                   // written events don't linger in memory
+    }
+
+    private func wipe(_ count: Int) {
+        guard count > 0 else { return }
+        memset(memory.advanced(by: Self.headerSize), 0, min(count, room))
+    }
+
+    /// Non-zero bytes in the event area (tests: nothing must linger after a flush).
+    func residue() -> Int {
+        let p = memory.advanced(by: Self.headerSize).assumingMemoryBound(to: UInt8.self)
+        var n = 0
+        for i in 0..<room where p[i] != 0 { n += 1 }
+        return n
+    }
+
+    /// The permission bits of a shared memory object (tests).
+    static func mode(name: String) -> mode_t? {
+        let fd = hw_shm_open(name, O_RDONLY, 0)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        var st = stat()
+        return fstat(fd, &st) == 0 ? st.st_mode & 0o777 : nil
     }
 
     func reset(segment: UInt64, base: Int64) {
+        let old = used
         header = Header(magic: Self.magic, segment: segment, base: base, used: 0)
+        wipe(old)
     }
 
     /// Removes the shared memory (tests; history cleared).

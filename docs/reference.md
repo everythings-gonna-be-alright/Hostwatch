@@ -1005,6 +1005,9 @@ All activity is written to disk as JSON Lines, one event per line, with a full `
   buffer records how long the file was when the events started waiting, so a crash at any step loses nothing and
   writes nothing twice (a half-written last member is cut off). A kernel panic or power loss can lose the last
   ~30 seconds, as with any write the system hadn't flushed. Time Travel shows events once they're written.
+  The shared memory is owner-only (0600, like the history files: other users can't open it), events are wiped
+  from it as soon as they're written, and it's removed at a normal quit, when history is deleted or turned off,
+  and on Reset: it holds at most the last ~30 s and outlasts the app only after a crash.
   - The `.gz` is a series of independent gzip members of ≈4 MB of whole lines, so it is a normal gzip
     file (`zcat`, `zgrep`, `gzip -d` work).
   - The index records each block's earliest and latest timestamp, offset and sizes, plus bytes per
