@@ -20,12 +20,12 @@
 </p>
 
 <p align="center">
-  <a href="https://everythings-gonna-be-alright.github.io/Hostwatch/"><b>Website</b></a> ·
+  <a href="https://hostwatch.tech/"><b>Website</b></a> ·
   <a href="#install"><b>Install</b></a> ·
   <a href="#whats-new">What's new</a> ·
   <a href="#what-it-does">Features</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="https://everythings-gonna-be-alright.github.io/Hostwatch/docs/"><b>Docs</b></a> ·
+  <a href="https://hostwatch.tech/docs/"><b>Docs</b></a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -68,8 +68,8 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 - **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
   parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
 - **✨ A new look** – a new app icon (the activity list, the flagged row brightest), the same mark in the menu bar.
-- **📖 Website and docs** – [everythings-gonna-be-alright.github.io/Hostwatch](https://everythings-gonna-be-alright.github.io/Hostwatch/)
-  with searchable [documentation](https://everythings-gonna-be-alright.github.io/Hostwatch/docs/) of every feature
+- **📖 Website and docs** – [hostwatch.tech](https://hostwatch.tech/)
+  with searchable [documentation](https://hostwatch.tech/docs/) of every feature
   and setting; *Help ▸ Hostwatch Help* opens it.
 - **🩹 Fix** – the menu bar's *known-bad matches this week* clears when you dismiss or delete those stories.
 

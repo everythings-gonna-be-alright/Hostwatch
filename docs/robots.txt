@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://everythings-gonna-be-alright.github.io/Hostwatch/sitemap.xml
+Sitemap: https://hostwatch.tech/sitemap.xml
