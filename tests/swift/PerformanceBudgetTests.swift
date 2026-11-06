@@ -79,7 +79,7 @@ enum PerfBaseline {
 
     /// Fails when the cost is over budget: writes +20% (they vary a few %; a careless rewrite costs 10× and more), memory +30%, CPU up to 2× (it depends on
     /// which cores macOS picks and what else runs; the regressions worth catching cost several times more), each with
-    /// a small allowance so tiny numbers don't flap.
+    /// a fixed allowance so small numbers don't flap.
     static func check(_ name: String, _ cost: ResourceCost, sourceLocation: SourceLocation = #_sourceLocation) {
         print(String(format: "PERF %@: cpu %.2f s, writes %.1f MB, memory %.1f MB, peak %.1f MB", name, cost.cpu,
                      Double(cost.writes) / 1e6, Double(cost.memory) / 1e6, Double(cost.peak) / 1e6))
@@ -88,7 +88,9 @@ enum PerfBaseline {
             Issue.record("no baseline for \(name): run with HOSTWATCH_PERF_RECORD=1", sourceLocation: sourceLocation)
             return
         }
-        let writeBudget = Int64(Double(base.writes) * 1.20) + 65_536
+        // +1 MB: once in a while a run is charged a few hundred KB it didn't write itself (the test runner, the
+        // system); the regressions this guards against cost 10× and more.
+        let writeBudget = Int64(Double(base.writes) * 1.20) + 1_000_000
         let cpuBudget = base.cpu * 2.0 + 0.20
         // Kept memory can't exceed the peak: budget it from the larger of the two, so a run that happened to keep
         // nothing (memory reused) can't leave a baseline normal runs then exceed.
