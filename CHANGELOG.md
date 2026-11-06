@@ -17,6 +17,8 @@
   accent too. In Time Travel the same bar holds the All History / This Window choice.
 - **Running Now: double-click for information.** A double-click (or *Show Info*) opens the process's information
   below the list, following the selection until closed; *Show Spawn in Timeline* is offered only there.
+- **Open at login** (Settings ▸ General ▸ Startup, off by default): Hostwatch as a macOS login item, listed in
+  System Settings ▸ General ▸ Login Items.
 - **A warning when the firewall turns itself to Watch.** If the relay's web check fails twice, Ask or Strict falls back
   to Watch (nothing blocked): a banner above every tab now says so and why, with *Turn Ask Back On* and *Firewall
   Settings*, and the menu bar menu shows it too, until you pick a mode.

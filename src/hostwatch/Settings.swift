@@ -185,9 +185,26 @@ private struct GeneralPane: View {
     let toggleCollector: () -> Void
     let reset: (ResetPlan) -> Void
     private var fullDiskAccess: Bool { ui.fullDiskAccess }
+    @StateObject private var loginItem = LoginItem()
 
     var body: some View {
         Pane {
+            Section {
+                Toggle("Open Hostwatch at login", isOn: Binding(get: { loginItem.isOn }, set: { loginItem.set($0) }))
+                if loginItem.needsApproval {
+                    LabeledContent("Waiting for your approval") {
+                        Button("Open Login Items…") { loginItem.openLoginItems() }
+                    }
+                }
+                if let problem = loginItem.problem {
+                    Label(problem, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.callout)
+                }
+            } header: {
+                Text("Startup")
+            } footer: {
+                Footnote("Off by default. When on, Hostwatch is listed in System Settings ▸ General ▸ Login Items, "
+                         + "where you can also remove it.")
+            }
             Section("Collector") {
                 LabeledContent("Status") {
                     HStack {
@@ -242,6 +259,7 @@ private struct GeneralPane: View {
                 Footnote("Erase patterns, the baseline, settings or history, then restart as on the first launch.")
             }
         }
+        .onAppear { loginItem.refresh() }             // changed in System Settings meanwhile
         .sheet(isPresented: $ui.showReset) {
             ResetSheet(plan: $ui.resetPlan,
                        cancel: { ui.showReset = false },

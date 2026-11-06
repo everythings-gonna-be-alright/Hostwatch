@@ -923,6 +923,10 @@ Settings (⌘,) has one pane per area. Every control is listed with its default.
 
 ### Settings: General
 
+- **Startup**: *Open Hostwatch at login* (off by default). Uses macOS's login item for the app, listed in
+  System Settings ▸ General ▸ Login Items, where it can also be removed; if macOS asks for approval first, the
+  setting says so with **Open Login Items…**. Together with *Start collector when Hostwatch opens*, watching starts
+  at login (the collector still asks for your password once per session).
 - **Collector**: Start/Stop, *Start collector when Hostwatch opens* (on), the log.
 - **Permissions**: Full Disk Access status and **Open Settings…**.
 - **Updates**: the version you run, *Check for updates automatically* (on, once a day), **Check Now** /
