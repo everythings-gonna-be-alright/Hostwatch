@@ -1228,7 +1228,7 @@ Runs every automated test (about 30 s):
 - **Performance budget** (`PerformanceBudgetTests.swift`, run alone after the rest so other tests don't count):
   the same realistic workloads every time, measuring CPU time, bytes written to disk and memory (kept and peak)
   against `tests/perf-baseline.json`, each test in a process of its own. A release fails the tests when it writes
-  more than +10%, keeps or peaks more than +30% memory, or uses more than twice the CPU (plus small allowances; CPU
+  more than +20%, keeps or peaks more than +30% memory, or uses more than twice the CPU (plus small allowances; CPU
   time depends on which cores macOS picks).
   - *app.eventPipeline:* 40,000 events through parsing, patterns, stories, domains and UI batches, with a 15,000-pattern
     store saved on the 5-minute schedule.
@@ -1239,7 +1239,7 @@ Runs every automated test (about 30 s):
   It catches the regressions found so far: the pattern store rewriting itself (87 MB written instead of 4 MB),
   history written uncompressed (24 MB instead of 2 MB), and the collector's line reader keeping what it read.
   After a change that's meant to cost more (or less), record a new baseline on purpose and commit it:
-  `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Numbers are from the debug build on
+  `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh` (each workload runs 3 times; the highest figures are kept). Numbers are from the debug build on
   the Mac they were recorded on; on a much slower or faster Mac, record a baseline there first.
 
 - **Swift** (`tests/swift`, Swift Testing, `swift test`): pattern grouping and risk rules; Stories
