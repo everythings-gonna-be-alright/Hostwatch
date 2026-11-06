@@ -388,11 +388,8 @@ final class RuleBook: ObservableObject {
 /// `Hostwatch --suggest-rules`: dry run of rule suggestion on the saved decisions. Asks Claude, checks
 /// every proposal locally and prints the result. Reads only; approves and writes nothing.
 func runRuleSuggestionDryRun() -> Never {
-    struct PatternFile: Decodable { var entries: [SignatureEntry] }
-    let d = JSONDecoder()
-    d.dateDecodingStrategy = .iso8601
-    guard let data = try? Data(contentsOf: AppPaths.support.appendingPathComponent("signatures-v2.json")),
-          let file = try? d.decode(PatternFile.self, from: data) else { print("no saved patterns"); exit(1) }
+    guard let saved = SignatureStore.readSaved(from: AppPaths.support) else { print("no saved patterns"); exit(1) }
+    let file = (entries: saved.entries, processRules: saved.processRules)
     SigningCache.shared.live = false
     let decisions = file.entries.filter(Decision.isYours)
     print("\(file.entries.count) patterns, \(decisions.count) of your decisions")

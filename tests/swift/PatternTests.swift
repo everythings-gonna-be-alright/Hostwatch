@@ -371,3 +371,86 @@ import Testing
         #expect(SignatureStore.statsSaveEvery >= 300)
     }
 }
+
+/// The pattern store saves changed patterns to a journal, and a full snapshot only when needed; crash-safe.
+@MainActor @Suite(.serialized) struct PatternJournal {
+    func dir() throws -> URL {
+        _ = TestEnv.ready
+        let d = FileManager.default.temporaryDirectory.appendingPathComponent("hw-journal-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }
+
+    /// A distinct pattern per n (letters: digits are normalised away in patterns).
+    func file(_ n: Int) -> ActivityEvent {
+        var name = "", v = n
+        repeat { name.append(Character(UnicodeScalar(97 + v % 26)!)); v /= 26 } while v > 0
+        return ActivityEvent(kind: .file, time: "", pid: 1, ppid: 0, name: "tool", proc: "/Users/alex/bin/tool",
+                             target: "/Users/alex/Documents/work/project\(name)/a.txt", extra: "r", parent: "")
+    }
+
+    func size(_ url: URL) -> Int { ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0 }
+
+    @Test func countersGoToTheJournalAndComeBack() throws {
+        let d = try dir()
+        defer { try? FileManager.default.removeItem(at: d) }
+        let snapshot = d.appendingPathComponent("signatures-v2.json"), journal = d.appendingPathComponent("signatures-v2.journal")
+        let store = SignatureStore(directory: d)
+        for n in 0..<200 { store.observe(file(n)) }
+        store.save(sync: true)                                           // no snapshot yet: a full one
+        #expect(size(snapshot) > 0 && size(journal) == 0)
+        let before = size(snapshot)
+        for _ in 0..<3 { store.observe(file(7)) }                        // only counters change
+        store.observe(file(999))                                         // and one new pattern
+        store.save(sync: true)
+        #expect(size(snapshot) == before)                                // not rewritten
+        #expect(size(journal) > 0 && size(journal) < before / 20)
+        let reloaded = SignatureStore(directory: d)
+        #expect(reloaded.entry(file(7).signatureKey)?.count == 4)
+        #expect(reloaded.entry(file(999).signatureKey) != nil)
+        #expect(reloaded.allEntries.count == 201)
+        // Readers outside the app (MCP server, command-line tools) see the journal too.
+        let saved = try #require(SignatureStore.readSaved(from: d))
+        #expect(saved.entries.count == 201 && saved.entries.first { $0.id == file(7).signatureKey }?.count == 4)
+    }
+
+    @Test func decisionsAndRemovalsWriteASnapshot() throws {
+        let d = try dir()
+        defer { try? FileManager.default.removeItem(at: d) }
+        let journal = d.appendingPathComponent("signatures-v2.journal")
+        let store = SignatureStore(directory: d)
+        for n in 0..<20 { store.observe(file(n)) }
+        store.save(sync: true)
+        store.observe(file(3))
+        store.save(sync: true)
+        #expect(size(journal) > 0)
+        store.set(.safe, keys: [file(3).signatureKey])                   // a decision
+        store.save(sync: true)
+        #expect(!FileManager.default.fileExists(atPath: journal.path))   // folded into the new snapshot
+        store.delete(keys: [file(4).signatureKey])                       // a removal
+        store.save(sync: true)
+        let reloaded = SignatureStore(directory: d)
+        #expect(reloaded.status(for: file(3)) == .safe)
+        #expect(reloaded.entry(file(4).signatureKey) == nil && reloaded.allEntries.count == 19)
+    }
+
+    /// A crash after the new snapshot is written but before the old journal is removed: its lines are older than
+    /// the snapshot and must not be applied.
+    @Test func anOldJournalIsIgnoredAfterACrash() throws {
+        let d = try dir()
+        defer { try? FileManager.default.removeItem(at: d) }
+        let journal = d.appendingPathComponent("signatures-v2.journal")
+        let store = SignatureStore(directory: d)
+        store.observe(file(1))
+        store.save(sync: true)
+        for _ in 0..<5 { store.observe(file(1)) }                        // count 6, in the journal
+        store.save(sync: true)
+        let stale = try Data(contentsOf: journal)
+        store.set(.dangerous, keys: [file(1).signatureKey])              // new snapshot (count 6, Dangerous)
+        store.save(sync: true)
+        try stale.write(to: journal)                                     // as if removing it never happened
+        let reloaded = SignatureStore(directory: d)
+        #expect(reloaded.status(for: file(1)) == .dangerous)             // the stale line (still New) not applied
+        #expect(reloaded.entry(file(1).signatureKey)?.count == 6)
+    }
+}
