@@ -18,7 +18,7 @@ SRC = ROOT / "docs" / "reference.md"                  # the front page: intro an
 CHAPTERS = ROOT / "docs" / "reference"               # one Markdown file per chapter (NN-name.md)
 OUT_DIR = ROOT / "docs" / "docs"                     # index.html (overview) and one page per chapter
 PAGES = {}                                           # "03-features.md" -> "features.html" (filled by main)
-SITE = "https://everythings-gonna-be-alright.github.io/Hostwatch/"
+SITE = "https://hostwatch.tech/"
 REPO = "https://github.com/everythings-gonna-be-alright/Hostwatch"
 
 

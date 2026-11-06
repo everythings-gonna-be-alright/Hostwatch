@@ -3,7 +3,7 @@
 This reference covers every feature, setting and rule of Hostwatch, in the order you'll meet them.
 
 For a short overview, see the [README](../README.md). The same text is on the website at
-<https://everythings-gonna-be-alright.github.io/Hostwatch/docs/>.
+<https://hostwatch.tech/docs/>.
 
 **Free for personal use, always.** The Mac app described here stays free and open source (MIT license).
 
