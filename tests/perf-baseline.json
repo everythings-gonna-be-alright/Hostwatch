@@ -1,0 +1,26 @@
+{
+  "app.eventPipeline" : {
+    "cpu" : 13.685207,
+    "memory" : 0,
+    "peak" : 8454144,
+    "writes" : 4268032
+  },
+  "collector.esloggerLoop" : {
+    "cpu" : 4.032242,
+    "memory" : 35389488,
+    "peak" : 35422256,
+    "writes" : 0
+  },
+  "history.write" : {
+    "cpu" : 0.5334949999999999,
+    "memory" : 2490368,
+    "peak" : 2490368,
+    "writes" : 2170880
+  },
+  "timetravel.read" : {
+    "cpu" : 0.313407,
+    "memory" : 18694168,
+    "peak" : 18694168,
+    "writes" : 0
+  }
+}
