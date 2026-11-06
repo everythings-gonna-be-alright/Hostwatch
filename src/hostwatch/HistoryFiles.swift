@@ -44,13 +44,14 @@ enum HistoryFiles {
     // MARK: Names
 
     static func isHistoryName(_ name: String) -> Bool {
-        name.hasPrefix("activity-") && (name.hasSuffix(".jsonl") || name.hasSuffix(".jsonl.gz") || name.hasSuffix(".jsonl.idx"))
+        name.hasPrefix("activity-") && (name.hasSuffix(".jsonl") || name.hasSuffix(".jsonl.gz") || name.hasSuffix(".jsonl.idx")
+                                        || name.hasSuffix(".jsonl.blocks"))
     }
 
     /// `activity-x.jsonl` for any of its forms.
     static func stem(_ url: URL) -> URL {
         let name = url.lastPathComponent
-        for suffix in [".gz", ".idx", ".tmp"] where name.hasSuffix(suffix) {
+        for suffix in [".gz", ".idx", ".tmp", ".blocks"] where name.hasSuffix(suffix) {
             return stem(url.deletingLastPathComponent().appendingPathComponent(String(name.dropLast(suffix.count))))
         }
         return url
@@ -58,6 +59,8 @@ enum HistoryFiles {
 
     static func gzURL(_ stem: URL) -> URL { stem.appendingPathExtension("gz") }
     static func indexURL(_ stem: URL) -> URL { stem.appendingPathExtension("idx") }
+    /// The block list of a file being written (one JSON line per member; replaced by the .idx when finished).
+    static func blocksURL(_ stem: URL) -> URL { stem.appendingPathExtension("blocks") }
 
     /// History files in `directory`, oldest first. A compressed file counts only with a readable index;
     /// when both forms exist (compression interrupted), the plain one is authoritative.
@@ -72,6 +75,9 @@ enum HistoryFiles {
                 out.append(.plain(stem))
             } else if let index = readIndex(stem) {
                 out.append(.compressed(gzURL(stem), index))
+            } else if names.contains(name + ".blocks"),
+                      let list = try? Data(contentsOf: blocksURL(stem)) {
+                out.append(.compressed(gzURL(stem), parseBlockList(list).index))      // being written
             }
         }
         return out
@@ -79,7 +85,7 @@ enum HistoryFiles {
 
     /// Bytes on disk for a stem (all of its forms).
     static func diskSize(_ stem: URL) -> Int64 {
-        [stem, gzURL(stem), indexURL(stem)].reduce(0) { total, url in
+        [stem, gzURL(stem), indexURL(stem), blocksURL(stem)].reduce(0) { total, url in
             total + (((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0)
         }
     }
@@ -133,7 +139,7 @@ enum HistoryFiles {
     }
 
     static func remove(_ stem: URL) {
-        for url in [stem, gzURL(stem), indexURL(stem), gzURL(stem).appendingPathExtension("tmp"),
+        for url in [stem, gzURL(stem), indexURL(stem), blocksURL(stem), gzURL(stem).appendingPathExtension("tmp"),
                     indexURL(stem).appendingPathExtension("tmp")] {
             try? FileManager.default.removeItem(at: url)
         }
@@ -144,6 +150,49 @@ enum HistoryFiles {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
         return try? decoder.decode(Index.self, from: data)
+    }
+
+    // MARK: The block list of a file being written
+
+    private struct BlockLine: Codable {
+        var s: Double, e: Double, o: Int64, l: Int64, z: Int64
+        var m: [[Int64]]?
+    }
+
+    /// `{"s":start,"e":end,"o":offset,"l":length,"z":size,"m":[[minute,bytes]…]}` for one member.
+    static func blockLine(_ b: Block, minutes: [Int64: Int64]) -> Data {
+        let line = BlockLine(s: b.start.timeIntervalSince1970, e: b.end.timeIntervalSince1970, o: b.offset, l: b.length,
+                             z: b.size, m: minutes.keys.sorted().map { [$0, minutes[$0]!] })
+        return (try? JSONEncoder().encode(line)) ?? Data()
+    }
+
+    /// The index of a file being written, and how many bytes of the list are whole, valid lines (a crash can leave
+    /// a half-written last line; everything after the first bad one is ignored).
+    static func parseBlockList(_ data: Data) -> (index: Index, validBytes: Int) {
+        var blocks: [Block] = [], minutes: [Int64: Int64] = [:], valid = 0
+        let decoder = JSONDecoder()
+        var start = data.startIndex
+        while let nl = data[start...].firstIndex(of: 0x0A) {
+            guard let b = try? decoder.decode(BlockLine.self, from: data[start..<nl]),
+                  b.o == (blocks.last.map { $0.offset + $0.length } ?? 0) else { break }   // members follow each other
+            blocks.append(Block(start: Date(timeIntervalSince1970: b.s), end: Date(timeIntervalSince1970: b.e),
+                                offset: b.o, length: b.l, size: b.z))
+            for pair in b.m ?? [] where pair.count == 2 { minutes[pair[0], default: 0] += pair[1] }
+            start = nl + 1
+            valid = start - data.startIndex
+        }
+        return (Index(blocks: blocks, minutes: minutes.keys.sorted().map { [$0, minutes[$0]!] }), valid)
+    }
+
+    /// The final index of a finished file (atomically: a .gz with an index is complete).
+    static func writeIndex(_ index: Index, for stem: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let tmp = indexURL(stem).appendingPathExtension("tmp")
+        try encoder.encode(index).write(to: tmp, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp.path)
+        try? FileManager.default.removeItem(at: indexURL(stem))
+        try FileManager.default.moveItem(at: tmp, to: indexURL(stem))
     }
 
     // MARK: Compressing a finished file
