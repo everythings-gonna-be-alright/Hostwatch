@@ -10,6 +10,7 @@ enum Entry {
         #endif
         // Claude Code's PreToolUse hook: first, and before anything else loads (it runs for every tool call).
         if args.count > 1, args[1] == ClaudeHook.flag { ClaudeHook.run() }
+        Migration.run()                                      // settings from the old bundle identifier, before any read
         if args.contains(FirewallProbe.flag) { FirewallProbe.run() }
         if let i = args.firstIndex(of: FirewallRelayTest.flag) { FirewallRelayTest.run(Array(args[(i + 1)...])) }
         if let i = args.firstIndex(of: AgentWatch.testFlag) { AgentWatch.runTest(Array(args[(i + 1)...])) }

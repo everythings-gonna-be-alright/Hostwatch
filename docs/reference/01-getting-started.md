@@ -40,7 +40,7 @@ The collector is the part of Hostwatch that runs with administrator (root) right
 **How it starts:** as a background service, approved once.
 
 1. The first time, Hostwatch registers the collector as a launchd service that ships inside the app
-   (`Contents/Library/LaunchDaemons/local.hostwatch.collectord.plist`). macOS asks for your administrator password
+   (`Contents/Library/LaunchDaemons/tech.hostwatch.collectord.plist`). macOS asks for your administrator password
    once, and may list the collector under System Settings ▸ General ▸ Login Items ▸ *Allow in the Background*, where
    you approve it once.
 2. From then on macOS starts the collector itself: at boot, after a crash, after an update. It runs as root, and
@@ -49,6 +49,11 @@ The collector is the part of Hostwatch that runs with administrator (root) right
    Hostwatch.app stays the responsible process for Full Disk Access. The agent serves the user at the Mac.
 4. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
    You can turn the registration at launch off with *Register the collector when Hostwatch opens*.
+
+**Coming from 0.12.0 or earlier:** 0.13.0 has a new identity (`tech.hostwatch.app`). Your settings are carried
+over on the first launch. macOS keys Full Disk Access and the keychain by identity, so grant Full Disk Access once
+more (the setup window appears by itself) and choose *Always Allow* in the one keychain dialog for *Hostwatch data
+key*. The collector service is registered again, with your password once.
 
 A build without a Developer ID signature (your own build from source) has no service: it starts the collector as a
 temporary launchd job after an administrator prompt, every launch.

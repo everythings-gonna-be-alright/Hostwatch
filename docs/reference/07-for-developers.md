@@ -90,7 +90,7 @@ Demo mode fills the app with made-up activity, for screenshots and the website. 
 normal build, and every release, has no demo code at all.
 
 **Build it:** `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app`. It uses the Swift flag `-DDEMO`, its
-own bundle id `local.hostwatch.demo` and its own build folder `.build-demo`.
+own bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
 
 **Run it:**
 `"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]`

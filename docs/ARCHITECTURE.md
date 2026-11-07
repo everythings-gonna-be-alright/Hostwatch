@@ -89,7 +89,7 @@ tab or window (`PatternsView` with `PatternInspector`, `RulesView`, `StoriesView
 `~/Library/Application Support/Hostwatch/`: `signatures-v2.json` + `.journal` (patterns), `rules.json`,
 `domains.json`, `firewall-watch.json`, `claude-guard.json`, `intel/`, `collector.token`.
 `~/Library/Logs/Hostwatch/History/`: `activity-*.jsonl.gz` + `.blocks`/`.idx`, `metrics-*`, `processes-*`.
-Settings in `UserDefaults` (`local.hostwatch.app`).
+Settings in `UserDefaults` (`tech.hostwatch.app`; `local.hostwatch.app` up to 0.13.0, carried over by `Migration`).
 
 ## Tests
 

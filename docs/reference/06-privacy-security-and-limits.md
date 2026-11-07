@@ -17,7 +17,7 @@ Here is where everything lives:
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
-| `~/Library/Preferences/local.hostwatch.app.plist` | settings and exclusions (plain) |
+| `~/Library/Preferences/tech.hostwatch.app.plist` | settings and exclusions (plain) |
 | `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
 
 ### Encryption at rest
@@ -125,7 +125,7 @@ erase:
 
 - **Patterns, decisions and baseline:** `~/Library/Application Support/Hostwatch` and the baseline's state. That
   folder holds patterns, stories, domains, your rules, signing facts and the MCP token.
-- **Settings:** HUD, window, detection, AI, exclusions and history options (`local.hostwatch.app` defaults).
+- **Settings:** HUD, window, detection, AI, exclusions and history options (`tech.hostwatch.app` defaults).
 - **Event history and logs:** `~/Library/Logs/Hostwatch`. In a custom history folder, only Hostwatch's `activity-*`,
   `metrics-*` and `processes-*` files are erased.
 

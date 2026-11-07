@@ -97,6 +97,8 @@ final class Vault: @unchecked Sendable {
     }
 
     var isSealed: Bool { currentKey() != nil }
+    /// A key exists that this app can't use: nothing must be written (it would overwrite sealed files with plain).
+    var isLocked: Bool { currentKey() == nil && problem?.contains("didn't let this app read it") == true }
 
     // MARK: The key
 
@@ -119,12 +121,21 @@ final class Vault: @unchecked Sendable {
         //    into it: wrapped into vault.key, then the keychain item goes (a password alone no longer opens the data).
         if let data = Self.keychainRead() {
             key = SymmetricKey(data: data); backend = .keychain
+            // The app's identity changed (0.13.0): the item's access list named the old one, so this read showed a
+            // keychain dialog; re-stored, the next read is silent.
+            if Migration.changedIdentity { _ = Self.keychainWrite(data) }
             if let privateKey = Self.enclaveKey(create: true), let publicKey = SecKeyCopyPublicKey(privateKey),
                let blob = Self.wrap(data, with: publicKey), (try? blob.write(to: wrapped, options: .atomic)) != nil {
                 try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: wrapped.path)
                 Self.keychainDelete()
                 backend = .enclave
             }
+            return
+        }
+        // An item that exists but couldn't be read (you pressed Deny, or a build this access list doesn't name):
+        // never make a new key over it, the sealed files would become unreadable for good.
+        if Self.keychainItemExists() {
+            problem = "Hostwatch's data key is in your keychain but macOS didn't let this app read it. Reopen Hostwatch and choose Always Allow in the keychain dialog."
             return
         }
         // 3. New: make one.
@@ -186,6 +197,15 @@ final class Vault: @unchecked Sendable {
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
         return item as? Data
+    }
+
+    /// Whether the item is there at all (attributes only: no access-list check, so no dialog).
+    private static func keychainItemExists() -> Bool {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount,
+                                    kSecReturnAttributes as String: true]
+        var item: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
     }
 
     private static func keychainDelete() {

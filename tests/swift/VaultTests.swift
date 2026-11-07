@@ -110,3 +110,24 @@ import Testing
         #expect(String(decoding: metrics.data(day: "20261107"), as: UTF8.self) == "{\"t\":1,\"cpu\":9}\n")
     }
 }
+
+/// The move to the new bundle identifier: settings from the old domain, once, without overwriting.
+@Suite struct BundleIdentifierMigration {
+    @Test func copiesTheOldSettingsOnce() throws {
+        let oldName = "test.hostwatch.old-\(UUID().uuidString)", newName = "test.hostwatch.new-\(UUID().uuidString)"
+        let old = try #require(UserDefaults(suiteName: oldName)), new = try #require(UserDefaults(suiteName: newName))
+        defer { old.removePersistentDomain(forName: oldName); new.removePersistentDomain(forName: newName) }
+        old.set(true, forKey: "claudeGuard"); old.set("count:desc", forKey: "patternTableSort")
+        new.set("size:asc", forKey: "patternTableSort")                                  // already set here: kept
+        Migration.run(defaults: new, old: oldName)
+        #expect(new.bool(forKey: "claudeGuard") && new.string(forKey: "patternTableSort") == "size:asc")
+        #expect(new.string(forKey: Migration.markerKey) == oldName)
+        old.set(false, forKey: "claudeGuard")
+        Migration.run(defaults: new, old: oldName)                                      // only once
+        #expect(new.bool(forKey: "claudeGuard"))
+        let fresh = try #require(UserDefaults(suiteName: newName + "-fresh"))
+        defer { fresh.removePersistentDomain(forName: newName + "-fresh") }
+        Migration.run(defaults: fresh, old: "test.hostwatch.nothing-there")
+        #expect(fresh.string(forKey: Migration.markerKey) == "none")
+    }
+}

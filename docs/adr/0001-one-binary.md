@@ -13,7 +13,7 @@ app's state. The socket between them carries a token (`collector.token`, mode 06
 peer's uid.
 
 **Update (0.13).** The collector runs as an `SMAppService` daemon: a LaunchDaemon plist inside the bundle
-(`Contents/Library/LaunchDaemons/local.hostwatch.collectord.plist`, `BundleProgram` the same binary, run with
+(`Contents/Library/LaunchDaemons/tech.hostwatch.collectord.plist`, `BundleProgram` the same binary, run with
 `--collector-launcher self --collector --daemon`). Registered once, approved once, started by launchd at boot; the
 agent serves the console user and ignores shutdown requests (the app unregisters it instead). The admin-prompted
 temporary job stays as the fallback for unsigned builds. The label differs from the old job's so both can exist.

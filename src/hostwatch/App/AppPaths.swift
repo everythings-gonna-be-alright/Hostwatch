@@ -3,7 +3,9 @@ import Foundation
 /// Where Hostwatch keeps its data.
 enum AppPaths {
     static let name = "Hostwatch"
-    static let bundleID = "local.hostwatch.app"
+    static let bundleID = "tech.hostwatch.app"
+    /// The identifier up to 0.13.0 (`local.`): its settings and keychain items are carried over on first launch.
+    static let oldBundleID = "local.hostwatch.app"
 
     private static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
     /// ~/Library/Application Support/Hostwatch: patterns, stories, domains, signing facts, token.

@@ -60,6 +60,9 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 **0.13.0**
 - **🔑 No password at launch** – the collector is a background service: registered once, approved once, started by
   macOS at boot from then on. Only Hostwatch's own signed code may talk to it, and it idles when the app is closed.
+- **🔒 Encrypted at rest** – patterns, stories, history and logs are sealed with a key only Hostwatch's own code can
+  use, so no other program running as you (an AI agent included) can read your activity.
+- **🪪 New identity** `tech.hostwatch.app` – settings carry over; grant Full Disk Access once more.
 
 **0.12.0**
 - **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
