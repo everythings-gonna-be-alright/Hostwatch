@@ -58,7 +58,7 @@
 <link rel="apple-touch-icon" href="images/site/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #08090a;
@@ -348,6 +348,10 @@
   .closing .note code { font: 12px var(--mono); color: var(--muted); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
   .closing .ua { margin: 72px auto 10px; color: var(--muted); font-size: 17px; line-height: 1.7; }
   .closing .ua b { color: var(--text); font-weight: 500; }
+  /* A personal line: the serif italic companion of the text font. */
+  .closing .ua .made { display: inline-block; margin-top: 4px; font: italic 400 24px/1.4 "Instrument Serif", Georgia, "Times New Roman", serif;
+                       letter-spacing: 0; color: #b4b8bf; }
+  .closing .ua .made .flag { width: 20px; height: 13px; vertical-align: -1px; margin: 0 3px; }
   .closing .ua .flag { display: inline-block; width: 18px; height: 12px; border-radius: 2px; vertical-align: -1px; margin: 0 2px; }
 
   footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font-size: 13px; color: var(--dim); }
@@ -705,7 +709,7 @@
       </div>
     </details>
     </div>
-    <p class="ua"><b>Free for personal use, always.</b><br>Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</p>
+    <p class="ua"><b>Free for personal use, always.</b><br><span class="made">Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</span></p>
     <a class="link-arrow" href="https://u24.gov.ua/" target="_blank" rel="noopener">Help Ukraine on United24 <span>↗</span></a>
   </div>
 </div>
