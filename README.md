@@ -122,17 +122,32 @@ Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or th
 
 ## How it works
 
+Two parts, one app. The collector runs as root and only watches; Hostwatch.app is where everything is decided and
+shown. They talk over one Unix socket that accepts nothing but Hostwatch's own signed code.
+
 ```
-collector (root)                       Hostwatch.app (you)
-eslogger · tcpdump · NetworkStatistics ─► patterns · baseline · stories · network
-firewall relay (pf)  ◄── Allow/Block ── HUD · window · Time Travel · Ask AI · MCP
-Watch Closely recorder ───────────────► Watch Closely window
-          verified Unix socket
+┌──────────────────────────────────┐                    ┌───────────────────────────────────────┐
+│  Collector  (root, background)   │                    │  Hostwatch.app  (you)                 │
+│                                  │                    │                                       │
+│  eslogger      processes, files  │  activity ───────► │  learns patterns, keeps the baseline, │
+│  tcpdump       DNS answers       │                    │  connects stories, records history    │
+│  NetworkStats  every connection  │                    │                                       │
+│                                  │                    │  HUD · window · Time Travel           │
+│  firewall relay (pf)             │ ◄─── allow / block │  Ask AI · MCP for Claude Code         │
+│                                  │                    │                                       │
+│  Watch Closely recorder          │  profile ────────► │  Watch Closely window                 │
+└──────────────────────────────────┘                    └───────────────────────────────────────┘
+                              one Unix socket, Hostwatch's own code only
 ```
 
-The collector is built into the app. It only observes, unless you turn on the firewall: then it also relays
-your apps' new connections through itself (macOS's own pf, no extension or paid entitlement needed).
-Everything stays on your Mac, except what you send to Claude and a daily update check (both optional).
+- **Activity** flows one way: what started, what was opened, who connected to what. The app turns it into patterns
+  and stories and writes the history.
+- **Allow / block** flows back only when the firewall is on: the collector then relays your apps' new connections
+  through itself (macOS's own pf, no extension or paid entitlement) and asks the app what to do.
+- **Watch Closely** is a second, deeper recording of one process, on request.
+
+The collector is a background service: registered once, approved once, started by macOS at boot. Everything stays on
+your Mac, except what you send to Claude and a daily update check (both optional).
 
 ## Privacy
 
