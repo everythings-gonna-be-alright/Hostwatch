@@ -25,15 +25,15 @@
   per folder. On a real Mac: 21,172 → 7,600.
 - Still specific: writes, sensitive places (SSH keys, keychains, cookies, browser logins), shells and interpreters
   reading files, and every launch of a tool attackers use (`curl`, `osascript`, `security`, `sudo`…).
-- Your store shrinks by itself on the first launch. Only patterns decided automatically are merged; your decisions,
+- Your store shrinks by itself on the first launch. Only patterns decided automatically are merged, and your decisions,
   rules and AI verdicts stay as they are. `Hostwatch --regroup-report` shows what would change.
 
 **Fixes**
 - Switching tabs is immediate: a visited tab stays alive instead of being rebuilt, and its table is never detached
   from the window (a switch cost up to a second before).
-- The tab bar keeps its titles after leaving Events; the Show filter on Patterns is a row of buttons again.
-- Columns resize on Events and Patterns (a click watcher on Patterns used to cancel the drag); every Events column
-  has room to grow. Clicking the selected pattern again deselects it; Escape clears the selection.
+- The tab bar keeps its titles after leaving Events, and the Show filter on Patterns is a row of buttons again.
+- Columns resize on Events and Patterns (a click watcher on Patterns used to cancel the drag), and every Events column
+  has room to grow. Clicking the selected pattern again deselects it, and Escape clears the selection.
 
 **Licence**
 - From this version Hostwatch is source available under the PolyForm Noncommercial License 1.0.0: free for personal
