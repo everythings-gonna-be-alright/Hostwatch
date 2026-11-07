@@ -47,7 +47,10 @@ The collector is the part of Hostwatch that runs with administrator (root) right
    Hostwatch connects to its socket (`/var/run/hostwatch/collector.sock`) when it opens. No password at launch.
 3. The service runs `Hostwatch --collector-launcher self --collector --daemon`: the launcher spawns the agent, so
    Hostwatch.app stays the responsible process for Full Disk Access. The agent serves the user at the Mac.
-4. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
+4. If macOS ever refuses to start the registered service (it happens when the app bundle is replaced at the very
+   moment the service restarts), Hostwatch notices within half a minute of opening and registers it again, with
+   your password.
+5. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
    You can turn the registration at launch off with *Register the collector when Hostwatch opens*.
 
 **Coming from 0.12.0 or earlier:** 0.13.0 has a new identity (`tech.hostwatch.app`). Your settings are carried
