@@ -372,7 +372,8 @@
   footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font-size: 13px; color: var(--dim); }
   footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 32px; }
   footer .contact { margin: 0 auto 0 0; line-height: 1.7; }
-  footer .fname { color: var(--text); font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  footer .fname { color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }  /* written like the name by the logo */
+  footer .fname .soft { color: var(--muted); }
   footer .contact .sep { margin: 0 10px; }
   footer .cols { display: flex; gap: 28px; flex-wrap: wrap; }
   footer a { color: var(--muted); } footer a:hover { color: var(--text); }
@@ -741,7 +742,7 @@
 
 <footer>
   <div class="wrap">
-    <span class="fname">Hostwatch</span>
+    <span class="fname">Host<span class="soft">watch</span></span>
     <p class="contact"><span>Found a bug? <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/issues/new?labels=bug&amp;body=%2A%2AWhat%20happened%2A%2A%0A%0A%0A%2A%2AWhat%20you%20expected%2A%2A%0A%0A%0A%2A%2ASteps%20to%20reproduce%2A%2A%0A1.%20%0A%0A%2A%2AHostwatch%20and%20macOS%20version%2A%2A%0AHostwatch%3A%20%0AmacOS%3A%20%0A%0A%28Security%20problem%3F%20Please%20email%20it%20instead%20of%20opening%20a%20public%20issue.%29%0A" target="_blank" rel="noopener">Report it on GitHub ↗</a></span><span class="sep" aria-hidden="true">·</span><span>Questions: <a href="mailto:contact@hostwatch.tech">contact@hostwatch.tech</a></span><span class="sep" aria-hidden="true">·</span><span>Security reports: <a href="mailto:security@hostwatch.tech">security@hostwatch.tech</a></span></p>
     <div class="cols">
       <a href="https://github.com/everythings-gonna-be-alright/Hostwatch">GitHub</a>
