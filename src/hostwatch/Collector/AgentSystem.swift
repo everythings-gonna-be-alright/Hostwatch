@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Security
 import SystemConfiguration
 
 // MARK: - Processes (libproc)
@@ -248,6 +249,34 @@ enum AgentSocket {
         return fd
     }
 
+    /// Our own designated requirement: for a Developer ID build, the Team ID and bundle identifier; for an
+    /// ad-hoc build, the exact binary. What a client must satisfy to be Hostwatch.
+    private static let ownRequirement: SecRequirement? = {
+        var me: SecCode?
+        guard SecCodeCopySelf([], &me) == errSecSuccess, let me else { return nil }
+        var code: SecStaticCode?
+        guard SecCodeCopyStaticCode(me, [], &code) == errSecSuccess, let code else { return nil }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(code, [], &requirement) == errSecSuccess else { return nil }
+        return requirement
+    }()
+    private static let localPeerToken: Int32 = 0x006                   // LOCAL_PEERTOKEN (sys/un.h)
+
+    /// The process on the other end runs the same code as we do: its audit token (from the kernel, so a pid
+    /// reused meanwhile can't fool it) names a code object that satisfies our own designated requirement. Being
+    /// the right user isn't enough: any program of yours could otherwise read the stream, answer firewall
+    /// questions or change exclusions.
+    static func peerIsSameCode(_ fd: Int32) -> Bool {
+        var token = audit_token_t()
+        var length = socklen_t(MemoryLayout<audit_token_t>.size)
+        guard getsockopt(fd, SOL_LOCAL, localPeerToken, &token, &length) == 0, let requirement = ownRequirement else { return false }
+        let data = withUnsafeBytes(of: &token) { Data($0) }
+        var code: SecCode?
+        guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributeAudit: data] as CFDictionary, [], &code) == errSecSuccess,
+              let code else { return false }
+        return SecCodeCheckValidity(code, [], requirement) == errSecSuccess
+    }
+
     /// (pid, uid) of the process on the other end, from the kernel.
     static func peer(_ fd: Int32) -> (pid: Int, uid: uid_t)? {
         var pid: pid_t = 0
@@ -280,6 +309,14 @@ extension Agent {
             guard AgentSocket.peerAllowed(pid: peer.pid, uid: peer.uid, ownerPid: ownerPid, clientUID: clientUID) else {
                 let path = pidPath(peer.pid)
                 Agent.log("rejected connection from pid \(peer.pid) (uid \(peer.uid), \(path.isEmpty ? "?" : path))")
+                close(fd)
+                continue
+            }
+            // The real socket: only Hostwatch's own code (a development socket elsewhere skips this: the app and
+            // the collector are then different builds).
+            if socketPath == CollectorSocket.defaultPath, !AgentSocket.peerIsSameCode(fd) {
+                let path = pidPath(peer.pid)
+                Agent.log("rejected connection from pid \(peer.pid): not Hostwatch's own code (\(path.isEmpty ? "?" : path))")
                 close(fd)
                 continue
             }

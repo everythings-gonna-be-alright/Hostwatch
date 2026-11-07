@@ -47,8 +47,18 @@ Unix socket is a local file-like connection point that only processes on this Ma
 - **Every connection is checked:** the collector asks the kernel who is connecting (peer credentials,
   `LOCAL_PEERPID` and `LOCAL_PEERCRED`).
   - When the app launched it, only that app process and user are accepted.
+  - As a background service, only the user logged in at the Mac is accepted (the socket follows a user switch).
   - When started by hand, only the `sudo` user is accepted.
+  - **And only Hostwatch's own code.** On the real socket the collector also asks the kernel for the peer's audit
+    token and checks, through macOS code signing, that the process satisfies the collector's own designated
+    requirement: the same Team ID and bundle identifier (or, for an ad-hoc build, the very same binary). Being the
+    right user isn't enough: another program of yours can't read the stream, answer firewall questions or change
+    exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
+- **A service with no client does nothing.** When the app isn't connected for 15 seconds, the background service
+  stops `eslogger` and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits; the
+  next connection starts them again. It also notices when an update replaced the app and restarts itself as the
+  new version.
 - **The app checks too:** it connects only when the socket is a socket owned by you, mode 0600, not a link, and in a
   root-owned folder that nobody else can write. Otherwise it refuses and the HUD says why. So a fake collector run by
   an ordinary user cannot feed it data.

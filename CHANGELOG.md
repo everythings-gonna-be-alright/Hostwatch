@@ -7,6 +7,10 @@
   Hostwatch just connects when it opens: no password at every launch, and *Open at login* really means watching
   from login. *Settings ▸ General ▸ Remove…* unregisters it. A build without a Developer ID signature keeps the
   old admin prompt.
+- **Only Hostwatch may talk to the collector.** Every connection must come from Hostwatch's own signed code (checked
+  through macOS code signing with the kernel's audit token), not just from your user account. With no app connected
+  the service goes idle: no `eslogger`, no packet capture, firewall off, until Hostwatch opens again. After an
+  update it restarts itself as the new version.
 
 ## 0.12.0 – AI sessions, two thirds fewer patterns
 
