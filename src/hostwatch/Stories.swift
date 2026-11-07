@@ -582,12 +582,7 @@ final class StoryEngine: ObservableObject {
     private static let userDropZones = ["/Downloads/", "/Users/Shared/"]
     /// Tools that matter by themselves in a chain. Shells/interpreters only count when an app
     /// spawns them or their command line looks encoded/piped (they run everywhere otherwise).
-    private static let riskyTools: Set<String> = [
-        "curl", "wget", "nc", "ncat", "netcat", "socat", "osascript", "osacompile", "base64", "openssl",
-        "security", "sqlite3", "launchctl", "dscl", "xattr", "spctl", "screencapture", "scp", "sftp", "ftp",
-        "telnet", "ditto", "hdiutil", "pkgutil", "installer", "codesign", "chflags", "csrutil", "tccutil",
-        "defaults", "profiles", "networksetup", "systemsetup", "kextload", "funzip",
-    ]
+    private static var riskyTools: Set<String> { SignatureBuilder.watchedTools }
     private static let keychainDump = try! NSRegularExpression(
         pattern: #"\b(find-(generic|internet)-password|dump-keychain|export)\b"#)
     private static let downloadTemp: Set<String> = ["crdownload", "download", "part", "partial", "opdownload"]

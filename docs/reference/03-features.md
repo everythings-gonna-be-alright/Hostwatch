@@ -33,9 +33,19 @@ only a version, e.g. `claude/versions/#.#.#`.
   which read whatever a script tells them to.
 - **Random temp names:** a file or folder in `/tmp` or `$TMPDIR` named like a temp file (a name, then random letters
   and digits: `zshVJbGMW`, `hostwatch.29Cjgb`) is one pattern per name: `r /tmp/zsh*`.
+- **Projects:** what a tool reads inside a git project (the folder with its `.git`) is one pattern per project
+  and program: `rg → r ~/Documents/git/devops/**`. Writes stay per folder, as do reads by shells and interpreters
+  (`cat`, `python3`), and a project so near the root that its pattern would cover a whole area (never `r ~/**`).
+- **Scratch trees:** a tree in `/tmp` or `$TMPDIR` is one pattern per tree: `r /tmp/site-shot/**`.
+- **Homebrew:** reads inside a formula's tree are one pattern per formula, interpreters included:
+  `Python → r /opt/homebrew/Cellar/awscli/**`.
+- **Plain tools:** a shell or interpreter starting macOS's plain tools (`awk`, `cut`, `ls`, `du`…) is one pattern
+  per folder: `zsh → /usr/bin/*  (plain tools)`. Tools attackers use (`curl`, `osascript`, `security`,
+  `launchctl`, `defaults`…) and admin tools (`sudo`, `chown`, `diskutil`…) keep one pattern each, with their
+  arguments.
 - **Earlier patterns:** at launch, patterns saved by an earlier version that these rules now write as one are moved
   into it, with counts and dates added up. Only automatic ones move (routine Safe, or New nobody touched); your
-  decisions, a rule's or an AI's stay as they are. On a real store: 21,172 → 8,422 patterns. Preview it with
+  decisions, a rule's or an AI's stay as they are. On a real store: 21,172 → 7,600 patterns. Preview it with
   `Hostwatch --regroup-report` (read-only).
 
 **Status.** Each pattern has a status: **New / Safe / Suspicious / Dangerous**. It also records who set it (you,

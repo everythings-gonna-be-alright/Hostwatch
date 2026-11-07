@@ -164,7 +164,8 @@ import Testing
     }
 
     @Test func otherProgramsAndBareShellsStayAsTheyWere() {
-        #expect(exec("/bin/ls", pid: 7, ppid: 0, parent: "/bin/zsh", args: "ls -la").signaturePattern == "/bin/ls")
+        #expect(exec("/bin/ls", pid: 7, ppid: 0, parent: "/bin/zsh", args: "ls -la").signaturePattern == "/bin/*  (plain tools)")
+        #expect(exec("/bin/ls", pid: 7, ppid: 0, parent: "/Applications/Tool.app/Contents/MacOS/Tool", args: "ls -la").signaturePattern == "/bin/ls")
         #expect(exec("/bin/zsh", pid: 8, ppid: 0, parent: "/usr/bin/login", args: "-zsh").signaturePattern.hasPrefix("/bin/zsh"))
         #expect(SignatureBuilder.shellTokens("ditto -x 'a b' c") == ["ditto", "-x", "a b", "c"])
     }

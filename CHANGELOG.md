@@ -2,10 +2,12 @@
 
 ## Unreleased – Fewer patterns
 
-- **60% fewer patterns, same detection.** What macOS's own programs read is now one pattern per program instead of
-  one per folder, and temp files with random names are one pattern per name. On a real Mac: 21,172 → 8,422.
-- **Still specific:** writes, sensitive places (SSH keys, keychains, cookies, browser logins), and shells,
-  interpreters and command-line tools like `cat` or `python3`.
+- **Two thirds fewer patterns, same detection.** What macOS's own programs read is one pattern per program instead
+  of one per folder. What a tool reads inside a git project is one pattern per project, a scratch tree in `/tmp` is
+  one, a Homebrew formula's tree is one, and temp files with random names are one per name. A shell starting plain
+  tools (`awk`, `cut`, `ls`) is one pattern per folder. On a real Mac: 21,172 → 7,600.
+- **Still specific:** writes, sensitive places (SSH keys, keychains, cookies, browser logins), shells and
+  interpreters reading files, and every launch of a tool attackers use (`curl`, `osascript`, `security`, `sudo`…).
 - **Your store shrinks by itself** on the first launch. Only patterns decided automatically are merged; your
   decisions, rules and AI verdicts stay as they are. `Hostwatch --regroup-report` shows what would change.
 
