@@ -359,6 +359,10 @@
   footer .contact .sep { margin: 0 10px; }
   footer .cols { display: flex; gap: 28px; flex-wrap: wrap; }
   footer a { color: var(--muted); } footer a:hover { color: var(--text); }
+  /* How to reach us: a step brighter than the rest of the footer, its links in white. */
+  footer .contact { font-size: 14px; color: var(--muted); }
+  footer .contact a { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+  footer .contact a:hover { text-decoration-color: var(--text); }
 
   /* Phones: tighter rhythm, nothing cut off, comfortable tap targets. */
   @media (max-width: 760px) {
