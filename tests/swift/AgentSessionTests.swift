@@ -85,3 +85,38 @@ import Testing
         #expect(CodingAgent.of("/usr/bin/git") == nil && CodingAgent.of("/Applications/Claude.app/Contents/MacOS/Claude") == nil)
     }
 }
+
+/// Phase 2: sessions in history, on stories, on the Network tab; helpers are not sessions.
+@MainActor @Suite(.serialized) struct AgentSessionsEverywhere {
+    let claude = "\(home)/.local/share/claude/versions/2.1.316"
+
+    @Test func helpersAreNotSessions() {
+        let s = AgentSessions(fileURL: nil)
+        s.isAlive = { _ in true }; s.workingDirectory = { _ in nil }
+        #expect(s.observe(exec(claude, pid: 100, ppid: 50, parent: "/bin/zsh", args: "claude bg-pty-host --bg-pty-host /tmp/x.sock")) == nil)
+        #expect(s.sessions.isEmpty)
+    }
+
+    @Test func replayedFromHistory() {
+        var events = [exec(claude, pid: 100, ppid: 50, parent: "/bin/zsh", args: "claude"),
+                      exec("/bin/zsh", pid: 101, ppid: 100, parent: claude, args: "zsh -c 'curl x'"),
+                      net("/usr/bin/curl", pid: 101, to: "140.82.112.3:443", host: "api.github.com")]
+        for i in events.indices { events[i].ts = 1_000 + Double(i) }
+        var known = AgentSession(id: 100, agent: .claude, started: Date(timeIntervalSince1970: 1_000), lastSeen: Date(), pids: [100])
+        known.project = "ProcessHUD"
+        let replayed = AgentSessions.replay(events.reversed(), named: [known])          // newest first, as history lists
+        #expect(replayed.count == 1 && replayed[0].pids == [100, 101] && replayed[0].ended != nil)
+        #expect(replayed[0].name == "Claude · ProcessHUD" && replayed[0].destinations == ["github.com"])
+        #expect(AgentSessions.replay(events, named: [])[0].name == "Claude · pid 100")
+    }
+
+    @Test func storiesCarryTheSessionName() {
+        let engine = StoryEngine(persistent: false)
+        var story = Story(rootPid: 1, originName: "iTerm2", originPath: "/Applications/iTerm.app/Contents/MacOS/iTerm2", origin: .background)
+        story.steps = [StoryStep(exec("/usr/bin/curl", pid: 7, ppid: 6, parent: "/bin/zsh", args: "curl x"), stage: .lolbin, note: "ran curl")]
+        #expect(story.title == "iTerm2 → curl")
+        story.session = "Claude · ProcessHUD"
+        #expect(story.title == "Claude · ProcessHUD: iTerm2 → curl")
+        _ = engine
+    }
+}

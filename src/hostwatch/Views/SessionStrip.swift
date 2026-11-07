@@ -3,27 +3,31 @@ import SwiftUI
 /// Above the Events list: one chip per coding-agent session (Claude Code and the like), live ones first. Click a
 /// chip to see only that session's events (its whole process tree); right-click for its patterns.
 struct SessionStrip: View {
-    @ObservedObject var sessions: AgentSessions
-    @ObservedObject var model: HUDModel
+    /// Live sessions, or the ones replayed from the Time Travel window.
+    let sessions: [AgentSession]
+    let traveling: Bool
+    let selected: Int?
+    /// Only this session's events (nil: all).
+    let select: (AgentSession?) -> Void
     /// Opens the Patterns tab scoped to these keys.
     let showPatterns: (String, Set<String>) -> Void
 
     var body: some View {
-        let listed = sessions.sessions
-        if !listed.isEmpty {
+        if !sessions.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles.rectangle.stack").foregroundStyle(.secondary)
-                        .help("Coding-agent sessions: each is the agent and every process it started")
-                    ForEach(listed) { s in
-                        SessionChip(session: s, selected: model.onlySession == s.id) {
-                            model.onlySession = model.onlySession == s.id ? nil : s.id
+                        .help(traveling ? "Coding-agent sessions in this window of history (replayed from recorded starts)"
+                              : "Coding-agent sessions: each is the agent and every process it started")
+                    ForEach(sessions) { s in
+                        SessionChip(session: s, selected: selected == s.id) {
+                            select(selected == s.id ? nil : s)
                         } patterns: {
                             showPatterns("Session: \(s.name)", s.keys)
                         }
                     }
-                    if model.onlySession != nil {
-                        Button("Show All Events") { model.onlySession = nil }.buttonStyle(.link).font(.system(size: 11))
+                    if selected != nil {
+                        Button("Show All Events") { select(nil) }.buttonStyle(.link).font(.system(size: 11))
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 6)
@@ -78,5 +82,21 @@ private struct SessionChip: View {
         if !session.sessionID.isEmpty { lines.append("Claude session \(session.sessionID)") }
         lines.append("Click: only this session's events · Right-click: its patterns")
         return lines.joined(separator: "\n")
+    }
+}
+
+/// Sessions replayed from the Time Travel window, once per window (not on every redraw).
+@MainActor
+final class ReplayedSessions: ObservableObject {
+    private var key: (Int, Int)?
+    private var cached: [AgentSession] = []
+
+    func sessions(for travel: TimeTravel, named: [AgentSession]) -> [AgentSession] {
+        let key = (travel.revision, travel.listed.count)
+        if key.0 != self.key?.0 || key.1 != self.key?.1 {
+            cached = AgentSessions.replay(travel.listed, named: named)
+            self.key = key
+        }
+        return cached
     }
 }
