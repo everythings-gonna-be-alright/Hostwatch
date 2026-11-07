@@ -175,14 +175,13 @@ Technical details of the compressed files:
 - **Kernel panic or power loss:** the last few seconds can be lost, as with any write the system hadn't flushed.
 - **When Time Travel sees it:** once its block is finished, within 30 s.
 
-You can also search the history yourself from Terminal:
+You can also search the history yourself from Terminal, for example:
 
-- Query examples:
-  ```bash
-  cd ~/Library/Logs/Hostwatch/History
-  zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
-  zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
-  ```
+```bash
+cd ~/Library/Logs/Hostwatch/History
+zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
+zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
+```
 
 **Tools:**
 

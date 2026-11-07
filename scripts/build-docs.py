@@ -429,6 +429,8 @@ PAGE = """<!doctype html>
   th {{ font: 500 12px var(--mono); color: var(--dim); }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
+  footer .reach {{ margin: 0 auto 14px; max-width: none; text-align: center; color: var(--muted); line-height: 1.9; font-size: 14px; }}
+  footer .reach a {{ color: var(--text); }}
   /* Features: groups set apart (a line, air, a muted intro), features below them. */
   .gicon {{ width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round;
             stroke-linejoin: round; margin-top: 2px; }}
@@ -587,7 +589,9 @@ PAGE = """<!doctype html>
   <aside class="onpage" aria-label="On this page"><div class="onpage-in"><b>On this page</b><ol></ol></div></aside>
 </div>
 <a class="totop" href="#" aria-label="Back to top">↑</a>
-<footer>Hostwatch · MIT license · <a href="../">Home</a> · <a href="{repo}" target="_blank" rel="noopener">GitHub</a> ·
+<footer><p class="reach">Found a bug or a mistake in the docs? <a href="{repo}/issues/new?labels=bug&amp;body=%2A%2AWhat%20happened%2A%2A%0A%0A%0A%2A%2AWhat%20you%20expected%2A%2A%0A%0A%0A%2A%2ASteps%20to%20reproduce%2A%2A%0A1.%20%0A%0A%2A%2AHostwatch%20and%20macOS%20version%2A%2A%0AHostwatch%3A%20%0AmacOS%3A%20%0A%0A%28Security%20problem%3F%20Please%20email%20it%20instead%20of%20opening%20a%20public%20issue.%29%0A" target="_blank" rel="noopener">Report it on GitHub ↗</a>
+  <br>Questions or a security report? Email Yaroslav at <a href="mailto:bash.test.sh@gmail.com">bash.test.sh@gmail.com</a></p>
+  Hostwatch · MIT license · <a href="../">Home</a> · <a href="{repo}" target="_blank" rel="noopener">GitHub</a> ·
   <a href="{repo}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a></footer>
 <script>
   // Every section of every page (for search), which page each section id is on, and this page.
