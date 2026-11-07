@@ -59,45 +59,19 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 **0.12.0**
 - **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
-  process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them; a *Session*
+  process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them, with a *Session*
   column, *via Claude* tags on the Network tab, session names on stories, and the MCP tool `agent_sessions`.
 - **🗂️ Two thirds fewer patterns** – system programs' reads, project trees, scratch trees, Homebrew formulas and
-  random temp names are one pattern each; your store shrinks by itself, your decisions untouched.
+  random temp names are one pattern each. Your store shrinks by itself, your decisions untouched.
 - **📖 Patterns and rules you can read** – a wrapped Pattern column and an inspector with the pattern in full and in
-  plain words; every rule reads as *who does what → what happens*.
+  plain words, and every rule reads as *who does what → what happens*.
 - **⚡ Instant tab switching**, resizable columns, and a tab bar that keeps its titles.
+- **🪪 Free for everyone**, at home and at work, under the PolyForm Shield licence (see [License](#license)).
 
 **0.11.1** – signed and notarized by Apple: no more *“Apple could not verify Hostwatch”*, and Full Disk Access
 survives updates.
 
-**0.11.0**
-- **🔍 Search all of history** – Time Travel finds matches in everything recorded. Double-click one to jump there.
-- **⏱️ Running Now in the past** – which processes were running at any moment, with CPU, memory and disk writes.
-- **💾 Who's writing to your disk** – a *Writing* column and free disk space with the programs that wrote the most.
-- **🪶 Lighter** – up to 10× fewer SSD writes, much less memory, and the collector's memory leak fixed.
-- **🚀 Open at login**, a firewall warning when it turns itself to Watch, and new MCP tools to find and trace processes.
-
-**0.10.0**
-- **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
-  parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
-- **✨ A new look** – a new app icon (the activity list, the flagged row brightest), the same mark in the menu bar.
-- **📖 Website and docs** – [hostwatch.tech](https://hostwatch.tech/)
-  with searchable [documentation](https://hostwatch.tech/docs/) of every feature
-  and setting. *Help ▸ Hostwatch Help* opens it.
-- **🩹 Fix** – the menu bar's *known-bad matches this week* clears when you dismiss or delete those stories.
-
-**0.9.0**
-- **🔬 Watch Closely** – not sure what a program is up to? Right-click it (or ⌥⌘W) and Hostwatch records for a
-  minute everything it and its helpers do: files changed, connections, other processes, persistence, privileges.
-  You get it in plain words, what stands out first, and Claude or the on-device model explains whether it's dangerous.
-- **🌐 Network tab** – domains and the firewall on one timeline: every destination, who connected, and whether it
-  passes, waits for you or is blocked. *Forget* also resets the firewall's answer.
-- **🐳 Containers in the firewall** – Docker, Podman, OrbStack, Lima and QEMU connections are asked about per site
-  ("A Docker container wants to connect to pypi.org"), instead of passing on Docker's signature.
-- **🗂️ Calmer Patterns** – grouped by program, one-off commands hidden and forgotten after a week, and the list
-  stays smooth with thousands of patterns.
-- **⚡ No helper programs** – connections come straight from macOS's own statistics: every TCP and UDP connection,
-  even one lasting milliseconds, with its real program (no more "?") and less CPU.
+Earlier versions: see the [changelog](CHANGELOG.md).
 
 ## What it does
 
