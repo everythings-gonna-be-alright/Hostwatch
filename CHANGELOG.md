@@ -36,8 +36,10 @@
   has room to grow. Clicking the selected pattern again deselects it, and Escape clears the selection.
 
 **Licence**
-- From this version Hostwatch is source available under the PolyForm Noncommercial License 1.0.0: free for personal
-  and non-commercial use, with the code public. Using it at work needs a commercial licence (contact@hostwatch.tech).
+- From this version Hostwatch is source available under the PolyForm Shield License 1.0.0: free to use, change, fork
+  and share, at home and at work, with the code public. The one thing it doesn't allow is using the code to make a
+  product or service that competes with Hostwatch (your own server or cloud edition of it). The centralised versions
+  for companies, a server for a whole fleet and a hosted cloud, will be paid editions (contact@hostwatch.tech).
   Versions up to 0.11.1 were released under MIT and stay under it.
 
 **For developers**
