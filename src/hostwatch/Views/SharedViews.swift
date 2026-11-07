@@ -189,6 +189,8 @@ final class TravelRowsCache: ObservableObject {
         var exclusions: String
         var signatures: Int
         var order: [KeyPathComparator<EventItem>]
+        var grouping = EventGrouping.none
+        var sessions = 0            // a stamp of the sessions the grouping used
     }
 
     struct Result {

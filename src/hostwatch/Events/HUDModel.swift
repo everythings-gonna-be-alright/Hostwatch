@@ -68,6 +68,10 @@ final class HUDModel: ObservableObject {
     /// its pids (the window keeps them current while the session runs).
     @Published var onlySession: Int?
     @Published var onlySessionPids: Set<Int>?
+    /// The Events list grouped by program or by coding-agent session (remembered).
+    @Published var eventGrouping = EventGrouping(rawValue: UserDefaults.standard.string(forKey: "eventGrouping") ?? "") ?? .none {
+        didSet { UserDefaults.standard.set(eventGrouping.rawValue, forKey: "eventGrouping") }
+    }
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?

@@ -3,10 +3,11 @@
 ## Unreleased – Agent sessions, fewer patterns, rules in plain words
 
 - **Agent sessions.** Claude Code (and the Cursor agent, Codex, Gemini CLI) is followed as one session: the agent
-  and every process it started. A strip above Events shows each session with its counts; click it to see only that
-  session's events, right-click for the patterns it produced. Events have a *Session* column, Network destinations
-  a session reached say *via Claude · project*, stories inside a session start with its name, and Time Travel
-  replays sessions from history. Patterns can be grouped *By Session*. The MCP server lists them (`agent_sessions`).
+  and every process it started. Events and Patterns can be grouped *By Session* (or *By Process*): one row per
+  session, named the way `claude --resume` lists it (the topic, then project · branch · time · counts), with a small
+  mark for the maker, and its events or patterns under it. Right-click a session for only its events or its
+  patterns. Network destinations a session reached say *via Claude · project*, stories inside a session start with
+  its name, and Time Travel replays sessions from history. The MCP server lists them (`agent_sessions`).
 - **The Show filter on Patterns is a row of buttons again**, one click like on Events, however narrow the window.
 
 - **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside

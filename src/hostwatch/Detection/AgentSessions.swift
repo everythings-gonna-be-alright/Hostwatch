@@ -62,6 +62,9 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var sessionID = ""
     /// The session's topic, as Claude Code titles it ("Pattern classifier noise reduction"), when known.
     var title = ""
+    /// The first prompt (what `claude --resume` shows when there's no title yet) and the git branch, when known.
+    var firstPrompt = ""
+    var branch = ""
     var events = 0
     var launches = 0
     var files = 0
@@ -75,9 +78,14 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var destinations: Set<String> = []
 
     var isLive: Bool { ended == nil }
+    /// The topic, as `claude --resume` lists it: the title, else the first prompt, else the project.
+    var topic: String {
+        !title.isEmpty ? title : !firstPrompt.isEmpty ? firstPrompt : project.isEmpty ? "\(agent.short) · pid \(id)" : project
+    }
+
     /// "Claude · ProcessHUD · Pattern classifier noise reduction".
     var name: String {
-        (project.isEmpty ? "\(agent.short) · pid \(id)" : "\(agent.short) · \(project)") + (title.isEmpty ? "" : " · \(title)")
+        (project.isEmpty ? "\(agent.short) · pid \(id)" : "\(agent.short) · \(project)") + (title.isEmpty && firstPrompt.isEmpty ? "" : " · \(topic)")
     }
     var duration: TimeInterval { (ended ?? lastSeen).timeIntervalSince(started) }
 }
@@ -184,7 +192,11 @@ final class AgentSessions: ObservableObject {
         if !sessionID.isEmpty { s.sessionID = sessionID }
         if !cwd.isEmpty { s.cwd = cwd; s.project = (cwd as NSString).lastPathComponent }
         // The title appears after a few turns: looked for again while it's missing (the file's first lines only).
-        if s.title.isEmpty, !transcript.isEmpty, let title = Self.title(inTranscript: transcript) { s.title = title }
+        if s.title.isEmpty, !transcript.isEmpty, let facts = Self.facts(inTranscript: transcript) {
+            if let t = facts.title { s.title = t }
+            if s.firstPrompt.isEmpty, let p = facts.firstPrompt { s.firstPrompt = p }
+            if let b = facts.branch { s.branch = b }
+        }
         s.lastSeen = now()
         sessions[i] = s
         scheduleSave()
@@ -223,6 +235,7 @@ final class AgentSessions: ObservableObject {
                 c.ended = s.lastSeen
                 if let known = named.first(where: { $0.id == s.id && abs($0.started.timeIntervalSince(s.started)) < 120 }) {
                     c.project = known.project; c.cwd = known.cwd; c.sessionID = known.sessionID; c.title = known.title
+                    c.firstPrompt = known.firstPrompt; c.branch = known.branch
                 }
                 return c
             }
@@ -281,26 +294,47 @@ final class AgentSessions: ObservableObject {
         return (try? decoder.decode([AgentSession].self, from: data)) ?? []
     }
 
-    // MARK: Claude Code's title for a session
+    // MARK: What Claude Code knows about a session (its transcript's first lines)
 
-    /// The session's title from its transcript's first lines: one you gave it ("custom-title"), else the one Claude
-    /// Code made ("ai-title").
-    nonisolated static func title(inTranscript path: String) -> String? {
-        guard let handle = FileHandle(forReadingAtPath: path), let head = try? handle.read(upToCount: 16_384) else { return nil }
+    struct TranscriptFacts: Equatable { var title: String?; var firstPrompt: String?; var branch: String? }
+
+    /// The title you gave it ("custom-title") or the one Claude Code made ("ai-title"), the first prompt and the git
+    /// branch, from the transcript's first lines (what `claude --resume` lists).
+    nonisolated static func facts(inTranscript path: String) -> TranscriptFacts? {
+        guard let handle = FileHandle(forReadingAtPath: path), let head = try? handle.read(upToCount: 65_536) else { return nil }
         try? handle.close()
-        return title(inTranscriptHead: head)
+        return facts(inTranscriptHead: head)
     }
 
-    nonisolated static func title(inTranscriptHead head: Data) -> String? {
+    nonisolated static func facts(inTranscriptHead head: Data) -> TranscriptFacts? {
+        var out = TranscriptFacts()
         var ai: String?
         for line in head.split(separator: 0x0A) {
             guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any], let type = obj["type"] as? String
             else { continue }
-            if type == "custom-title", let t = obj["customTitle"] as? String, !t.isEmpty { return t }
-            if type == "ai-title", let t = obj["aiTitle"] as? String, !t.isEmpty { ai = t }
+            switch type {
+            case "custom-title": if let t = obj["customTitle"] as? String, !t.isEmpty { out.title = t }
+            case "ai-title": if let t = obj["aiTitle"] as? String, !t.isEmpty { ai = t }
+            case "user":
+                guard out.firstPrompt == nil, obj["isMeta"] as? Bool != true, obj["isCompactSummary"] as? Bool != true,
+                      let message = obj["message"] as? [String: Any] else { continue }
+                var text = message["content"] as? String
+                if text == nil, let parts = message["content"] as? [[String: Any]] {
+                    text = parts.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.first
+                }
+                if let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, !text.hasPrefix("<") {
+                    out.firstPrompt = String(text.split(separator: "\n").first ?? "").prefix(80).trimmingCharacters(in: .whitespaces)
+                    if let b = obj["gitBranch"] as? String, !b.isEmpty { out.branch = b }
+                }
+            default: continue
+            }
         }
-        return ai
+        if out.title == nil { out.title = ai }
+        return out == TranscriptFacts() ? nil : out
     }
+
+    /// The title alone (tests and the chip).
+    nonisolated static func title(inTranscriptHead head: Data) -> String? { facts(inTranscriptHead: head)?.title }
 
     // MARK: The working directory of a live process
 
