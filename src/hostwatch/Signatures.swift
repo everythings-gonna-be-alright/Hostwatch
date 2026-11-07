@@ -432,7 +432,57 @@ enum SignatureBuilder {
         let path = filePattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? filePattern
         guard let star = path.firstIndex(where: { $0 == "*" || $0 == "?" }) else { return false }
         let prefix = String(path[..<star])
+        // A family of temp files ("/tmp/zsh*", "$TMPDIR/hostwatch.*"): named, so not a whole area.
+        if prefix.hasPrefix("/tmp/") || prefix.hasPrefix("$TMPDIR/"),
+           (prefix.split(separator: "/", omittingEmptySubsequences: false).last?.count ?? 0) >= 2 { return false }
         return depth(prefix) < minWildcardDepth(prefix)
+    }
+
+    // MARK: Fewer patterns
+
+    /// What macOS's own programs read, other than sensitive places: one pattern per program ("r *  [ordinary
+    /// files]"). Which of thousands of system files a sealed daemon reads says nothing, and nothing can change it.
+    static let ordinaryFiles = "ordinary files"
+
+    /// Programs whose reads are one pattern: on the sealed system volume, and not a shell, interpreter or
+    /// command-line tool (`cat`, `cp`, `python3` read whatever a script or a person tells them to).
+    static func readsAsOnePattern(_ actor: String) -> Bool {
+        isSealedSystem(actor) && !isLolbin(actor) && !BaselinePolicy.isCommandLineTool(actor)
+    }
+
+    private static let tempRoot = try! NSRegularExpression(
+        pattern: #"^(/private)?/tmp(?=/)|^/private/var/folders/[^/]+/[^/]+/[A-Za-z0-9]+(?=/)"#)
+
+    /// "/tmp/zshVJbGMW" → "/tmp/zsh*", "$TMPDIR/hostwatch.JazhOu/x" → "$TMPDIR/hostwatch.*/x": a temp file or
+    /// folder named like mkstemp does (a name, then 6 random letters and digits), directly in a temp folder. The
+    /// raw path with that name folded, or nil.
+    static func foldTempName(_ path: String) -> String? {
+        guard let m = tempRoot.firstMatch(in: path, range: NSRange(path.startIndex..., in: path)),
+              let r = Range(m.range, in: path) else { return nil }
+        let root = path[..<r.upperBound]
+        let rest = path[r.upperBound...].dropFirst()                 // after the "/"
+        let name = rest.prefix { $0 != "/" }
+        func alnum(_ c: Character) -> Bool { c.isASCII && (c.isLetter || c.isNumber) }
+        func upperHex(_ c: Character) -> Bool { c.isASCII && (c.isNumber || "ABCDEF".contains(c)) }
+        // The random part: all after the last "-", "." or "_" ("hostwatch.29Cjgb"), else the last 6 ("zshiteQSf"),
+        // or a whole uppercase hex run ("hwCDDEE408").
+        var tail = name.suffix(6)
+        if let sep = name.lastIndex(where: { "-._".contains($0) }) { tail = name[name.index(after: sep)...] }
+        else if tail.allSatisfy(upperHex) { tail = name.suffix(name.reversed().prefix(while: upperHex).count) }
+        guard tail.count >= 6, tail.allSatisfy(alnum), name.count - tail.count >= 2 else { return nil }
+        let upper = tail.filter(\.isUppercase).count, lower = tail.filter(\.isLowercase).count
+        let digits = tail.filter(\.isNumber).count
+        guard upper >= 2 && lower >= 1 || digits >= 1 && upper >= 1 && (lower >= 1 || upper >= 2) else { return nil }
+        return root + "/" + name.dropLast(tail.count) + "*" + rest.dropFirst(name.count)
+    }
+
+    /// A pattern one of the rules above writes for many former ones (what `SignatureStore.regroup` moves into).
+    static func isRegrouped(_ pattern: String) -> Bool {
+        if pattern.hasSuffix("[\(ordinaryFiles)]") { return true }
+        let path = pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
+        guard path.hasPrefix("/tmp/") || path.hasPrefix("$TMPDIR/") else { return false }
+        let name = path.split(separator: "/").dropFirst().first ?? ""
+        return name.hasSuffix("*") && name.count >= 3
     }
 
     /// Keeps up to `depth` folders below the zone root, then "/**".
@@ -513,11 +563,15 @@ enum SignatureBuilder {
                     sealedActor ? .normal : .high, "write to an autostart location")
         }
 
+        if !writes, readsAsOnePattern(actor) {
+            return ("\(mode) *  [\(ordinaryFiles)]", .routine, "macOS system process")
+        }
+
         if let own = ownDataRoot(raw: path, actor: actor) {
             return ("\(mode) \(normalize(own))/**  [own data]", .routine, "app's own data folder")
         }
 
-        let pattern = "\(mode) \(specificPath(path, deep: !isLolbin(actor)))"
+        let pattern = "\(mode) \(specificPath(foldTempName(path) ?? path, deep: !isLolbin(actor)))"
         if writes {
             if routineWriteRoots.contains(where: { under(norm, $0) }) {
                 return (pattern, .routine, "scratch/cache write")
@@ -788,6 +842,7 @@ final class SignatureStore: ObservableObject {
         load()
         PatternMerges.shared.set(merges)                 // this store's combined patterns (none for a new one)
         dropInterpreterTrust()
+        regroup()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -1247,6 +1302,78 @@ final class SignatureStore: ObservableObject {
         }
         lastOneOffs = oneOffs
         return (pruned, folded, into)
+    }
+
+    // MARK: Regrouping (patterns today's rules write as one)
+
+    /// Decided automatically (routine Safe) or not at all (New, untouched): what regrouping may move.
+    nonisolated static func mayRegroup(_ e: SignatureEntry) -> Bool {
+        e.kind == .file && e.reopened == nil && e.risk != .high
+            && (e.source == "auto" || e.source == nil && e.status == .unclassified)
+    }
+
+    /// Patterns from earlier versions that today's rules write as one (system programs' ordinary reads, random temp
+    /// names), by the key they now belong to. Rebuilt from each pattern's stored example, so it matches what new
+    /// events make. Nothing you, a rule or an AI decided moves, nor anything combined, reopened or high-risk.
+    nonisolated static func regroupPlan(_ entries: [SignatureEntry], combined: Set<String> = []) -> [String: [SignatureEntry]] {
+        var groups: [String: [SignatureEntry]] = [:]
+        for e in entries where mayRegroup(e) && !combined.contains(e.id) && !e.exampleTarget.isEmpty {
+            let (pattern, _, _) = SignatureBuilder.fileTarget(e.exampleTarget, mode: e.exampleExtra, actor: e.exampleProc)
+            guard pattern != e.pattern, SignatureBuilder.isRegrouped(pattern),
+                  SignatureBuilder.normalizeExecutable(e.exampleProc) == e.process else { continue }
+            groups["\(e.kind.rawValue)|\(e.process)|\(pattern)", default: []].append(e)
+        }
+        return groups
+    }
+
+    /// Moves earlier patterns into the ones today's rules write (see `regroupPlan`), at launch: counts add up, the
+    /// first and last time seen are kept. Safe when all were Safe, New otherwise; a pattern already there keeps
+    /// its decision. Old keys of temp files answer for the new one (stories may point at them).
+    @discardableResult
+    func regroup() -> (moved: Int, into: Int) {
+        let plan = Self.regroupPlan(Array(entries.values), combined: Set(merges.map(\.key)))
+        var moved = 0
+        for (key, group) in plan {
+            let pattern = String(key.split(separator: "|", maxSplits: 2)[2])
+            let first = group[0]
+            let (_, risk, reason) = SignatureBuilder.fileTarget(first.exampleTarget, mode: first.exampleExtra,
+                                                                 actor: first.exampleProc)
+            let existing = entries[key]
+            let all = group + (existing.map { [$0] } ?? [])
+            guard let latest = all.max(by: { $0.lastSeen < $1.lastSeen }) else { continue }
+            var merged = existing ?? latest
+            merged.id = key
+            merged.pattern = pattern
+            merged.count = all.reduce(0) { $0 + $1.count }
+            merged.firstSeen = all.map(\.firstSeen).min() ?? latest.firstSeen
+            merged.lastSeen = latest.lastSeen
+            merged.examplePid = latest.examplePid
+            merged.exampleName = latest.exampleName
+            merged.exampleProc = latest.exampleProc
+            merged.exampleTarget = latest.exampleTarget
+            merged.exampleExtra = latest.exampleExtra
+            merged.exampleParent = latest.exampleParent
+            merged.risk = max(risk, all.map(\.risk).max() ?? risk)
+            if existing.map(Self.mayRegroup) ?? true {
+                let safe = all.allSatisfy { $0.status == .safe } && merged.risk == .routine
+                merged.status = safe ? .safe : .unclassified
+                merged.source = safe ? "auto" : nil
+                merged.note = safe ? reason : all.compactMap(\.note).first
+                merged.suggestion = nil
+            }
+            let temp = !pattern.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]")
+            for e in group where e.id != key {
+                entries[e.id] = nil
+                if temp { aliases[e.id] = key }
+                selection.remove(e.id)
+            }
+            let gone = Set(group.map(\.id))
+            for (old, target) in aliases where gone.contains(target) { aliases[old] = key }
+            entries[key] = merged
+            moved += group.count
+        }
+        if moved > 0 { changedNow() }
+        return (moved, plan.count)
     }
 
     /// Once a day (checked by the store's timer).
@@ -2069,4 +2196,23 @@ final class MemoCache<Key: Hashable, Value>: @unchecked Sendable {
         if store.count >= limit { store.removeAll(keepingCapacity: true) }
         store[key] = value
     }
+}
+
+/// `--regroup-report [folder]`: what the next launch's regrouping would do to the saved patterns (read-only).
+func runRegroupReport(_ folder: String?) -> Never {
+    let dir = folder.map { URL(fileURLWithPath: $0) } ?? AppPaths.support
+    guard let saved = SignatureStore.readSaved(from: dir) else { print("no patterns in \(dir.path)"); exit(1) }
+    let plan = SignatureStore.regroupPlan(saved.entries)
+    let moved = plan.values.reduce(0) { $0 + $1.count }
+    let existing = Set(saved.entries.map(\.id))
+    let new = plan.keys.filter { !existing.contains($0) }.count
+    let ordinary = plan.filter { $0.key.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]") }
+    print("\(saved.entries.count) patterns -> \(saved.entries.count - moved + new)")
+    print("  system programs' ordinary reads: \(ordinary.values.reduce(0) { $0 + $1.count }) -> \(ordinary.count)")
+    let temp = plan.filter { !$0.key.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]") }
+    print("  random temp names: \(temp.values.reduce(0) { $0 + $1.count }) -> \(temp.count)")
+    for (key, group) in plan.sorted(by: { $0.value.count > $1.value.count }).prefix(15) {
+        print(String(format: "%6d  ", group.count) + key)
+    }
+    exit(0)
 }

@@ -1260,6 +1260,9 @@ enum Entry {
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
             runSignatureReport(args[i + 1])
         }
+        if let i = args.firstIndex(of: "--regroup-report") {
+            runRegroupReport(i + 1 < args.count ? args[i + 1] : nil)
+        }
         if let i = args.firstIndex(of: "--signing-check"), i + 1 < args.count {
             runSigningCheck(Array(args[(i + 1)...]))
         }
