@@ -464,10 +464,12 @@ extension Agent {
 // MARK: - Entry
 
 /// `Hostwatch --collector [--no-files] [--no-net] [--net-interval s] [--socket path] [--owner-pid pid]
-/// [--token-file path]`, as root.
+/// [--token-file path] [--daemon]`, as root. `--daemon`: started by launchd as a background service, so there is no
+/// owner app: the console user's Hostwatch may connect (whoever is at the Mac), and a shutdown request is ignored
+/// (launchd keeps the service alive; the app unregisters it to stop it).
 func runCollectorAgent(_ args: [String]) -> Never {
     var noFiles = false, noNet = false, netInterval = 1.0, socketPath = CollectorSocket.path
-    var ownerPid = 0, tokenFile = ""
+    var ownerPid = 0, tokenFile = "", daemon = false
     var i = 0
     while i < args.count {
         let a = args[i]
@@ -479,12 +481,14 @@ func runCollectorAgent(_ args: [String]) -> Never {
         case "--socket": socketPath = value()
         case "--owner-pid": ownerPid = Int(value()) ?? 0
         case "--token-file": tokenFile = value()
+        case "--daemon": daemon = true
         default: Agent.logError("unknown option \(a)"); exit(64)
         }
         i += 1
     }
     signal(SIGPIPE, SIG_IGN)
     let agent = Agent()
+    agent.daemon = daemon
     if !tokenFile.isEmpty {
         do {
             agent.shutdownToken = try String(contentsOfFile: tokenFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -500,8 +504,10 @@ func runCollectorAgent(_ args: [String]) -> Never {
     if noFiles { kinds.remove("file") }
     if noNet { kinds.remove("net") }
 
-    // Who may connect: the app that launched us, or (started by hand) the user who ran sudo.
+    // Who may connect: the app that launched us, (as a service) the user at the Mac, or (started by hand) the
+    // user who ran sudo.
     let clientUID: uid_t? = ownerPid > 0 ? ProcessList.uid(ownerPid)
+        : daemon ? (AgentSocket.consoleUID() ?? 0)
         : uid_t(ProcessInfo.processInfo.environment["SUDO_UID"] ?? "0") ?? 0
     let server: Int32
     do {
@@ -513,7 +519,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
     PFRedirect.clearStale()                                  // a firewall redirect left by a crashed collector
     Agent.stopStrayNettop()                                  // and its nettop, from versions before 0.9
     agent.onShutdown { agent.firewall.shutdown() }
-    Thread.detachNewThread { agent.acceptClients(server, ownerPid: ownerPid, clientUID: clientUID) }
+    Thread.detachNewThread { agent.acceptClients(server, ownerPid: ownerPid, clientUID: clientUID, socketPath: socketPath) }
 
     agent.adoptOwnProcesses(ownerPid: ownerPid)              // before events flow: Hostwatch's own processes
     // "exit" only keeps the set of Hostwatch's own pids exact; it is never published.

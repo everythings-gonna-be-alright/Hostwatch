@@ -77,7 +77,10 @@ enum Reset {
             plan.clearDefaults(.standard, domain: AppPaths.bundleID)
             exit(0)   // not terminate(): quitting normally would save the stores again
         }
-        if collector.isRunning {
+        if collector.usesDaemon {
+            collector.stopService()                      // a fresh install has no service registered
+            finish()
+        } else if collector.isRunning {
             var done = false
             let once = { if !done { done = true; finish() } }
             collector.stop(via: model) { DispatchQueue.main.async(execute: once) }

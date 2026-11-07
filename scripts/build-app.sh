@@ -61,7 +61,36 @@ fi
 # Notarization needs Apple's secure timestamp (RELEASE=1, set by package.sh); local builds skip the network call.
 TIMESTAMP="--timestamp=none"
 if [ "${RELEASE:-0}" = 1 ]; then TIMESTAMP="--timestamp"; fi
-if [ -n "${CODESIGN_IDENTITY:-}" ] && [ "$CODESIGN_IDENTITY" != "-" ]; then
+if [ -n "${CODESIGN_IDENTITY:-}" ] && [ "$CODESIGN_IDENTITY" != "-" ] && [ "${DEMO:-0}" != 1 ]; then
+  # The collector as a background service (SMAppService daemon): registered once, approved once, started by launchd
+  # as root from then on. Only a Developer ID build may ship it; the signature covers the plist.
+  mkdir -p "$APP/Contents/Library/LaunchDaemons"
+  cat > "$APP/Contents/Library/LaunchDaemons/local.hostwatch.collectord.plist" <<DAEMON
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.hostwatch.collectord</string>
+  <key>BundleProgram</key><string>Contents/MacOS/Hostwatch</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>Hostwatch</string>
+    <string>--collector-launcher</string>
+    <string>self</string>
+    <string>--collector</string>
+    <string>--daemon</string>
+    <string>--socket</string>
+    <string>/var/run/hostwatch/collector.sock</string>
+  </array>
+  <key>AssociatedBundleIdentifiers</key><array><string>$BUNDLE_ID</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>StandardOutPath</key><string>/var/log/hostwatch-collector.log</string>
+  <key>StandardErrorPath</key><string>/var/log/hostwatch-collector.log</string>
+</dict>
+</plist>
+DAEMON
   codesign --force --options runtime $TIMESTAMP --sign "$CODESIGN_IDENTITY" "$APP"
   echo "Signed: $CODESIGN_IDENTITY" | sed -E 's/\([A-Z0-9]{10}\)/(team)/'
 else

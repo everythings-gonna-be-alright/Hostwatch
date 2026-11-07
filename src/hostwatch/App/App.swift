@@ -210,9 +210,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         if AppPaths.isDemo { runDemo(); return }
         // Start the bundled collector unless one (e.g. run-agent.sh) is already serving.
+        collector.onNeedsApproval = { [weak self] in self?.showServiceApproval() }
         if collector.startAtLaunch {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, !self.model.connected else { return }
+                // The service, once approved, is already up: the socket connects by itself. Otherwise register it
+                // (first run) or show where to approve it.
+                if self.collector.usesDaemon {
+                    self.collector.daemon.refresh()
+                    if self.collector.daemon.isEnabled { return }
+                    if self.collector.daemon.needsApproval { self.showServiceApproval(); return }
+                }
                 self.startCollector()
             }
         }

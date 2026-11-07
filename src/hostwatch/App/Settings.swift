@@ -205,16 +205,28 @@ private struct GeneralPane: View {
                 Footnote("Off by default. When on, Hostwatch is listed in System Settings ▸ General ▸ Login Items, "
                          + "where you can also remove it.")
             }
-            Section("Collector") {
+            Section {
                 LabeledContent("Status") {
                     HStack {
                         Text(collector.statusText).foregroundStyle(.secondary)
-                        Button(collector.isRunning ? "Stop" : "Start…", action: toggleCollector)
-                            .disabled(collector.state == .starting)
+                        if collector.usesDaemon, collector.daemon.needsApproval {
+                            Button("Open Login Items…") { collector.daemon.openLoginItems() }
+                        } else {
+                            Button(collector.isRunning ? (collector.usesDaemon ? "Remove…" : "Stop") : "Start…", action: toggleCollector)
+                                .disabled(collector.state == .starting && !collector.usesDaemon)
+                        }
                     }
                 }
-                Toggle("Start collector when Hostwatch opens", isOn: $collector.startAtLaunch)
+                Toggle(collector.usesDaemon ? "Register the collector when Hostwatch opens" : "Start collector when Hostwatch opens",
+                       isOn: $collector.startAtLaunch)
                 LabeledContent("Log") { Button("Show Collector Log") { collector.openLog() } }
+            } header: {
+                Text("Collector")
+            } footer: {
+                if collector.usesDaemon {
+                    Footnote("The collector runs as a background service: registered once with your password, approved once "
+                             + "in Login Items, then started by macOS at boot. Remove… unregisters it (your password again).")
+                }
             }
             Section {
                 LabeledContent("Full Disk Access") {

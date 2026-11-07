@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased – No password at launch
+
+- **The collector is a background service now.** It's registered once (your password), approved once in System
+  Settings ▸ Login Items, and from then on macOS starts it at boot by itself, as root, including after an update.
+  Hostwatch just connects when it opens: no password at every launch, and *Open at login* really means watching
+  from login. *Settings ▸ General ▸ Remove…* unregisters it. A build without a Developer ID signature keeps the
+  old admin prompt.
+
 ## 0.12.0 – AI sessions, two thirds fewer patterns
 
 **New**

@@ -477,6 +477,19 @@ extension AppDelegate {
         if collector.isRunning { collector.stop(via: model) } else { startCollector() }
     }
 
+    /// The service is registered and waits in System Settings ▸ Login Items: say so, with the way there.
+    func showServiceApproval() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Allow Hostwatch's collector in the background"
+        alert.informativeText = "macOS lists Hostwatch's collector under System Settings ▸ General ▸ Login Items ▸ "
+            + "Allow in the Background. Turn it on once: it then starts at boot as a background service and never asks for "
+            + "your password at launch again."
+        alert.addButton(withTitle: "Open Login Items…")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn { collector.daemon.openLoginItems() }
+    }
+
     /// Checks Full Disk Access first so a missing grant doesn't cost a password prompt.
     func startCollector() {
         if Collector.appearsToHaveFullDiskAccess {

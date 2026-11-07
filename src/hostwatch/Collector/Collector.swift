@@ -21,6 +21,12 @@ final class Collector: ObservableObject {
     }
 
     let logURL: URL
+    /// The collector as a background service (Developer ID builds): registered and approved once.
+    let daemon = CollectorDaemon()
+    var usesDaemon: Bool { daemon.available }
+    /// The service is registered but waits for your approval in Login Items (the app shows how).
+    var onNeedsApproval: (() -> Void)?
+    private var approvalWatch: Timer?
     private let tokenURL: URL
     private(set) var token = ""
     private var monitor: Timer?
@@ -41,11 +47,15 @@ final class Collector: ObservableObject {
     }
 
     var isRunning: Bool {
+        if usesDaemon { return daemon.isEnabled }
         if case .running = state { return true }
         return false
     }
 
     var statusText: String {
+        if usesDaemon, state != .needsFullDiskAccess {
+            if case .failed = state {} else { return daemon.statusText }
+        }
         switch state {
         case .stopped: return "Collector stopped"
         case .starting: return "Collector starting…"
@@ -61,6 +71,7 @@ final class Collector: ObservableObject {
     // MARK: Start
 
     func start() {
+        if usesDaemon { startService(); return }
         guard !isRunning, state != .starting else { return }
         let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
         do {
@@ -142,11 +153,71 @@ final class Collector: ObservableObject {
         }
     }
 
+    // MARK: The background service
+
+    /// Registers the service (one admin password, then approval in Login Items, once). Once it runs, the app
+    /// connects to its socket by itself; its log says if Full Disk Access is missing.
+    private func startService() {
+        daemon.refresh()
+        if daemon.status == .notRegistered || daemon.status == .notFound {
+            logOffset = (try? FileManager.default.attributesOfItem(atPath: CollectorDaemon.logURL.path)[.size] as? NSNumber)?.uint64Value ?? 0
+            daemon.register()
+            if let problem = daemon.problem {
+                state = problem == "cancelled" ? .stopped : .failed(problem)
+                return
+            }
+        }
+        watchService()
+    }
+
+    /// Follows the service's state: approval given, or the service failing for lack of Full Disk Access.
+    private func watchService() {
+        approvalWatch?.invalidate()
+        if daemon.needsApproval { onNeedsApproval?() }
+        state = daemon.isEnabled ? .running(pid: 0) : .starting
+        var checks = 0
+        approvalWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.daemon.refresh()
+                checks += 1
+                if self.daemon.isEnabled {
+                    if case .running = self.state {} else { self.state = .running(pid: 0) }
+                    // A few seconds in: did it fail for lack of Full Disk Access?
+                    if checks % 3 == 0, self.serviceLogSinceStart().contains("ERR_NOT_PERMITTED") {
+                        self.state = .needsFullDiskAccess
+                        self.onNeedsFullDiskAccess?()
+                        self.approvalWatch?.invalidate()
+                    }
+                    if checks >= 30 { self.approvalWatch?.invalidate() }
+                } else if self.daemon.status == .notRegistered {
+                    self.state = .stopped
+                    self.approvalWatch?.invalidate()
+                }
+            }
+        }
+    }
+
+    private func serviceLogSinceStart() -> String {
+        guard let handle = try? FileHandle(forReadingFrom: CollectorDaemon.logURL) else { return "" }
+        defer { try? handle.close() }
+        try? handle.seek(toOffset: logOffset)
+        return String(decoding: handle.readDataToEndOfFile(), as: UTF8.self)
+    }
+
+    /// Removes the service (an admin password): the collector stops and won't start at boot.
+    func stopService() {
+        approvalWatch?.invalidate()
+        daemon.unregister()
+        state = daemon.isEnabled ? .running(pid: 0) : .stopped
+    }
+
     // MARK: Stop
 
     /// Stops a collector this app started. Uses the shutdown token over the
     /// existing connection; the agent also exits on its own when the app quits.
     func stop(via model: HUDModel, completion: (() -> Void)? = nil) {
+        if usesDaemon { stopService(); completion?(); return }
         guard isRunning else { completion?(); return }
         let sent = model.sendShutdown(token: token) { completion?() }
         if !sent {
@@ -216,6 +287,9 @@ final class Collector: ObservableObject {
     }
 
     func openLog() {
+        if usesDaemon, FileManager.default.isReadableFile(atPath: CollectorDaemon.logURL.path) {
+            NSWorkspace.shared.open(CollectorDaemon.logURL); return
+        }
         if !FileManager.default.fileExists(atPath: logURL.path) {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
