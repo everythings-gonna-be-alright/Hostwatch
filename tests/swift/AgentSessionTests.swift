@@ -155,7 +155,9 @@ import Testing
         #expect(rows.map(\.id) == ["session:100", "session:0"])
         #expect(rows[0].entry.process == "Claude · ProcessHUD" && rows[0].children?.map(\.id) == ["a", "b"])
         #expect(rows[1].entry.process == "No AI session" && rows[1].children?.count == 2)
-        #expect(PatternItem.groupedBySession(items, sessions: [groups[1]], order: []).map(\.id) == ["a", "b", "c", "d"])
+        let none = PatternItem.groupedBySession(items, sessions: [groups[1]], order: [])      // sessions, none listed here
+        #expect(none.map(\.id) == ["session:0"] && none[0].children?.count == 4)
+        #expect(PatternItem.groupedBySession(items, sessions: [], order: []).map(\.id) == ["a", "b", "c", "d"])
     }
 }
 
@@ -189,7 +191,8 @@ import Testing
         #expect(rows[1].groupTitle == "No AI session" && rows[1].children?.map(\.id) == [c.id])
         #expect(rows[0].id == EventItem.stableUUID("session:100") && EventItem.stableUUID("a") != EventItem.stableUUID("b"))
         #expect(EventItem.groupedByProcess([a, b, c]).map(\.groupTitle) == ["git", "vim"])
-        #expect(EventItem.groupedBySession([c], sessions: [header]).count == 1 && !EventItem.groupedBySession([c], sessions: [header])[0].isGroup)
+        #expect(EventItem.groupedBySession([c], sessions: [header]).map(\.groupTitle) == ["No AI session"])
+        #expect(EventItem.groupedBySession([c], sessions: []).count == 1 && !EventItem.groupedBySession([c], sessions: [])[0].isGroup)
     }
 }
 

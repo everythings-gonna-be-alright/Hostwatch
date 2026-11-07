@@ -66,7 +66,7 @@ struct RunningRow: Identifiable, Equatable {
                 rest.removeAll { s.pids.contains($0.pid) }
                 out.append(group(mine, title: s.topic, agent: s.agent))
             }
-            if !rest.isEmpty, !out.isEmpty { out.append(group(rest, title: "No AI session", agent: nil)) }
+            if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, title: "No AI session", agent: nil)) }
             return out.isEmpty ? rows : out
         }
     }
