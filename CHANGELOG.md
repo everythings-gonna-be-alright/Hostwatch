@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased – No password at launch
+## 0.13.0 – No password at launch
 
 - **The collector is a background service now.** It's registered once (your password), approved once in System
   Settings ▸ Login Items, and from then on macOS starts it at boot by itself, as root, including after an update.
@@ -11,6 +11,8 @@
   through macOS code signing with the kernel's audit token), not just from your user account. With no app connected
   the service goes idle: no `eslogger`, no packet capture, firewall off, until Hostwatch opens again. After an
   update it restarts itself as the new version.
+- **Coming from 0.12.0 or earlier:** the first launch asks for your password once more, to register the service; the
+  old temporary job is left loaded but idle and disappears at the next restart.
 
 ## 0.12.0 – AI sessions, two thirds fewer patterns
 
