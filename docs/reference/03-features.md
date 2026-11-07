@@ -286,6 +286,12 @@ waits for you.
 - **Decisions:** who decided which patterns, by app. The groups are *Patterns AI decided*, *Patterns you decided*
   (one by one, each covers only itself), *…decided by learned rules* and *…decided by baseline rules*. AI and your
   decisions each have **Undo** (back to New).
+- **In plain words:** every learned rule and proposal reads as a sentence: *who* does *what* → *what happens*,
+  e.g. **git** reads anything under ~/Documents/ProcessHUD → **Safe: decided for you, never asked about, left out
+  of Stories**. A proposal also lists *If you approve*: how many New patterns change now, that future matches are
+  decided without asking, and how many of your decisions it agrees with. *Details* shows the exact match (kind ·
+  program → pattern). A baseline rule says what it trusts: the kinds of behaviour the app showed in its first week,
+  as long as its signature matches.
 - **N patterns ›:** every row (needs-you apps, baseline and learned rules, decided groups) has *N patterns ›*. Click
   it to list those patterns in place: high risk first, up to 40, with *Open in Patterns* for all of them.
 

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased – Fewer patterns
+## Unreleased – Fewer patterns, rules in plain words
+
+- **Rules read as sentences.** Every learned rule and proposal now says who does what and what happens then:
+  *git reads anything under ~/Documents/ProcessHUD → Safe: decided for you, never asked about*. A proposal lists
+  what approving changes. The glob form is behind *Details*. Baseline rules say what they trust.
 
 - **Two thirds fewer patterns, same detection.** What macOS's own programs read is one pattern per program instead
   of one per folder. What a tool reads inside a git project is one pattern per project, a scratch tree in `/tmp` is

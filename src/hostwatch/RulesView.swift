@@ -254,6 +254,32 @@ struct RulesView: View {
     }
 }
 
+/// A rule in plain words: who, does what, then what. The glob form is behind "Details".
+struct RuleSentenceView: View {
+    let sentence: RuleText.Sentence
+    let matcher: String
+    @StateObject private var details = ExpandState()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: sentence.symbol).foregroundStyle(.secondary).frame(width: 14)
+                (Text(sentence.who).fontWeight(.semibold) + Text(" \(sentence.does) ")
+                 + Text("→ ").foregroundStyle(.secondary) + Text(sentence.then).fontWeight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(details.open ? "Hide details" : "Details") { withAnimation(.snappy(duration: 0.2)) { details.open.toggle() } }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .help("The exact match: kind · program → pattern (globs: * is anything)")
+            }
+            .font(.system(size: 12))
+            if details.open {
+                Text(matcher).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    .textSelection(.enabled).padding(.leading, 20)
+            }
+        }
+    }
+}
+
 private struct ActionPill: View {
     let status: SignatureStatus
     var body: some View { StatusPill(status: status) }
@@ -271,14 +297,18 @@ private struct ProposalCard: View {
                 Text(r.name).font(.system(size: 13, weight: .semibold))
                 Spacer()
             }
-            Text(r.matcherText).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+            RuleSentenceView(sentence: RuleText.sentence(r), matcher: r.matcherText)
             if !r.rationale.isEmpty { Text(r.rationale).font(.system(size: 12)).foregroundStyle(.secondary) }
-            HStack(spacing: 14) {
-                Label("\(e.agreeing.count) of your decisions", systemImage: "checkmark.circle")
-                Label("\(e.newPatterns) new pattern\(e.newPatterns == 1 ? "" : "s")", systemImage: "square.stack.3d.up")
-                if e.newHighRisk > 0 { Label("\(e.newHighRisk) high-risk", systemImage: "flame").foregroundStyle(.orange) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("If you approve").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                ForEach(RuleText.effects(proposal), id: \.self) { line in
+                    Label(line, systemImage: "arrow.turn.down.right").font(.system(size: 11))
+                }
+                if e.newHighRisk > 0 {
+                    Label("\(e.newHighRisk) of them \(e.newHighRisk == 1 ? "is" : "are") high-risk", systemImage: "flame")
+                        .foregroundStyle(.orange).font(.system(size: 11))
+                }
             }
-            .font(.system(size: 11))
             ForEach(e.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 .font(.system(size: 11))
             ForEach(e.problems, id: \.self) { Label($0, systemImage: "xmark.octagon").foregroundStyle(.red) }
@@ -312,12 +342,14 @@ private struct RuleRow: View {
             ActionPill(status: rule.action)
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.name).fontWeight(.semibold)
-                Text(rule.matcherText).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                RuleSentenceView(sentence: RuleText.sentence(rule), matcher: rule.matcherText)
                 if let why = rule.pausedReason {
                     Label("Paused: \(why)", systemImage: "pause.circle").foregroundStyle(.orange).font(.system(size: 11))
                 } else {
                     HStack(spacing: 6) {
                         Label("Check passes", systemImage: "checkmark.seal").foregroundStyle(.green)
+                        Text("·").foregroundStyle(.tertiary)
+                        Text("decided").foregroundStyle(.secondary)
                         PatternsToggle(count: matches, expand: expand)
                     }
                     .font(.system(size: 11))
@@ -374,8 +406,9 @@ private struct BaselineRuleRow: View {
                     Text("\(rule.signer) · paused, its patterns are New again")
                         .font(.system(size: 11)).foregroundStyle(.orange)
                 } else {
+                    Text(RuleText.baseline(rule)).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 6) {
-                        Text("\(rule.signer) · trusts").foregroundStyle(.secondary)
+                        Text("Trusted so far").foregroundStyle(.secondary)
                         PatternsToggle(count: count, expand: expand)
                     }
                     .font(.system(size: 11))
@@ -396,7 +429,7 @@ private struct BaselineRuleRow: View {
     }
 }
 
-private final class ExpandState: ObservableObject { @Published var open = false }
+final class ExpandState: ObservableObject { @Published var open = false }
 
 /// "12 patterns ›": shows or hides the row's patterns in place.
 private struct PatternsToggle: View {
