@@ -58,9 +58,11 @@ import Testing
         _ = fill(s)
         s.groupByProcess = true
         let classifier = PatternClassifier(store: s)
+        let list = PatternListModel()
+        list.build(s, filter: .all, wait: true)                       // the window builds it ahead; here, now
         let view = PatternsView(signatures: s, classifier: classifier,
                                 actions: HUDActions(openFullScreen: {}, openExclusions: {}, toggleCollector: {}, quit: {}, askAI: { _ in }),
-                                filter: .constant(.all))
+                                filter: .constant(.all), list: list)
             .frame(width: 1200, height: 300).background(Color(nsColor: .windowBackgroundColor))
         let host = NSHostingView(rootView: view)
         host.frame = NSRect(x: 0, y: 0, width: 1200, height: 300)

@@ -113,7 +113,8 @@ column; hovering it says what it means in plain words (*reads anything under ~/D
 (the sidebar button at the right of the toolbar, shown by default) has the selected pattern in full: the plain
 words, the pattern and program as selectable text, who decided it and why, the AI's suggestion, count and exact
 first/last times, the last example it was seen in, the program's signature, and Safe / Suspicious / Dangerous
-buttons. With several rows selected it marks them all. Rows alternate in shade, and an empty list says why.
+buttons. With several rows selected it marks them all. Clicking the selected row again deselects it (Escape clears
+the selection), and an empty list says why.
 
 **More in the Patterns tab:**
 
