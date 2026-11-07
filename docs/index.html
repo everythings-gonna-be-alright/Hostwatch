@@ -58,7 +58,7 @@
 <link rel="apple-touch-icon" href="images/site/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #08090a;
@@ -348,8 +348,9 @@
   .closing .note code { font: 12px var(--mono); color: var(--muted); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
   .closing .ua { margin: 72px auto 10px; color: var(--muted); font-size: 17px; line-height: 1.7; }
   .closing .ua b { color: var(--text); font-weight: 500; }
-  /* A personal line: the serif italic companion of the text font. */
-  .closing .ua .made { font: italic 400 19px/1.6 "Instrument Serif", Georgia, "Times New Roman", serif; letter-spacing: 0; }
+  /* A signature under the promise: the site's mono, as in the section labels. */
+  .closing .ua .made { display: inline-block; margin-top: 8px; font: 400 14px/1.7 var(--mono); letter-spacing: 0; color: var(--muted); }
+  .closing .ua .made .flag { vertical-align: -1px; }
   .closing .ua .flag { display: inline-block; width: 18px; height: 12px; border-radius: 2px; vertical-align: -1px; margin: 0 2px; }
 
   footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font-size: 13px; color: var(--dim); }
