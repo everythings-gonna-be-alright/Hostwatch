@@ -1,14 +1,18 @@
 # Changelog
 
-## Unreleased – Encrypted at rest
+## 0.13.0 – No password at launch, encrypted at rest
 
 - **Everything Hostwatch keeps is encrypted now.** Patterns, stories, domains, sessions, rules, logs and the whole
   activity history are sealed with a key kept in a keychain item that only Hostwatch's own code may read (the
   Secure Enclave takes over once the build is provisioned for it). Another program running as you, an AI agent included, can't read your
   activity. Older files still read and are rewritten sealed as they're saved. `zcat` on history files is replaced by
   `Hostwatch --export-history`. Settings ▸ General shows the state.
-
-## 0.13.0 – No password at launch
+- **A new identity: `tech.hostwatch.app`** (it was `local.hostwatch.app`). Your settings are carried over on the
+  first launch and the data key is re-stored under the new identity (one keychain dialog: choose *Always Allow*).
+  macOS keys Full Disk Access by identity, so grant it once more; the setup window shows how. The collector service
+  is registered again under the new identity (your password once). If you installed the first 0.13.0 build (before
+  November 8), its registration stays in launchd and never runs: remove it once with
+  `sudo launchctl bootout system/local.hostwatch.collectord`.
 
 - **The collector is a background service now.** It's registered once (your password), approved once in System
   Settings ▸ Login Items, and from then on macOS starts it at boot by itself, as root, including after an update.

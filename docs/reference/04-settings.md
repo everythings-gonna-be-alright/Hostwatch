@@ -112,7 +112,7 @@ file:*.plist
 Sensible noise defaults come preloaded: `/System`, `/usr/lib`, caches, loopback and Spotlight. **Restore Defaults** in
 the editor brings them back.
 
-Exclusions persist in `UserDefaults` (`local.hostwatch.app`).
+Exclusions persist in `UserDefaults` (`tech.hostwatch.app`).
 
 ### Activity history
 

@@ -8,7 +8,7 @@ import ServiceManagement
 /// plist; a development build falls back to the admin-prompted job.
 @MainActor
 final class CollectorDaemon: ObservableObject {
-    static let plistName = "local.hostwatch.collectord.plist"   // not the admin-prompted job's label: both may exist
+    static let plistName = "tech.hostwatch.collectord.plist"   // not the admin-prompted job's label: both may exist
     /// Where launchd writes the service's output (root-owned, world-readable).
     static let logURL = URL(fileURLWithPath: "/var/log/hostwatch-collector.log")
 

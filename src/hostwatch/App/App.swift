@@ -93,6 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if Vault.shared.isLocked {
+            let alert = NSAlert()
+            alert.messageText = "Hostwatch can't open its data"
+            alert.informativeText = Vault.shared.problem ?? ""
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            exit(1)
+        }
         NSApp.setActivationPolicy(.accessory)
         collector.onNeedsFullDiskAccess = { [weak self] in self?.showFullDiskAccessAlert(afterFailure: true) }
         setUpPanel()

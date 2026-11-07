@@ -10,10 +10,10 @@ if [ "${UNIVERSAL:-0}" = 1 ]; then ARCH_FLAGS=(--arch arm64 --arch x86_64); fi
 SWIFT_FLAGS=(-Xswiftc -file-prefix-map -Xswiftc "$PWD=.")
 # DEMO=1 builds "Hostwatch Demo.app": demo mode compiled in (-DDEMO), its own bundle id and build folder, so it can
 # never touch the real app's settings. Releases never set it: the normal build has no demo code at all.
-NAME="Hostwatch"; BUNDLE_ID="local.hostwatch.app"
+NAME="Hostwatch"; BUNDLE_ID="tech.hostwatch.app"
 if [ "${DEMO:-0}" = 1 ]; then
   SWIFT_FLAGS+=(-Xswiftc -DDEMO --build-path .build-demo)
-  NAME="Hostwatch Demo"; BUNDLE_ID="local.hostwatch.demo"
+  NAME="Hostwatch Demo"; BUNDLE_ID="tech.hostwatch.demo"
 fi
 swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}"
 BIN="$(swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}" --show-bin-path)/Hostwatch"
@@ -65,12 +65,12 @@ if [ -n "${CODESIGN_IDENTITY:-}" ] && [ "$CODESIGN_IDENTITY" != "-" ] && [ "${DE
   # The collector as a background service (SMAppService daemon): registered once, approved once, started by launchd
   # as root from then on. Only a Developer ID build may ship it; the signature covers the plist.
   mkdir -p "$APP/Contents/Library/LaunchDaemons"
-  cat > "$APP/Contents/Library/LaunchDaemons/local.hostwatch.collectord.plist" <<DAEMON
+  cat > "$APP/Contents/Library/LaunchDaemons/tech.hostwatch.collectord.plist" <<DAEMON
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>local.hostwatch.collectord</string>
+  <key>Label</key><string>tech.hostwatch.collectord</string>
   <key>BundleProgram</key><string>Contents/MacOS/Hostwatch</string>
   <key>ProgramArguments</key>
   <array>
