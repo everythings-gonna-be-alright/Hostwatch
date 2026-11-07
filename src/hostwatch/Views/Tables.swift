@@ -62,7 +62,9 @@ struct PatternItem: Identifiable, @unchecked Sendable {
             rest.removeAll { s.keys.contains($0.id) }
             groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name))
         }
-        if !rest.isEmpty, !groups.isEmpty { groups.append(group(rest, id: sessionPrefix + "0", name: "No AI session")) }
+        // With Show ▸ New or Important, a session may have nothing listed: the rest still says it's outside any
+        // session (a flat list looked like the grouping had stopped working).
+        if !rest.isEmpty, !sessions.isEmpty { groups.append(group(rest, id: sessionPrefix + "0", name: "No AI session")) }
         return groups.isEmpty ? items : groups
     }
 
@@ -325,7 +327,7 @@ struct EventItem: Identifiable {
             rest.removeAll { s.pids.contains($0.event.pid) }
             out.append(group(mine, id: "session:\(s.id)", title: s.topic, subtitle: s.facts, agent: s.agent))
         }
-        if !rest.isEmpty, !out.isEmpty { out.append(group(rest, id: "session:0", title: "No AI session", subtitle: "", agent: nil)) }
+        if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, id: "session:0", title: "No AI session", subtitle: "", agent: nil)) }
         return out.isEmpty ? items : out
     }
 

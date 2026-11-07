@@ -5,7 +5,10 @@ This reference covers every feature, setting and rule of Hostwatch, in the order
 For a short overview, see the [README](../README.md). The same text is on the website at
 <https://hostwatch.tech/docs/>.
 
-**Free for personal use, always.** The Mac app described here stays free and open source (MIT license).
+**Free for everyone, at home and at work.** The Mac app described here is free to use, change, fork and share, personally or in your
+company, under the [PolyForm Shield License 1.0.0](https://polyformproject.org/licenses/shield/1.0.0/). The source code stays public. The one
+thing the licence doesn't allow is using the code to make a product or service that competes with Hostwatch, such as your own server or cloud
+edition of it. Versions up to 0.11.1 were released under the MIT license.
 
 A paid edition will be only for companies. It will offer two things:
 

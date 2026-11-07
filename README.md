@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-black" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/status-prototype-yellow" alt="Status: prototype">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
+  <img src="https://img.shields.io/badge/license-PolyForm%20Shield-blue" alt="PolyForm Shield license">
   <a href="https://vshymanskyy.github.io/StandWithUkraine/"><img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand With Ukraine"></a>
 </p>
 
@@ -44,9 +44,9 @@
 ## Why
 
 **One machine was enough.** In 2026, [GitHub](https://techcrunch.com/2026/05/20/github-says-hackers-stole-data-from-thousands-of-internal-repositories/)
-lost about 3,800 internal repositories to a poisoned editor extension on one employee's device;
+lost about 3,800 internal repositories to a poisoned editor extension on one employee's device.
 [Grafana Labs](https://grafana.com/blog/grafana-labs-security-update-latest-on-tanstack-npm-supply-chain-ransomware-incident/)
-had its codebase taken through a compromised npm package; [Binance](https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/)
+had its codebase taken through a compromised npm package. [Binance](https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/)
 lost $6.3 billion to a coding task from a fake job interview. Each was code someone trusted and ran.
 
 Meanwhile new CVEs grew **+49.5%** in the first half of 2026 ([Jerry Gamblin](https://jerrygamblin.com/2026/07/01/3528/)),
@@ -57,55 +57,39 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.12.0**
+- **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
+  process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them, with a *Session*
+  column, *via Claude* tags on the Network tab, session names on stories, and the MCP tool `agent_sessions`.
+- **🗂️ Two thirds fewer patterns** – system programs' reads, project trees, scratch trees, Homebrew formulas and
+  random temp names are one pattern each. Your store shrinks by itself, your decisions untouched.
+- **📖 Patterns and rules you can read** – a wrapped Pattern column and an inspector with the pattern in full and in
+  plain words, and every rule reads as *who does what → what happens*.
+- **⚡ Instant tab switching**, resizable columns, and a tab bar that keeps its titles.
+- **🪪 Free for everyone**, at home and at work, under the PolyForm Shield licence (see [License](#license)).
+
 **0.11.1** – signed and notarized by Apple: no more *“Apple could not verify Hostwatch”*, and Full Disk Access
 survives updates.
 
-**0.11.0**
-- **🔍 Search all of history** – Time Travel finds matches in everything recorded; double-click one to jump there.
-- **⏱️ Running Now in the past** – which processes were running at any moment, with CPU, memory and disk writes.
-- **💾 Who's writing to your disk** – a *Writing* column and free disk space with the programs that wrote the most.
-- **🪶 Lighter** – up to 10× fewer SSD writes, much less memory, and the collector's memory leak fixed.
-- **🚀 Open at login**, a firewall warning when it turns itself to Watch, and new MCP tools to find and trace processes.
-
-**0.10.0**
-- **📋 Running Now** – every process running at this moment, root ones too: CPU, CPU time, memory, threads, uptime,
-  parent and full command line. Double-click one to jump to the moment it was spawned in the timeline (⌥⌘R).
-- **✨ A new look** – a new app icon (the activity list, the flagged row brightest), the same mark in the menu bar.
-- **📖 Website and docs** – [hostwatch.tech](https://hostwatch.tech/)
-  with searchable [documentation](https://hostwatch.tech/docs/) of every feature
-  and setting; *Help ▸ Hostwatch Help* opens it.
-- **🩹 Fix** – the menu bar's *known-bad matches this week* clears when you dismiss or delete those stories.
-
-**0.9.0**
-- **🔬 Watch Closely** – not sure what a program is up to? Right-click it (or ⌥⌘W) and Hostwatch records for a
-  minute everything it and its helpers do: files changed, connections, other processes, persistence, privileges.
-  You get it in plain words, what stands out first, and Claude or the on-device model explains whether it's dangerous.
-- **🌐 Network tab** – domains and the firewall on one timeline: every destination, who connected, and whether it
-  passes, waits for you or is blocked. *Forget* also resets the firewall's answer.
-- **🐳 Containers in the firewall** – Docker, Podman, OrbStack, Lima and QEMU connections are asked about per site
-  ("A Docker container wants to connect to pypi.org"), instead of passing on Docker's signature.
-- **🗂️ Calmer Patterns** – grouped by program, one-off commands hidden and forgotten after a week, and the list
-  stays smooth with thousands of patterns.
-- **⚡ No helper programs** – connections come straight from macOS's own statistics: every TCP and UDP connection,
-  even one lasting milliseconds, with its real program (no more "?") and less CPU.
+Earlier versions: see the [changelog](CHANGELOG.md).
 
 ## What it does
 
 **👀 See what happens**
 - **Live HUD** – new processes, connections and file opens as they happen.
-- **Running Now** – every running process with CPU, CPU time, memory and uptime; jump to the moment it was spawned.
+- **Running Now** – every running process with CPU, CPU time, memory and uptime. Jump to the moment it was spawned.
 - **Time Travel** – scrub back through recorded activity, resources and heavy processes.
 - **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
 
 **🧠 Learn what's normal**
 - **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
-- **Patterns** – events grouped by behaviour and by program; ordinary ones are decided automatically, so few need you.
+- **Patterns** – events grouped by behaviour and by program. Ordinary ones are decided automatically, so few need you.
 - **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.
 - **Network tab** – hostnames, first-seen domains, beaconing, raw-IP connections, and the firewall's verdict for each.
-- **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
+- **Known threats** – daily public threat lists matched on your Mac, plus exploited macOS flaws vs. your updates.
 
 **🛡️ Stop what you didn't allow** (off until you turn it on)
 - **Firewall** – each app's new connections checked before they're made: allowed ones pass, unknown ones wait
@@ -154,7 +138,7 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 - Passwords and tokens are masked before they're recorded, and again before anything goes to an AI.
 - The firewall reads only which server an app asks for. It never decrypts traffic.
 - Watch Closely records only the process you pick, only while it runs, and keeps it on your Mac until you ask AI.
-- *Apple On-Device* AI keeps everything on the Mac; Claude is used only if you choose it.
+- *Apple On-Device* AI keeps everything on the Mac. Claude is used only if you choose it.
 - The MCP server needs your permission and a token, and can't change anything.
 - *Settings ▸ General ▸ Reset Hostwatch…* erases it all.
 
@@ -163,7 +147,7 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), the
 collector asks for your password at each start, and the optional process hold is best effort. The firewall
 covers your own apps, not programs running as root or macOS's own DNS lookups. Containers are judged by
-destination (which program inside made a connection can't be seen); VMs with bridged networking aren't covered.
+destination (which program inside made a connection can't be seen). VMs with bridged networking aren't covered.
 
 ## Development
 
@@ -175,10 +159,17 @@ Start with [`CLAUDE.md`](CLAUDE.md) (build, test, workflow, invariants), [`docs/
 ```
 
 `src/hostwatch` is the app and collector, `tests/swift` the tests. Every rule, threshold and setting is
-in **[docs/reference.md](docs/reference.md)**; changes in **[CHANGELOG.md](CHANGELOG.md)**.
+in **[docs/reference.md](docs/reference.md)**, changes in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## License
 
-**Free for personal use, always.** A paid edition will be only for companies: a server that watches a whole fleet
-of Macs from one place, and a hosted cloud (SaaS) version. The Mac app stays free and open source under the
-[MIT license](LICENSE).
+**Free for everyone, at home and at work.** Hostwatch is source available under the
+[PolyForm Shield License 1.0.0](LICENSE): use it, change it, fork it and share it, personally or in your company, at
+no cost. The one thing the licence doesn't allow is using the code to make a product or service that competes with
+Hostwatch, such as your own server or cloud edition of it.
+
+Companies that want the centralised versions, a server that watches a whole fleet of Macs from one place or a hosted
+cloud (SaaS), will get them as paid editions. Write to
+[contact@hostwatch.tech](mailto:contact@hostwatch.tech?subject=Hostwatch%20Server%20or%20Cloud).
+
+Versions up to 0.11.1 were released under the MIT license and stay under it.

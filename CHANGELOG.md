@@ -1,32 +1,51 @@
 # Changelog
 
-## Unreleased – Agent sessions, fewer patterns, rules in plain words
+## 0.12.0 – AI sessions, two thirds fewer patterns
 
-- **Agent sessions.** Claude Code (and the Cursor agent, Codex, Gemini CLI) is followed as one session: the agent
-  and every process it started. Events and Patterns can be grouped *By AI Session* (or *By Process*): one row per
-  session, named the way `claude --resume` lists it (the topic, then project · branch · time · counts), with a small
-  mark for the maker, and its events or patterns under it. Right-click a session for only its events or its
-  patterns. Network destinations a session reached say *via Claude · project*, stories inside a session start with
-  its name, and Time Travel replays sessions from history. The MCP server lists them (`agent_sessions`).
-- **Tab titles stay.** Switching from Events to another tab no longer leaves the tab bar with icons only.
-- **Events columns resize freely**: every column can be dragged wider or narrower.
-- **The Show filter on Patterns is a row of buttons again**, one click like on Events, however narrow the window.
+**New**
+- **AI sessions.** Claude Code (and the Cursor agent, Codex, Gemini CLI) is followed as one session: the agent and
+  every process it started. Group Events or Patterns *By AI Session* and each session is one row, named the way
+  `claude --resume` lists it (the topic, then project · branch · time · counts) with a small mark for its maker, and
+  its events or patterns under it. Right-click a session for only its events, or its patterns. The Events table has
+  a *Session* column, a Network destination a session reached says *via Claude · project*, a story inside a session
+  starts with its name, and Time Travel replays sessions from history. Running Now groups the same way, with the
+  numbers added up per group. Sessions are named from Claude Code's own transcript, with or without the guard hook.
+  For Claude: the MCP tool `agent_sessions`.
+- **Patterns you can read.** The Pattern column wraps instead of cutting off, and an inspector beside the table
+  shows the selected pattern in full: what it means in plain words, the exact text (selectable), who decided it and
+  why, when and how often, the last example, the signer, and the mark buttons.
+- **Rules in plain words.** Every learned rule and proposal says who does what and what happens then: *git reads
+  anything under ~/Documents/ProcessHUD → Safe: decided for you, never asked about*. A proposal lists what approving
+  changes, and the glob is behind *Details*. Baseline rules say what they trust.
 
-- **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside
-  the table shows the selected pattern in full: what it means in plain words, the exact text (selectable), who
-  decided it and why, when and how often, the last example, the signer, and the mark buttons.
-- **Rules read as sentences.** Every learned rule and proposal now says who does what and what happens then:
-  *git reads anything under ~/Documents/ProcessHUD → Safe: decided for you, never asked about*. A proposal lists
-  what approving changes. The glob form is behind *Details*. Baseline rules say what they trust.
+**Fewer patterns, same detection**
+- What macOS's own programs read is one pattern per program instead of one per folder. What a tool reads inside a
+  git project is one pattern per project, a scratch tree in `/tmp` is one, a Homebrew formula's tree is one, and
+  temp files with random names are one per name. A shell starting plain tools (`awk`, `cut`, `ls`) is one pattern
+  per folder. On a real Mac: 21,172 → 7,600.
+- Still specific: writes, sensitive places (SSH keys, keychains, cookies, browser logins), shells and interpreters
+  reading files, and every launch of a tool attackers use (`curl`, `osascript`, `security`, `sudo`…).
+- Your store shrinks by itself on the first launch. Only patterns decided automatically are merged, and your decisions,
+  rules and AI verdicts stay as they are. `Hostwatch --regroup-report` shows what would change.
 
-- **Two thirds fewer patterns, same detection.** What macOS's own programs read is one pattern per program instead
-  of one per folder. What a tool reads inside a git project is one pattern per project, a scratch tree in `/tmp` is
-  one, a Homebrew formula's tree is one, and temp files with random names are one per name. A shell starting plain
-  tools (`awk`, `cut`, `ls`) is one pattern per folder. On a real Mac: 21,172 → 7,600.
-- **Still specific:** writes, sensitive places (SSH keys, keychains, cookies, browser logins), shells and
-  interpreters reading files, and every launch of a tool attackers use (`curl`, `osascript`, `security`, `sudo`…).
-- **Your store shrinks by itself** on the first launch. Only patterns decided automatically are merged; your
-  decisions, rules and AI verdicts stay as they are. `Hostwatch --regroup-report` shows what would change.
+**Fixes**
+- Switching tabs is immediate: a visited tab stays alive instead of being rebuilt, and its table is never detached
+  from the window (a switch cost up to a second before).
+- The tab bar keeps its titles after leaving Events, and the Show filter on Patterns is a row of buttons again.
+- Columns resize on Events and Patterns (a click watcher on Patterns used to cancel the drag), and every Events column
+  has room to grow. Clicking the selected pattern again deselects it, and Escape clears the selection.
+
+**Licence**
+- From this version Hostwatch is source available under the PolyForm Shield License 1.0.0: free to use, change, fork
+  and share, at home and at work, with the code public. The one thing it doesn't allow is using the code to make a
+  product or service that competes with Hostwatch (your own server or cloud edition of it). The centralised versions
+  for companies, a server for a whole fleet and a hosted cloud, will be paid editions (contact@hostwatch.tech).
+  Versions up to 0.11.1 were released under MIT and stay under it.
+
+**For developers**
+- One folder per area under `src/hostwatch/`, one concept per file; `CLAUDE.md`, `docs/ARCHITECTURE.md` and
+  `docs/adr/` explain the shape and the decisions, and a structure test keeps the dependency direction.
+- `./scripts/test.sh --changed` runs only the suites for the files you changed, and `--only` takes a regex.
 
 ## 0.11.1 – Signed and notarized
 

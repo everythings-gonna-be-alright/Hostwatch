@@ -3,36 +3,119 @@ import SwiftUI
 // Coding-agent sessions in the views: the maker's mark, a session's facts line (as `claude --resume` lists them),
 // and the sessions replayed from a Time Travel window.
 
-/// A small, plain mark for the agent's maker: a letter in its tint. No logos.
+/// The agent's maker, as a small mark drawn here (no bitmaps): Anthropic's slanted A, OpenAI's six-petal knot,
+/// Google's four-colour G, Cursor's cube. 15 pt, legible at a glance next to a row.
 struct AgentBadge: View {
     let agent: CodingAgent
+    var size: CGFloat = 15
 
     var body: some View {
-        Text(agent.mark)
-            .font(.system(size: 9, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: 15, height: 15)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(agent.tint))
-            .help(agent.title)
-            .accessibilityLabel(agent.title)
+        Group {
+            switch agent {
+            case .claude: AnthropicMark()
+            case .codex: OpenAIMark()
+            case .gemini: GoogleMark()
+            case .cursor: CursorMark()
+            }
+        }
+        .frame(width: size, height: size)
+        .help(agent.title)
+        .accessibilityLabel(agent.title)
+    }
+}
+
+/// Anthropic: a rounded terracotta tile with the slanted, cross-bar-less A.
+private struct AnthropicMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color(red: 0.85, green: 0.47, blue: 0.34))
+                Path { p in
+                    // Left leg (shorter, thinner) and right leg: the two strokes of the mark.
+                    p.move(to: CGPoint(x: w * 0.30, y: h * 0.78)); p.addLine(to: CGPoint(x: w * 0.47, y: h * 0.26))
+                    p.addLine(to: CGPoint(x: w * 0.56, y: h * 0.26)); p.addLine(to: CGPoint(x: w * 0.39, y: h * 0.78)); p.closeSubpath()
+                    p.move(to: CGPoint(x: w * 0.50, y: h * 0.22)); p.addLine(to: CGPoint(x: w * 0.60, y: h * 0.22))
+                    p.addLine(to: CGPoint(x: w * 0.80, y: h * 0.78)); p.addLine(to: CGPoint(x: w * 0.70, y: h * 0.78)); p.closeSubpath()
+                }
+                .fill(Color.white)
+            }
+        }
+    }
+}
+
+/// OpenAI: the knot of six petals around a hollow centre, white on black.
+private struct OpenAIMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, c = CGPoint(x: w / 2, y: w / 2)
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color.black)
+                ForEach(0..<6, id: \.self) { i in
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: w * 0.17, height: w * 0.46)
+                        .offset(y: -w * 0.19)
+                        .rotationEffect(.degrees(Double(i) * 60), anchor: .center)
+                        .position(c)
+                }
+                Circle().fill(Color.black).frame(width: w * 0.22, height: w * 0.22).position(c)
+            }
+        }
+    }
+}
+
+/// Google: the G in its four colours on white.
+private struct GoogleMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, c = CGPoint(x: w / 2, y: w / 2), r = w * 0.32, line = w * 0.17
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                arc(c, r, from: 45, to: 135, Color(red: 0.26, green: 0.52, blue: 0.96), line)     // blue: right, lower
+                arc(c, r, from: 135, to: 225, Color(red: 0.20, green: 0.66, blue: 0.33), line)    // green: bottom
+                arc(c, r, from: 225, to: 315, Color(red: 0.98, green: 0.74, blue: 0.02), line)    // yellow: left
+                arc(c, r, from: 315, to: 400, Color(red: 0.92, green: 0.26, blue: 0.21), line)    // red: top
+                Rectangle().fill(Color(red: 0.26, green: 0.52, blue: 0.96))
+                    .frame(width: r + line / 2, height: line).position(x: c.x + (r + line / 2) / 2, y: c.y)
+            }
+        }
+    }
+
+    private func arc(_ c: CGPoint, _ r: CGFloat, from: Double, to: Double, _ color: Color, _ line: CGFloat) -> some View {
+        Path { p in p.addArc(center: c, radius: r, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false) }
+            .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .butt))
+    }
+}
+
+/// Cursor: a cube seen from above, white on black.
+private struct CursorMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color.black)
+                Path { p in
+                    let top = CGPoint(x: w * 0.5, y: w * 0.18), left = CGPoint(x: w * 0.2, y: w * 0.36)
+                    let right = CGPoint(x: w * 0.8, y: w * 0.36), bottom = CGPoint(x: w * 0.5, y: w * 0.84)
+                    let mid = CGPoint(x: w * 0.5, y: w * 0.56), lb = CGPoint(x: w * 0.2, y: w * 0.66), rb = CGPoint(x: w * 0.8, y: w * 0.66)
+                    p.move(to: top); p.addLine(to: right); p.addLine(to: rb); p.addLine(to: bottom); p.addLine(to: lb); p.addLine(to: left); p.closeSubpath()
+                    p.move(to: left); p.addLine(to: mid); p.addLine(to: right)
+                    p.move(to: mid); p.addLine(to: bottom)
+                }
+                .stroke(Color.white, lineWidth: max(1, w * 0.08))
+            }
+        }
     }
 }
 
 extension CodingAgent {
-    /// One or two letters: who makes the agent.
-    var mark: String {
-        switch self {
-        case .claude: "A"       // Anthropic
-        case .codex: "O"        // OpenAI
-        case .gemini: "G"       // Google
-        case .cursor: "Cu"
-        }
-    }
-
+    /// The maker's tint, for text next to the mark.
     var tint: Color {
         switch self {
         case .claude: Color(red: 0.85, green: 0.47, blue: 0.34)
-        case .codex: Color(red: 0.06, green: 0.64, blue: 0.50)
+        case .codex: Color(white: 0.2)
         case .gemini: Color(red: 0.26, green: 0.52, blue: 0.96)
         case .cursor: Color(white: 0.35)
         }

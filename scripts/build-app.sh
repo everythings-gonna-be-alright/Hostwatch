@@ -39,7 +39,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
-  <key>NSHumanReadableCopyright</key><string>MIT License</string>
+  <key>NSHumanReadableCopyright</key><string>© 2026 everythings-gonna-be-alright. Free for everyone (PolyForm Shield 1.0.0).</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSUIElement</key><true/>

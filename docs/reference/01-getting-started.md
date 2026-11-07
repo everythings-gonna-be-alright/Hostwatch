@@ -79,11 +79,11 @@ in **three waves, at 5, 15 and 60 minutes**.
 Each wave sorts the New patterns seen so far (`BaselinePolicy`) into these groups:
 
 - **Trusted:** marked Safe, with source "baseline". This needs all of the following:
-  - normal risk;
+  - normal risk
   - the acting program is signed by Apple or by the developer of an installed app. For a launch, the launched program
-    must be too;
-  - a valid signature, and not quarantined;
-  - not in Downloads, temp, Shared or a volume;
+    must be too
+  - a valid signature, and not quarantined
+  - not in Downloads, temp, Shared or a volume
   - not touching a sensitive place (login items, credentials, mail, messages).
 - **Exception for macOS system services:** daemons and agents on the sealed system volume may touch sensitive places.
   Indexing, sync and malware scanning is their job. This doesn't include command-line tools like `cat`, `sqlite3` or a
@@ -114,9 +114,9 @@ trusted apps among them. It is local and uses code signatures only, no AI.
 - **Remove all:** *⋯ ▸ Remove All Baseline Rules* removes every baseline rule.
 - **Decided isn't forever.** A Safe pattern is **reopened** when something about it changes, whoever decided it (you
   included). Reopened means back to New and listed first in Needs You as *Reopened: …*. This happens when:
-  - one of its steps is part of a story that fires (*part of a story: Slack → sh → curl*);
+  - one of its steps is part of a story that fires (*part of a story: Slack → sh → curl*)
   - its program contacts known malware infrastructure or is a known malware file. This reopens every Safe pattern of
-    that program;
+    that program
   - it becomes high-risk: the binary was swapped or modified, is quarantined or runs from a download/temp folder.
 
   A reopened pattern is never decided again by a baseline rule, a learned rule, *Accept AI suggestions without asking*

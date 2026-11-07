@@ -33,7 +33,7 @@ glance and quick actions.
 | Menu | Commands |
 |------|----------|
 | *Edit* | Undo, Redo, Cut, Copy, Paste, Select All, Find (⌘F) |
-| *View* | Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, Running Now (⌥⌘R), Time Travel (⌥⌘T), Earlier (⌘[) and Later (⌘]) during Time Travel, the **Show** filter, event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F; Esc leaves) |
+| *View* | Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, Running Now (⌥⌘R), Time Travel (⌥⌘T), Earlier (⌘[) and Later (⌘]) during Time Travel, the **Show** filter, event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F, Esc leaves) |
 | *Activity* | Pause Live Stream, Clear Events (⌘K), Ask AI About Selection (⌘↩), Watch Selected Process Closely… (⌥⌘W), Mark Safe / Suspicious / Dangerous / Unclassified, Exclude Selection…, Start/Stop Collector |
 | *Window* | Activity Window (⌘0), Held Processes |
 | *Help* | **Hostwatch Help** (these docs), Use with Claude Code…, Collector Log, Full Disk Access Settings |
@@ -111,11 +111,11 @@ event list. While the window is on screen, the list refreshes every 3 s.
 
 | Column | What it shows |
 |--------|---------------|
-| process | name with its app's icon; ✦ when Hostwatch saw it start |
+| process | name with its app's icon, ✦ when Hostwatch saw it start |
 | PID | process ID |
 | user | root is shown in orange |
-| % CPU | since the previous refresh; orange from 50% |
-| *Writing* | bytes per second written to disk since the previous refresh; orange from 1 MB/s |
+| % CPU | since the previous refresh, orange from 50% |
+| *Writing* | bytes per second written to disk since the previous refresh, orange from 1 MB/s |
 | CPU time | total processor time used |
 | memory | physical footprint, as Activity Monitor's *Memory* |
 | threads | number of threads |
@@ -226,7 +226,7 @@ throughput.
 **Disk space.** The strip shows the startup disk's free space, as Finder counts it, purgeable space included. Click it
 to see:
 
-- free space over the last hour or 24 hours, live or ending at the playhead in Time Travel;
+- free space over the last hour or 24 hours, live or ending at the playhead in Time Travel
 - the programs that **wrote the most** to disk in that period, with bytes and how many processes.
 
 Writes come from two sources. One is the collector: each process's bytes written since it started (its rate is the
@@ -305,7 +305,7 @@ everything recorded, not only the slice.
 - In the plain (current) file, lines are in time order. So the offset of any moment is a binary search away.
 - Compressed files are found through their block index.
 - Bar heights come from byte counts (per-minute counts for compressed files).
-- Timings: the overview takes milliseconds; a busy slice of ~20,000 events takes ≈0.3 s.
+- Timings: the overview takes milliseconds, and a busy slice of ~20,000 events takes ≈0.3 s.
 - A search reads blocks newest first and parses only lines whose bytes contain the search text.
 
 `Hostwatch --time-travel-probe [dir]` prints these timings, searches included.

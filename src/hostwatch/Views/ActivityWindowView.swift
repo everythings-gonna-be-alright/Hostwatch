@@ -190,7 +190,8 @@ struct ActivityWindowView: View {
                     RunningProcessesView(running: running, signatures: signatures, search: model.searchText,
                                          history: model.history, showSpawn: { row in
                                              if let start = row.started { actions.showSpawn(row.pid, start) }
-                                         }, actions: actions)
+                                         }, actions: actions, grouping: model.eventGrouping,
+                                         sessions: shownSessions.map { .init(id: $0.id, topic: $0.topic, facts: $0.facts, agent: $0.agent, pids: $0.pids) })
                 } else {
                     eventsList
                 }
@@ -331,6 +332,21 @@ struct ActivityWindowView: View {
     }
 
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
+    /// No Groups · By Process · By AI Session, for the Events list and Running Now alike.
+    private var groupingPicker: some View {
+        HStack(spacing: 12) {
+            Divider().frame(height: 16)
+            Picker("Group", selection: $model.eventGrouping) {
+                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help(runningNow ? "Group the processes: flat, under their parent process, or under the AI session (Claude Code…) they belong to"
+                  : "Group the list: flat, one row per program, or one row per AI session (Claude Code…) with its events under it")
+        }
+    }
+
     private var filterBar: some View {
         HStack(spacing: 12) {
             Picker("View", selection: $running.showing) {
@@ -343,6 +359,7 @@ struct ActivityWindowView: View {
             .help(traveling ? "Events: what happened in the window · Running Now: what was running at the playhead (⌥⌘R)"
                   : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
             if runningNow {
+                groupingPicker
                 if running.isRecorded {
                     Text(running.recordedAt.map { "Recorded \($0.formatted(date: .omitted, time: .standard)) · once a minute" }
                          ?? "Nothing recorded at this moment")
@@ -356,14 +373,7 @@ struct ActivityWindowView: View {
                 Divider().frame(height: 16)
                 ShowFilterPicker(filter: $model.signatureFilter,
                                  counts: traveling ? travelDerived.counts : model.showCounts(model.history))
-                Divider().frame(height: 16)
-                Picker("Group", selection: $model.eventGrouping) {
-                    ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help("Group the list: flat, one row per program, or one row per coding-agent session (Claude Code…) with its events under it")
+                groupingPicker
                 if model.onlySession != nil {
                     Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
                         .buttonStyle(.link).font(.system(size: 11))
