@@ -315,7 +315,7 @@ final class ClaudeGuard: ObservableObject {
         self.defaults = defaults
         self.logURL = logURL
         enabled = defaults.bool(forKey: "claudeGuard")
-        if let data = try? Data(contentsOf: logURL), let saved = try? JSONDecoder.iso.decode(Saved.self, from: data) {
+        if let data = Vault.shared.read(logURL), let saved = try? JSONDecoder.iso.decode(Saved.self, from: data) {
             log = saved.log; checked = saved.checked
         }
     }
@@ -471,7 +471,7 @@ final class ClaudeGuard: ObservableObject {
     private func save() {
         guard let data = try? JSONEncoder.iso.encode(Saved(log: log, checked: checked)) else { return }
         try? FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: logURL, options: .atomic)
+        try? Vault.shared.write(data, to: logURL)
         chmod(logURL.path, 0o600)
     }
 }

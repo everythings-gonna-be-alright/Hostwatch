@@ -81,7 +81,7 @@ final class SigningCache: @unchecked Sendable {
             ?? AppPaths.support.appendingPathComponent("signing.json")
         trusted = Set(UserDefaults.standard.stringArray(forKey: "trustedTeams") ?? [])
         UserDefaults.standard.removeObject(forKey: "trustHomebrewTools")   // removed option
-        if let data = try? Data(contentsOf: fileURL),
+        if let data = Vault.shared.read(fileURL),
            let stored = try? JSONDecoder().decode([String: CodeIdentity].self, from: data) {
             known = stored
         }
@@ -254,7 +254,7 @@ final class SigningCache: @unchecked Sendable {
         dirty = false
         let snapshot = known
         lock.unlock()
-        if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? JSONEncoder().encode(snapshot) { try? Vault.shared.write(data, to: fileURL) }
     }
 }
 

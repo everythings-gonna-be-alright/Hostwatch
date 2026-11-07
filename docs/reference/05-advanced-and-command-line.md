@@ -18,6 +18,7 @@ You don't need any of these: the app runs without flags, and most are for testin
 | `--metrics-probe` | Prints CPU, memory, network and disk samples. |
 | `--compress-history <folder>` | Compresses plain history files by hand. |
 | `--time-travel-probe [dir]` | Times reading history and searching it for Time Travel. |
+| `--export-history [file or folder]` | The recorded events as plain JSON lines on stdout, through the data key (the files are sealed). |
 | `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely and prints the result. |
 | `sudo … --firewall-probe` | Checks that the firewall's redirect works. |
 | `sudo … --firewall-relay-test [seconds]` | Runs the relay and reports what passes through it. |

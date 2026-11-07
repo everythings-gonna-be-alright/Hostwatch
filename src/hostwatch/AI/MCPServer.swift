@@ -235,13 +235,13 @@ final class MCPServer {
     }
 
     private func stories(includeDismissed: Bool) -> [Story] {
-        guard let data = try? Data(contentsOf: data.support.appendingPathComponent("stories.json")),
+        guard let data = Vault.shared.read(data.support.appendingPathComponent("stories.json")),
               let list = try? decoder().decode([Story].self, from: data) else { return [] }
         return list.filter { includeDismissed || !$0.dismissed }.sorted { $0.lastSeen > $1.lastSeen }
     }
 
     private func domains() -> [DomainRecord] {
-        guard let data = try? Data(contentsOf: data.support.appendingPathComponent("domains.json")),
+        guard let data = Vault.shared.read(data.support.appendingPathComponent("domains.json")),
               let list = try? decoder().decode([DomainRecord].self, from: data) else { return [] }
         return list
     }

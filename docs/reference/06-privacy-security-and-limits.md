@@ -17,7 +17,30 @@ Here is where everything lives:
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
-| `~/Library/Preferences/local.hostwatch.app.plist` | settings and exclusions |
+| `~/Library/Preferences/local.hostwatch.app.plist` | settings and exclusions (plain) |
+| `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
+
+### Encryption at rest
+
+Everything Hostwatch keeps is encrypted on disk (AES-256-GCM): patterns and their journal, stories, domains, AI
+sessions, rules, signing facts, the firewall and Claude Code guard logs, the MCP token hash and access log, and the
+whole activity history (each compressed block sealed on its own, day files line by line). The point is *where the
+key lives*: another process running as you, an AI agent included, can't fetch it silently.
+
+- **Secure Enclave** (Apple silicon and T2 Macs): the data key is wrapped by a key that never leaves the Enclave;
+  the wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
+  signed code.
+- **Keychain** (other Macs): the data key is a login-keychain item whose access list names only Hostwatch's code.
+  Any other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
+- **What it looks like:** a sealed file starts with `HWV1`; a sealed line with `HWV1:`. Files from earlier versions
+  are plain and still read; they're rewritten sealed the next time they're saved (history blocks when their file
+  is finished or scrubbed).
+- **Reading it yourself:** `zcat` and `zgrep` no longer work on the history files. Use
+  `Hostwatch --export-history [file or folder]`, which prints plain JSON lines through the key, and pipe it to `jq`.
+- **Settings ▸ General ▸ Permissions ▸ Data on disk** shows the state and where the key is.
+- **If the key is lost** (the keychain item removed, the Enclave key gone): the sealed files can't be read. Hostwatch
+  says so in Settings, starts a new key and begins again. A backup of the files is only useful together with your
+  keychain, which Time Machine includes. The collector (root) writes none of these files.
 
 ### Security notes
 

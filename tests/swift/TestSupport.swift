@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 @testable import Hostwatch
 
@@ -10,6 +11,7 @@ enum TestEnv {
         setenv("HOSTWATCH_SIGNING_DB", db.path, 1)
         SigningCache.shared.live = false
         ProcessList.startLookup = { _ in nil }      // deterministic collector output
+        Vault.shared = Vault(key: SymmetricKey(size: .bits256))   // sealed files, no keychain
     }()
 }
 

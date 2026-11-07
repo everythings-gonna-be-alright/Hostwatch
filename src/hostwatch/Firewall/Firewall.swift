@@ -209,7 +209,7 @@ final class FirewallMonitor: ObservableObject {
         self.defaults = defaults
         self.fileURL = fileURL
         mode = FirewallMode(rawValue: defaults.string(forKey: "firewallMode") ?? "") ?? .off
-        if let data = try? Data(contentsOf: fileURL), let saved = try? Self.decoder.decode(Saved.self, from: data) {
+        if let data = Vault.shared.read(fileURL), let saved = try? Self.decoder.decode(Saved.self, from: data) {
             entries = saved.entries
             allowedCount = saved.allowed
         }
@@ -372,7 +372,7 @@ final class FirewallMonitor: ObservableObject {
     func save() {
         guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount)) else { return }
         dirty = false
-        try? data.write(to: fileURL, options: .atomic)
+        try? Vault.shared.write(data, to: fileURL)
         chmod(fileURL.path, 0o600)
     }
 

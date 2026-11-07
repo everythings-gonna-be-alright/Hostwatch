@@ -143,7 +143,7 @@ final class ThreatIntel: ObservableObject {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: directory.appendingPathComponent("state.json")),
            let saved = try? JSONDecoder().decode([String: FeedState].self, from: data) { states = saved }
-        if let data = try? Data(contentsOf: directory.appendingPathComponent("hits.json")),
+        if let data = Vault.shared.read(directory.appendingPathComponent("hits.json")),
            let saved = try? JSONDecoder().decode([ThreatHit].self, from: data) { hits = saved }
         osUpdated = Self.lastOSUpdate()
     }
@@ -341,7 +341,7 @@ final class ThreatIntel: ObservableObject {
     private func save() {
         if let data = try? JSONEncoder().encode(states) { try? data.write(to: directory.appendingPathComponent("state.json"), options: .atomic) }
         if let data = try? JSONEncoder().encode(Array(hits.suffix(500))) {
-            try? data.write(to: directory.appendingPathComponent("hits.json"), options: .atomic)
+            try? Vault.shared.write(data, to: directory.appendingPathComponent("hits.json"))
         }
     }
 

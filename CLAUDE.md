@@ -53,6 +53,9 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
   otherwise. It talks over a Unix socket that accepts only Hostwatch's own code (audit token + designated requirement). Everything it sends is masked
   (`Secrets`) before it reaches history or any prompt. Nothing leaves the Mac except: Claude calls you enabled,
   threat-list downloads, the update check, and the firewall relay's self-check.
+- **Every file is sealed through `Vault.shared`** (`read`/`write`/`appendLine`/`lines`, history blocks as records):
+  never `Data(contentsOf:)` or `write(to:)` a Hostwatch data file directly. Tests get an in-memory key; the real
+  key is in the Secure Enclave or a keychain item only Hostwatch's code may read (ADR 0009).
 - **Patterns are keys.** `kind|process|pattern` is the identity of a decision; changing how a pattern is built
   orphans old decisions unless `SignatureStore.regroup` (or a merge alias) moves them.
 

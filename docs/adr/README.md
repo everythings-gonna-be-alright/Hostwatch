@@ -13,3 +13,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0006](0006-developer-id-signing.md) | Releases signed with a personal Developer ID and notarized |
 | [0007](0007-fewer-patterns.md) | Fewer patterns where the detail says nothing, with a launch-time regroup |
 | [0008](0008-flat-module-one-concept-files.md) | One module, one concept per file; no architecture framework |
+| [0009](0009-encryption-at-rest.md) | Everything on disk encrypted; the key in the Secure Enclave or a code-bound keychain item |

@@ -34,7 +34,8 @@ test (`tests/swift/StructureTests.swift`) keeps it so: every file in an area fol
 `App/`, `AI/` and `Events/`, nothing over 1,000 lines.
 
 **`Events/`** — `Events.swift` (`ActivityEvent`, `EventKind`, parsing the collector's JSON), `Exclusions.swift`,
-`HUDModel.swift` (the live event list, filters, search), `Secrets.swift` (masking).
+`HUDModel.swift` (the live event list, filters, search), `Secrets.swift` (masking), `Vault.swift` (everything on
+disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 0009).
 
 **`Patterns/`**
 - `PatternModel.swift` — `SignatureEntry`, `SignatureStatus`, `PatternRisk`, the Show filter.

@@ -304,14 +304,14 @@ final class AgentSessions: ObservableObject {
         guard let fileURL else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(sessions) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? encoder.encode(sessions) { try? Vault.shared.write(data, to: fileURL) }
     }
 
     /// The saved list (the MCP server reads it while the app runs).
     nonisolated static func readSaved(from directory: URL) -> [AgentSession] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let data = try? Data(contentsOf: directory.appendingPathComponent("agent-sessions.json")) else { return [] }
+        guard let data = Vault.shared.read(directory.appendingPathComponent("agent-sessions.json")) else { return [] }
         return (try? decoder.decode([AgentSession].self, from: data)) ?? []
     }
 
