@@ -262,8 +262,8 @@ import Testing
     }
 
     @Test func launchAndConnectionRules() {
-        let s = RuleText.sentence(rule(.exec, "/Library/Application Support/JAMF/Remote Assist/*", "/usr/sbin/sysctl"))
-        #expect(s.who == "any program in /Library/Application Support/JAMF/Remote Assist" && s.does == "starts sysctl")
+        let s = RuleText.sentence(rule(.exec, "/Library/Application Support/Fleet Agent/*", "/usr/sbin/sysctl"))
+        #expect(s.who == "any program in /Library/Application Support/Fleet Agent" && s.does == "starts sysctl")
         #expect(RuleText.launch("/usr/bin/curl -s https://x.example/a") == "starts curl with -s https://x.example/a")
         #expect(RuleText.launch("/usr/bin/*  (plain tools)") == "starts plain tools in /usr/bin")
         #expect(RuleText.launch("/usr/bin/*") == "starts any program in /usr/bin")
