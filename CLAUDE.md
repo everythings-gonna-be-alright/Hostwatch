@@ -48,7 +48,9 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
   lowers risk automatically except `reassess` after signing facts change.
 - **History is append-only and crash-safe**: compressed as written, a block list that only grows, nothing written
   twice. Readers must tolerate a streaming file with no finished blocks yet.
-- **The collector runs as root** and talks over a Unix socket with a token. Everything it sends is masked
+- **The collector runs as root**, as an `SMAppService` daemon in Developer ID builds (registered once; the agent in
+  `--daemon` mode serves the console user, idles without a client, ignores shutdown) and as an admin-prompted job
+  otherwise. It talks over a Unix socket that accepts only Hostwatch's own code (audit token + designated requirement). Everything it sends is masked
   (`Secrets`) before it reaches history or any prompt. Nothing leaves the Mac except: Claude calls you enabled,
   threat-list downloads, the update check, and the firewall relay's self-check.
 - **Patterns are keys.** `kind|process|pattern` is the identity of a decision; changing how a pattern is built

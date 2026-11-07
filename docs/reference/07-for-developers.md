@@ -11,7 +11,8 @@
 
 ```bash
 ./scripts/build-app.sh
-open dist/Hostwatch.app      # prompts for an admin password to start the collector
+open dist/Hostwatch.app      # a Developer ID build registers the collector service (one password); an ad-hoc build
+                             # starts the collector with an admin prompt each time
 ```
 
 ### Test

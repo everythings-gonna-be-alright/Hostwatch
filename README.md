@@ -113,7 +113,8 @@ Earlier versions: see the [changelog](CHANGELOG.md).
    `Hostwatch.app` to `/Applications`.
 2. Open it. It's signed and notarized by Apple, so macOS opens it without a warning. A short setup window helps you
    turn on **Full Disk Access**.
-3. Enter your administrator password to start the collector. Done.
+3. Enter your administrator password once: it registers the collector as a background service, which macOS
+   starts at boot from then on. Done.
 
 Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or the Command Line Tools).
 
@@ -161,8 +162,8 @@ your Mac, except what you send to Claude and a daily update check (both optional
 
 ## Limitations
 
-A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), the
-collector asks for your password at each start, and the optional process hold is best effort. The firewall
+A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), and the optional
+process hold is best effort. The firewall
 covers your own apps, not programs running as root or macOS's own DNS lookups. Containers are judged by
 destination (which program inside made a connection can't be seen). VMs with bridged networking aren't covered.
 
