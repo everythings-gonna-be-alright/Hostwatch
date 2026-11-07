@@ -2,6 +2,9 @@
 
 ## Unreleased – Fewer patterns, rules in plain words
 
+- **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside
+  the table shows the selected pattern in full: what it means in plain words, the exact text (selectable), who
+  decided it and why, when and how often, the last example, the signer, and the mark buttons.
 - **Rules read as sentences.** Every learned rule and proposal now says who does what and what happens then:
   *git reads anything under ~/Documents/ProcessHUD → Safe: decided for you, never asked about*. A proposal lists
   what approving changes. The glob form is behind *Details*. Baseline rules say what they trust.
