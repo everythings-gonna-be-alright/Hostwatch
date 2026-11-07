@@ -275,10 +275,18 @@ struct EventItem: Identifiable {
     let event: ActivityEvent
     let status: SignatureStatus
     let statusRank: Int
-    /// The coding-agent session's name ("Claude · ProcessHUD"), "" if none.
+    /// The coding-agent session's topic ("Pattern classifier noise reduction"), "" if none; and its maker.
     var session = ""
+    var agent: CodingAgent?
+    /// A group row (by process or by session): the events under it.
+    var children: [EventItem]? = nil
+    var groupID = UUID()
+    var groupTitle = ""
+    var groupSubtitle = ""
+    var groupKinds: [EventKind] = []
 
-    var id: UUID { event.id }
+    var isGroup: Bool { children != nil }
+    var id: UUID { isGroup ? groupID : event.id }
     var seq: Int { event.seq }             // arrival order: the Time column
     var kind: String { event.kind.rawValue }
     var name: String { event.name.lowercased() }
@@ -296,6 +304,68 @@ struct EventItem: Identifiable {
         "session": { KeyPathComparator(\.session, order: $0) },
         "detail": { KeyPathComparator(\.detail, order: $0) },
     ]
+
+    /// One row per program (its name), the events under it in their order.
+    static func groupedByProcess(_ items: [EventItem]) -> [EventItem] {
+        var order: [String] = [], byName: [String: [EventItem]] = [:]
+        for i in items { if byName[i.event.name] == nil { order.append(i.event.name) }; byName[i.event.name, default: []].append(i) }
+        return order.map { name in group(byName[name]!, id: "process:" + name, title: name, subtitle: "", agent: nil) }
+    }
+
+    /// One row per coding-agent session (its topic), the events under it; the rest under "No session".
+    struct SessionHeader { var id: Int; var topic: String; var facts: String; var agent: CodingAgent; var pids: Set<Int> }
+    static func groupedBySession(_ items: [EventItem], sessions: [SessionHeader]) -> [EventItem] {
+        var rest = items, out: [EventItem] = []
+        for s in sessions {
+            let mine = rest.filter { s.pids.contains($0.event.pid) }
+            guard !mine.isEmpty else { continue }
+            rest.removeAll { s.pids.contains($0.event.pid) }
+            out.append(group(mine, id: "session:\(s.id)", title: s.topic, subtitle: s.facts, agent: s.agent))
+        }
+        if !rest.isEmpty, !out.isEmpty { out.append(group(rest, id: "session:0", title: "No session", subtitle: "", agent: nil)) }
+        return out.isEmpty ? items : out
+    }
+
+    /// A group row standing for `list`: the newest event's time, the kinds in it, the worst status.
+    private static func group(_ list: [EventItem], id: String, title: String, subtitle: String, agent: CodingAgent?) -> EventItem {
+        let newest = list.max { $0.seq < $1.seq }!
+        let worst = list.min { $0.statusRank < $1.statusRank }!
+        var g = EventItem(event: newest.event, status: worst.status, statusRank: worst.statusRank, session: "", agent: agent)
+        g.children = list
+        g.groupID = stableUUID(id)
+        g.groupTitle = title
+        g.groupSubtitle = subtitle.isEmpty ? "\(list.count.formatted()) events" : "\(list.count.formatted()) events · \(subtitle)"
+        g.groupKinds = EventKind.allCases.filter { k in list.contains { $0.event.kind == k } }
+        return g
+    }
+
+    /// The same id for the same group every rebuild (a Table keeps expansion and selection by id).
+    static func stableUUID(_ text: String) -> UUID {
+        var h1: UInt64 = 0xcbf29ce484222325, h2: UInt64 = 0x84222325cbf29ce4
+        for b in text.utf8 { h1 = (h1 ^ UInt64(b)) &* 0x100000001b3; h2 = (h2 &+ UInt64(b)) &* 0x9E3779B97F4A7C15 }
+        func byte(_ h: UInt64, _ shift: UInt64) -> UInt8 { UInt8(truncatingIfNeeded: h >> shift) }
+        return UUID(uuid: (byte(h1, 56), byte(h1, 48), byte(h1, 40), byte(h1, 32), byte(h1, 24), byte(h1, 16), byte(h1, 8), byte(h1, 0),
+                           byte(h2, 56), byte(h2, 48), byte(h2, 40), byte(h2, 32), byte(h2, 24), byte(h2, 16), byte(h2, 8), byte(h2, 0)))
+    }
+}
+
+/// How the Events list is grouped: flat, one row per program, or one row per coding-agent session.
+enum EventGrouping: String, CaseIterable {
+    case none, process, session
+    var title: String {
+        switch self {
+        case .none: "No Groups"
+        case .process: "By Process"
+        case .session: "By Session"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .none: "list.bullet"
+        case .process: "rectangle.3.group"
+        case .session: "sparkles.rectangle.stack"
+        }
+    }
 }
 
 /// Remembers a table's primary sort column and direction in UserDefaults ("count:desc").

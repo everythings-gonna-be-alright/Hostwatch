@@ -112,24 +112,16 @@ struct ActivityWindowView: View {
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 && !runningNow {
                 heavySection
-                let shown = traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : model.sessions.sessions
-                SessionStrip(sessions: shown, traveling: traveling, selected: model.onlySession, select: { s in
-                    model.onlySession = s?.id
-                    model.onlySessionPids = s?.pids
-                }, showPatterns: { title, keys in
-                    signatures.search = ""
-                    signatures.scope = .init(title: title, keys: keys)
-                    model.windowTab = 1
-                })
-                .onReceive(model.sessions.objectWillChange) { _ in
-                    // A live session's tree grows: the filter follows it, and the Patterns grouping too.
-                    DispatchQueue.main.async {
-                        if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
-                        if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
-                            model.onlySessionPids = s.pids
+                Color.clear.frame(height: 0)
+                    .onReceive(model.sessions.objectWillChange) { _ in
+                        // A live session's tree grows: the filter follows it, and the groupings too.
+                        DispatchQueue.main.async {
+                            if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
+                            if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
+                                model.onlySessionPids = s.pids
+                            }
                         }
                     }
-                }
             }
             if traveling {
                 if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
@@ -364,6 +356,18 @@ struct ActivityWindowView: View {
                 Divider().frame(height: 16)
                 ShowFilterPicker(filter: $model.signatureFilter,
                                  counts: traveling ? travelDerived.counts : model.showCounts(model.history))
+                Divider().frame(height: 16)
+                Picker("Group", selection: $model.eventGrouping) {
+                    ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Group the list: flat, one row per program, or one row per coding-agent session (Claude Code…) with its events under it")
+                if model.onlySession != nil {
+                    Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
+                        .buttonStyle(.link).font(.system(size: 11))
+                }
                 Spacer(minLength: 0)
                 ClassifyAllButton(classifier: classifier, signatures: signatures)
             }
@@ -417,29 +421,49 @@ struct ActivityWindowView: View {
         let key = TravelRowsCache.Key(revision: travel.revision, showingSearch: travel.showingSearch,
                                       kinds: model.visibleKinds, filter: model.signatureFilter,
                                       search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
-                                      signatures: signatures.revision, order: model.eventOrder)
+                                      signatures: signatures.revision, order: model.eventOrder,
+                                      grouping: model.eventGrouping, sessions: sessionsStamp)
         return travelRows.result(for: key) {
             TravelRowsCache.Result(rows: makeRows(model.filtered(travel.listed, applyExclusions: true)),
                                    counts: model.showCounts(travel.listed, applyExclusions: true))
         }
     }
 
+    /// The sessions the list's events belong to: live ones, or the ones replayed from the Time Travel window.
+    private var shownSessions: [AgentSession] {
+        traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : model.sessions.sessions
+    }
+
     private func makeRows(_ events: [ActivityEvent]) -> [EventItem] {
-        let replayed = traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : []
-        func sessionName(_ e: ActivityEvent) -> String {
-            if traveling { return replayed.first { $0.pids.contains(e.pid) }?.name ?? "" }
-            return e.session > 0 ? model.sessions.session(e.session)?.name ?? "" : ""
+        let sessions = shownSessions
+        func session(_ e: ActivityEvent) -> AgentSession? {
+            if traveling { return sessions.first { $0.pids.contains(e.pid) } }
+            return e.session > 0 ? model.sessions.session(e.session) : nil
         }
         let items = events.map { e -> EventItem in
             let status = signatures.status(for: e)
+            let s = session(e)
             // Known bad sorts above Dangerous.
             return EventItem(event: e, status: status, statusRank: intel.flag(for: e) != nil ? -1 : signatures.rank(status),
-                             session: sessionName(e))
+                             session: s?.topic ?? "", agent: s?.agent)
         }
         // The list is already newest first: only sort for another column or direction.
         let newestFirst = model.eventOrder.count == 1 && model.eventOrder[0].keyPath == \EventItem.seq
             && model.eventOrder[0].order == .reverse
-        return newestFirst ? items : items.sorted(using: model.eventOrder)
+        let sorted = newestFirst ? items : items.sorted(using: model.eventOrder)
+        switch model.eventGrouping {
+        case .none: return sorted
+        case .process: return EventItem.groupedByProcess(sorted)
+        case .session:
+            return EventItem.groupedBySession(sorted, sessions: sessions.map {
+                .init(id: $0.id, topic: $0.topic, facts: $0.facts, agent: $0.agent, pids: $0.pids)
+            })
+        }
+    }
+
+    /// A stamp of the sessions a grouping depends on (their count, members and events).
+    private var sessionsStamp: Int {
+        shownSessions.reduce(0) { $0 &* 31 &+ $1.id &* 7 &+ $1.pids.count &* 3 &+ $1.events }
     }
 
     /// The live rows, from the cache when nothing they depend on changed.
@@ -447,8 +471,43 @@ struct ActivityWindowView: View {
         let key = TravelRowsCache.Key(revision: model.history.count &* 1_000_003 &+ (model.history.first?.seq ?? 0),
                                       showingSearch: false, kinds: model.visibleKinds, filter: model.signatureFilter,
                                       search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
-                                      signatures: signatures.revision, order: model.eventOrder)
+                                      signatures: signatures.revision, order: model.eventOrder,
+                                      grouping: model.eventGrouping, sessions: sessionsStamp)
         return liveRows.result(for: key) { TravelRowsCache.Result(rows: makeRows(model.searchResults)) }.rows
+    }
+
+    /// A row by id, group rows and their events alike.
+    private static func row(_ id: UUID, in rows: [EventItem]) -> EventItem? {
+        for r in rows {
+            if r.id == id { return r }
+            if let c = r.children?.first(where: { $0.id == id }) { return c }
+        }
+        return nil
+    }
+
+    /// Right-click on a group row.
+    @ViewBuilder private func groupMenu(_ item: EventItem) -> some View {
+        if let session = shownSessions.first(where: { $0.topic == item.groupTitle }) {
+            Button(model.onlySession == session.id ? "Show All Sessions" : "Show Only This Session") {
+                let on = model.onlySession != session.id
+                model.onlySession = on ? session.id : nil
+                model.onlySessionPids = on ? session.pids : nil
+            }
+            Button("Show Its Patterns…") {
+                signatures.search = ""
+                signatures.scope = .init(title: "Session: \(session.name)", keys: session.keys)
+                model.windowTab = 1
+            }
+            .disabled(session.keys.isEmpty)
+            if !session.sessionID.isEmpty {
+                Button("Copy Claude Session ID") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(session.sessionID, forType: .string)
+                }
+            }
+        } else {
+            Button("Show Only \(item.groupTitle)") { model.searchText = item.groupTitle }
+        }
     }
 
     private var eventsList: some View {
@@ -458,21 +517,34 @@ struct ActivityWindowView: View {
         let lastRowID = rows.last?.id
         return VStack(spacing: 0) {
           ScrollViewReader { proxy in
-            Table(rows, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
+            Table(rows, children: \.children, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
                     Text(withDay ? item.event.dayTime : item.event.time).foregroundStyle(.secondary).monospacedDigit()
+                        .opacity(item.isGroup ? 0.7 : 1)
                         // The end of a Time Travel window's list: its next older page.
                         .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
                 }
                 .width(min: 56, ideal: withDay ? 104 : 60, max: withDay ? 130 : 72)
                 TableColumn("Kind", value: \.kind) { item in
-                    Image(systemName: item.event.kind.symbol)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(item.event.kind.color)
-                        .help(item.event.kind.title)
+                    if item.isGroup {
+                        HStack(spacing: 2) {
+                            ForEach(item.groupKinds.prefix(3), id: \.self) {
+                                Image(systemName: $0.symbol).font(.system(size: 10, weight: .bold)).foregroundStyle($0.color)
+                            }
+                        }
+                        .help(item.groupKinds.map(\.title).joined(separator: ", "))
+                    } else {
+                        Image(systemName: item.event.kind.symbol)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(item.event.kind.color)
+                            .help(item.event.kind.title)
+                    }
                 }
-                .width(min: 20, ideal: 24, max: 32)
+                .width(min: 20, ideal: 56, max: 64)
                 TableColumn("Status", value: \.statusRank) { item in
+                    if item.isGroup {
+                        StatusPill(status: item.status).help("The most serious status among these events")
+                    } else {
                     HStack(spacing: 4) {
                         if let bad = intel.flag(for: item.event) {
                             // A listed destination or file outranks the pattern's own status (often Safe: the
@@ -502,28 +574,43 @@ struct ActivityWindowView: View {
                                 .accessibilityLabel("First seen")
                         }
                     }
+                    }
                 }
                 .width(min: 70, ideal: 84, max: 100)
                 TableColumn("Process", value: \.name) { item in
-                    Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
+                    if item.isGroup {
+                        HStack(spacing: 5) {
+                            if let agent = item.agent { AgentBadge(agent: agent) }
+                            Text(item.groupTitle).fontWeight(.semibold).lineLimit(1).truncationMode(.tail)
+                        }
+                        .help(item.groupTitle)
+                    } else {
+                        Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
+                    }
                 }
-                .width(min: 60, ideal: 110, max: 150)
+                .width(min: 60, ideal: model.eventGrouping == .session ? 260 : 110, max: 400)
                 TableColumn("PID", value: \.pid) { item in
-                    Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit()
+                    if !item.isGroup { Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Session", value: \.session) { item in
-                    if !item.session.isEmpty {
-                        Text(item.session).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                            .help("The coding-agent session this process belongs to")
+                    if !item.session.isEmpty, !item.isGroup {
+                        HStack(spacing: 5) {
+                            if let agent = item.agent { AgentBadge(agent: agent) }
+                            Text(item.session).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        }
+                        .help("The coding-agent session this process belongs to: \(item.session)")
                     }
                 }
-                .width(min: 60, ideal: 130, max: 220)
+                .width(min: 60, ideal: 160, max: 320)
                 TableColumn("PPID", value: \.ppid) { item in
-                    Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit()
+                    if !item.isGroup { Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
                 .width(min: 38, ideal: 48, max: 64)
                 TableColumn("Detail", value: \.detail) { item in
+                    if item.isGroup {
+                        Text(item.groupSubtitle).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    } else {
                     HStack(spacing: 6) {
                         if let bad = intel.flag(for: item.event) { KnownBadTag(detail: bad) }
                         if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
@@ -538,14 +625,17 @@ struct ActivityWindowView: View {
                             Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
                         }
                     }
+                    }
                 }
                 .width(min: 200, ideal: 900)
             }
             .font(.system(size: 12, design: .monospaced))
             .contextMenu(forSelectionType: UUID.self) { ids in
-                if let id = ids.first, let item = rows.first(where: { $0.id == id }) { rowMenu(item.event) }
+                if let id = ids.first, let item = Self.row(id, in: rows) {
+                    if item.isGroup { groupMenu(item) } else { rowMenu(item.event) }
+                }
             } primaryAction: { ids in
-                guard let id = ids.first, let item = rows.first(where: { $0.id == id }) else { return }
+                guard let id = ids.first, let item = Self.row(id, in: rows), !item.isGroup else { return }
                 // A search hit opens its moment; elsewhere a double-click asks the AI.
                 if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
             }

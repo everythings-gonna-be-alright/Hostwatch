@@ -380,27 +380,28 @@ A coding agent (Claude Code, the Cursor agent, Codex, Gemini CLI) is one process
 `git`, builds, `curl`. Hostwatch follows each agent process and its whole tree as one **session**, so you can see
 what one session did, not just what `zsh` or `git` did in general.
 
-- **Where:** a strip above the Events list, one chip per session: *● Claude · ProcessHUD · 12 min · 340 events ·
-  5 conn · 2 New*. The dot is green while the agent runs; ended sessions stay for 30 minutes, dimmed.
-- **Click a chip:** the list shows only that session's events (every process it started, however deep). *Show All
-  Events* takes it off. **Right-click ▸ Show Its Patterns…** opens Patterns scoped to the patterns that session
-  produced, New ones first: "what did this agent do that I haven't decided on yet?"
+- **Events ▸ Group:** *No Groups*, *By Process* or *By Session*, next to the Show buttons. *By Session* gives one
+  row per session with its events under it, the rest under *No session*. A session row reads the way
+  `claude --resume` lists sessions: the maker's mark, the topic, then *340 events · ProcessHUD · main · 12 min ·
+  5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree; *All Sessions* takes it
+  off), **Show Its Patterns…** and the Claude session id.
+- **The maker's mark:** a small letter badge, no logos: **A** for Claude Code (Anthropic), **O** for Codex (OpenAI),
+  **G** for Gemini CLI (Google), **Cu** for the Cursor agent. It appears on session rows and in the *Session* column.
+- **The topic:** Claude Code's title for the session (`ai-title`, or a title you set yourself, which wins), else the
+  first prompt, else the project folder. It comes from the transcript the guard hook names, so it needs the Claude
+  Code guard on; it's looked up again until found, since Claude titles a session a few turns in. The branch comes
+  from the same place.
 - **How events are matched:** by process lineage at the moment each event arrives. A child that daemonizes and is
   reparented to `launchd` keeps its session. An agent started by an agent (a sub-agent) is part of the outer session.
-- **Names:** the project is the agent's working directory (`ProcessHUD`), read from the live process. With the Claude
-  Code guard on, the hook also tells Hostwatch Claude's own session id, which the chip's tooltip shows.
+  Claude Code's own helper processes (pty hosts, spare daemons) aren't sessions.
 - **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
   seconds while Running Now is open), with lineage for processes whose start wasn't seen.
-- **Names:** the chip says the agent, the project and the session's topic as Claude Code titles it: *Claude ·
-  ProcessHUD · Pattern classifier noise reduction* (the topic comes from the transcript the guard hook names, so it
-  needs the Claude Code guard on; a title you set yourself wins over the generated one).
 - **Patterns ▸ By Session:** one row per session with the patterns it produced under it, the rest under *No
   session*. It replaces *By Process* while it's on.
 - **Everywhere else:** the Events table has a *Session* column; a destination on the Network tab that a session
-  reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name
-  (*Claude · ProcessHUD: zsh → curl*). In Time Travel, sessions are replayed from the window's recorded process
-  starts, so the strip, the filter and the column work for yesterday's session too (named when the saved list knows
-  the pid and start, else by pid). Claude Code's own helper processes (pty hosts, spare daemons) aren't sessions.
+  reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name. In
+  Time Travel, sessions are replayed from the window's recorded process starts, so the grouping and the column work
+  for yesterday's session too (named when the saved list knows the pid and start, else by pid).
 - **For Claude:** the MCP tool `agent_sessions` lists them; `trace_process` with a session's pid shows what it did.
   The list is saved in `agent-sessions.json` while Hostwatch runs.
 

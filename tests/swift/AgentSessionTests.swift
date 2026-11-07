@@ -158,3 +158,37 @@ import Testing
         #expect(PatternItem.groupedBySession(items, sessions: [groups[1]], order: []).map(\.id) == ["a", "b", "c", "d"])
     }
 }
+
+/// What `claude --resume` shows, and the Events list grouped by session.
+@MainActor @Suite struct AgentSessionResumeFacts {
+    @Test func factsFromTheTranscript() throws {
+        let head = Data("""
+        {"type":"ai-title","aiTitle":"Pattern classifier noise reduction","sessionId":"d5"}
+        {"type":"user","isMeta":true,"message":{"role":"user","content":"<command-name>/clear</command-name>"},"gitBranch":"main"}
+        {"type":"user","message":{"role":"user","content":"Hi. I think its time to new features.\\nSecond line"},"gitBranch":"feature/x","cwd":"/x"}
+        """.utf8)
+        let f = try #require(AgentSessions.facts(inTranscriptHead: head))
+        #expect(f.title == "Pattern classifier noise reduction" && f.branch == "feature/x")
+        #expect(f.firstPrompt == "Hi. I think its time to new features.")
+        var s = AgentSession(id: 1, agent: .claude, started: Date(), lastSeen: Date(), pids: [1])
+        s.project = "ProcessHUD"; s.firstPrompt = "Fix the thing"
+        #expect(s.topic == "Fix the thing" && s.name == "Claude · ProcessHUD · Fix the thing")
+        s.title = "Fewer patterns"
+        #expect(s.topic == "Fewer patterns")
+    }
+
+    @Test func eventsGroupBySession() {
+        func item(_ e: ActivityEvent) -> EventItem { EventItem(event: e, status: .safe, statusRank: 3) }
+        let a = item(exec("/usr/bin/git", pid: 101, ppid: 100, parent: "/bin/zsh", args: "git status"))
+        let b = item(file("/usr/bin/git", pid: 101, "r", "/x"))
+        let c = item(file("/usr/bin/vim", pid: 300, "r", "/y"))
+        let header = EventItem.SessionHeader(id: 100, topic: "Fewer patterns", facts: "ProcessHUD · 5 min", agent: .claude, pids: [100, 101])
+        let rows = EventItem.groupedBySession([a, b, c], sessions: [header])
+        #expect(rows.count == 2 && rows[0].groupTitle == "Fewer patterns" && rows[0].children?.count == 2)
+        #expect(rows[0].agent == .claude && rows[0].groupSubtitle == "2 events · ProcessHUD · 5 min")
+        #expect(rows[1].groupTitle == "No session" && rows[1].children?.map(\.id) == [c.id])
+        #expect(rows[0].id == EventItem.stableUUID("session:100") && EventItem.stableUUID("a") != EventItem.stableUUID("b"))
+        #expect(EventItem.groupedByProcess([a, b, c]).map(\.groupTitle) == ["git", "vim"])
+        #expect(EventItem.groupedBySession([c], sessions: [header]).count == 1 && !EventItem.groupedBySession([c], sessions: [header])[0].isGroup)
+    }
+}
