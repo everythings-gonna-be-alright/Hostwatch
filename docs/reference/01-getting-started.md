@@ -37,14 +37,21 @@ xcode-select --install
 The collector is the part of Hostwatch that runs with administrator (root) rights and gathers activity through
 `eslogger`. It is built into the app, so there is no separate script to install.
 
-**How it starts:**
+**How it starts:** as a background service, approved once.
 
-1. When the app launches, it checks for an existing collector socket (`/var/run/hostwatch/collector.sock`). You can
-   turn this on or off with **Settings ▸ General ▸ Start collector when Hostwatch opens**.
-2. If no collector is running, the app asks for an administrator password.
-3. It then starts the collector as root as a temporary launchd job (`system/local.hostwatch.collector`). The job is
-   gone after a reboot.
-4. The job runs `Hostwatch --collector-launcher`, which spawns the agent.
+1. The first time, Hostwatch registers the collector as a launchd service that ships inside the app
+   (`Contents/Library/LaunchDaemons/local.hostwatch.collectord.plist`). macOS asks for your administrator password
+   once, and may list the collector under System Settings ▸ General ▸ Login Items ▸ *Allow in the Background*, where
+   you approve it once.
+2. From then on macOS starts the collector itself: at boot, after a crash, after an update. It runs as root, and
+   Hostwatch connects to its socket (`/var/run/hostwatch/collector.sock`) when it opens. No password at launch.
+3. The service runs `Hostwatch --collector-launcher self --collector --daemon`: the launcher spawns the agent, so
+   Hostwatch.app stays the responsible process for Full Disk Access. The agent serves the user at the Mac.
+4. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
+   You can turn the registration at launch off with *Register the collector when Hostwatch opens*.
+
+A build without a Developer ID signature (your own build from source) has no service: it starts the collector as a
+temporary launchd job after an administrator prompt, every launch.
 
 **Where Full Disk Access goes:** macOS treats Hostwatch.app as the responsible process for eslogger. So Full Disk
 Access must be granted to **Hostwatch.app**.

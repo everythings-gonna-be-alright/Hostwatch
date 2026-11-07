@@ -231,6 +231,8 @@ final class Agent: @unchecked Sendable {
     private let stopLock = NSLock()
     private var shutdownHooks: [() -> Void] = []
     var shutdownToken: String?
+    /// Started by launchd as a background service (see `--daemon`).
+    var daemon = false
 
     // Hostwatch's own activity is not reported: the verified owner app (by pid), our helpers, and
     // their children. Other runs of the same program (e.g. the MCP server) are reported like any

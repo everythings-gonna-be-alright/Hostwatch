@@ -9,9 +9,13 @@ This pane covers startup, the collector, permissions, updates and resetting Host
 - **Startup:** *Open Hostwatch at login* is off by default. It uses macOS's login item for the app, so Hostwatch is
   listed in System Settings ▸ General ▸ Login Items, where you can also remove it. If macOS asks for approval first,
   the setting says so, with **Open Login Items…**. Together with *Start collector when Hostwatch opens*, watching starts
-  at login (the collector still asks for your password once per session).
-- **Collector:** Start or Stop it here. *Start collector when Hostwatch opens* is on by default. The pane also shows the
-  collector's log.
+  at login, with no password: the collector is a background service.
+- **Collector:** the status, and *Start…* or *Remove…*. The collector runs as a **background service**: the first
+  time you start it, macOS asks for your password once and lists it under System Settings ▸ General ▸ Login Items ▸
+  *Allow in the Background* (approve it there once if asked). From then on macOS starts it at boot, as root, and
+  Hostwatch connects to it: no password at launch. *Remove…* unregisters it (your password again), for example
+  before uninstalling. *Register the collector when Hostwatch opens* is on by default. The pane also shows the
+  collector's log (`/var/log/hostwatch-collector.log`).
 - **Permissions:** shows your Full Disk Access status, with an **Open Settings…** button.
 - **Updates:** shows the version you run. *Check for updates automatically* is on by default and checks once a day.
   Use **Check Now** / **Open Release Page** to check by hand or see the release.

@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import SystemConfiguration
 
 // MARK: - Processes (libproc)
 
@@ -180,10 +181,18 @@ final class LineReader {
 enum AgentSocket {
     struct Failure: Error, CustomStringConvertible { let description: String }
 
-    /// Launched by the app: only that process (and its user). Started by hand: only the sudo user.
+    /// Launched by the app: only that process (and its user). Started by hand: only the sudo user. As a service:
+    /// the user at the Mac (`clientUID` is re-read per connection).
     static func peerAllowed(pid: Int, uid: uid_t, ownerPid: Int, clientUID: uid_t?) -> Bool {
         if ownerPid > 0 { return pid == ownerPid && uid == clientUID }
         return uid == clientUID
+    }
+
+    /// The user logged in at the console (nil at the login window), for the service's socket and peer check.
+    static func consoleUID() -> uid_t? {
+        var uid: uid_t = 0
+        guard SCDynamicStoreCopyConsoleUser(nil, &uid, nil) != nil, uid != 0 else { return nil }
+        return uid
     }
 
     /// Binds `path` inside a folder only root (we) can write, so nobody else can create or replace
@@ -253,11 +262,18 @@ enum AgentSocket {
 
 extension Agent {
     /// Accepts verified clients until shutdown; each gets a reader thread for its config lines.
-    func acceptClients(_ server: Int32, ownerPid: Int, clientUID: uid_t?) {
+    func acceptClients(_ server: Int32, ownerPid: Int, clientUID: uid_t?, socketPath: String = "") {
+        var clientUID = clientUID
         while !isStopped {
             var pfd = pollfd(fd: server, events: Int16(POLLIN), revents: 0)
             let ready = poll(&pfd, 1, 1000)
             if ready <= 0 { if ready < 0 && errno != EINTR { break }; continue }
+            // A service outlives logins: the socket follows the user at the Mac.
+            if daemon, let now = AgentSocket.consoleUID(), now != clientUID {
+                clientUID = now
+                if !socketPath.isEmpty { chown(socketPath, now, gid_t.max) }
+                Agent.log("console user changed: the socket now belongs to uid \(now)")
+            }
             let fd = accept(server, nil, nil)
             guard fd >= 0 else { if errno == EINTR || errno == EAGAIN { continue }; break }
             guard let peer = AgentSocket.peer(fd) else { close(fd); continue }
@@ -267,6 +283,7 @@ extension Agent {
                 close(fd)
                 continue
             }
+            if daemon { addToOurTree(peer.pid) }               // the app that connected: Hostwatch's own activity
             var on: Int32 = 1
             setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
             var timeout = timeval(tv_sec: 2, tv_usec: 0)
@@ -299,6 +316,7 @@ extension Agent {
     private func handleConfigLine(_ line: Data, from client: AgentClient) {
                 guard let cfg = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return }
                 if cfg["cmd"] as? String == "shutdown" {
+                    if daemon { Agent.log("shutdown request ignored: running as a service (unregister it to stop)"); return }
                     if let token = shutdownToken, !token.isEmpty, cfg["token"] as? String == token {
                         Agent.log("shutdown requested by client")
                         requestShutdown()

@@ -7,10 +7,12 @@ let collectorLauncherFlag = "--collector-launcher"
 /// collector and eslogger then inherit this process as their TCC "responsible
 /// process", so Hostwatch.app's Full Disk Access grant applies.
 func runCollectorLauncher(_ args: [String]) -> Never {
-    guard let program = args.first else {
+    guard var program = args.first else {
         FileHandle.standardError.write(Data("collector launcher: missing program\n".utf8))
         exit(64)
     }
+    // From the bundled LaunchDaemon: the program is this very binary, wherever the app lives.
+    if program == "self" { program = Bundle.main.executablePath ?? CommandLine.arguments[0] }
     let child = Process()
     child.executableURL = URL(fileURLWithPath: program)
     child.arguments = Array(args.dropFirst())
