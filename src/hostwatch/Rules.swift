@@ -422,3 +422,161 @@ func runRuleSuggestionDryRun() -> Never {
     print(String(format: "\ncost $%.3f", obj["total_cost_usd"] as? Double ?? 0))
     exit(0)
 }
+
+// MARK: - What a rule does, in plain words
+
+/// A rule as a sentence: who, does what, where, and what happens then. The glob form stays for the details.
+enum RuleText {
+    struct Sentence: Equatable {
+        var who: String        // "git", "any program in /usr/bin"
+        var does: String       // "reads anything under ~/Documents/ProcessHUD", "starts sysctl"
+        var then: String       // "marked Safe: decided for you, never asked about"
+        var symbol: String     // the kind's SF Symbol
+        var text: String { "\(who) \(does) → \(then)" }
+    }
+
+    static func sentence(_ rule: LearnedRule) -> Sentence {
+        Sentence(who: program(rule.process), does: does(kind: rule.kind, pattern: rule.pattern),
+                 then: outcome(rule.action), symbol: symbol(rule.kind))
+    }
+
+    static func symbol(_ kind: EventKind?) -> String {
+        switch kind {
+        case .file: "doc.text"
+        case .exec: "play.circle"
+        case .net: "network"
+        case nil: "asterisk.circle"
+        }
+    }
+
+    /// "git", "claude/#.#.#", "any program in /usr/bin".
+    static func program(_ glob: String) -> String {
+        if glob == "*" { return "any program" }
+        let name = (glob as NSString).lastPathComponent
+        if name.contains("*") || name.contains("?") {
+            let dir = (glob as NSString).deletingLastPathComponent
+            return dir.isEmpty || dir == "*" ? "any program" : "any program in \(dir)"
+        }
+        return displayProcessName(glob)
+    }
+
+    static func does(kind: EventKind?, pattern: String) -> String {
+        switch kind {
+        case .file: return file(pattern)
+        case .exec: return launch(pattern)
+        case .net: return connection(pattern)
+        case nil: return pattern == "*" ? "does anything" : "does anything matching \(pattern)"
+        }
+    }
+
+    /// "reads anything under ~/Documents/ProcessHUD", "writes files in /tmp/x", "reads SSH keys (~/.ssh/*)".
+    static func file(_ pattern: String) -> String {
+        var p = pattern
+        var label: String?
+        if p.hasSuffix("]"), let open = p.range(of: "  [", options: .backwards) {
+            label = String(p[open.upperBound...].dropLast())
+            p = String(p[..<open.lowerBound])
+        }
+        let parts = p.split(separator: " ", maxSplits: 1).map(String.init)
+        let (mode, path) = parts.count == 2 ? (parts[0], parts[1]) : ("*", p)
+        let verb: String
+        switch mode {
+        case "r": verb = "reads"
+        case "w": verb = "writes"
+        case "rw": verb = "reads and writes"
+        default: verb = "reads or writes"
+        }
+        if label == SignatureBuilder.ordinaryFiles { return "\(verb) ordinary files (anything but sensitive places)" }
+        let what: String
+        if path == "*" || path == "**" { what = "any file" }
+        else if path.hasSuffix("/**") { what = "anything under \(path.dropLast(3))" }
+        else if path.hasSuffix("/*") { what = "files in \(path.dropLast(2))" }
+        else if path.hasSuffix("*") { what = "anything starting with \(path.dropLast())" }
+        else if path.contains("*") || path.contains("?") { what = "files matching \(path)" }
+        else { what = path }
+        if let label { return "\(verb) \(label) (\(what))" }
+        return "\(verb) \(what)"
+    }
+
+    /// "starts sysctl", "starts curl with -s https://…", "starts plain tools in /usr/bin", "starts any program".
+    static func launch(_ pattern: String) -> String {
+        if pattern == "*" { return "starts any program" }
+        if pattern.hasSuffix(SignatureBuilder.plainTools) {
+            let dir = pattern.split(separator: " ").first.map { ($0 as NSString).deletingLastPathComponent } ?? ""
+            return "starts plain tools in \(dir)"
+        }
+        let parts = pattern.split(separator: " ", maxSplits: 1).map(String.init)
+        let target = parts[0]
+        let name = (target as NSString).lastPathComponent
+        var out: String
+        if name.contains("*") || name.contains("?") {
+            let dir = (target as NSString).deletingLastPathComponent
+            out = dir.isEmpty ? "starts any program" : "starts any program in \(dir)"
+        } else {
+            out = "starts \(displayProcessName(target))"
+        }
+        if parts.count == 2 { out += " with \(parts[1])" }
+        return out
+    }
+
+    /// "connects to the web on port 443", "connects to the local network on port 445", "connects to 45.33.*.* on port 8081".
+    static func connection(_ pattern: String) -> String {
+        if pattern == "*" { return "connects anywhere" }
+        let parts = pattern.split(separator: " ", maxSplits: 1).map(String.init)
+        let (proto, rest) = parts.count == 2 ? (parts[0], parts[1]) : ("", pattern)
+        let hostPort = rest.split(separator: ":", maxSplits: 1).map(String.init)
+        let host = hostPort.first ?? rest
+        let port = hostPort.count == 2 ? hostPort[1] : "*"
+        let where_: String
+        switch host {
+        case "internet": where_ = "the web"
+        case "lan": where_ = "the local network"
+        case "loopback": where_ = "this Mac itself"
+        case "link-local": where_ = "link-local addresses"
+        case "cgnat": where_ = "carrier-grade NAT addresses"
+        case "*": where_ = "anywhere"
+        default: where_ = host
+        }
+        let p = port == "*" ? "any port" : port == "ephemeral" ? "a high port" : "port \(port)"
+        let via = proto.isEmpty || proto == "*" ? "" : " over \(proto)"
+        return "connects to \(where_) on \(p)\(via)"
+    }
+
+    static func outcome(_ status: SignatureStatus) -> String {
+        switch status {
+        case .safe: "Safe: decided for you, never asked about, left out of Stories"
+        case .suspicious: "Suspicious: flagged as Important"
+        case .dangerous: "Dangerous: flagged as Important"
+        case .unclassified: "left New"
+        }
+    }
+
+    /// What approving a proposal changes, as a short list.
+    static func effects(_ p: RuleProposal) -> [String] {
+        var out: [String] = []
+        let e = p.evaluation, status = p.rule.action == .unclassified ? "New" : p.rule.action.title
+        if e.newPatterns > 0 {
+            out.append("\(e.newPatterns) New pattern\(e.newPatterns == 1 ? "" : "s") become\(e.newPatterns == 1 ? "s" : "") \(status) now")
+        } else {
+            out.append("No New pattern changes now")
+        }
+        out.append("From then on, anything matching is \(status) without asking")
+        if !e.agreeing.isEmpty { out.append("Agrees with \(e.agreeing.count) of your decisions") }
+        if p.rule.action == .safe { out.append("Safe patterns are never sent to the AI and drop out of Stories") }
+        return out
+    }
+
+    /// A baseline rule: "trusts what Slack did in its first week, signed by Slack Technologies: connects to the
+    /// web, reads its own data".
+    static func baseline(_ rule: BaselineRule) -> String {
+        if !rule.learnsProfile {
+            return "Trusts the normal-risk things macOS's own programs do, signed by \(rule.signer). Nothing can modify them."
+        }
+        let kinds = rule.profile.sorted()
+        var out = "Trusts what \(rule.name) did in its first week, as long as it's signed by \(rule.signer)"
+        if rule.approvedByYou { out += ", its own sensitive reads included" }
+        if kinds.isEmpty { return out + ". Something new for it comes to Needs You." }
+        let shown = kinds.prefix(4).joined(separator: ", ") + (kinds.count > 4 ? " and \(kinds.count - 4) more" : "")
+        return out + ": \(shown). Something new for it comes to Needs You."
+    }
+}

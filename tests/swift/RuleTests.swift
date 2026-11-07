@@ -238,3 +238,58 @@ import Testing
         #expect(reopened.status(forKey: curlKey) == .safe && reopened.status(forKey: mine) == .safe)
     }
 }
+
+/// A rule in plain words: what it matches and what happens then, so the Rules tab reads without globs.
+@Suite struct RuleTextInPlainWords {
+    func rule(_ kind: EventKind?, _ process: String, _ pattern: String, _ action: SignatureStatus = .safe) -> LearnedRule {
+        LearnedRule(name: "", rationale: "", kind: kind, process: process, pattern: pattern, action: action)
+    }
+
+    @Test func fileRules() {
+        let s = RuleText.sentence(rule(.file, "/opt/homebrew/Cellar/git/*/bin/git", "r ~/Documents/ProcessHUD/**"))
+        #expect(s.who == "git" && s.does == "reads anything under ~/Documents/ProcessHUD")
+        #expect(s.then.hasPrefix("Safe: decided for you"))
+        #expect(s.text == "git reads anything under ~/Documents/ProcessHUD → " + s.then)
+        #expect(RuleText.does(kind: .file, pattern: "* ~/Documents/ProcessHUD/*") == "reads or writes files in ~/Documents/ProcessHUD")
+        #expect(RuleText.does(kind: .file, pattern: "rw ~/Library/Application Support/GitKrakenCLI/*") == "reads and writes files in ~/Library/Application Support/GitKrakenCLI")
+        #expect(RuleText.does(kind: .file, pattern: "r ~/Documents/ProcessHUD*") == "reads anything starting with ~/Documents/ProcessHUD")
+        #expect(RuleText.does(kind: .file, pattern: "r ~/.CFUserTextEncoding") == "reads ~/.CFUserTextEncoding")
+        #expect(RuleText.does(kind: .file, pattern: "w ~/.ssh/*  [SSH keys]") == "writes SSH keys (files in ~/.ssh)")
+        #expect(RuleText.does(kind: .file, pattern: "r *  [ordinary files]") == "reads ordinary files (anything but sensitive places)")
+        #expect(RuleText.program("/Library/Developer/CommandLineTools/usr/bin/*") == "any program in /Library/Developer/CommandLineTools/usr/bin")
+        #expect(RuleText.program("~/.local/share/claude/versions/#.#.#") == "claude/#.#.#")
+        #expect(RuleText.program("*") == "any program")
+    }
+
+    @Test func launchAndConnectionRules() {
+        let s = RuleText.sentence(rule(.exec, "/Library/Application Support/JAMF/Remote Assist/*", "/usr/sbin/sysctl"))
+        #expect(s.who == "any program in /Library/Application Support/JAMF/Remote Assist" && s.does == "starts sysctl")
+        #expect(RuleText.launch("/usr/bin/curl -s https://x.example/a") == "starts curl with -s https://x.example/a")
+        #expect(RuleText.launch("/usr/bin/*  (plain tools)") == "starts plain tools in /usr/bin")
+        #expect(RuleText.launch("/usr/bin/*") == "starts any program in /usr/bin")
+        #expect(RuleText.connection("TCP internet:443") == "connects to the web on port 443 over TCP")
+        #expect(RuleText.connection("UDP lan:*") == "connects to the local network on any port over UDP")
+        #expect(RuleText.connection("TCP 45.33.*.*:8081") == "connects to 45.33.*.* on port 8081 over TCP")
+        #expect(RuleText.does(kind: nil, pattern: "*") == "does anything")
+        #expect(RuleText.outcome(.suspicious) == "Suspicious: flagged as Important")
+    }
+
+    @Test func whatApprovingChanges() {
+        var e = RuleEvaluation()
+        e.newPatterns = 3; e.agreeing = ["a", "b"]
+        let p = RuleProposal(rule: rule(.file, "/usr/bin/git", "r ~/Documents/x/**"), evaluation: e)
+        let lines = RuleText.effects(p)
+        #expect(lines[0] == "3 New patterns become Safe now")
+        #expect(lines[1] == "From then on, anything matching is Safe without asking")
+        #expect(lines.contains("Agrees with 2 of your decisions"))
+        e.newPatterns = 0
+        #expect(RuleText.effects(RuleProposal(rule: p.rule, evaluation: e))[0] == "No New pattern changes now")
+    }
+
+    @Test func baselineRules() {
+        let slack = BaselineRule(id: "x", name: "Slack", signer: "Slack Technologies", profile: ["connects to the web", "reads its own data"])
+        #expect(RuleText.baseline(slack) == "Trusts what Slack did in its first week, as long as it's signed by Slack Technologies: "
+                + "connects to the web, reads its own data. Something new for it comes to Needs You.")
+        #expect(RuleText.baseline(BaselineRule(id: "system", name: "macOS", signer: "Apple")).hasPrefix("Trusts the normal-risk things macOS's own programs do"))
+    }
+}

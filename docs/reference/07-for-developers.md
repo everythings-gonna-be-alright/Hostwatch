@@ -15,6 +15,16 @@ open dist/Hostwatch.app      # prompts for an admin password to start the collec
 
 This runs every automated test, in about 30 s. There are three suites.
 
+Only part of it, while working:
+
+```bash
+./scripts/test.sh --changed                       # the suites that mention types declared in files changed since main
+./scripts/test.sh --only 'FewerPatterns|RuleText' # suites or tests matching a regex (swift test --filter)
+```
+
+`--changed` finds the types the changed source files declare and runs every suite whose file mentions one of them
+(a changed test file runs as itself). It is a shortcut for the edit loop; the merge gate still runs everything.
+
 **Swift** (`tests/swift`, Swift Testing, `swift test`) covers:
 
 - pattern grouping and risk rules
