@@ -370,8 +370,11 @@
   .closing .ua .flag { display: inline-block; width: 18px; height: 12px; border-radius: 2px; vertical-align: -1px; margin: 0 2px; }
 
   footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font-size: 13px; color: var(--dim); }
-  footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 32px; }
-  footer .contact { margin: 0 auto 0 0; line-height: 1.7; }
+  /* Two rows: the name and the links, then how to reach us. */
+  footer .wrap { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name cols" "contact contact"; align-items: center; gap: 10px 32px; }
+  footer .fname { grid-area: name; }
+  footer .cols { grid-area: cols; }
+  footer .contact { grid-area: contact; margin: 0; line-height: 1.7; }
   footer .fname { color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }  /* written like the name by the logo */
   footer .fname .soft { color: var(--muted); }
   footer .contact .sep { margin: 0 10px; }
@@ -411,7 +414,7 @@
     .pill { height: 36px; }
     /* Centered like the closing above it: three short lines, then the links under a hairline. */
     footer { padding: 24px 0 calc(16px + env(safe-area-inset-bottom)); }
-    footer .wrap { flex-direction: column; align-items: center; gap: 0; text-align: center; }
+    footer .wrap { display: flex; flex-direction: column; align-items: center; gap: 0; text-align: center; }
     footer .contact { line-height: 1.5; margin: 0; }
     footer .fname { margin-bottom: 4px; }
     footer .contact .sep { display: none; }
