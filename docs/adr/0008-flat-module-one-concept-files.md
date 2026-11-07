@@ -6,7 +6,8 @@ considered.
 
 **Decision.** Keep one app module and plain Swift: pure functions over values for anything decided
 (`SignatureBuilder`, `RuleText`, `BaselinePolicy`), `@MainActor` engines as `ObservableObject`s owned by
-`AppDelegate`, SwiftUI views that read them. Files are one concept each, named after the main type, kept under ~700
+`AppDelegate`, SwiftUI views that read them. One folder per area under `src/hostwatch/` (the map in
+`docs/ARCHITECTURE.md`). Files are one concept each, named after the main type, kept under ~700
 lines, split along `// MARK:` sections when they grow (`AppDelegate+Menus.swift`, `PatternStore.swift`…). Protocols
 only where a second implementation exists. Orientation lives in `CLAUDE.md`, `docs/ARCHITECTURE.md` and these ADRs.
 
