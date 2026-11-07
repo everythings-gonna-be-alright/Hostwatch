@@ -188,7 +188,7 @@ private struct GeneralPane: View {
     @StateObject private var loginItem = LoginItem()
 
     var body: some View {
-        Pane {
+        Pane(height: 640) {        // long since the service and encryption rows: scrolls like Detection and AI
             Section {
                 Toggle("Open Hostwatch at login", isOn: Binding(get: { loginItem.isOn }, set: { loginItem.set($0) }))
                 if loginItem.needsApproval {
