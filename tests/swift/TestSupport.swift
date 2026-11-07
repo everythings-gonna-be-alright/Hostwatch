@@ -11,7 +11,8 @@ enum TestEnv {
         setenv("HOSTWATCH_SIGNING_DB", db.path, 1)
         SigningCache.shared.live = false
         ProcessList.startLookup = { _ in nil }      // deterministic collector output
-        Vault.shared = Vault(key: SymmetricKey(size: .bits256))   // sealed files, no keychain
+        // Vault.shared is already an in-memory key under the test runner (Vault.isTestProcess); replacing it here
+        // mid-run left files sealed by one key unreadable with another in suites running in parallel.
     }()
 }
 

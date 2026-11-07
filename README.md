@@ -62,7 +62,7 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
   macOS at boot from then on. Only Hostwatch's own signed code may talk to it, and it idles when the app is closed.
 - **🔒 Encrypted at rest** – patterns, stories, history and logs are sealed with a key only Hostwatch's own code can
   use, so no other program running as you (an AI agent included) can read your activity.
-- **🪪 New identity** `tech.hostwatch.app` – settings carry over; grant Full Disk Access once more.
+- **🪪 New identity** `tech.hostwatch.app` – settings carry over, and Full Disk Access is granted once more.
 
 **0.12.0**
 - **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
@@ -126,7 +126,7 @@ Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or th
 
 ## How it works
 
-Two parts, one app. The collector runs as root and only watches; Hostwatch.app is where everything is decided and
+Two parts, one app. The collector runs as root and only watches. Hostwatch.app is where everything is decided and
 shown. They talk over one Unix socket that accepts nothing but Hostwatch's own signed code.
 
 ```
