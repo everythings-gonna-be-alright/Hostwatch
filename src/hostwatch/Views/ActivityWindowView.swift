@@ -87,6 +87,11 @@ struct ActivityWindowView: View {
     @StateObject private var liveRows = TravelRowsCache()
     /// The Patterns tab's rows, kept across tab switches and built ahead, in the background.
     @StateObject private var patternList = PatternListModel()
+    @StateObject private var visited = VisitedTabs()
+    private var visitedTabs: Set<Int> {
+        get { visited.tabs }
+        nonmutating set { visited.tabs = newValue }
+    }
     /// Events ▸ Running Now instead of the event list.
     /// In Time Travel it shows what was running at the playhead.
     private var runningNow: Bool { running.showing && model.windowTab == 0 }
@@ -105,7 +110,50 @@ struct ActivityWindowView: View {
                 TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
                                  noun: runningNow ? "processes" : "events"); Divider()
             }
-            switch model.windowTab {
+            // Every tab visited stays alive, hidden: switching back is instant instead of rebuilding a table of
+            // thousands of rows (and the Patterns list keeps following changes while another tab is showing).
+            ZStack {
+                ForEach(Array(visitedTabs).sorted(), id: \.self) { tab in
+                    tabContent(tab)
+                        .opacity(model.windowTab == tab ? 1 : 0)
+                        .allowsHitTesting(model.windowTab == tab)
+                        .accessibilityHidden(model.windowTab != tab)
+                        .zIndex(model.windowTab == tab ? 1 : 0)
+                }
+            }
+            .onAppear { visitedTabs.insert(model.windowTab) }
+            .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
+        }
+        .frame(minWidth: 900, minHeight: 480)
+        // The Patterns rows are ready before the tab is opened.
+        .onAppear { if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) } }
+        .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
+        }
+        .animation(.smooth(duration: 0.25), value: traveling)
+        // Time Travel searches all recorded history (scope All History), in the background.
+        .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
+        .onChange(of: traveling) { _, on in
+            if on && !runningNow { travel.search(model.searchText) }
+            syncRunningMoment()
+        }
+        .onChange(of: runningNow) { _, on in
+            if traveling && !on { travel.search(model.searchText) }
+            syncRunningMoment()
+        }
+        // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
+        .toolbar { toolbarContent }
+        .searchable(text: searchText, placement: .toolbar,
+                    prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
+                             "Domain, host, program", "Not used on Rules", "Not used on Overview"][min(model.windowTab, 5)])
+        .navigationTitle("Hostwatch")
+        .navigationSubtitle(subtitle)
+    }
+
+    /// One tab's content (built on first visit, then kept).
+    @ViewBuilder private func tabContent(_ tab: Int) -> some View {
+        switch tab {
             case 0:
                 if runningNow {
                     RunningProcessesView(running: running, signatures: signatures, search: model.searchText,
@@ -133,32 +181,6 @@ struct ActivityWindowView: View {
                                    model.windowTab = 1
                                })
             }
-        }
-        .frame(minWidth: 900, minHeight: 480)
-        // The Patterns rows are ready before the tab is opened.
-        .onAppear { if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) } }
-        .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
-        }
-        .animation(.smooth(duration: 0.25), value: traveling)
-        // Time Travel searches all recorded history (scope All History), in the background.
-        .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
-        .onChange(of: traveling) { _, on in
-            if on && !runningNow { travel.search(model.searchText) }
-            syncRunningMoment()
-        }
-        .onChange(of: runningNow) { _, on in
-            if traveling && !on { travel.search(model.searchText) }
-            syncRunningMoment()
-        }
-        // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
-        .toolbar { toolbarContent }
-        .searchable(text: searchText, placement: .toolbar,
-                    prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
-                             "Domain, host, program", "Not used on Rules", "Not used on Overview"][min(model.windowTab, 5)])
-        .navigationTitle("Hostwatch")
-        .navigationSubtitle(subtitle)
     }
 
     /// Running Now follows the playhead while traveling, the present otherwise.
@@ -549,3 +571,6 @@ struct ActivityWindowView: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 }
+
+/// Tabs shown at least once (kept alive, see the window body).
+final class VisitedTabs: ObservableObject { @Published var tabs: Set<Int> = [] }
