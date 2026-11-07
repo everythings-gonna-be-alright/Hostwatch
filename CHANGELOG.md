@@ -8,6 +8,8 @@
   mark for the maker, and its events or patterns under it. Right-click a session for only its events or its
   patterns. Network destinations a session reached say *via Claude · project*, stories inside a session start with
   its name, and Time Travel replays sessions from history. The MCP server lists them (`agent_sessions`).
+- **Tab titles stay.** Switching from Events to another tab no longer leaves the tab bar with icons only.
+- **Events columns resize freely**: every column can be dragged wider or narrower.
 - **The Show filter on Patterns is a row of buttons again**, one click like on Events, however narrow the window.
 
 - **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside

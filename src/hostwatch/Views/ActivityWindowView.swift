@@ -524,7 +524,7 @@ struct ActivityWindowView: View {
                         // The end of a Time Travel window's list: its next older page.
                         .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
                 }
-                .width(min: 56, ideal: withDay ? 104 : 60, max: withDay ? 130 : 72)
+                .width(min: 56, ideal: withDay ? 104 : 60, max: 200)
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
                         HStack(spacing: 2) {
@@ -540,7 +540,7 @@ struct ActivityWindowView: View {
                             .help(item.event.kind.title)
                     }
                 }
-                .width(min: 20, ideal: 56, max: 64)
+                .width(min: 20, ideal: 56, max: 120)
                 TableColumn("Status", value: \.statusRank) { item in
                     if item.isGroup {
                         StatusPill(status: item.status).help("The most serious status among these events")
@@ -576,7 +576,7 @@ struct ActivityWindowView: View {
                     }
                     }
                 }
-                .width(min: 70, ideal: 84, max: 100)
+                .width(min: 70, ideal: 84, max: 240)
                 TableColumn("Process", value: \.name) { item in
                     if item.isGroup {
                         HStack(spacing: 5) {
@@ -588,11 +588,11 @@ struct ActivityWindowView: View {
                         Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
                     }
                 }
-                .width(min: 60, ideal: model.eventGrouping == .session ? 260 : 110, max: 400)
+                .width(min: 60, ideal: model.eventGrouping == .session ? 260 : 110, max: 600)
                 TableColumn("PID", value: \.pid) { item in
                     if !item.isGroup { Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
-                .width(min: 38, ideal: 48, max: 64)
+                .width(min: 38, ideal: 48, max: 140)
                 TableColumn("Session", value: \.session) { item in
                     if !item.session.isEmpty, !item.isGroup {
                         HStack(spacing: 5) {
@@ -602,11 +602,11 @@ struct ActivityWindowView: View {
                         .help("The coding-agent session this process belongs to: \(item.session)")
                     }
                 }
-                .width(min: 60, ideal: 160, max: 320)
+                .width(min: 60, ideal: 160, max: 600)
                 TableColumn("PPID", value: \.ppid) { item in
                     if !item.isGroup { Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
-                .width(min: 38, ideal: 48, max: 64)
+                .width(min: 38, ideal: 48, max: 140)
                 TableColumn("Detail", value: \.detail) { item in
                     if item.isGroup {
                         Text(item.groupSubtitle).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
@@ -627,7 +627,7 @@ struct ActivityWindowView: View {
                     }
                     }
                 }
-                .width(min: 200, ideal: 900)
+                .width(min: 120, ideal: 900)
             }
             .font(.system(size: 12, design: .monospaced))
             .contextMenu(forSelectionType: UUID.self) { ids in

@@ -84,7 +84,8 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
 - **First sighting:** the event that first shows a pattern is tagged ✦ (Events) or **FIRST** (HUD). The *New*
   status means the pattern isn't decided yet.
 - **Row colours:** flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
-- **Columns:** the Events and Patterns tables use native columns.
+- **Columns:** the Events and Patterns tables use native columns: drag a header edge to resize any of them, click a
+  header to sort. Widths are not remembered between launches yet.
   - Events show Time · Kind · Status · Process · PID · PPID · Detail.
   - Patterns show Status (🔥 = high-risk) · Kind · Process · Pattern · Decided By · Signer · Reason · Count ·
     First Seen · Last Seen.

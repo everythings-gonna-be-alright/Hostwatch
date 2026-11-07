@@ -1,8 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// The window's tab bar: icon and title per tab, counts as small badges; icons only when the window is
-/// narrow. (The native segmented control drops the icons and puts counts into the titles.)
+/// The window's tab bar: icon and title per tab, counts as small badges. Always with titles: as a toolbar item,
+/// a ViewThatFits that once chose the icons-only form kept it (the toolbar offers an item the width it last
+/// asked for), so Events, whose toolbar is the fullest, left the titles off for every tab that followed.
+/// (The native segmented control drops the icons and puts counts into the titles.)
 struct WindowTabBar: View {
     struct Tab: Identifiable {
         let id: Int              // HUDModel.windowTab
@@ -16,10 +18,7 @@ struct WindowTabBar: View {
     @Binding var selection: Int
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            bar(showTitles: true)
-            bar(showTitles: false)
-        }
+        bar(showTitles: true)
     }
 
     private func bar(showTitles: Bool) -> some View {
@@ -40,7 +39,7 @@ struct WindowTabBar: View {
                                 .background(Capsule().fill(tab.badgeTint))
                         }
                     }
-                    .padding(.horizontal, showTitles ? 10 : 8)
+                    .padding(.horizontal, showTitles ? 9 : 8)
                     .padding(.vertical, 5)
                     // Selected: an accent-tinted capsule with a hairline edge and accent text, clearly
                     // distinct in light and dark (a plain grey was too faint).
