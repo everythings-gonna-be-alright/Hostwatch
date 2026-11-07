@@ -357,6 +357,7 @@ PAGE = """<!doctype html>
   .brand {{ display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; letter-spacing: -0.02em; text-decoration: none; }}
   .brand .tile {{ display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(180deg, #1d1e20, #0b0c0d); }}
   .brand .tile svg {{ width: 26px; height: 26px; }}
+  .brand .soft {{ color: var(--muted); }}
   .crumb {{ font: 500 12px var(--mono); color: var(--dim); }}
   .top .right {{ margin-left: auto; display: flex; gap: 8px; }}
   .btn {{ display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: var(--r-control); font: 500 14px var(--sans);
@@ -570,7 +571,7 @@ PAGE = """<!doctype html>
 </head>
 <body>
 <header class="top"><div class="in">
-  <a class="brand" href="../"><span class="tile">{mark}</span><span>Hostwatch</span></a>
+  <a class="brand" href="../"><span class="tile">{mark}</span><span>Host<span class="soft">watch</span></span></a>
   <span class="crumb">/ docs</span>
   <div class="right">
     <a class="btn" href="{edit_url}" target="_blank" rel="noopener">Edit on GitHub</a>
