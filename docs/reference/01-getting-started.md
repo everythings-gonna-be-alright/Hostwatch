@@ -7,7 +7,7 @@ Before you install, check that your Mac has these:
 - **macOS 26 or later.** Hostwatch uses the Liquid Glass UI, and `eslogger` is included with this version.
 - **Xcode 26 Command Line Tools.** They provide Swift 6.2+ and the macOS 26 SDK.
 - **Full Disk Access for Hostwatch.app.** If you use run-agent.sh, grant it to Terminal instead.
-- **Your administrator password.** The collector needs it to start.
+- **Your administrator password, once.** It registers the collector as a background service.
 
 Install the command line tools if needed:
 
@@ -56,13 +56,18 @@ temporary launchd job after an administrator prompt, every launch.
 **Where Full Disk Access goes:** macOS treats Hostwatch.app as the responsible process for eslogger. So Full Disk
 Access must be granted to **Hostwatch.app**.
 
-**Where the log goes:** output goes to `~/Library/Logs/Hostwatch/agent.log`. Open it with *Help ▸ Collector Log*.
+**Where the log goes:** the service writes `/var/log/hostwatch-collector.log`; a collector started by the admin
+prompt (a build without a Developer ID) writes `~/Library/Logs/Hostwatch/agent.log`. Open it with *Help ▸ Collector
+Log*.
 
 **Stopping and safety:**
 
-- **Stop Collector:** this sends a shutdown command carrying a random token. The token is written with mode 0600 to
-  `~/Library/Application Support/Hostwatch/collector.token` and passed to the agent.
-- **If the app dies:** the agent also exits within about 2 s if the app that launched it dies (`--owner-pid`).
+- **Remove…** (the service): unregisters it with your password; it stops and won't start at boot. **Stop** (an
+  admin-prompted collector) sends a shutdown command carrying a random token, written with mode 0600 to
+  `~/Library/Application Support/Hostwatch/collector.token`; the service ignores that command.
+- **If the app quits or dies:** the service keeps running but goes idle after 15 s with no client (no `eslogger`,
+  no packet capture, firewall off) until Hostwatch connects again. An admin-prompted collector exits within about
+  2 s if the app that launched it dies (`--owner-pid`).
 
 **Full Disk Access problems:**
 

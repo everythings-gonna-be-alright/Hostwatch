@@ -7,8 +7,8 @@ You don't need any of these: the app runs without flags, and most are for testin
 
 | Flag | What it does |
 |------|--------------|
-| `--collector` | The collector itself (runs as root, started by the launcher). Options include `--owner-pid`, `--token-file`, `--socket`. |
-| `--collector-launcher` | Started by launchd at the app's request. It spawns the collector. |
+| `--collector` | The collector itself (runs as root, started by the launcher). Options: `--daemon` (the background service: serves the user at the Mac, idles without a client), `--owner-pid`, `--token-file`, `--socket`. |
+| `--collector-launcher` | Started by launchd: by the bundled service (`self` names this binary) or by the admin-prompted job. It spawns the collector. |
 | `--mcp` | The read-only MCP server for Claude Code (see [MCP server](03-features.md#mcp-server)). |
 | `--claude-hook` | Claude Code's PreToolUse hook (see [Claude Code guard](03-features.md#claude-code-guard)). |
 | `--suggest-rules` | Dry run of rule suggestions from your decisions. |

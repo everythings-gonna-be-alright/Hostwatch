@@ -15,7 +15,8 @@ Here is where everything lives:
 | `~/Library/Application Support/Hostwatch/` | patterns (`signatures-v2.json`), stories, domains, rules, signing facts, `collector.token` (0600), `claude-guard.json`, `firewall-watch.json` |
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
-| `~/Library/Logs/Hostwatch/` | `agent.log` (collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
+| `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
+| `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/local.hostwatch.app.plist` | settings and exclusions |
 
 ### Security notes
@@ -103,6 +104,8 @@ erase:
 - **Settings:** HUD, window, detection, AI, exclusions and history options (`local.hostwatch.app` defaults).
 - **Event history and logs:** `~/Library/Logs/Hostwatch`. In a custom history folder, only Hostwatch's `activity-*`,
   `metrics-*` and `processes-*` files are erased.
+
+Reset also unregisters the collector service (your password), so the next launch starts as on a fresh install.
 
 Then Hostwatch:
 

@@ -97,7 +97,8 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
 - **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*, *AI suggests
   Safe* (waiting for you), *Automatic (routine)* or *New*. **Needs You…** opens Rules ▸ Needs You.
 
-**Group by Process** is on by default. It shows one row per program (by name), with its patterns under it. The
+**By Process** is on by default. It shows one row per program (by name), with its patterns under it (**By AI
+Session** groups them by the coding-agent session that produced them instead, see [AI sessions](#ai-sessions-what-claude-code-did)). The
 program's row shows:
 
 - the most serious status and risk among its patterns

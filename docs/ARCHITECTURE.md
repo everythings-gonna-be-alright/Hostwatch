@@ -51,6 +51,8 @@ test (`tests/swift/StructureTests.swift`) keeps it so: every file in an area fol
 
 **`Detection/`**
 - `Stories.swift` — `StoryEngine`: stages, scoring per process tree, what counts as a step. `StoryReplay.swift`.
+- `AgentSessions.swift` — coding-agent sessions (Claude Code, Cursor agent, Codex, Gemini CLI): one per agent process
+  and its tree, by lineage at event time; named from Claude's transcript; replayed from history for Time Travel.
 - `NetSignals.swift`, `Domains.swift`, `DomainDetails.swift` — beaconing, raw IPs, first-seen domains, risk score.
 - `ThreatIntel.swift` — threat lists, matched locally. `Hold.swift` — holding a process while you decide.
 - `Watch.swift` — Watch Closely (a second eslogger on one process). `CommandGuard.swift`, `ClaudeGuard.swift` —
@@ -65,7 +67,8 @@ written, crash safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryA
 
 **`Collector/`** (runs as root, no UI) — `Agent.swift` (loop, sources, JSON out), `AgentNet.swift` (parsers, pure),
 `AgentSystem.swift` (libproc), `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`;
-`Collector.swift` (start and stop from the app), `CollectorLauncher.swift`, `CollectorSocket.swift`.
+`Collector.swift` (start and stop from the app), `CollectorDaemon.swift` (the background service: `SMAppService`
+registration and status), `CollectorLauncher.swift`, `CollectorSocket.swift`.
 
 **`AI/`** — `AskAI.swift` / `AskAIView.swift` (the Ask AI window), `MCPServer.swift`, `MCPAccess.swift` (read-only
 MCP for Claude Code), `ClaudeUsage.swift` (tokens and cost).
@@ -75,10 +78,10 @@ wiring), `AppDelegate+Features/Overlay/Menus/Windows.swift`, `Settings.swift`, `
 `Reset.swift`, `AppPaths.swift`, `HotKey.swift`, `MenuBarIcon.swift`.
 
 **`Views/`** — `HUDView.swift` (the overlay), `ActivityWindowView.swift` (the main window), one `…View.swift` per
-tab or window (`PatternsView`, `RulesView`, `StoriesView`, `NetworkView`, `RunningView`, `WatchView`,
+tab or window (`PatternsView` with `PatternInspector`, `RulesView`, `StoriesView`, `NetworkView`, `RunningView`, `WatchView`,
 `FirewallView`, `StoryDetails`, `DiskView`, `TimelineBar`, `ClaudeGuardView`, `FullDiskAccessView`, `HeldView`,
 `DomainDetailView`, `MetricsViews`, `VitalsViews`),
-`OverviewView.swift` (the tab bar), `SharedViews.swift`, `Tables.swift` (row models), `Demo.swift` (demo build only).
+`OverviewView.swift` (the tab bar), `SharedViews.swift`, `SessionViews.swift` (the makers' marks, session facts), `Tables.swift` (row models), `Demo.swift` (demo build only).
 
 ## Where things live on disk
 
