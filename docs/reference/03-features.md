@@ -386,8 +386,9 @@ what one session did, not just what `zsh` or `git` did in general.
   `claude --resume` lists sessions: the maker's mark, the topic, then *340 events · ProcessHUD · main · 12 min ·
   5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree; *All Sessions* takes it
   off), **Show Its Patterns…** and the Claude session id.
-- **The maker's mark:** a small letter badge, no logos: **A** for Claude Code (Anthropic), **O** for Codex (OpenAI),
-  **G** for Gemini CLI (Google), **Cu** for the Cursor agent. It appears on session rows and in the *Session* column.
+- **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's slanted A for Claude Code,
+  OpenAI's knot for Codex, Google's four-colour G for Gemini CLI, a cube for the Cursor agent. It appears on session
+  rows and in the *Session* column.
 - **The topic:** Claude Code's title for the session (`ai-title`, or a title you set yourself, which wins), else the
   first prompt, else the project folder. It comes from the transcript the guard hook names, so it needs the Claude
   Code guard on; it's looked up again until found, since Claude titles a session a few turns in. The branch comes
