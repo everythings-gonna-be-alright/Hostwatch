@@ -1,6 +1,6 @@
 ## Features
 
-What Hostwatch does for you, in six groups. Each feature starts with a sentence or two; the details follow.
+What Hostwatch does for you, in six groups. Each feature starts with a sentence or two, then the details.
 
 ### Learns what's normal
 
@@ -33,17 +33,17 @@ can also be misused (`curl`, `osascript`…).
 
 - **routine:** auto-marked **Safe** (source `auto`). It is never sent to Claude and never highlighted as NEW.
   Routine covers:
-  - reads of system, app, cache and container files;
-  - scratch writes (temp, caches, containers, prefs);
-  - anything done by binaries on the sealed system volume, except LOLBins like `curl` and `osascript`;
-  - launchd/xpcproxy starting system services (one pattern);
-  - loopback traffic;
+  - reads of system, app, cache and container files
+  - scratch writes (temp, caches, containers, prefs)
+  - anything done by binaries on the sealed system volume, except LOLBins like `curl` and `osascript`
+  - launchd/xpcproxy starting system services (one pattern)
+  - loopback traffic
   - an app touching its own data.
 - **high**, shown with a 🔥:
-  - access to a sensitive place by a non-owner;
-  - persistence writes;
-  - executables running from temp/Downloads/`/Users/Shared`/volumes;
-  - GUI apps spawning shells/interpreters/LOLBins;
+  - access to a sensitive place by a non-owner
+  - persistence writes
+  - executables running from temp/Downloads/`/Users/Shared`/volumes
+  - GUI apps spawning shells/interpreters/LOLBins
   - LOLBins talking to public IPs on unusual ports.
 - **normal:** everything else.
 
@@ -75,9 +75,9 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
 **Group by Process** is on by default. It shows one row per program (by name), with its patterns under it. The
 program's row shows:
 
-- the most serious status and risk among its patterns;
-- how many are New;
-- the kinds of activity;
+- the most serious status and risk among its patterns
+- how many are New
+- the kinds of activity
 - the total count and first/last seen.
 
 A program with one pattern stays a plain row. Marking, deleting or asking about a program's row acts on all its
@@ -113,7 +113,7 @@ so detection works the first time.
   patterns.
 - **Classify with AI** (Events and Patterns toolbars) does it for every New pattern that no AI has looked at. It
   works in batches of 40, high-risk first, with a progress bar and Cancel. The popover shows the count, the engine
-  and the rough cost (on-device free; Claude about $0.03 per batch). It also lets you choose whether to **apply the
+  and the rough cost (on-device free, Claude about $0.03 per batch). It also lets you choose whether to **apply the
   verdicts** or **keep them as suggestions**. A failing Claude (offline, not installed) stops the run.
 - **Limits:** no AI overrides a decision you made or suggests Safe for a high-risk pattern. No AI trusts an
   interpreter, shell or similar tool (python, bash, node, curl, osascript…), because they run whatever they're told.
@@ -126,11 +126,11 @@ so detection works the first time.
 3. A sheet proposes the shared pattern: their common shape, token by token, with `*` where they differ
    (`r ~/Documents/work/alpha/*` + `…/beta/*` → `r ~/Documents/work/*/*`). You can edit the program and the pattern.
 
-The combined pattern must cover every chosen pattern and stay specific (the general rule below; bare wildcards
+The combined pattern must cover every chosen pattern and stay specific (the general rule below, bare wildcards
 refused). What happens next:
 
 - **Merging:** every existing pattern it covers is merged too. Counts add up, and first and last seen span them.
-- **Status:** the most serious status wins (Dangerous, Suspicious; New when Safe and New are mixed).
+- **Status:** the most serious status wins (Dangerous, then Suspicious, and New when Safe and New are mixed).
 - **New activity:** from then on, activity whose own pattern it matches joins it instead of creating a new one.
   Rows already on screen follow it.
 - **Undo:** *Separate Combined Pattern* undoes it. New activity makes its own patterns again.
@@ -188,10 +188,10 @@ Labelled places stay as before:
 **Built-in safe patterns.** Some of macOS's own behaviour is the same on every Mac, so it is decided as routine out
 of the box (`BuiltInSafe`):
 
-- any program *reading* `~/.CFUserTextEncoding` (CoreFoundation's text-encoding preference);
+- any program *reading* `~/.CFUserTextEncoding` (CoreFoundation's text-encoding preference)
 - `/usr/sbin/networksetup` running `/bin/sh -c ‹/bin/cp …/SystemConfiguration/preferences.plist …›` (its settings
-  backup);
-- `sh`/`bash /usr/libexec/tmp_cleaner` (Apple's temp clean-up script);
+  backup)
+- `sh`/`bash /usr/libexec/tmp_cleaner` (Apple's temp clean-up script)
 - SystemUIServer running `screencapture …com.apple.screenshot.launcher…` (a screenshot you took).
 
 Only exact patterns count. When a parent is named, it must be that program on the sealed, read-only system volume.
@@ -274,15 +274,15 @@ How to use it:
 
 1. Mark a few patterns yourself.
 2. Click **Suggest Rules…** (Rules ▸ Rules ▸ Learned rules).
-3. Review the proposals that pass the checks. **Approve** applies a rule; **Reject** drops it.
+3. Review the proposals that pass the checks. **Approve** applies a rule. **Reject** drops it.
 
 Approved rules are saved in `rules.json`. Suggesting rules needs Claude, so it's disabled when the engine is *Apple
 On-Device*.
 
 **What is sent:**
 
-- your decisions (patterns *you* marked), with secrets masked;
-- your existing rules;
+- your decisions (patterns *you* marked), with secrets masked
+- your existing rules
 - the story chains you always ignore.
 
 Claude's own verdicts are deliberately not used, so rules don't amplify the AI.
@@ -313,9 +313,9 @@ passed the checks, or why none did.
 
 **Precedence**, from strongest to weakest:
 
-1. your markings and the baseline;
-2. your rules;
-3. Claude/on-device verdicts;
+1. your markings and the baseline
+2. your rules
+3. Claude/on-device verdicts
 4. automatic routine.
 
 A rule's verdict counts as yours. It satisfies *Only New (not reviewed)*, and a Safe rule removes matching steps
@@ -334,7 +334,7 @@ changing nothing.
 
 ### Connects the dots
 
-One event rarely means much on its own; Hostwatch links related ones into a story.
+One event rarely means much on its own. Hostwatch links related ones into a story.
 
 #### Stories: chains, not single events
 
@@ -853,13 +853,13 @@ claude -p --output-format stream-json --include-partial-messages --no-session-pe
 
 #### AI engine and triage
 
-Pick the AI: Apple's on-device model keeps everything on your Mac; Claude is stronger and sees only what you send it.
+Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is stronger and sees only what you send it.
 
 **Settings ▸ AI** picks which AI Hostwatch uses. It also shows the on-device model's status.
 
 | Engine | AI suggestions for patterns | Ask AI (event or story) |
 |--------|------------------------------|-------------------------|
-| **Apple On-Device (private)** | on-device only; what it can't settle stays New | on-device model |
+| **Apple On-Device (private)** | on-device only, what it can't settle stays New | on-device model |
 | **Claude** | Claude only | Claude |
 | **On-Device First, Claude for the Rest** (default) | steps 1 and 2 below | Claude |
 
@@ -930,7 +930,7 @@ An AI coding assistant can be tricked into running harmful commands. The guard c
 
 - **Block:** The call gets `deny`. It doesn't run, and Claude is told why and to ask you to run it yourself.
   Examples:
-  - `rm -rf ~`, `/`, `~/Documents`; `find ~ -delete`
+  - `rm -rf ~`, `/`, `~/Documents`, `find ~ -delete`
   - `/dev/tcp`, `nc -e`
   - `diskutil eraseDisk`, `dd of=/dev/…`
   - a fork bomb
@@ -941,13 +941,13 @@ An AI coding assistant can be tricked into running harmful commands. The guard c
   - deleting or changing Hostwatch's files
 - **Ask:** The call gets `ask`. Claude Code asks you, with the reason. Examples:
   - `curl … | sh`, `bash <(curl …)`, `base64 -d | sh`
-  - `sudo`; `osascript`
+  - `sudo`, `osascript`
   - launch agents, shell startup files, `authorized_keys`, `/etc`, Claude Code's own settings
   - `launchctl load`, `crontab`
   - `security find-generic-password -w`, SSH keys, AWS/GitHub/Docker/Kubernetes credentials, browser data. This also
     applies via Read/Grep, whose content would go to Claude.
   - `xattr -d com.apple.quarantine`
-  - recursive deletes outside the project; `$VAR/` deletes
+  - recursive deletes outside the project, `$VAR/` deletes
   - a bare public IP
   - `pkill Hostwatch`
   - scripts run with `bash x.sh` or written by Claude that do any of this
@@ -1007,13 +1007,13 @@ questions like what ran on your Mac yesterday, and it reads the answer from Host
 | Tool | What it returns |
 |------|-----------------|
 | `hostwatch_overview` | collector state, pattern counts by status (new high-risk too), open stories, new domains, history span and size, AI engine |
-| `search_events` | recorded events newest first: `query` (text in name/path/target/host/command line; `~` = home; case-insensitive for the usual spellings), `kind`, `pid`, `since`/`until` (`30m`, `24h`, `7d`, `today`, `yesterday`, ISO 8601; default last 24 h), `limit` (≤ 300) |
+| `search_events` | recorded events newest first: `query` (text in name/path/target/host/command line, `~` = home, case-insensitive for the usual spellings), `kind`, `pid`, `since`/`until` (`30m`, `24h`, `7d`, `today`, `yesterday`, ISO 8601, default last 24 h), `limit` (≤ 300) |
 | `search_patterns` | patterns with status/risk/count/first/last/who decided: `query`, `status` (new/safe/suspicious/dangerous/flagged), `risk`, `kind`, `sort` |
 | `list_stories`, `get_story` | stories (numbered newest first) and one story's full timeline (`id` = number or id prefix) |
 | `list_domains` | domain inventory: `only_new`, `query`, `limit` |
 | `process_tree` | ancestors (respecting PID reuse: the latest start of a pid before its child), children during the process's lifetime, its recent connections and file activity |
-| `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid; `since`/`until`): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. From the once-a-minute process lists, plus recorded starts for processes that lived under a minute |
-| `trace_process` | one process's life (`pid`; `at` picks the run when a pid was reused; `children`): ancestors, child tree, CPU/memory/disk use over its life, what it (and its tree) ran, opened and connected to, and a timeline. For a process running for days, children and activity cover its last 6 h; a huge tree is followed for its first 200 descendants |
+| `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid, and `since`/`until`): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. From the once-a-minute process lists, plus recorded starts for processes that lived under a minute |
+| `trace_process` | one process's life (`pid`, `at` to pick the run when a pid was reused, and `children`): ancestors, child tree, CPU/memory/disk use over its life, what it (and its tree) ran, opened and connected to, and a timeline. For a process running for days, children and activity cover its last 6 h. A huge tree is followed for its first 200 descendants |
 | `signing_info` | signer, Team ID, ad-hoc, quarantine, Apple, trusted, replaced-at-path, full validity check |
 
 **Access control.**

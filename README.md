@@ -44,9 +44,9 @@
 ## Why
 
 **One machine was enough.** In 2026, [GitHub](https://techcrunch.com/2026/05/20/github-says-hackers-stole-data-from-thousands-of-internal-repositories/)
-lost about 3,800 internal repositories to a poisoned editor extension on one employee's device;
+lost about 3,800 internal repositories to a poisoned editor extension on one employee's device.
 [Grafana Labs](https://grafana.com/blog/grafana-labs-security-update-latest-on-tanstack-npm-supply-chain-ransomware-incident/)
-had its codebase taken through a compromised npm package; [Binance](https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/)
+had its codebase taken through a compromised npm package. [Binance](https://www.bleepingcomputer.com/news/security/binance-says-fake-job-interview-led-to-63-billion-crypto-heist/)
 lost $6.3 billion to a coding task from a fake job interview. Each was code someone trusted and ran.
 
 Meanwhile new CVEs grew **+49.5%** in the first half of 2026 ([Jerry Gamblin](https://jerrygamblin.com/2026/07/01/3528/)),
@@ -61,7 +61,7 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 survives updates.
 
 **0.11.0**
-- **🔍 Search all of history** – Time Travel finds matches in everything recorded; double-click one to jump there.
+- **🔍 Search all of history** – Time Travel finds matches in everything recorded. Double-click one to jump there.
 - **⏱️ Running Now in the past** – which processes were running at any moment, with CPU, memory and disk writes.
 - **💾 Who's writing to your disk** – a *Writing* column and free disk space with the programs that wrote the most.
 - **🪶 Lighter** – up to 10× fewer SSD writes, much less memory, and the collector's memory leak fixed.
@@ -73,7 +73,7 @@ survives updates.
 - **✨ A new look** – a new app icon (the activity list, the flagged row brightest), the same mark in the menu bar.
 - **📖 Website and docs** – [hostwatch.tech](https://hostwatch.tech/)
   with searchable [documentation](https://hostwatch.tech/docs/) of every feature
-  and setting; *Help ▸ Hostwatch Help* opens it.
+  and setting. *Help ▸ Hostwatch Help* opens it.
 - **🩹 Fix** – the menu bar's *known-bad matches this week* clears when you dismiss or delete those stories.
 
 **0.9.0**
@@ -93,19 +93,19 @@ survives updates.
 
 **👀 See what happens**
 - **Live HUD** – new processes, connections and file opens as they happen.
-- **Running Now** – every running process with CPU, CPU time, memory and uptime; jump to the moment it was spawned.
+- **Running Now** – every running process with CPU, CPU time, memory and uptime. Jump to the moment it was spawned.
 - **Time Travel** – scrub back through recorded activity, resources and heavy processes.
 - **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
 
 **🧠 Learn what's normal**
 - **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
-- **Patterns** – events grouped by behaviour and by program; ordinary ones are decided automatically, so few need you.
+- **Patterns** – events grouped by behaviour and by program. Ordinary ones are decided automatically, so few need you.
 - **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.
 - **Network tab** – hostnames, first-seen domains, beaconing, raw-IP connections, and the firewall's verdict for each.
-- **Known threats** – daily public threat lists, matched on your Mac; plus exploited macOS flaws vs. your updates.
+- **Known threats** – daily public threat lists matched on your Mac, plus exploited macOS flaws vs. your updates.
 
 **🛡️ Stop what you didn't allow** (off until you turn it on)
 - **Firewall** – each app's new connections checked before they're made: allowed ones pass, unknown ones wait
@@ -154,7 +154,7 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 - Passwords and tokens are masked before they're recorded, and again before anything goes to an AI.
 - The firewall reads only which server an app asks for. It never decrypts traffic.
 - Watch Closely records only the process you pick, only while it runs, and keeps it on your Mac until you ask AI.
-- *Apple On-Device* AI keeps everything on the Mac; Claude is used only if you choose it.
+- *Apple On-Device* AI keeps everything on the Mac. Claude is used only if you choose it.
 - The MCP server needs your permission and a token, and can't change anything.
 - *Settings ▸ General ▸ Reset Hostwatch…* erases it all.
 
@@ -163,7 +163,7 @@ Everything stays on your Mac, except what you send to Claude and a daily update 
 A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), the
 collector asks for your password at each start, and the optional process hold is best effort. The firewall
 covers your own apps, not programs running as root or macOS's own DNS lookups. Containers are judged by
-destination (which program inside made a connection can't be seen); VMs with bridged networking aren't covered.
+destination (which program inside made a connection can't be seen). VMs with bridged networking aren't covered.
 
 ## Development
 
@@ -173,7 +173,7 @@ destination (which program inside made a connection can't be seen); VMs with bri
 ```
 
 `src/hostwatch` is the app and collector, `tests/swift` the tests. Every rule, threshold and setting is
-in **[docs/reference.md](docs/reference.md)**; changes in **[CHANGELOG.md](CHANGELOG.md)**.
+in **[docs/reference.md](docs/reference.md)**, changes in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## License
 
