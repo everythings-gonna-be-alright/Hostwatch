@@ -57,16 +57,16 @@ Tests use in-memory engines and a scratch signing database, so they never touch 
 measures CPU time, bytes written to disk and memory (kept and peak) against `tests/perf-baseline.json`. Each test runs
 alone, in its own process, after the rest, so other tests don't count.
 
-- **The workloads:** 40,000 events through the app's pipeline with a 15,000-pattern store saved on schedule; 100,000
-  events through the compressed history writer; 120,000 eslogger events through the collector's reader; a Time Travel
-  page and a full search.
+- **The workloads:** 40,000 events through the app's pipeline with a 15,000-pattern store saved on schedule, 100,000
+  events through the compressed history writer, 120,000 eslogger events through the collector's reader, and a Time
+  Travel page and a full search.
 - **The budget:** a change fails the tests when it writes more than +20%, keeps or peaks more than +30% memory, or uses
-  more than twice the CPU (plus small allowances; CPU time depends on which cores macOS picks).
+  more than twice the CPU (plus small allowances, since CPU time depends on which cores macOS picks).
 - **What it catches:** the regressions found so far, such as the pattern store rewriting itself (87 MB written instead
   of 4 MB), history written uncompressed (24 MB instead of 2 MB), and the collector's reader keeping what it read.
 - **A new baseline:** after a change meant to cost more (or less), record one on purpose and commit it:
   `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Each workload runs 3 times and the highest figures are kept. Numbers are
-  from the debug build on the Mac they were recorded on; on a much faster or slower Mac, record a baseline there.
+  from the debug build on the Mac they were recorded on. On a much faster or slower Mac, record a baseline there.
 
 **Local MRs are gated.** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and refuses the merge
 commit if anything fails.
