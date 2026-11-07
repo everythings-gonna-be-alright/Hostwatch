@@ -391,12 +391,15 @@
     .hero .actions > a:not(.btn) { padding: 10px 0; }
     .link-arrow { display: inline-block; padding: 10px 0; }
     .pill { height: 36px; }
-    footer { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+    /* Centered like the closing above it: three short lines, then the links under a hairline. */
+    footer { padding: 24px 0 calc(16px + env(safe-area-inset-bottom)); }
+    footer .wrap { flex-direction: column; align-items: center; gap: 0; text-align: center; }
+    footer .contact { line-height: 1.5; }
     footer .contact .sep { display: none; }
-    footer .contact > span { display: block; padding: 4px 0; }
-    footer .contact a { display: inline-block; padding: 8px 0; }
-    footer .cols { gap: 0 24px; }
-    footer .cols a { display: inline-block; padding: 10px 0; }
+    footer .contact > span { display: block; }
+    footer .contact a { display: inline-block; padding: 10px 0; }   /* 41 px rows: comfortable to tap, no extra air */
+    footer .cols { justify-content: center; gap: 0 28px; margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); width: 100%; }
+    footer .cols a { display: inline-block; padding: 12px 0; }
   }
   @media (max-width: 560px) {
     /* The version pill on one line: version, name, GitHub mark. */
