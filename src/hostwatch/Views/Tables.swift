@@ -232,6 +232,8 @@ struct EventItem: Identifiable {
     let event: ActivityEvent
     let status: SignatureStatus
     let statusRank: Int
+    /// The coding-agent session's name ("Claude · ProcessHUD"), "" if none.
+    var session = ""
 
     var id: UUID { event.id }
     var seq: Int { event.seq }             // arrival order: the Time column
@@ -248,6 +250,7 @@ struct EventItem: Identifiable {
         "process": { KeyPathComparator(\.name, order: $0) },
         "pid": { KeyPathComparator(\.pid, order: $0) },
         "ppid": { KeyPathComparator(\.ppid, order: $0) },
+        "session": { KeyPathComparator(\.session, order: $0) },
         "detail": { KeyPathComparator(\.detail, order: $0) },
     ]
 }

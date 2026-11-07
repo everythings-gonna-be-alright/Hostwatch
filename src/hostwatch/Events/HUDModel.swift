@@ -64,8 +64,10 @@ final class HUDModel: ObservableObject {
     let domains: DomainRegistry
     /// Coding agents' sessions (Claude Code…): which one each event belongs to.
     let sessions: AgentSessions
-    /// Only one agent session's events (its process tree), like `onlyPids` for heavy processes.
+    /// Only one agent session's events (its process tree), like `onlyPids` for heavy processes: the session and
+    /// its pids (the window keeps them current while the session runs).
     @Published var onlySession: Int?
+    @Published var onlySessionPids: Set<Int>?
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
@@ -246,7 +248,7 @@ final class HUDModel: ObservableObject {
     func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false, show: SignatureFilter? = nil) -> [ActivityEvent] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let only = onlyPids
-        let sessionPids = onlySession.flatMap { sessions.session($0)?.pids }
+        let sessionPids = onlySessionPids
         let filter = show ?? signatureFilter
         let visible = events.filter { e in
             visibleKinds.contains(e.kind) && passes(e, filter) && !(applyExclusions && rules.excludes(e))
@@ -465,7 +467,7 @@ final class HUDModel: ObservableObject {
             event.isFirst = signatures.observe(event)
             nextSeq += 1
             event.seq = nextSeq
-            sessions.observe(event)
+            event.session = sessions.observe(event) ?? 0
             if event.kind == .net {
                 if let domain = domains.observe(event) { event.newDomain = domain }
                 if let beacon = beacons.observe(event) { event.beacon = beacon }
@@ -474,7 +476,8 @@ final class HUDModel: ObservableObject {
             } else if event.kind == .exec {
                 intel?.checkLaunch(event)       // untrusted programs: SHA-256 against the file lists
             }
-            let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event))
+            let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event),
+                                        session: event.session > 0 ? sessions.session(event.session)?.name : nil)
             hold?.consider(event, stages: stages, status: signatures.status(for: event))
             onEvent?(event)
             fresh.append(event)

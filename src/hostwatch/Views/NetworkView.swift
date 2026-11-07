@@ -153,6 +153,8 @@ struct NetworkView: View {
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var state: NetworkViewState
     let search: String
+    /// The coding-agent session that reached a destination, by name (nil: none).
+    var sessionTag: (String) -> String? = { _ in nil }
     /// Opens the domain's details window (risk score, programs, Ask AI).
     var openDetails: (String) -> Void = { _ in }
     /// Settings ▸ Firewall.
@@ -385,8 +387,14 @@ struct NetworkView: View {
             }
             .help("\(e.facts.program)\n\(row.detail)")
         } else {
-            Text(row.destination).fontWeight(.semibold)
-                .help(row.record?.hosts.joined(separator: "\n") ?? row.destination)
+            HStack(spacing: 6) {
+                Text(row.destination).fontWeight(.semibold)
+                    .help(row.record?.hosts.joined(separator: "\n") ?? row.destination)
+                if let name = sessionTag(row.destination) {
+                    Tag(text: "via \(name)", color: .accentColor, faint: true)
+                        .help("A coding-agent session connected here: \(name)")
+                }
+            }
         }
     }
 

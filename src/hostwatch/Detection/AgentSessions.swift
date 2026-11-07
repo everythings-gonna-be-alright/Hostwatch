@@ -29,6 +29,11 @@ enum CodingAgent: String, Codable, CaseIterable {
         }
     }
 
+    /// An agent's helper process (Claude Code's pty host and spare daemons): not a session of its own.
+    static func isHelper(args: String) -> Bool {
+        args.contains("bg-pty-host") || args.contains("--bg-spare") || args.contains("--bg-daemon")
+    }
+
     /// The agent an executable is, or nil.
     static func of(_ path: String) -> CodingAgent? {
         if path.contains("/.local/share/claude/versions/") || path.contains("/@anthropic-ai/claude-code/") { return .claude }
@@ -64,6 +69,8 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var pids: Set<Int>
     /// Every pattern key seen in it (the Patterns tab's scope).
     var keys: Set<String> = []
+    /// Domains (or hosts) its tree connected to (the Network tab's tag).
+    var destinations: Set<String> = []
 
     var isLive: Bool { ended == nil }
     var name: String { project.isEmpty ? "\(agent.short) · pid \(id)" : "\(agent.short) · \(project)" }
@@ -113,7 +120,7 @@ final class AgentSessions: ObservableObject {
         var id: Int?
         if e.kind == .exec {
             parentOf[e.pid] = e.ppid
-            if let agent = CodingAgent.of(e.target), root(of: e.ppid) == nil {
+            if let agent = CodingAgent.of(e.target), root(of: e.ppid) == nil, !CodingAgent.isHelper(args: e.args) {
                 // A new agent, unless one agent runs another (a sub-agent): then it's part of the outer session.
                 let cwd = workingDirectory(e.pid) ?? ""
                 let s = AgentSession(id: e.pid, agent: agent, started: at, lastSeen: at,
@@ -134,7 +141,10 @@ final class AgentSessions: ObservableObject {
         switch e.kind {
         case .exec: s.launches += 1; s.pids.insert(e.pid)
         case .file: s.files += 1
-        case .net: s.connections += 1
+        case .net:
+            s.connections += 1
+            let host = e.host.isEmpty ? String(e.target.split(separator: ":").first ?? "") : e.host
+            if let d = DomainRegistry.registrable(host) ?? (host.isEmpty ? nil : host.lowercased()) { s.destinations.insert(d) }
         }
         if !e.signatureKey.isEmpty { s.keys.insert(e.signatureKey) }
         if e.isFirst { s.newPatterns += 1 }
@@ -147,7 +157,8 @@ final class AgentSessions: ObservableObject {
     /// start Hostwatch didn't see, and agents that were already running when it started.
     func learn(_ list: [RunningProcessInfo]) {
         for p in list where parentOf[p.pid] == nil { parentOf[p.pid] = p.ppid }
-        for p in list where CodingAgent.of(p.path) != nil && sessionOf[p.pid] == nil && root(of: p.ppid) == nil {
+        for p in list where CodingAgent.of(p.path) != nil && sessionOf[p.pid] == nil && root(of: p.ppid) == nil
+                && !CodingAgent.isHelper(args: p.args) {
             let at = p.start > 0 ? Date(timeIntervalSince1970: p.start) : now()
             let cwd = workingDirectory(p.pid) ?? ""
             add(AgentSession(id: p.pid, agent: CodingAgent.of(p.path)!, started: at, lastSeen: now(),
@@ -185,6 +196,30 @@ final class AgentSessions: ObservableObject {
             changed = true
         }
         if changed { reindex(); scheduleSave() }
+    }
+
+    /// The session (if any) a destination belongs to: live ones first, then recent.
+    func session(forDestination d: String) -> AgentSession? {
+        sessions.first { $0.destinations.contains(d) }
+    }
+
+    /// Sessions in recorded events (Time Travel): replayed in time order, so lineage works as it did live. Ended at
+    /// their last event; named from the saved list when the pid and start match, else by pid.
+    nonisolated static func replay(_ events: [ActivityEvent], named: [AgentSession] = []) -> [AgentSession] {
+        let engine = AgentSessions(fileURL: nil)
+        return MainActor.assumeIsolated {
+            engine.isAlive = { _ in true }
+            engine.workingDirectory = { _ in nil }
+            for e in events.sorted(by: { $0.ts < $1.ts }) { engine.observe(e) }
+            return engine.sessions.map { s in
+                var c = s
+                c.ended = s.lastSeen
+                if let known = named.first(where: { $0.id == s.id && abs($0.started.timeIntervalSince(s.started)) < 120 }) {
+                    c.project = known.project; c.cwd = known.cwd; c.sessionID = known.sessionID
+                }
+                return c
+            }
+        }
     }
 
     /// The session a pid belongs to, by lineage (its ancestors' sessions count too: a process started before

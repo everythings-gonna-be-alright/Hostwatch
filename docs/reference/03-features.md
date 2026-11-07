@@ -391,6 +391,11 @@ what one session did, not just what `zsh` or `git` did in general.
   Code guard on, the hook also tells Hostwatch Claude's own session id, which the chip's tooltip shows.
 - **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
   seconds while Running Now is open), with lineage for processes whose start wasn't seen.
+- **Everywhere else:** the Events table has a *Session* column; a destination on the Network tab that a session
+  reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name
+  (*Claude · ProcessHUD: zsh → curl*). In Time Travel, sessions are replayed from the window's recorded process
+  starts, so the strip, the filter and the column work for yesterday's session too (named when the saved list knows
+  the pid and start, else by pid). Claude Code's own helper processes (pty hosts, spare daemons) aren't sessions.
 - **For Claude:** the MCP tool `agent_sessions` lists them; `trace_process` with a session's pid shows what it did.
   The list is saved in `agent-sessions.json` while Hostwatch runs.
 

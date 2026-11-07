@@ -87,6 +87,8 @@ struct ActivityWindowView: View {
     @StateObject private var liveRows = TravelRowsCache()
     /// The Patterns tab's rows, kept across tab switches and built ahead, in the background.
     @StateObject private var patternList = PatternListModel()
+    /// Sessions replayed from the Time Travel window's events.
+    @StateObject private var travelSessions = ReplayedSessions()
     @StateObject private var visited = VisitedTabs()
     private var visitedTabs: Set<Int> {
         get { visited.tabs }
@@ -106,10 +108,22 @@ struct ActivityWindowView: View {
             if model.windowTab == 0 { filterBar; Divider() }
             if model.windowTab == 0 && !runningNow {
                 heavySection
-                SessionStrip(sessions: model.sessions, model: model) { title, keys in
+                let shown = traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : model.sessions.sessions
+                SessionStrip(sessions: shown, traveling: traveling, selected: model.onlySession, select: { s in
+                    model.onlySession = s?.id
+                    model.onlySessionPids = s?.pids
+                }, showPatterns: { title, keys in
                     signatures.search = ""
                     signatures.scope = .init(title: title, keys: keys)
                     model.windowTab = 1
+                })
+                .onReceive(model.sessions.objectWillChange) { _ in
+                    // A live session's tree grows: the filter follows it.
+                    DispatchQueue.main.async {
+                        if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
+                            model.onlySessionPids = s.pids
+                        }
+                    }
                 }
             }
             if traveling {
@@ -182,7 +196,8 @@ struct ActivityWindowView: View {
                                  filter: $model.signatureFilter, list: patternList)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
-                                search: model.searchText, openDetails: actions.openDomain,
+                                search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
+                                openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
                                showPatterns: { app in
@@ -400,10 +415,16 @@ struct ActivityWindowView: View {
     }
 
     private func makeRows(_ events: [ActivityEvent]) -> [EventItem] {
+        let replayed = traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : []
+        func sessionName(_ e: ActivityEvent) -> String {
+            if traveling { return replayed.first { $0.pids.contains(e.pid) }?.name ?? "" }
+            return e.session > 0 ? model.sessions.session(e.session)?.name ?? "" : ""
+        }
         let items = events.map { e -> EventItem in
             let status = signatures.status(for: e)
             // Known bad sorts above Dangerous.
-            return EventItem(event: e, status: status, statusRank: intel.flag(for: e) != nil ? -1 : signatures.rank(status))
+            return EventItem(event: e, status: status, statusRank: intel.flag(for: e) != nil ? -1 : signatures.rank(status),
+                             session: sessionName(e))
         }
         // The list is already newest first: only sort for another column or direction.
         let newestFirst = model.eventOrder.count == 1 && model.eventOrder[0].keyPath == \EventItem.seq
@@ -481,6 +502,13 @@ struct ActivityWindowView: View {
                     Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit()
                 }
                 .width(min: 38, ideal: 48, max: 64)
+                TableColumn("Session", value: \.session) { item in
+                    if !item.session.isEmpty {
+                        Text(item.session).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                            .help("The coding-agent session this process belongs to")
+                    }
+                }
+                .width(min: 60, ideal: 130, max: 220)
                 TableColumn("PPID", value: \.ppid) { item in
                     Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit()
                 }

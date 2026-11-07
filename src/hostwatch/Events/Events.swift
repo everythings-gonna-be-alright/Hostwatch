@@ -60,6 +60,7 @@ struct ActivityEvent: Identifiable, Decodable {
     var beacon = ""              // net: "every ~60s" when part of a worrying beacon
     var rawIP = false            // net: public IP, unusual port, no DNS, untrusted program
     var knownBad = ""            // on a threat list: "ThreatFox: AsyncRAT command server, reported …"
+    var session = 0              // the coding-agent session (the agent's pid) it belongs to, 0 if none
 
     /// Any per-connection network signal that deserves attention.
     var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }

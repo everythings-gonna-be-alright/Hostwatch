@@ -137,6 +137,8 @@ struct Story: Codable, Identifiable {
     var fired = false
     var severity: SignatureStatus = .suspicious
     var dismissed = false
+    /// The coding-agent session it happened in ("Claude · ProcessHUD"), if any.
+    var session: String?
 
     var stages: [StoryStage] { Array(Set(steps.map(\.stage))).sorted() }
 
@@ -150,7 +152,7 @@ struct Story: Codable, Identifiable {
         var names: [String] = []
         for s in steps where !names.contains(s.name) { names.append(s.name) }
         if !names.contains(originName) { names.insert(originName, at: 0) }
-        return names.prefix(6).joined(separator: " → ")
+        return (session.map { "\($0): " } ?? "") + names.prefix(6).joined(separator: " → ")
     }
 
     /// Ignore key: same origin program + same set of stages.
@@ -252,7 +254,7 @@ final class StoryEngine: ObservableObject {
     /// `extra`: stages found outside the event itself (a launched process that later runs heavy); the
     /// event was seen before, so its process isn't registered again.
     func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date(),
-                extra: [(StoryStage, String)] = []) -> [(StoryStage, String)] {
+                extra: [(StoryStage, String)] = [], session: String? = nil) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0, extra.isEmpty {
             procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
@@ -299,6 +301,7 @@ final class StoryEngine: ObservableObject {
             story = Story(rootPid: root.pid, originName: root.originName, originPath: root.originPath, origin: root.origin)
             story.firstSeen = now
         }
+        if story.session == nil, let session { story.session = session }
 
         for var step in candidate {
             step.processStart = start
