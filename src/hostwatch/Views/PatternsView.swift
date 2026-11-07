@@ -88,6 +88,7 @@ struct PatternsView: View {
     @Binding var filter: SignatureFilter
     @StateObject private var combine = CombineState()
     @StateObject private var list = PatternListModel()
+    @StateObject private var inspector = InspectorState()
 
     var body: some View {
         let rows = list.rows
@@ -126,7 +127,12 @@ struct PatternsView: View {
                     if item.isGroup {
                         Text(item.pattern).foregroundStyle(item.newCount > 0 ? .primary : .secondary)
                     } else {
-                        Text(item.pattern).truncationMode(.middle).help(item.pattern)
+                        // Whole, wrapped: a pattern is what you decide on, so it must be readable without
+                        // dragging the column wider. The inspector has it selectable, with the rest.
+                        Text(item.pattern)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .help(RuleText.does(kind: item.entry.kind, pattern: item.pattern))
                     }
                 }
                 .width(min: 160, ideal: 360)
@@ -168,6 +174,22 @@ struct PatternsView: View {
                 .width(min: 70, ideal: 90, max: 130)
             }
             .font(.system(size: 12, design: .monospaced))
+            .tableStyle(.inset(alternatesRowBackgrounds: true))
+            .overlay {
+                if rows.isEmpty && list.built {
+                    ContentUnavailableView {
+                        Label(signatures.search.isEmpty ? "No patterns here" : "No matches", systemImage: "magnifyingglass")
+                    } description: {
+                        Text(signatures.search.isEmpty
+                             ? "Nothing matches the current Show filter. New patterns appear as programs do things."
+                             : "No pattern matches “\(signatures.search)”. Seen-once patterns are searched too.")
+                    }
+                }
+            }
+            .inspector(isPresented: $inspector.shown) {
+                PatternInspector(signatures: signatures, actions: actions)
+                    .inspectorColumnWidth(min: 260, ideal: 320, max: 480)
+            }
             // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) {
@@ -249,6 +271,9 @@ struct PatternsView: View {
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
+            Toggle(isOn: $inspector.shown) { Image(systemName: "sidebar.trailing") }
+                .toggleStyle(.button)
+                .help(inspector.shown ? "Hide the inspector" : "Show the inspector: the selected pattern in full")
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
@@ -330,6 +355,13 @@ extension PatternsView {
         }
         Divider()
         Button("Delete All \(keys.count) Patterns") { signatures.delete(keys: keys) }
+    }
+}
+
+/// Whether the inspector is shown; remembered.
+final class InspectorState: ObservableObject {
+    @Published var shown = UserDefaults.standard.object(forKey: "patternsInspector") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(shown, forKey: "patternsInspector") }
     }
 }
 

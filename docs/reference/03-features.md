@@ -108,6 +108,13 @@ A program with one pattern stays a plain row. Marking, deleting or asking about 
 listed patterns. Right-click it for *Show Only* that program. Columns: Status, Kind, Process, Pattern, Decided By,
 Signer, Reason, Count, First Seen, Last Seen.
 
+**Reading a pattern.** The Pattern column wraps (up to three lines), so a long pattern reads without widening the
+column; hovering it says what it means in plain words (*reads anything under ~/Documents/work*). The **inspector**
+(the sidebar button at the right of the toolbar, shown by default) has the selected pattern in full: the plain
+words, the pattern and program as selectable text, who decided it and why, the AI's suggestion, count and exact
+first/last times, the last example it was seen in, the program's signature, and Safe / Suspicious / Dangerous
+buttons. With several rows selected it marks them all. Rows alternate in shade, and an empty list says why.
+
 **More in the Patterns tab:**
 
 - Status tally chips at the top.
