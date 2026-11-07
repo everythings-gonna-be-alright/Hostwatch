@@ -1,6 +1,6 @@
 import AppKit
+import Combine
 import Foundation
-import SwiftUI
 
 // First-seen domains: an inventory of every registrable domain programs connect to. After a
 // baseline (recorded history + a learning period), a domain never seen before is "new" and gets

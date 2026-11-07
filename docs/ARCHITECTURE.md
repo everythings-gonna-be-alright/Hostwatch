@@ -28,8 +28,15 @@ on-device, auto). Everything downstream — Needs You, Stories, the firewall, th
 
 ## Map of `src/hostwatch`
 
-**Events and patterns**
-- `Events.swift` — `ActivityEvent`, `EventKind`; parsing the collector's JSON.
+One folder per area; a folder is the map, a file is one concept named after its main type. Views read the engines
+and never the reverse, so they sit in `Views/` (a few live next to their engine as `…View.swift`). The structure
+test (`tests/swift/StructureTests.swift`) keeps it so: every file in an area folder, no SwiftUI outside `Views/`,
+`App/`, `AI/` and `Events/`, nothing over 1,000 lines.
+
+**`Events/`** — `Events.swift` (`ActivityEvent`, `EventKind`, parsing the collector's JSON), `Exclusions.swift`,
+`HUDModel.swift` (the live event list, filters, search), `Secrets.swift` (masking).
+
+**`Patterns/`**
 - `PatternModel.swift` — `SignatureEntry`, `SignatureStatus`, `PatternRisk`, the Show filter.
 - `PatternBuilder.swift` — `SignatureBuilder`: normalization, path knowledge (sensitive places, zones, LOLBins),
   the pattern rules (the general rule `specificPath` / `isTooWide`, projects, scratch trees, Homebrew, system
@@ -40,33 +47,38 @@ on-device, auto). Everything downstream — Needs You, Stories, the firewall, th
 - `PatternMerges.swift`, `BuiltInSafe.swift`, `MemoCache.swift`, `PatternTools.swift` (developer reports).
 - `Baseline.swift` — `BaselinePolicy` (what a trusted app may do), `BaselineLearner` (rules from code signatures).
 - `Rules.swift` — learned rules: `LearnedRule`, evaluation and regression, `RuleBook`, `RuleText` (plain words).
-- `Signing.swift` — who signed a binary, cached (`SigningCache.shared`); `Secrets.swift` — masking.
+- `Signing.swift` — who signed a binary, cached (`SigningCache`).
 
-**Detection**
+**`Detection/`**
 - `Stories.swift` — `StoryEngine`: stages, scoring per process tree, what counts as a step. `StoryReplay.swift`.
 - `NetSignals.swift`, `Domains.swift`, `DomainDetails.swift` — beaconing, raw IPs, first-seen domains, risk score.
 - `ThreatIntel.swift` — threat lists, matched locally. `Hold.swift` — holding a process while you decide.
 - `Watch.swift` — Watch Closely (a second eslogger on one process). `CommandGuard.swift`, `ClaudeGuard.swift` —
   the Claude Code hook: judge a tool call before it runs.
-- `Firewall.swift`, `FirewallRelay.swift`, `PFRedirect.swift`, `SocketOwner.swift` — modes, the relay, pf rules.
 
-**History**
-- `HistoryRecorder.swift` (what to write, rotation, the cap), `HistoryStream.swift` (compressed as written, crash
-  safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryArchive.swift` (reading by time),
-  `TimeTravel.swift` (state), `ProcessHistory.swift`, `Metrics.swift`, `ProcessVitals.swift`.
+**`Firewall/`** — `Firewall.swift` (modes, what it would do), `FirewallRelay.swift` (the relay), `PFRedirect.swift`
+(pf rules), `SocketOwner.swift`, `FirewallProbe.swift`, `FirewallRelayTest.swift` (the `sudo` self-checks).
 
-**Collector (root)**
-- `Agent.swift` (loop, sources, JSON out), `AgentNet.swift` (parsers, pure), `AgentSystem.swift` (libproc),
-  `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`, `Collector.swift` (start and
-  stop from the app), `CollectorLauncher.swift`, `CollectorSocket.swift`.
+**`History/`** — `HistoryRecorder.swift` (what to write, rotation, the cap), `HistoryStream.swift` (compressed as
+written, crash safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryArchive.swift` (reading by time),
+`TimeTravel.swift` (state), `ProcessHistory.swift`, `Metrics.swift`, `ProcessVitals.swift`.
 
-**App**
-- `Main.swift` — entry point and command-line modes. `App.swift` — `AppDelegate`'s state and launch wiring;
-  `AppDelegate+Features/Overlay/Menus/Windows.swift` — the rest of it.
-- `HUDModel.swift` — the live event list, filters, search; `HUDView.swift` — the overlay; `ActivityWindowView.swift`
-  — the main window; `*View.swift` per tab or window; `Settings.swift`; `SharedViews.swift`, `Tables.swift`.
-- `MCPServer.swift`, `MCPAccess.swift` — read-only MCP for Claude Code. `AskAI.swift` / `AskAIView.swift`.
-- `Updates.swift`, `LoginItem.swift`, `Reset.swift`, `AppPaths.swift`, `Demo.swift` (demo build only).
+**`Collector/`** (runs as root, no UI) — `Agent.swift` (loop, sources, JSON out), `AgentNet.swift` (parsers, pure),
+`AgentSystem.swift` (libproc), `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`;
+`Collector.swift` (start and stop from the app), `CollectorLauncher.swift`, `CollectorSocket.swift`.
+
+**`AI/`** — `AskAI.swift` / `AskAIView.swift` (the Ask AI window), `MCPServer.swift`, `MCPAccess.swift` (read-only
+MCP for Claude Code), `ClaudeUsage.swift` (tokens and cost).
+
+**`App/`** — `Main.swift` (entry point and command-line modes), `App.swift` (`AppDelegate`'s state and launch
+wiring), `AppDelegate+Features/Overlay/Menus/Windows.swift`, `Settings.swift`, `Updates.swift`, `LoginItem.swift`,
+`Reset.swift`, `AppPaths.swift`, `HotKey.swift`, `MenuBarIcon.swift`.
+
+**`Views/`** — `HUDView.swift` (the overlay), `ActivityWindowView.swift` (the main window), one `…View.swift` per
+tab or window (`PatternsView`, `RulesView`, `StoriesView`, `NetworkView`, `RunningView`, `WatchView`,
+`FirewallView`, `StoryDetails`, `DiskView`, `TimelineBar`, `ClaudeGuardView`, `FullDiskAccessView`, `HeldView`,
+`DomainDetailView`, `MetricsViews`, `VitalsViews`),
+`OverviewView.swift` (the tab bar), `SharedViews.swift`, `Tables.swift` (row models), `Demo.swift` (demo build only).
 
 ## Where things live on disk
 

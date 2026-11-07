@@ -56,8 +56,11 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
 
 ## Style
 
-- Files are one concept each, named after the main type; keep them under ~700 lines (split along `// MARK:` when
-  they grow). `Foo.swift` is the model/engine, `FooView.swift` the SwiftUI, `AppDelegate+Foo.swift` the wiring.
+- `src/hostwatch/<Area>/`: one folder per area (`Events`, `Patterns`, `Detection`, `Firewall`, `History`,
+  `Collector`, `AI`, `App`, `Views`), as `docs/ARCHITECTURE.md` maps them. Files are one concept each, named after
+  the main type; keep them under ~700 lines (split along `// MARK:` when they grow). `Foo.swift` is the
+  model/engine, `FooView.swift` the SwiftUI (in `Views/`), `AppDelegate+Foo.swift` the wiring. The structure test
+  fails the gate on a file outside an area, SwiftUI in a logic folder, or a file over 1,000 lines.
 - Pure functions over values for anything decided (`SignatureBuilder`, `RuleText`, `BaselinePolicy`): testable
   without a store, no singletons inside. Engines are `@MainActor` `ObservableObject`s owned by `AppDelegate`.
 - Comments say *why* and what would break, not what the line does. User-facing text is plain language, no jargon,

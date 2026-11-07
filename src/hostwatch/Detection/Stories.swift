@@ -1,7 +1,7 @@
 import AppKit
 import Darwin
+import Combine
 import Foundation
-import SwiftUI
 
 // Stories: suspicious steps from one process tree (plus files it hands to other trees),
 // scored together. Each step alone is often "normal"; the chain is what matters, e.g.
