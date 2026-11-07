@@ -57,6 +57,10 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.13.0**
+- **🔑 No password at launch** – the collector is a background service: registered once, approved once, started by
+  macOS at boot from then on. Only Hostwatch's own signed code may talk to it, and it idles when the app is closed.
+
 **0.12.0**
 - **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
   process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them, with a *Session*
@@ -68,8 +72,6 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 - **⚡ Instant tab switching**, resizable columns, and a tab bar that keeps its titles.
 - **🪪 Free for everyone**, at home and at work, under the PolyForm Shield licence (see [License](#license)).
 
-**0.11.1** – signed and notarized by Apple: no more *“Apple could not verify Hostwatch”*, and Full Disk Access
-survives updates.
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 
