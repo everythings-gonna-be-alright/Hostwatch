@@ -1,5 +1,12 @@
 ## For developers
 
+### Where to start
+
+- `CLAUDE.md` in the repository root: how to build, test and release, the git workflow, and the invariants that bite.
+- `docs/ARCHITECTURE.md`: the flow from the collector to the views and a map of every source file.
+- `docs/adr/`: the decisions behind the shape (one binary, patterns as decisions, no blanket trust of interpreters,
+  compressed history, signing, fewer patterns, one module with one-concept files).
+
 ### Build & run
 
 ```bash

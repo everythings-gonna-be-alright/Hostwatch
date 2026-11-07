@@ -167,6 +167,8 @@ destination (which program inside made a connection can't be seen); VMs with bri
 
 ## Development
 
+Start with [`CLAUDE.md`](CLAUDE.md) (build, test, workflow, invariants), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the map) and [`docs/adr/`](docs/adr/) (the decisions).
+
 ```bash
 ./scripts/test.sh       # all tests
 ./scripts/package.sh    # tests + universal build + zip
