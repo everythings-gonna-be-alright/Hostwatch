@@ -54,6 +54,56 @@ import Testing
         #expect(SignatureBuilder.isTooWide(filePattern: "r /tmp/*"))
         #expect(SignatureBuilder.isTooWide(filePattern: "r /tmp/z*"))                // one letter names nothing
     }
+
+    /// Reads inside a project by a tool: one pattern per project. Writes, shells and files outside stay per folder.
+    @Test func projectReadsAreOnePattern() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("hw-proj-\(UUID().uuidString)")
+        let repo = root.appendingPathComponent("code/apps/shop")
+        try FileManager.default.createDirectory(at: repo.appendingPathComponent("src/model"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("code/notes"), withIntermediateDirectories: true)
+        try Data().write(to: repo.appendingPathComponent(".git"))                    // a worktree's .git is a file
+        defer { try? FileManager.default.removeItem(at: root) }
+        let rg = "/opt/homebrew/bin/rg", norm = SignatureBuilder.normalize(repo.path)
+        let a = file(rg, pid: 1, "r", repo.appendingPathComponent("src/model/user.go").path)
+        let b = file(rg, pid: 1, "r", repo.appendingPathComponent("README.md").path)
+        #expect(a.signaturePattern == "r \(norm)/**" && a.signatureKey == b.signatureKey)
+        #expect(!SignatureBuilder.isTooWide(filePattern: a.signaturePattern))
+        // (The test tree lives in a scratch folder, so the others follow the scratch-tree rule; what matters here is
+        // that none of them is the project's pattern.)
+        #expect(!file(rg, pid: 1, "w", repo.appendingPathComponent("src/model/user.go").path).signaturePattern.hasSuffix("\(norm)/**"))
+        #expect(file("/bin/zsh", pid: 2, "r", repo.appendingPathComponent("src/model/user.go").path).signaturePattern.hasSuffix("/src/model/*"))
+        #expect(!file(rg, pid: 1, "r", root.appendingPathComponent("code/notes/todo.md").path).signaturePattern.hasSuffix("\(norm)/**"))
+        #expect(SignatureBuilder.projectRoot(of: "\(home)/x.txt") == nil)            // never the home folder
+    }
+
+    @Test func scratchTreesAndFormulasAreOnePattern() {
+        let chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        #expect(file(chrome, pid: 1, "r", "/private/tmp/site-shot/profile1/Default/Service Worker/x").signaturePattern == "r /tmp/site-shot/**")
+        #expect(file(chrome, pid: 1, "r", "/private/tmp/site-shot/x.png").signaturePattern == "r /tmp/site-shot/x.png")
+        let py = "/opt/homebrew/Cellar/python@3.12/3.12.4/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python"
+        let a = file(py, pid: 2, "r", "/opt/homebrew/Cellar/awscli/2.17.0/libexec/lib/python3.12/site-packages/botocore/x.py")
+        let b = file(py, pid: 2, "r", "/opt/homebrew/Cellar/awscli/2.17.0/libexec/lib/python3.12/site-packages/boto3/y.py")
+        #expect(a.signaturePattern == "r /opt/homebrew/Cellar/awscli/**" && a.signatureKey == b.signatureKey)
+        #expect(file(py, pid: 2, "w", "/opt/homebrew/Cellar/awscli/2.17.0/libexec/lib/python3.12/site-packages/boto3/y.py").signaturePattern != a.signaturePattern)
+        #expect(file(py, pid: 2, "r", "\(home)/Documents/work/x.py").signaturePattern == "r ~/Documents/work/*")   // interpreters stay exact elsewhere
+    }
+
+    /// A shell starting plain tools: one pattern per folder. Watched and admin tools keep theirs, with arguments.
+    @Test func shellsStartingPlainToolsAreOnePattern() {
+        func run(_ tool: String, _ args: String, parent: String = "/bin/zsh") -> String {
+            exec(tool, pid: 3, ppid: 0, parent: parent, args: args).signaturePattern
+        }
+        #expect(run("/usr/bin/awk", "awk {print}") == "/usr/bin/*  (plain tools)")
+        #expect(run("/usr/bin/cut", "cut -d: -f1") == run("/usr/bin/awk", "awk x"))
+        #expect(run("/bin/ls", "ls") == "/bin/*  (plain tools)")
+        #expect(run("/usr/bin/curl", "curl https://x.example/a").hasPrefix("/usr/bin/curl "))
+        #expect(run("/usr/bin/defaults", "defaults write com.apple.x y 1") == "/usr/bin/defaults")
+        #expect(run("/usr/bin/sudo", "sudo rm -rf /") == "/usr/bin/sudo")
+        #expect(run("/usr/sbin/chown", "chown root x") == "/usr/sbin/chown")
+        #expect(run("/opt/homebrew/bin/jq", "jq .") == "/opt/homebrew/bin/jq")          // not macOS's own
+        #expect(run("/usr/bin/awk", "awk x", parent: "/Applications/Tool.app/Contents/MacOS/Tool") == "/usr/bin/awk")
+        #expect(exec("/usr/bin/awk", pid: 4, ppid: 0, parent: "/bin/zsh", args: "awk x").signatureRisk == .routine)
+    }
 }
 
 /// The store from an earlier version: what today's rules write as one moves into it, at launch.
@@ -104,6 +154,17 @@ import Testing
         #expect(temp.pattern == "r /tmp/zsh*" && temp.status == .unclassified)      // a New one among them: New
         #expect(s.entry(z2)?.id == temp.id)
         #expect(s.regroup().moved == 0)                                              // once
+    }
+
+    @Test func launchesRegroupToo() throws {
+        let s = store()
+        _ = s.observe(exec("/usr/bin/awk", pid: 1, ppid: 0, parent: "/bin/zsh", args: "awk x"))
+        var e = try #require(s.allEntries.first)
+        s.delete(keys: [e.id])
+        e.id = "exec|/bin/zsh|/usr/bin/awk"; e.pattern = "/usr/bin/awk"
+        s.restore(e)
+        #expect(s.regroup().moved == 1)
+        #expect(s.allEntries.first?.pattern == "/usr/bin/*  (plain tools)")
     }
 
     @Test func newEventsJoinTheRegroupedPattern() {

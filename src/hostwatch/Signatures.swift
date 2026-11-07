@@ -402,7 +402,11 @@ enum SignatureBuilder {
     /// 3 elsewhere ("/Users/Shared/tools/*"). Never "r ~/*", "r ~/Documents/*", "r /*", "r /tmp/*" or "r /Users/**".
     static func minWildcardDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 2 : 3 }
     /// Deeper than this, an app's pattern ends in "/**" (so node_modules isn't a pattern per folder).
-    static func maxFolderDepth(_ dir: String) -> Int { dir.hasPrefix("~") ? 4 : 5 }
+    static func maxFolderDepth(_ dir: String) -> Int {
+        // Scratch trees ("/tmp/site-shot/profile/Default/…"): the tree's name is all that matters.
+        if dir.hasPrefix("/tmp/") || dir.hasPrefix("$TMPDIR/") { return 2 }
+        return dir.hasPrefix("~") ? 4 : 5
+    }
 
     /// Folders below "~" or "/": "~/Documents/work" → 2, "/usr/bin" → 2, "~" → 0.
     static func depth(_ dir: String) -> Int {
@@ -478,11 +482,64 @@ enum SignatureBuilder {
 
     /// A pattern one of the rules above writes for many former ones (what `SignatureStore.regroup` moves into).
     static func isRegrouped(_ pattern: String) -> Bool {
-        if pattern.hasSuffix("[\(ordinaryFiles)]") { return true }
+        if pattern.hasSuffix("[\(ordinaryFiles)]") || pattern.hasSuffix(plainTools) || pattern.hasSuffix("/**") { return true }
         let path = pattern.split(separator: " ", maxSplits: 1).last.map(String.init) ?? ""
         guard path.hasPrefix("/tmp/") || path.hasPrefix("$TMPDIR/") else { return false }
         let name = path.split(separator: "/").dropFirst().first ?? ""
         return name.hasSuffix("*") && name.count >= 3
+    }
+
+    /// A project: the folder with the `.git` of the file's repository (a worktree's `.git` file counts), or nil.
+    /// Reads inside a project by a tool are one pattern per project ("r ~/Documents/git/devops/**"): which of
+    /// its files git, an editor or a search tool read says nothing. Never the home folder itself, and never a
+    /// repository so near the root that its pattern would cover a whole area. Remembered per folder.
+    static func projectRoot(of raw: String) -> String? {
+        var dir = (raw as NSString).deletingLastPathComponent
+        var walked: [String] = []
+        var found: String?
+        while dir.count > 1, dir != home {
+            if let hit = projects.get(dir) { found = hit.isEmpty ? nil : hit; break }
+            walked.append(dir)
+            if FileManager.default.fileExists(atPath: dir + "/.git") { found = dir; break }
+            dir = (dir as NSString).deletingLastPathComponent
+        }
+        for d in walked { projects.set(d, found ?? "") }
+        guard let root = found else { return nil }
+        let norm = normalize(root)
+        return depth(norm) >= minWildcardDepth(norm) ? norm : nil
+    }
+    private static let projects = MemoCache<String, String>(limit: 20_000)
+
+    /// "/opt/homebrew/Cellar/python@3.12" for a file inside that formula: reads of a formula's own tree are one
+    /// pattern per formula (and per program), interpreters included: an interpreter loading its library says
+    /// nothing about the script.
+    static func homebrewFormula(_ norm: String) -> String? {
+        let parts = norm.split(separator: "/", omittingEmptySubsequences: true)
+        guard parts.count > 4, parts[0] == "opt", parts[1] == "homebrew", parts[2] == "Cellar" else { return nil }
+        return "/opt/homebrew/Cellar/" + parts[3]
+    }
+
+    /// A shell or interpreter starting macOS's plain tools (`awk`, `cut`, `ls`, `du`…): one pattern per folder,
+    /// "/usr/bin/*  (plain tools)". Not the tools attackers use (`curl`, `osascript`, `security`…), nor admin
+    /// tools: those keep one pattern each, with their arguments.
+    static let plainTools = "(plain tools)"
+
+    /// Built-in tools whose run is a signal in itself (Stories count them too).
+    static let watchedTools: Set<String> = [
+        "curl", "wget", "nc", "ncat", "netcat", "socat", "osascript", "osacompile", "base64", "openssl",
+        "security", "sqlite3", "launchctl", "dscl", "xattr", "spctl", "screencapture", "scp", "sftp", "ftp",
+        "telnet", "ditto", "hdiutil", "pkgutil", "installer", "codesign", "chflags", "csrutil", "tccutil",
+        "defaults", "profiles", "networksetup", "systemsetup", "kextload", "funzip",
+    ]
+    static let adminTools: Set<String> = [
+        "sudo", "su", "doas", "login", "passwd", "visudo", "fdesetup", "sysadminctl", "dseditgroup", "dscacheutil",
+        "kmutil", "nvram", "bless", "diskutil", "mount", "umount", "tmutil", "softwareupdate", "pfctl", "pmset",
+        "chown", "chmod", "killall", "kill", "crontab", "at", "ssh-add", "ssh-keygen", "plutil", "PlistBuddy",
+    ]
+
+    static func isPlainTool(_ path: String) -> Bool {
+        let name = (path as NSString).lastPathComponent
+        return isSealedSystem(path) && !isLolbin(path) && !watchedTools.contains(name.lowercased()) && !adminTools.contains(name)
     }
 
     /// Keeps up to `depth` folders below the zone root, then "/**".
@@ -571,7 +628,12 @@ enum SignatureBuilder {
             return ("\(mode) \(normalize(own))/**  [own data]", .routine, "app's own data folder")
         }
 
-        let pattern = "\(mode) \(specificPath(foldTempName(path) ?? path, deep: !isLolbin(actor)))"
+        var pattern = "\(mode) \(specificPath(foldTempName(path) ?? path, deep: !isLolbin(actor)))"
+        if !writes, let formula = homebrewFormula(norm) {
+            pattern = "\(mode) \(formula)/**"
+        } else if !writes, !isLolbin(actor), let project = projectRoot(of: path) {
+            pattern = "\(mode) \(project)/**"
+        }
         if writes {
             if routineWriteRoots.contains(where: { under(norm, $0) }) {
                 return (pattern, .routine, "scratch/cache write")
@@ -699,6 +761,9 @@ enum SignatureBuilder {
                 pattern = "macOS system service"; risk = .routine; reason = "launchd started a sealed system binary"
             } else if isSealedSystem(e.parent), isSealedSystem(e.target), !isLolbin(e.target) {
                 risk = .routine; reason = "system binary started by system binary"
+            }
+            if risk != .high, isLolbin(e.parent), isPlainTool(e.target) {
+                pattern = (target as NSString).deletingLastPathComponent + "/*  \(plainTools)"
             }
             if risk != .high, let why = BuiltInSafe.reason(kind: .exec, parent: e.parent, pattern: pattern) {
                 risk = .routine; reason = why
@@ -1308,7 +1373,7 @@ final class SignatureStore: ObservableObject {
 
     /// Decided automatically (routine Safe) or not at all (New, untouched): what regrouping may move.
     nonisolated static func mayRegroup(_ e: SignatureEntry) -> Bool {
-        e.kind == .file && e.reopened == nil && e.risk != .high
+        e.kind != .net && e.reopened == nil && e.risk != .high
             && (e.source == "auto" || e.source == nil && e.status == .unclassified)
     }
 
@@ -1318,12 +1383,21 @@ final class SignatureStore: ObservableObject {
     nonisolated static func regroupPlan(_ entries: [SignatureEntry], combined: Set<String> = []) -> [String: [SignatureEntry]] {
         var groups: [String: [SignatureEntry]] = [:]
         for e in entries where mayRegroup(e) && !combined.contains(e.id) && !e.exampleTarget.isEmpty {
-            let (pattern, _, _) = SignatureBuilder.fileTarget(e.exampleTarget, mode: e.exampleExtra, actor: e.exampleProc)
-            guard pattern != e.pattern, SignatureBuilder.isRegrouped(pattern),
-                  SignatureBuilder.normalizeExecutable(e.exampleProc) == e.process else { continue }
+            let actor = e.kind == .exec ? e.exampleParent : e.exampleProc
+            let pattern = Self.rebuilt(e).pattern
+            guard pattern != e.pattern, SignatureBuilder.isRegrouped(pattern), !actor.isEmpty,
+                  SignatureBuilder.normalizeExecutable(actor) == e.process else { continue }
             groups["\(e.kind.rawValue)|\(e.process)|\(pattern)", default: []].append(e)
         }
         return groups
+    }
+
+    /// The pattern today's rules make from a saved pattern's example (a launch's example has no command line, which
+    /// plain tools don't need).
+    nonisolated static func rebuilt(_ e: SignatureEntry) -> (pattern: String, risk: PatternRisk, reason: String) {
+        if e.kind == .file { return SignatureBuilder.fileTarget(e.exampleTarget, mode: e.exampleExtra, actor: e.exampleProc) }
+        let s = SignatureBuilder.baseSignature(for: e.exampleEvent)
+        return (s.pattern, s.risk, s.reason)
     }
 
     /// Moves earlier patterns into the ones today's rules write (see `regroupPlan`), at launch: counts add up, the
@@ -1335,9 +1409,7 @@ final class SignatureStore: ObservableObject {
         var moved = 0
         for (key, group) in plan {
             let pattern = String(key.split(separator: "|", maxSplits: 2)[2])
-            let first = group[0]
-            let (_, risk, reason) = SignatureBuilder.fileTarget(first.exampleTarget, mode: first.exampleExtra,
-                                                                 actor: first.exampleProc)
+            let (_, risk, reason) = Self.rebuilt(group[0])
             let existing = entries[key]
             let all = group + (existing.map { [$0] } ?? [])
             guard let latest = all.max(by: { $0.lastSeen < $1.lastSeen }) else { continue }
@@ -1412,7 +1484,7 @@ final class SignatureStore: ObservableObject {
         for (key, e) in entries where !["you", "rule"].contains(e.source ?? "") {
             let interpreter = SignatureBuilder.runsAnyCode(e)
             let wide = e.kind == .file ? SignatureBuilder.isTooWide(filePattern: e.pattern)
-                    || interpreter && e.pattern.hasSuffix("/**")
+                    || interpreter && e.pattern.hasSuffix("/**") && !e.pattern.contains(" /opt/homebrew/Cellar/")
                 : e.kind == .exec ? interpreter && e.pattern.hasPrefix("/") && !e.pattern.contains(" ")   // "bash → /usr/bin/perl"
                 : e.kind == .net ? interpreter && (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
                 : false
@@ -2206,11 +2278,18 @@ func runRegroupReport(_ folder: String?) -> Never {
     let moved = plan.values.reduce(0) { $0 + $1.count }
     let existing = Set(saved.entries.map(\.id))
     let new = plan.keys.filter { !existing.contains($0) }.count
-    let ordinary = plan.filter { $0.key.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]") }
+    func kind(_ key: String) -> String {
+        if key.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]") { return "system programs' ordinary reads" }
+        if key.hasSuffix(SignatureBuilder.plainTools) { return "shells starting plain tools" }
+        if key.contains(" /opt/homebrew/Cellar/") { return "Homebrew formula trees" }
+        if key.hasSuffix("/**") { return key.contains("|r /tmp/") || key.contains("|r $TMPDIR/") || key.contains("|w /tmp/")
+            || key.contains("|w $TMPDIR/") || key.contains("|rw /tmp/") || key.contains("|rw $TMPDIR/") ? "scratch trees" : "project trees" }
+        return "random temp names"
+    }
     print("\(saved.entries.count) patterns -> \(saved.entries.count - moved + new)")
-    print("  system programs' ordinary reads: \(ordinary.values.reduce(0) { $0 + $1.count }) -> \(ordinary.count)")
-    let temp = plan.filter { !$0.key.hasSuffix("[\(SignatureBuilder.ordinaryFiles)]") }
-    print("  random temp names: \(temp.values.reduce(0) { $0 + $1.count }) -> \(temp.count)")
+    var byKind: [String: (Int, Int)] = [:]
+    for (key, group) in plan { byKind[kind(key), default: (0, 0)].0 += group.count; byKind[kind(key), default: (0, 0)].1 += 1 }
+    for (k, v) in byKind.sorted(by: { $0.value.0 > $1.value.0 }) { print("  \(k): \(v.0) -> \(v.1)") }
     for (key, group) in plan.sorted(by: { $0.value.count > $1.value.count }).prefix(15) {
         print(String(format: "%6d  ", group.count) + key)
     }
