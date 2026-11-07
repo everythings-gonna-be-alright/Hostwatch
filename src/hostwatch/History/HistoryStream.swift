@@ -156,9 +156,10 @@ final class HistoryStream {
         stream.next_in = nil
         guard status >= 0 || status == Z_BUF_ERROR else { throw HistoryFiles.ZError.failed(status) }
         guard !out.isEmpty else { return }
-        try gz.write(contentsOf: out)
-        blockWritten += Int64(out.count)
-        diskBytes += Int64(out.count)
+        let record = HistoryFiles.sealRecord(out)                 // this flush, sealed: nothing plain reaches the disk
+        try gz.write(contentsOf: record)
+        blockWritten += Int64(record.count)
+        diskBytes += Int64(record.count)
     }
 
     private func addToList(_ block: HistoryFiles.Block, minutes perMinute: [Int64: Int64]) throws {
@@ -197,9 +198,9 @@ final class HistoryStream {
 
     /// As much of a (possibly unfinished, possibly torn) gzip stream as decompresses.
     static func inflatePartial(_ data: Data) -> Data {
-        guard !data.isEmpty else { return Data() }
+        guard !data.isEmpty, let gzipBytes = HistoryFiles.openRecords(data) else { return Data() }
         var out = Data()
-        HistoryFiles.gunzipMembers(data, partial: true) { out.append($0) }
+        HistoryFiles.gunzipMembers(gzipBytes, partial: true) { out.append($0) }
         return out
     }
 

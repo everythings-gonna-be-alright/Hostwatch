@@ -46,19 +46,21 @@ import Testing
         #expect(onDisk < Int64(original.count) / 5)
     }
 
-    @Test func systemGzipReadsTheFile() throws {
+    /// Sealed on disk: the system's gzip can't read it, the export path (through the key) gives every line back.
+    @Test func systemGzipCannotReadItButTheExportCan() throws {
+        _ = TestEnv.ready
         let (dir, url, original) = try makeFile()
         defer { try? FileManager.default.removeItem(at: dir) }
         try HistoryFiles.compress(url, blockBytes: 16_384)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
-        p.arguments = ["-dc", HistoryFiles.gzURL(url).path]
-        let pipe = Pipe()
-        p.standardOutput = pipe
+        p.arguments = ["-t", HistoryFiles.gzURL(url).path]
+        p.standardError = FileHandle.nullDevice
         try p.run()
-        let out = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        #expect(p.terminationStatus == 0)
+        #expect(p.terminationStatus != 0)
+        var out = Data()
+        HistoryFiles.forEachLine(path: HistoryFiles.gzURL(url).path) { out.append($0); out.append(0x0A) }
         #expect(out == original)
     }
 

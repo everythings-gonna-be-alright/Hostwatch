@@ -216,7 +216,7 @@ enum HistoryFiles {
         var perMinute: [Int64: Int64] = [:]
         func emit(_ block: Data) throws {
             guard !block.isEmpty, let (first, last) = timeRange(block, perMinute: &perMinute) else { return }
-            let member = try gzip(block)
+            let member = sealRecord(try gzip(block))
             try output.write(contentsOf: member)
             blocks.append(Block(start: first, end: last, offset: offset, length: Int64(member.count), size: Int64(block.count)))
             offset += Int64(member.count)
@@ -299,7 +299,7 @@ enum HistoryFiles {
         guard let handle = try? FileHandle(forReadingFrom: gz) else { return nil }
         defer { try? handle.close() }
         try? handle.seek(toOffset: UInt64(block.offset))
-        guard let member = try? handle.read(upToCount: Int(block.length)) else { return nil }
+        guard let stored = try? handle.read(upToCount: Int(block.length)), let member = openRecords(stored) else { return nil }
         return gunzip(member, expected: Int(block.size))
     }
 
@@ -357,7 +357,7 @@ enum HistoryFiles {
             if start < chunk.endIndex { body(chunk[start...]) }
         }
         if path.hasSuffix(".gz") {
-            guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return }
+            guard let stored = try? Data(contentsOf: url, options: .alwaysMapped), let data = openRecords(stored) else { return }
             gunzipMembers(data) { emit($0) }
         } else {
             forEachChunk(.plain(url)) { emit($0); return true }
@@ -410,6 +410,38 @@ enum HistoryFiles {
     enum ZError: Error { case failed(Int32) }
 
     /// One gzip member.
+    // MARK: Sealed records
+
+    /// A block on disk is a run of records, `[u32 little-endian length][sealed bytes]`, whose opened bytes joined
+    /// are the gzip member; a block that starts with gzip's magic is from an older version, plain.
+    static let gzipMagic = Data([0x1F, 0x8B])
+
+    static func sealRecord(_ data: Data) -> Data {
+        let sealed = Vault.shared.seal(data)
+        var out = Data(capacity: sealed.count + 4)
+        var length = UInt32(sealed.count).littleEndian
+        withUnsafeBytes(of: &length) { out.append(contentsOf: $0) }
+        out.append(sealed)
+        return out
+    }
+
+    /// The gzip bytes a block's records hold (a torn last record is dropped); a plain block as it is; nil when a
+    /// record can't be opened (another key).
+    static func openRecords(_ data: Data) -> Data? {
+        if data.starts(with: gzipMagic) || data.isEmpty { return data }
+        var out = Data(capacity: data.count)
+        var i = data.startIndex
+        while i + 4 <= data.endIndex {
+            let length = Int(data[i..<i + 4].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }.littleEndian)
+            let end = i + 4 + length
+            guard length > 0, end <= data.endIndex else { break }                      // torn: what's whole counts
+            guard let opened = Vault.shared.open(Data(data[i + 4..<end])) else { return nil }
+            out.append(opened)
+            i = end
+        }
+        return out
+    }
+
     static func gzip(_ input: Data, level: Int32 = 6) throws -> Data {
         var stream = z_stream()
         guard deflateInit2_(&stream, level, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION,
@@ -484,5 +516,20 @@ func runCompressHistory(_ path: String) -> Never {
         print("\(url.lastPathComponent): \(before / 1_000_000) MB -> \(after / 1_000_000) MB "
               + "(\(index?.blocks.count ?? 0) blocks) in \(t)")
     }
+    exit(0)
+}
+
+/// `Hostwatch --export-history [file or folder]`: the recorded events as plain JSON lines on stdout, through the data
+/// key (the files themselves are sealed). Default: the history folder.
+func runExportHistory(_ path: String?) -> Never {
+    let target = path ?? AppPaths.logs.appendingPathComponent("History").path
+    guard FileManager.default.fileExists(atPath: target) else { print("nothing at \(target)"); exit(1) }
+    let out = FileHandle.standardOutput
+    var buffer = Data()
+    HistoryFiles.forEachLine(path: target) { line in
+        buffer.append(line); buffer.append(0x0A)
+        if buffer.count > 1 << 20 { out.write(buffer); buffer.removeAll(keepingCapacity: true) }
+    }
+    out.write(buffer)
     exit(0)
 }

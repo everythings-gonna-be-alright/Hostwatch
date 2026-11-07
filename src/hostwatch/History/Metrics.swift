@@ -173,8 +173,7 @@ struct MetricsArchive: Sendable {
 
     /// One line (without its newline) at the end of a day's file.
     func append(line raw: Data, day: String) {
-        var line = raw
-        line.append(0x0A)
+        let line = Vault.shared.sealLine(raw)
         let url = plainURL(day: day)
         if let handle = try? FileHandle(forWritingTo: url) {
             _ = try? handle.seekToEnd()
@@ -188,11 +187,18 @@ struct MetricsArchive: Sendable {
 
     /// A day's file, plain or decompressed (empty when there is none).
     func data(day: String) -> Data {
-        var data = Data()
+        var stored = Data()
         if let plain = try? Data(contentsOf: plainURL(day: day)) {
-            data = plain
+            stored = plain
         } else if let gz = try? Data(contentsOf: gzURL(day: day)) {
-            HistoryFiles.gunzipMembers(gz) { data.append($0) }
+            HistoryFiles.gunzipMembers(gz) { stored.append($0) }
+        }
+        // Lines are sealed one by one (older files: plain); what comes back is plain JSON lines.
+        var data = Data(capacity: stored.count)
+        for raw in stored.split(separator: 0x0A) {
+            guard let line = Vault.shared.openLine(Data(raw)) else { continue }
+            data.append(line)
+            data.append(0x0A)
         }
         return data
     }

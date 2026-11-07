@@ -16,7 +16,9 @@ This pane covers startup, the collector, permissions, updates and resetting Host
   Hostwatch connects to it: no password at launch. *Remove…* unregisters it (your password again), for example
   before uninstalling. *Register the collector when Hostwatch opens* is on by default. The pane also shows the
   collector's log (`/var/log/hostwatch-collector.log`).
-- **Permissions:** shows your Full Disk Access status, with an **Open Settings…** button.
+- **Permissions:** shows your Full Disk Access status, with an **Open Settings…** button, and *Data on disk*: whether
+  Hostwatch's files are encrypted and where the key is kept (see
+  [Encryption at rest](06-privacy-security-and-limits.md#encryption-at-rest)).
 - **Updates:** shows the version you run. *Check for updates automatically* is on by default and checks once a day.
   Use **Check Now** / **Open Release Page** to check by hand or see the release.
 - **Reset:** *Reset Hostwatch…* asks what to erase: learned data, settings and history. All three are ticked by

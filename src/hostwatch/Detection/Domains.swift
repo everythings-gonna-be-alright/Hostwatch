@@ -194,7 +194,7 @@ final class DomainRegistry: ObservableObject {
     // MARK: Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let data = Vault.shared.read(fileURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         if let list = try? decoder.decode([DomainRecord].self, from: data) {
@@ -207,7 +207,7 @@ final class DomainRegistry: ObservableObject {
         dirty = false
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(Array(records.values)) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? encoder.encode(Array(records.values)) { try? Vault.shared.write(data, to: fileURL) }
     }
 }
 

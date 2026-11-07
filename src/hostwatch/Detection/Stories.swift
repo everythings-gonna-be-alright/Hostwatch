@@ -876,7 +876,7 @@ final class StoryEngine: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let data = Vault.shared.read(fileURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         stories = (try? decoder.decode([Story].self, from: data)) ?? []
@@ -887,7 +887,7 @@ final class StoryEngine: ObservableObject {
         dirty = false
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(stories) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? encoder.encode(stories) { try? Vault.shared.write(data, to: fileURL) }
     }
 
     static func ago(_ date: Date, now: Date = Date()) -> String {

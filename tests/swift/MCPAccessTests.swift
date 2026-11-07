@@ -4,6 +4,7 @@ import Testing
 
 /// MCP access: off by default, token required, revocable, nothing secret on disk.
 @Suite struct MCPAccessRules {
+    init() { _ = TestEnv.ready }
     func tempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-mcp-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -40,7 +41,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: dir) }
         let token = try MCPAccess.issueToken(in: dir)
         let url = MCPAccess.hashFile(in: dir)
-        let stored = try String(contentsOf: url, encoding: .utf8)
+        let raw = try Data(contentsOf: url)
+        #expect(raw.starts(with: Data("HWV1".utf8)))                                   // sealed on disk
+        let stored = String(decoding: try #require(Vault.shared.read(url)), as: UTF8.self)
         #expect(!stored.contains(token) && !stored.contains(String(token.dropFirst(6))))
         let mode = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber
         #expect(mode?.intValue == 0o600)

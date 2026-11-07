@@ -812,7 +812,7 @@ final class SignatureStore: ObservableObject {
     private static let writer = DispatchQueue(label: "hostwatch.patterns.save", qos: .utility)
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let data = Vault.shared.read(fileURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let snap = try? decoder.decode(Snapshot.self, from: data) else { return }
@@ -825,8 +825,9 @@ final class SignatureStore: ObservableObject {
         hasSnapshot = true
         if let journal = try? Data(contentsOf: journalURL) {
             journalBytes = journal.count
-            for line in journal.split(separator: 0x0A) {
-                guard let j = try? decoder.decode(JournalLine.self, from: line), j.g == generation else { continue }
+            for raw in journal.split(separator: 0x0A) {
+                guard let line = Vault.shared.openLine(Data(raw)),
+                      let j = try? decoder.decode(JournalLine.self, from: line), j.g == generation else { continue }
                 entries[j.e.id] = j.e
             }
         }
@@ -837,15 +838,15 @@ final class SignatureStore: ObservableObject {
     /// they read while the app runs). nil when nothing is saved.
     nonisolated static func readSaved(from directory: URL) -> (entries: [SignatureEntry], processRules: [SignatureEntry])? {
         let file = directory.appendingPathComponent("signatures-v2.json")
-        guard let data = try? Data(contentsOf: file) else { return nil }
+        guard let data = Vault.shared.read(file) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let snap = try? decoder.decode(Snapshot.self, from: data) else { return nil }
         var entries = Dictionary(snap.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let g = snap.generation ?? 0
         if let journal = try? Data(contentsOf: file.deletingPathExtension().appendingPathExtension("journal")) {
-            for line in journal.split(separator: 0x0A) {
-                if let j = try? decoder.decode(JournalLine.self, from: line), j.g == g { entries[j.e.id] = j.e }
+            for raw in journal.split(separator: 0x0A) {
+                if let line = Vault.shared.openLine(Data(raw)), let j = try? decoder.decode(JournalLine.self, from: line), j.g == g { entries[j.e.id] = j.e }
             }
         }
         return (Array(entries.values), snap.processRules)
@@ -872,7 +873,7 @@ final class SignatureStore: ObservableObject {
             write = {
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
-                guard let data = try? encoder.encode(snap), (try? data.write(to: url, options: .atomic)) != nil else { return }
+                guard let data = try? encoder.encode(snap), (try? Vault.shared.write(data, to: url)) != nil else { return }
                 try? FileManager.default.removeItem(at: journal)       // its lines were for the previous generation
             }
         } else {
@@ -884,8 +885,7 @@ final class SignatureStore: ObservableObject {
                 var out = Data()
                 for e in changed {
                     guard let line = try? encoder.encode(JournalLine(g: g, e: e)) else { continue }
-                    out += line
-                    out.append(0x0A)
+                    out += Vault.shared.sealLine(line)
                 }
                 guard !out.isEmpty else { return }
                 if let h = try? FileHandle(forWritingTo: journal) {

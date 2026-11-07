@@ -40,7 +40,7 @@ enum MCPAccess {
         let token = "hwmcp_" + bytes.map { String(format: "%02x", $0) }.joined()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = hashFile(in: directory)
-        try Data(hash(token).utf8).write(to: url, options: .atomic)
+        try Vault.shared.write(Data(hash(token).utf8), to: url)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return token
     }
@@ -51,8 +51,9 @@ enum MCPAccess {
     }
 
     static func check(token: String?, in directory: URL = AppPaths.support) -> Verdict {
-        guard let stored = try? String(contentsOf: hashFile(in: directory), encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines), !stored.isEmpty else { return .off }
+        guard let data = Vault.shared.read(hashFile(in: directory)),
+              case let stored = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
+              !stored.isEmpty else { return .off }
         guard let token, !token.isEmpty else { return .missingToken }
         return constantTimeEqual(hash(token), stored) ? .allowed : .wrongToken
     }
@@ -78,27 +79,21 @@ enum MCPAccess {
 
     /// Appends "time verdict program" (the program that started this MCP session).
     static func log(_ verdict: Verdict, in directory: URL = AppPaths.support, now: Date = Date()) {
-        let line = "\(now.ISO8601Format()) \(verdict.rawValue) \(parentProgram())\n"
+        let line = "\(now.ISO8601Format()) \(verdict.rawValue) \(parentProgram())"
         let url = logFile(in: directory)
-        if let handle = try? FileHandle(forWritingTo: url) {
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: Data(line.utf8))
-            try? handle.close()
-        } else {
-            FileManager.default.createFile(atPath: url.path, contents: Data(line.utf8),
-                                           attributes: [.posixPermissions: 0o600])
-        }
+        Vault.shared.appendLine(Data(line.utf8), to: url)
         // Keep it small: the last 200 sessions.
-        if let text = try? String(contentsOf: url, encoding: .utf8) {
-            let lines = text.split(separator: "\n")
-            if lines.count > 400 { try? (lines.suffix(200).joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8) }
+        if let raw = try? Data(contentsOf: url), raw.split(separator: 0x0A).count > 400 {
+            let kept = Vault.shared.lines(of: url).suffix(200)
+            try? Data().write(to: url, options: .atomic)
+            for l in kept { Vault.shared.appendLine(l, to: url) }
         }
     }
 
     /// Newest first: (date, verdict, program).
     static func recentSessions(in directory: URL = AppPaths.support, limit: Int = 5) -> [(Date, Verdict, String)] {
-        guard let text = try? String(contentsOf: logFile(in: directory), encoding: .utf8) else { return [] }
-        return text.split(separator: "\n").suffix(limit).reversed().compactMap { line in
+        let lines = Vault.shared.lines(of: logFile(in: directory)).map { String(decoding: $0, as: UTF8.self) }
+        return lines.suffix(limit).reversed().compactMap { line in
             let parts = line.split(separator: " ", maxSplits: 2).map(String.init)
             guard parts.count >= 2, let date = try? Date(parts[0], strategy: .iso8601),
                   let verdict = Verdict(rawValue: parts[1]) else { return nil }

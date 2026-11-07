@@ -237,6 +237,13 @@ private struct GeneralPane: View {
                         Button("Open Settings…") { Collector.openFullDiskAccessSettings() }
                     }
                 }
+                LabeledContent("Data on disk") {
+                    let v = Vault.shared
+                    Label(v.isSealed ? "Encrypted, key in the \(v.backend.rawValue)" : "Not encrypted",
+                          systemImage: v.isSealed ? "lock.fill" : "lock.open")
+                        .foregroundStyle(v.isSealed ? .green : .orange)
+                        .help(v.problem ?? "Patterns, stories, history and logs are sealed with a key only Hostwatch's own code can use.")
+                }
             } header: {
                 Text("Permissions")
             } footer: {

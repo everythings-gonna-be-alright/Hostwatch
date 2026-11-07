@@ -183,7 +183,7 @@ final class RuleBook: ObservableObject {
     init(store: SignatureStore, fileURL: URL = AppPaths.support.appendingPathComponent("rules.json")) {
         self.store = store
         self.fileURL = fileURL
-        if let data = try? Data(contentsOf: fileURL) {
+        if let data = Vault.shared.read(fileURL) {
             let d = JSONDecoder()
             d.dateDecodingStrategy = .iso8601
             rules = (try? d.decode([LearnedRule].self, from: data)) ?? []
@@ -263,7 +263,7 @@ final class RuleBook: ObservableObject {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let data = try? e.encode(rules) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? e.encode(rules) { try? Vault.shared.write(data, to: fileURL) }
     }
 
     // MARK: Suggestions from Claude
