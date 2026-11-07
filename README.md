@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-black" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/status-prototype-yellow" alt="Status: prototype">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
+  <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue" alt="PolyForm Noncommercial license">
   <a href="https://vshymanskyy.github.io/StandWithUkraine/"><img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand With Ukraine"></a>
 </p>
 
@@ -177,6 +177,9 @@ in **[docs/reference.md](docs/reference.md)**, changes in **[CHANGELOG.md](CHANG
 
 ## License
 
-**Free for personal use, always.** A paid edition will be only for companies: a server that watches a whole fleet
-of Macs from one place, and a hosted cloud (SaaS) version. The Mac app stays free and open source under the
-[MIT license](LICENSE).
+**Free for personal use, always.** Hostwatch is source available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE): free for personal and non-commercial use, and the code stays public.
+Using it at work needs a commercial licence. Write to contact@hostwatch.tech. Companies will also get a server that
+watches a whole fleet of Macs from one place, and a hosted cloud (SaaS) version.
+
+Versions up to 0.11.1 were released under the MIT license and stay under it.
