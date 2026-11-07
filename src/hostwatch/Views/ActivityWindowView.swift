@@ -82,6 +82,11 @@ struct ActivityWindowView: View {
     private var traveling: Bool { travel.active && model.windowTab == 0 }
     /// Time Travel rows, derived only when the events or a filter change (not on every playhead or hover update).
     @StateObject private var travelRows = TravelRowsCache()
+    /// The live list's rows, remade only when the list or a filter changed (not on every redraw: 5,000 status
+    /// lookups per redraw made the Events tab open late).
+    @StateObject private var liveRows = TravelRowsCache()
+    /// The Patterns tab's rows, kept across tab switches and built ahead, in the background.
+    @StateObject private var patternList = PatternListModel()
     /// Events ▸ Running Now instead of the event list.
     /// In Time Travel it shows what was running at the playhead.
     private var runningNow: Bool { running.showing && model.windowTab == 0 }
@@ -111,7 +116,7 @@ struct ActivityWindowView: View {
                     eventsList
                 }
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
-                                 filter: $model.signatureFilter)
+                                 filter: $model.signatureFilter, list: patternList)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
                                 search: model.searchText, openDetails: actions.openDomain,
@@ -130,6 +135,8 @@ struct ActivityWindowView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 480)
+        // The Patterns rows are ready before the tab is opened.
+        .onAppear { if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) } }
         .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
@@ -367,8 +374,17 @@ struct ActivityWindowView: View {
         return newestFirst ? items : items.sorted(using: model.eventOrder)
     }
 
+    /// The live rows, from the cache when nothing they depend on changed.
+    private var liveDerived: [EventItem] {
+        let key = TravelRowsCache.Key(revision: model.history.count &* 1_000_003 &+ (model.history.first?.seq ?? 0),
+                                      showingSearch: false, kinds: model.visibleKinds, filter: model.signatureFilter,
+                                      search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
+                                      signatures: signatures.revision, order: model.eventOrder)
+        return liveRows.result(for: key) { TravelRowsCache.Result(rows: makeRows(model.searchResults)) }.rows
+    }
+
     private var eventsList: some View {
-        let rows = traveling ? travelDerived.rows : makeRows(model.searchResults)
+        let rows = traveling ? travelDerived.rows : liveDerived
         // Search hits span days: their Time column shows the day too.
         let withDay = traveling && travel.showingSearch
         let lastRowID = rows.last?.id

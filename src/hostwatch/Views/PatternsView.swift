@@ -86,8 +86,9 @@ struct PatternsView: View {
     @ObservedObject var classifier: PatternClassifier
     let actions: HUDActions
     @Binding var filter: SignatureFilter
+    /// Owned by the window, so the rows survive a tab switch (rebuilding 8,000 rows on every switch froze it ~1 s).
+    @ObservedObject var list: PatternListModel
     @StateObject private var combine = CombineState()
-    @StateObject private var list = PatternListModel()
     @StateObject private var inspector = InspectorState()
 
     var body: some View {
@@ -105,11 +106,12 @@ struct PatternsView: View {
                         }
                     }
                 }
-                .width(min: 64, ideal: 84, max: 140)
+                .width(min: 100, ideal: 112, max: 160)
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
-                        HStack(spacing: 2) {
-                            ForEach(item.kinds, id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
+                        // A program's kinds, side by side; the column is sized for all three.
+                        HStack(spacing: 3) {
+                            ForEach(item.kinds.prefix(3), id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
                         }
                         .help(item.kinds.map(\.title).joined(separator: ", "))
                     } else {
@@ -118,7 +120,7 @@ struct PatternsView: View {
                             .help(item.entry.kind.title)
                     }
                 }
-                .width(min: 20, ideal: 24, max: 32)
+                .width(min: 24, ideal: 56, max: 64)
                 TableColumn("Process", value: \.processName) { item in
                     Text(displayProcessName(item.entry.process)).fontWeight(.semibold).help(item.entry.process)
                 }
@@ -174,7 +176,6 @@ struct PatternsView: View {
                 .width(min: 70, ideal: 90, max: 130)
             }
             .font(.system(size: 12, design: .monospaced))
-            .tableStyle(.inset(alternatesRowBackgrounds: true))
             .overlay {
                 if rows.isEmpty && list.built {
                     ContentUnavailableView {
@@ -190,6 +191,9 @@ struct PatternsView: View {
                 PatternInspector(signatures: signatures, actions: actions)
                     .inspectorColumnWidth(min: 260, ideal: 320, max: 480)
             }
+            // A click on the only selected row deselects it (the Table itself can't); Escape clears the selection.
+            .onExitCommand { signatures.selection.removeAll() }
+            .background(ClickTracker { signatures.selection = $0(signatures.selection) })
             // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) {
@@ -217,7 +221,8 @@ struct PatternsView: View {
             .padding(.vertical, 6)
         }
         // Rebuilt when something it shows changed, at most a few times a second; never on a redraw.
-        .onAppear { if !list.built { list.build(signatures, filter: filter, wait: true) } }
+        // Shown again: refresh in the background (changes while another tab was showing weren't followed).
+        .onAppear { list.request(signatures) { filter } }
         .onReceive(signatures.listChanges) { list.request(signatures) { filter } }
         .onChange(of: filter) { list.request(signatures) { filter } }
     }
@@ -355,6 +360,48 @@ extension PatternsView {
         }
         Divider()
         Button("Delete All \(keys.count) Patterns") { signatures.delete(keys: keys) }
+    }
+}
+
+/// Watches clicks over the table: a single click on the row that was already the only selection, with no modifier
+/// keys, clears the selection on mouse-up (the Table keeps it selected otherwise, with no way to deselect but ⌘-click).
+private struct ClickTracker: NSViewRepresentable {
+    let update: (@escaping (Set<String>) -> Set<String>) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = TrackerView()
+        view.update = update
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? TrackerView)?.update = update }
+
+    final class TrackerView: NSView {
+        var update: ((@escaping (Set<String>) -> Set<String>) -> Void)?
+        private var monitor: Any?
+        private var before: Set<String> = []
+        private var pending = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if monitor != nil { NSEvent.removeMonitor(monitor!); monitor = nil }
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
+                guard let self, let window = self.window, event.window == window else { return event }
+                let inTable = self.superview.map { $0.bounds.contains($0.convert(event.locationInWindow, from: nil)) } ?? false
+                guard inTable, event.modifierFlags.intersection([.command, .shift, .option]).isEmpty else { return event }
+                if event.type == .leftMouseDown {
+                    self.pending = event.clickCount == 1
+                    self.update? { current in self.before = current; return current }
+                } else if self.pending {
+                    self.pending = false
+                    let before = self.before
+                    DispatchQueue.main.async { [weak self] in
+                        self?.update? { current in current.count == 1 && current == before ? [] : current }
+                    }
+                }
+                return event
+            }
+        }
     }
 }
 
