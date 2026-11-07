@@ -6,7 +6,8 @@ For a short overview, see the [README](../README.md). The same text is on the we
 <https://hostwatch.tech/docs/>.
 
 **Free for personal use, always.** The Mac app described here is free for personal and non-commercial use, under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/). The source code stays public. Using it at work needs a
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/). The source code stays public, and forks and changes
+are welcome under the same terms, for non-commercial use. Using it at work, or in anything sold, needs a
 commercial licence: write to [contact@hostwatch.tech](mailto:contact@hostwatch.tech?subject=Hostwatch%20licence%20for%20work). Versions up to 0.11.1 were released under the MIT license.
 
 A paid edition will be only for companies. It will offer two things:
