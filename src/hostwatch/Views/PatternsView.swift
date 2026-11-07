@@ -215,7 +215,7 @@ struct PatternsView: View {
             .background(ClickTracker { signatures.selection = $0(signatures.selection) })
             // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
-                if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) {
+                if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) || id.hasPrefix(PatternItem.sessionPrefix) {
                     groupMenu(ids)
                 } else if let id = ids.first, let entry = signatures.entry(id) { menu(for: entry) }
             } primaryAction: { ids in
@@ -233,7 +233,7 @@ struct PatternsView: View {
                 PatternTally(counts: list.counts.byStatus)
                 Text("·")
                 Text("\(signatures.keys(forSelection: signatures.selection).count) selected · \(list.shown) shown"
-                     + (signatures.groupByProcess ? " · \(rows.count) programs" : ""))
+                     + (signatures.groupBySession ? " · \(rows.count) groups" : signatures.groupByProcess ? " · \(rows.count) programs" : ""))
                     .monospacedDigit()
             }
             .font(.system(size: 11))
@@ -257,7 +257,8 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
-                ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important])
+                ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important],
+                                 allowsMenu: false)
                 let once = list.counts.oneOffs
                 Toggle(isOn: $signatures.showSeenOnce) {
                     Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
@@ -267,12 +268,20 @@ struct PatternsView: View {
                 .help("Patterns seen only once, that you didn't decide and aren't risky: hidden unless this is on (search "
                       + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
-            Toggle(isOn: $signatures.groupByProcess) {
-                Label("Group by Process", systemImage: "rectangle.3.group")
+            Toggle(isOn: Binding(get: { signatures.groupByProcess && !signatures.groupBySession },
+                                 set: { on in signatures.groupByProcess = on; if on { signatures.groupBySession = false } })) {
+                Label("By Process", systemImage: "rectangle.3.group")
             }
             .toggleStyle(.button)
             .fixedSize()
             .help("One row per program, with its patterns under it")
+            Toggle(isOn: Binding(get: { signatures.groupBySession },
+                                 set: { on in signatures.groupBySession = on; if on { signatures.groupByProcess = false } })) {
+                Label("By Session", systemImage: "sparkles.rectangle.stack")
+            }
+            .toggleStyle(.button)
+            .fixedSize()
+            .help("One row per coding-agent session (Claude Code…), with the patterns it produced under it; the rest under No session")
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {

@@ -46,6 +46,44 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     var firstSeen: Date { entry.firstSeen }
     var lastSeen: Date { entry.lastSeen }
     static let groupPrefix = "group:"
+    static let sessionPrefix = "session:"
+
+    /// A coding-agent session, for grouping: its row's name and the keys of its patterns.
+    struct SessionGroup: Sendable { var id: Int; var name: String; var keys: Set<String>; var live: Bool }
+
+    /// One row per session that produced patterns (its patterns under it), then the rest under "No session".
+    static func groupedBySession(_ items: [PatternItem], sessions: [SessionGroup],
+                                 order: [KeyPathComparator<PatternItem>]) -> [PatternItem] {
+        var rest = items
+        var groups: [PatternItem] = []
+        for s in sessions {
+            let mine = rest.filter { s.keys.contains($0.id) }
+            guard !mine.isEmpty else { continue }
+            rest.removeAll { s.keys.contains($0.id) }
+            groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name))
+        }
+        if !rest.isEmpty, !groups.isEmpty { groups.append(group(rest, id: sessionPrefix + "0", name: "No session")) }
+        return groups.isEmpty ? items : groups
+    }
+
+    /// A group row standing for `list` (its worst status, counts added up), with the list under it.
+    private static func group(_ list: [PatternItem], id: String, name: String) -> PatternItem {
+        let worst = list.min { $0.statusRank != $1.statusRank ? $0.statusRank < $1.statusRank : $0.entry.risk > $1.entry.risk }!
+        let new = list.filter { $0.status == .unclassified }.count
+        var e = worst.entry
+        e.id = id
+        e.process = name
+        e.pattern = "\(list.count) patterns" + (new > 0 ? " · \(new) New" : "")
+        e.count = list.reduce(0) { $0 + $1.entry.count }
+        e.firstSeen = list.map(\.entry.firstSeen).min() ?? e.firstSeen
+        e.lastSeen = list.map(\.entry.lastSeen).max() ?? e.lastSeen
+        e.risk = list.map(\.entry.risk).max() ?? e.risk
+        e.note = nil; e.suggestion = nil
+        let deciders = Set(list.map(\.decidedBy))
+        let kinds = EventKind.allCases.filter { k in list.contains { $0.entry.kind == k } }
+        return PatternItem(entry: e, status: worst.status, statusRank: worst.statusRank, source: nil, note: nil,
+                           decidedBy: deciders.count == 1 ? deciders.first! : "Mixed", children: list, kinds: kinds, newCount: new)
+    }
 
     /// One row per program (by name) with its patterns under it; a program with a single pattern stays a plain row.
     /// The program's row shows the most serious status and risk among its patterns, the total count and the span.
@@ -175,6 +213,8 @@ final class PatternListModel: ObservableObject {
     private var lastBuild: TimeInterval = -1
     /// At most this often while patterns stream in.
     var interval: TimeInterval = 0.3
+    /// The coding-agent sessions to group by (wired by the window).
+    var sessionGroups: @MainActor () -> [PatternItem.SessionGroup] = { [] }
     private static let queue = DispatchQueue(label: "hostwatch.patterns.sort", qos: .userInitiated)
 
     /// Something changed: rebuild soon (at once, unless the last rebuild was just now).
@@ -198,12 +238,15 @@ final class PatternListModel: ObservableObject {
         built = true
         let input = store.patternInput(filter: filter)                       // copies only: the main thread's share
         let order = store.patternOrder, group = store.groupByProcess
+        let sessions = store.groupBySession ? sessionGroups() : []
         generation += 1
         let g = generation
         let work: @Sendable () -> (rows: [PatternItem], shown: Int, counts: PatternCounts) = {
             let (items, counts) = input.compute()
             let sorted = PatternItem.sorted(items, by: order)
-            return (group ? PatternItem.grouped(sorted, order: order) : sorted, items.count, counts)
+            let rows = !sessions.isEmpty ? PatternItem.groupedBySession(sorted, sessions: sessions, order: order)
+                : group ? PatternItem.grouped(sorted, order: order) : sorted
+            return (rows, items.count, counts)
         }
         if wait {
             let r = work()

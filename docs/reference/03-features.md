@@ -391,6 +391,11 @@ what one session did, not just what `zsh` or `git` did in general.
   Code guard on, the hook also tells Hostwatch Claude's own session id, which the chip's tooltip shows.
 - **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
   seconds while Running Now is open), with lineage for processes whose start wasn't seen.
+- **Names:** the chip says the agent, the project and the session's topic as Claude Code titles it: *Claude ·
+  ProcessHUD · Pattern classifier noise reduction* (the topic comes from the transcript the guard hook names, so it
+  needs the Claude Code guard on; a title you set yourself wins over the generated one).
+- **Patterns ▸ By Session:** one row per session with the patterns it produced under it, the rest under *No
+  session*. It replaces *By Process* while it's on.
 - **Everywhere else:** the Events table has a *Session* column; a destination on the Network tab that a session
   reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name
   (*Claude · ProcessHUD: zsh → curl*). In Time Travel, sessions are replayed from the window's recorded process

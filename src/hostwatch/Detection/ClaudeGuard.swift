@@ -35,6 +35,8 @@ struct GuardRequest: Sendable {
     var session: String
     /// The agent process the hook runs under (found by the hook itself): the app's session for this call.
     var agentPid: Int
+    /// Claude Code's transcript file for the session (its first lines carry the session's title).
+    var transcript: String
 
     init?(json: Data) {
         guard let obj = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
@@ -45,6 +47,7 @@ struct GuardRequest: Sendable {
         mode = obj["permission_mode"] as? String ?? "default"
         session = obj["session_id"] as? String ?? ""
         agentPid = (obj[Self.agentPidKey] as? NSNumber)?.intValue ?? 0
+        transcript = obj["transcript_path"] as? String ?? ""
     }
 
     /// Added by the hook before it asks the app: the agent process's pid.

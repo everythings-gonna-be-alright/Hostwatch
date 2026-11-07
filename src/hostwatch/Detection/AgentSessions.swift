@@ -60,6 +60,8 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var cwd = ""
     /// Claude Code's own session id (from the guard hook), when known.
     var sessionID = ""
+    /// The session's topic, as Claude Code titles it ("Pattern classifier noise reduction"), when known.
+    var title = ""
     var events = 0
     var launches = 0
     var files = 0
@@ -73,7 +75,10 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var destinations: Set<String> = []
 
     var isLive: Bool { ended == nil }
-    var name: String { project.isEmpty ? "\(agent.short) · pid \(id)" : "\(agent.short) · \(project)" }
+    /// "Claude · ProcessHUD · Pattern classifier noise reduction".
+    var name: String {
+        (project.isEmpty ? "\(agent.short) · pid \(id)" : "\(agent.short) · \(project)") + (title.isEmpty ? "" : " · \(title)")
+    }
     var duration: TimeInterval { (ended ?? lastSeen).timeIntervalSince(started) }
 }
 
@@ -169,7 +174,7 @@ final class AgentSessions: ObservableObject {
 
     /// The guard hook saw a tool call: the agent's pid (found by the hook), Claude Code's session id and the
     /// working directory name the session.
-    func learn(hookAgentPid pid: Int, sessionID: String, cwd: String) {
+    func learn(hookAgentPid pid: Int, sessionID: String, cwd: String, transcript: String = "") {
         guard pid > 0 else { return }
         if index[pid] == nil, isAlive(pid) {
             add(AgentSession(id: pid, agent: .claude, started: now(), lastSeen: now(), pids: [pid]))
@@ -178,6 +183,8 @@ final class AgentSessions: ObservableObject {
         var s = sessions[i]
         if !sessionID.isEmpty { s.sessionID = sessionID }
         if !cwd.isEmpty { s.cwd = cwd; s.project = (cwd as NSString).lastPathComponent }
+        // The title appears after a few turns: looked for again while it's missing (the file's first lines only).
+        if s.title.isEmpty, !transcript.isEmpty, let title = Self.title(inTranscript: transcript) { s.title = title }
         s.lastSeen = now()
         sessions[i] = s
         scheduleSave()
@@ -215,7 +222,7 @@ final class AgentSessions: ObservableObject {
                 var c = s
                 c.ended = s.lastSeen
                 if let known = named.first(where: { $0.id == s.id && abs($0.started.timeIntervalSince(s.started)) < 120 }) {
-                    c.project = known.project; c.cwd = known.cwd; c.sessionID = known.sessionID
+                    c.project = known.project; c.cwd = known.cwd; c.sessionID = known.sessionID; c.title = known.title
                 }
                 return c
             }
@@ -272,6 +279,27 @@ final class AgentSessions: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         guard let data = try? Data(contentsOf: directory.appendingPathComponent("agent-sessions.json")) else { return [] }
         return (try? decoder.decode([AgentSession].self, from: data)) ?? []
+    }
+
+    // MARK: Claude Code's title for a session
+
+    /// The session's title from its transcript's first lines: one you gave it ("custom-title"), else the one Claude
+    /// Code made ("ai-title").
+    nonisolated static func title(inTranscript path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path), let head = try? handle.read(upToCount: 16_384) else { return nil }
+        try? handle.close()
+        return title(inTranscriptHead: head)
+    }
+
+    nonisolated static func title(inTranscriptHead head: Data) -> String? {
+        var ai: String?
+        for line in head.split(separator: 0x0A) {
+            guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any], let type = obj["type"] as? String
+            else { continue }
+            if type == "custom-title", let t = obj["customTitle"] as? String, !t.isEmpty { return t }
+            if type == "ai-title", let t = obj["aiTitle"] as? String, !t.isEmpty { ai = t }
+        }
+        return ai
     }
 
     // MARK: The working directory of a live process

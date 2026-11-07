@@ -117,8 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.sessions.learn(list)
         }
         claudeGuard.onRequest = { [weak self] request in
-            self?.sessions.learn(hookAgentPid: request.agentPid, sessionID: request.session, cwd: request.cwd)
+            self?.sessions.learn(hookAgentPid: request.agentPid, sessionID: request.session, cwd: request.cwd,
+                                 transcript: request.transcript)
         }
+        signatures.sessionKeys = { [weak self] id in self?.sessions.session(id)?.keys ?? [] }
         travel.onProcesses = { [weak self] snapshot, moment in self?.running.showRecorded(snapshot, at: moment) }
         running.historyDirectory = history.directory
         // Asked for only while the window is on screen.

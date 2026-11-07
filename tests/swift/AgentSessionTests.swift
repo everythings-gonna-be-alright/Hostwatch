@@ -120,3 +120,41 @@ import Testing
         _ = engine
     }
 }
+
+/// The session's topic, as Claude Code titles it, and patterns grouped by session.
+@MainActor @Suite struct AgentSessionNames {
+    @Test func titleComesFromTheTranscript() {
+        let head = Data("""
+        {"type":"ai-title","aiTitle":"Pattern classifier noise reduction","sessionId":"d5"}
+        {"type":"agent-name","agentName":"Pattern classifier noise reduction","sessionId":"d5"}
+        {"type":"mode","mode":"normal","sessionId":"d5"}
+        """.utf8)
+        #expect(AgentSessions.title(inTranscriptHead: head) == "Pattern classifier noise reduction")
+        let custom = Data("""
+        {"type":"ai-title","aiTitle":"Something","sessionId":"d5"}
+        {"type":"custom-title","customTitle":"Release 0.12","sessionId":"d5"}
+        """.utf8)
+        #expect(AgentSessions.title(inTranscriptHead: custom) == "Release 0.12")
+        #expect(AgentSessions.title(inTranscriptHead: Data("{\"type\":\"mode\"}\nnot json\n".utf8)) == nil)
+        var s = AgentSession(id: 1, agent: .claude, started: Date(), lastSeen: Date(), pids: [1])
+        s.project = "ProcessHUD"; s.title = "Release 0.12"
+        #expect(s.name == "Claude · ProcessHUD · Release 0.12")
+    }
+
+    @Test func patternsGroupBySession() {
+        func item(_ key: String) -> PatternItem {
+            let e = SignatureEntry(id: key, kind: .file, process: "/usr/bin/git", pattern: key, count: 1, firstSeen: Date(), lastSeen: Date(),
+                                   status: .unclassified, exampleName: "git", examplePid: 1, exampleProc: "/usr/bin/git",
+                                   exampleTarget: "", exampleExtra: "r", exampleParent: "")
+            return PatternItem(entry: e, status: .unclassified, statusRank: 2, source: nil, note: nil, decidedBy: "New")
+        }
+        let items = ["a", "b", "c", "d"].map(item)
+        let groups = [PatternItem.SessionGroup(id: 100, name: "Claude · ProcessHUD", keys: ["a", "b"], live: true),
+                      PatternItem.SessionGroup(id: 200, name: "Claude · devops", keys: ["zzz"], live: false)]
+        let rows = PatternItem.groupedBySession(items, sessions: groups, order: [KeyPathComparator(\.priority)])
+        #expect(rows.map(\.id) == ["session:100", "session:0"])
+        #expect(rows[0].entry.process == "Claude · ProcessHUD" && rows[0].children?.map(\.id) == ["a", "b"])
+        #expect(rows[1].entry.process == "No session" && rows[1].children?.count == 2)
+        #expect(PatternItem.groupedBySession(items, sessions: [groups[1]], order: []).map(\.id) == ["a", "b", "c", "d"])
+    }
+}
