@@ -18,11 +18,25 @@ grouped into one **pattern**. There are three kinds:
 |------|-----------|---------|
 | process | parent program → executable | `Microsoft Excel → /usr/bin/osascript` |
 | connection | process → proto, host bucket, port | `Slack → TCP internet:443`, `curl → TCP 45.33.*.*:8081` |
-| file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]` |
+| file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]`, `mds → r *  [ordinary files]` |
 
 **Normalization** removes the parts that vary, so similar events really match. Your home folder becomes `~`.
 `$TMPDIR`, UUIDs, hex IDs and version numbers become placeholders. This also applies to executable names that are
 only a version, e.g. `claude/versions/#.#.#`.
+
+**Fewer patterns where the detail says nothing:**
+
+- **macOS's own programs:** what a program on the sealed system volume reads is one pattern for that program,
+  `r *  [ordinary files]`. Which of thousands of system files `mds` or XProtect read says nothing, and nothing can
+  change those programs. Kept specific: their writes, sensitive places (SSH keys, keychains, cookies, browser
+  logins…), and shells, interpreters and command-line tools in `/bin` and `/usr/bin` (`cat`, `python3`, `zsh`),
+  which read whatever a script tells them to.
+- **Random temp names:** a file or folder in `/tmp` or `$TMPDIR` named like a temp file (a name, then random letters
+  and digits: `zshVJbGMW`, `hostwatch.29Cjgb`) is one pattern per name: `r /tmp/zsh*`.
+- **Earlier patterns:** at launch, patterns saved by an earlier version that these rules now write as one are moved
+  into it, with counts and dates added up. Only automatic ones move (routine Safe, or New nobody touched); your
+  decisions, a rule's or an AI's stay as they are. On a real store: 21,172 → 8,422 patterns. Preview it with
+  `Hostwatch --regroup-report` (read-only).
 
 **Status.** Each pattern has a status: **New / Safe / Suspicious / Dangerous**. It also records who set it (you,
 Claude, auto or baseline) and a short reason.

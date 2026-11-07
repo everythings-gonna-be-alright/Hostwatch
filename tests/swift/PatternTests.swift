@@ -252,13 +252,15 @@ import Testing
     @Test func foldsRoutineVariantsButNotYourDecisions() throws {
         let (s, dir) = try store()
         defer { _ = SignatureStore(directory: dir.appendingPathComponent("reset")) }
+        // A third-party reader (macOS's own programs' reads are one pattern each already).
+        let reader = "/Applications/Tool.app/Contents/MacOS/Tool"
         let names = ["cache-aB1dE2", "cache-xY3zW4", "cache-qR5sT6"]
-        let events = names.map { file(logd, pid: 1, "r", "/Library/Application Support/Apple/\($0)/data.db") }
+        let events = names.map { file(reader, pid: 1, "r", "/Library/Application Support/Apple/\($0)/data.db") }
         events.forEach { _ = s.observe($0) }
         #expect(events.allSatisfy { s.entry($0.signatureKey)?.source == "auto" })   // routine
         let r = s.tidy()
         #expect(r.folded == 3 && r.into == 1 && s.allEntries.count == 1)
-        #expect(file(logd, pid: 2, "r", "/Library/Application Support/Apple/cache-zZ9yY8/data.db").signatureKey == s.allEntries[0].id)
+        #expect(file(reader, pid: 2, "r", "/Library/Application Support/Apple/cache-zZ9yY8/data.db").signatureKey == s.allEntries[0].id)
 
         let (t, dir2) = try store()
         defer { _ = SignatureStore(directory: dir2.appendingPathComponent("reset")) }

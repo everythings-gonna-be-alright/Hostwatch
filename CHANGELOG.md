@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased – Fewer patterns
+
+- **60% fewer patterns, same detection.** What macOS's own programs read is now one pattern per program instead of
+  one per folder, and temp files with random names are one pattern per name. On a real Mac: 21,172 → 8,422.
+- **Still specific:** writes, sensitive places (SSH keys, keychains, cookies, browser logins), and shells,
+  interpreters and command-line tools like `cat` or `python3`.
+- **Your store shrinks by itself** on the first launch. Only patterns decided automatically are merged; your
+  decisions, rules and AI verdicts stay as they are. `Hostwatch --regroup-report` shows what would change.
+
 ## 0.11.1 – Signed and notarized
 
 - **No more “Apple could not verify Hostwatch”.** Hostwatch is now signed with a Developer ID and notarized by Apple,
