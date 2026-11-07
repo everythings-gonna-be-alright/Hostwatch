@@ -378,11 +378,11 @@
   footer .fname { color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }  /* written like the name by the logo */
   footer .contact .sep { margin: 0 10px; }
   footer .cols { display: flex; gap: 28px; flex-wrap: wrap; font-size: 14px; }  /* the same size as the contact line beside it */
-  footer a { color: var(--muted); } footer a:hover { color: var(--text); }
+  footer a { color: var(--text); text-decoration: none; text-underline-offset: 3px; }
+  footer a:hover { text-decoration: underline; text-decoration-color: var(--line-strong); }
   /* How to reach us: a step brighter than the rest of the footer, its links in white. */
   footer .contact { font-size: 14px; color: var(--muted); }
-  footer .contact a { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
-  footer .contact a:hover { text-decoration-color: var(--text); }
+
 
   /* Phones: tighter rhythm, nothing cut off, comfortable tap targets. */
   @media (max-width: 760px) {
@@ -419,7 +419,7 @@
     footer .contact .sep { display: none; }
     footer .contact > span { display: block; }
     footer .contact a { display: inline-block; padding: 10px 0; }   /* 41 px rows: comfortable to tap, no extra air */
-    footer .cols { justify-content: center; gap: 0 28px; margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); width: 100%; }
+    footer .cols { justify-content: center; gap: 0 28px; margin-top: 12px; width: 100%; }
     footer .cols a { display: inline-block; padding: 12px 0; }
   }
   @media (max-width: 560px) {
@@ -747,7 +747,7 @@
     <span class="fname">Hostwatch</span>
     <p class="contact"><span>Found a bug? <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/issues/new?labels=bug&amp;body=%2A%2AWhat%20happened%2A%2A%0A%0A%0A%2A%2AWhat%20you%20expected%2A%2A%0A%0A%0A%2A%2ASteps%20to%20reproduce%2A%2A%0A1.%20%0A%0A%2A%2AHostwatch%20and%20macOS%20version%2A%2A%0AHostwatch%3A%20%0AmacOS%3A%20%0A%0A%28Security%20problem%3F%20Please%20email%20it%20instead%20of%20opening%20a%20public%20issue.%29%0A" target="_blank" rel="noopener">Report it on GitHub ↗</a></span><span class="sep" aria-hidden="true">·</span><span>Questions: <a href="mailto:contact@hostwatch.tech">contact@hostwatch.tech</a></span><span class="sep" aria-hidden="true">·</span><span>Security reports: <a href="mailto:security@hostwatch.tech">security@hostwatch.tech</a></span></p>
     <div class="cols">
-      <a href="https://github.com/everythings-gonna-be-alright/Hostwatch">GitHub</a>
+      <a href="https://github.com/everythings-gonna-be-alright/Hostwatch">Source code</a>
       <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md">Changelog</a>
       <a href="docs/">Docs</a>
     </div>
