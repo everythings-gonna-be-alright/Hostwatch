@@ -5,7 +5,7 @@ This reference covers every feature, setting and rule of Hostwatch, in the order
 For a short overview, see the [README](../README.md). The same text is on the website at
 <https://hostwatch.tech/docs/>.
 
-**Free and open source, for everyone.** The Mac app described here is free at home and at work, under the MIT license.
+**Free for personal use, always.** The Mac app described here stays free and open source (MIT license).
 
 A paid edition will be only for companies. It will offer two things:
 
