@@ -62,6 +62,10 @@ final class HUDModel: ObservableObject {
     let signatures: SignatureStore
     let stories: StoryEngine
     let domains: DomainRegistry
+    /// Coding agents' sessions (Claude Code…): which one each event belongs to.
+    let sessions: AgentSessions
+    /// Only one agent session's events (its process tree), like `onlyPids` for heavy processes.
+    @Published var onlySession: Int?
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
@@ -169,10 +173,12 @@ final class HUDModel: ObservableObject {
         static let overlayScale = "overlayScale"
     }
 
-    init(signatures: SignatureStore, stories: StoryEngine, domains: DomainRegistry) {
+    init(signatures: SignatureStore, stories: StoryEngine, domains: DomainRegistry,
+         sessions: AgentSessions = AgentSessions(fileURL: nil)) {
         self.signatures = signatures
         self.stories = stories
         self.domains = domains
+        self.sessions = sessions
         eventOrder = SortMemory.load(key: "eventTableSort", columns: EventItem.sortColumns,
                                      fallback: KeyPathComparator(\.seq, order: .reverse))
         signatureFilter = UserDefaults.standard.string(forKey: "signatureFilter")
@@ -240,10 +246,11 @@ final class HUDModel: ObservableObject {
     func filtered(_ events: [ActivityEvent], applyExclusions: Bool = false, show: SignatureFilter? = nil) -> [ActivityEvent] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let only = onlyPids
+        let sessionPids = onlySession.flatMap { sessions.session($0)?.pids }
         let filter = show ?? signatureFilter
         let visible = events.filter { e in
             visibleKinds.contains(e.kind) && passes(e, filter) && !(applyExclusions && rules.excludes(e))
-                && (only?.contains(e.pid) ?? true)
+                && (only?.contains(e.pid) ?? true) && (sessionPids?.contains(e.pid) ?? true)
         }
         guard !q.isEmpty else { return visible }
         return visible.filter { $0.matches(q) }
@@ -458,6 +465,7 @@ final class HUDModel: ObservableObject {
             event.isFirst = signatures.observe(event)
             nextSeq += 1
             event.seq = nextSeq
+            sessions.observe(event)
             if event.kind == .net {
                 if let domain = domains.observe(event) { event.newDomain = domain }
                 if let beacon = beacons.observe(event) { event.beacon = beacon }

@@ -33,6 +33,8 @@ struct GuardRequest: Sendable {
     var cwd: String
     var mode: String
     var session: String
+    /// The agent process the hook runs under (found by the hook itself): the app's session for this call.
+    var agentPid: Int
 
     init?(json: Data) {
         guard let obj = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
@@ -42,6 +44,17 @@ struct GuardRequest: Sendable {
         cwd = obj["cwd"] as? String ?? ""
         mode = obj["permission_mode"] as? String ?? "default"
         session = obj["session_id"] as? String ?? ""
+        agentPid = (obj[Self.agentPidKey] as? NSNumber)?.intValue ?? 0
+    }
+
+    /// Added by the hook before it asks the app: the agent process's pid.
+    static let agentPidKey = "hostwatch_agent_pid"
+
+    /// The hook's input with the agent pid added (the app can't see the hook's lineage, the hook can).
+    static func withAgentPid(_ json: Data, pid: Int) -> Data {
+        guard pid > 0, var obj = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { return json }
+        obj[agentPidKey] = pid
+        return (try? JSONSerialization.data(withJSONObject: obj)) ?? json
     }
 
     private static func sendable(_ v: Any) -> (any Sendable)? {
@@ -100,7 +113,8 @@ enum ClaudeHook {
     static func run() -> Never {
         let input = FileHandle.standardInput.readDataToEndOfFile()
         guard let request = GuardRequest(json: input) else { exit(0) }
-        let reply = askApp(input) ?? Self.reply(CommandGuard().assess(tool: request.tool, input: request.input, cwd: request.cwd),
+        let tagged = GuardRequest.withAgentPid(input, pid: AgentSessions.agentAncestor(of: Int(getpid())))
+        let reply = askApp(tagged) ?? Self.reply(CommandGuard().assess(tool: request.tool, input: request.input, cwd: request.cwd),
                                                request: request, confirm: nil)
         if let out = reply.hookOutput { FileHandle.standardOutput.write(out) }
         exit(0)
@@ -395,8 +409,12 @@ final class ClaudeGuard: ObservableObject {
 
     private final class ReplyBox: @unchecked Sendable { var reply: GuardReply? }
 
+    /// Every call the hook reports, before it's judged (the app ties it to an agent session).
+    var onRequest: ((GuardRequest) -> Void)?
+
     /// Judges a call and answers through `reply` (at once, or after you answer the panel).
     func handle(_ request: GuardRequest, reply: @escaping (GuardReply) -> Void) {
+        onRequest?(request)
         let verdict = CommandGuard(listed: listed).assess(tool: request.tool, input: request.input, cwd: request.cwd)
         checked += 1
         switch verdict.level {
