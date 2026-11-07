@@ -19,6 +19,11 @@ base64 line each. History blocks: each sealed on its own, so Time Travel still r
 A file or line without the marker is read as plain (older versions) and rewritten sealed on the next save. Tests
 use an in-memory key and never touch the keychain. The collector (root) writes none of these files.
 
+**Status.** The Enclave path needs `com.apple.application-identifier` and a keychain access group, which a Developer
+ID build may carry only with a provisioning profile (without one macOS kills the process at launch, seen 2026-11-07).
+Until the profile is in place, released builds use the keychain item; the code wraps the key into the Enclave and
+drops the item the first time the Enclave is reachable.
+
 **Consequences.** `zcat`/`zgrep` on history files no longer work by hand; `--export-history` goes through the key.
 A backup of the files is only useful together with the keychain (Time Machine includes it); a lost Enclave key or
 keychain item means the files can't be read, and Hostwatch starts over with a new key and says so. Reading and

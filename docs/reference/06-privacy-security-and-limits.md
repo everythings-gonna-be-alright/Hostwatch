@@ -27,11 +27,12 @@ sessions, rules, signing facts, the firewall and Claude Code guard logs, the MCP
 whole activity history (each compressed block sealed on its own, day files line by line). The point is *where the
 key lives*: another process running as you, an AI agent included, can't fetch it silently.
 
-- **Secure Enclave** (Apple silicon and T2 Macs): the data key is wrapped by a key that never leaves the Enclave;
+- **Keychain** (today): the data key is a login-keychain item whose access list names only Hostwatch's code. Any
+  other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
+- **Secure Enclave** (when the build can use it): the data key is wrapped by a key that never leaves the Enclave;
   the wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
-  signed code.
-- **Keychain** (other Macs): the data key is a login-keychain item whose access list names only Hostwatch's code.
-  Any other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
+  signed code, and the keychain item goes. Enclave keys need an entitlement that only a provisioned build carries, so
+  released builds use the keychain until that is in place; the code moves the key over by itself when it can.
 - **What it looks like:** a sealed file starts with `HWV1`; a sealed line with `HWV1:`. Files from earlier versions
   are plain and still read; they're rewritten sealed the next time they're saved (history blocks when their file
   is finished or scrubbed).

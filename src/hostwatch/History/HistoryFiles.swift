@@ -357,6 +357,11 @@ enum HistoryFiles {
             if start < chunk.endIndex { body(chunk[start...]) }
         }
         if path.hasSuffix(".gz") {
+            let stem = stem(url)
+            if let index = readIndex(stem) ?? (try? Data(contentsOf: blocksURL(stem))).map({ parseBlockList($0).index }) {
+                forEachChunk(.compressed(url, index)) { emit($0); return true }     // block by block, plain or sealed
+                return
+            }
             guard let stored = try? Data(contentsOf: url, options: .alwaysMapped), let data = openRecords(stored) else { return }
             gunzipMembers(data) { emit($0) }
         } else {
