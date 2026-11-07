@@ -375,14 +375,14 @@ changing nothing.
 
 One event rarely means much on its own; Hostwatch links related ones into a story.
 
-#### Agent sessions: what Claude Code did
+#### AI sessions: what Claude Code did
 
 A coding agent (Claude Code, the Cursor agent, Codex, Gemini CLI) is one process that starts many others: shells,
 `git`, builds, `curl`. Hostwatch follows each agent process and its whole tree as one **session**, so you can see
 what one session did, not just what `zsh` or `git` did in general.
 
-- **Events ▸ Group:** *No Groups*, *By Process* or *By Session*, next to the Show buttons. *By Session* gives one
-  row per session with its events under it, the rest under *No session*. A session row reads the way
+- **Events ▸ Group:** *No Groups*, *By Process* or *By AI Session*, next to the Show buttons. *By AI Session* gives one
+  row per session with its events under it, the rest under *No AI session*. A session row reads the way
   `claude --resume` lists sessions: the maker's mark, the topic, then *340 events · ProcessHUD · main · 12 min ·
   5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree; *All Sessions* takes it
   off), **Show Its Patterns…** and the Claude session id.
