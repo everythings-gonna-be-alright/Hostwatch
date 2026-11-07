@@ -397,7 +397,13 @@ what one session did, not just what `zsh` or `git` did in general.
   Claude Code's own helper processes (pty hosts, spare daemons) aren't sessions.
 - **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
   seconds while Running Now is open), with lineage for processes whose start wasn't seen.
-- **Patterns ▸ By Session:** one row per session with the patterns it produced under it, the rest under *No
+- **Running Now ▸ Group:** the same control groups the running processes under their parent process (*By
+  Process*) or under the AI session they belong to (*By AI Session*), with CPU, memory, threads and writes added up
+  per group and the count of processes in the PID column.
+- **Without the guard hook:** Claude Code keeps a session's transcript under `~/.claude/projects/`, in a folder
+  named after the working directory, so Hostwatch finds the transcript that started with the session and names it
+  from there. A session with no topic yet is named by where and when it started (*Claude in ~, 16:24*).
+- **Patterns ▸ By AI Session:** one row per session with the patterns it produced under it, the rest under *No
   session*. It replaces *By Process* while it's on.
 - **Everywhere else:** the Events table has a *Session* column; a destination on the Network tab that a session
   reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name. In

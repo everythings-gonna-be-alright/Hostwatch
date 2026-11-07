@@ -192,3 +192,52 @@ import Testing
         #expect(EventItem.groupedBySession([c], sessions: [header]).count == 1 && !EventItem.groupedBySession([c], sessions: [header])[0].isGroup)
     }
 }
+
+/// Naming without the hook (the transcript found by working directory and start time), and Running Now groups.
+@MainActor @Suite(.serialized) struct AgentSessionNaming {
+    @Test func transcriptFoundByFolderAndStart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("hw-projects-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("-Users-alex-Documents-my-app")        // "/" and "." become "-"
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let old = folder.appendingPathComponent("old.jsonl"), mine = folder.appendingPathComponent("mine.jsonl")
+        try Data("{\"type\":\"ai-title\",\"aiTitle\":\"Old work\"}\n".utf8).write(to: old)
+        try FileManager.default.setAttributes([.creationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: old.path)
+        try Data("{\"type\":\"ai-title\",\"aiTitle\":\"Release 0.12\"}\n{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"ship it\"},\"gitBranch\":\"main\"}\n".utf8).write(to: mine)
+        let saved = AgentSessions.projectsRoot
+        AgentSessions.projectsRoot = root
+        defer { AgentSessions.projectsRoot = saved }
+        let facts = try #require(AgentSessions.transcriptFacts(cwd: "/Users/alex/Documents/my.app", started: Date()))
+        #expect(facts.title == "Release 0.12" && facts.branch == "main" && facts.firstPrompt == "ship it")
+        #expect(AgentSessions.transcriptFacts(cwd: "/nowhere", started: Date()) == nil)
+
+        let s = AgentSessions(fileURL: nil)
+        s.isAlive = { _ in true }
+        s.workingDirectory = { _ in "/Users/alex/Documents/my.app" }
+        s.observe(exec("/Users/alex/.local/share/claude/versions/2.1.0", pid: 500, ppid: 1, parent: "/bin/zsh", args: "claude"))
+        #expect(s.session(500)?.topic == "Release 0.12")                             // named with no hook at all
+    }
+
+    @Test func topicFallsBackToWhereAndWhen() {
+        var s = AgentSession(id: 7, agent: .claude, started: Date(timeIntervalSince1970: 0), lastSeen: Date(), pids: [7])
+        s.cwd = AppPaths.userHome
+        #expect(s.topic.hasPrefix("Claude in ~, "))
+        s.cwd = ""
+        #expect(s.topic.hasPrefix("Claude pid 7, "))
+    }
+
+    @Test func runningNowGroups() {
+        func info(_ pid: Int, _ ppid: Int, _ name: String, cpu: Double? = 1, mem: Int64 = 10) -> RunningProcessInfo {
+            RunningProcessInfo(pid: pid, ppid: ppid, start: 100, uid: 501, user: "me", name: name, path: "/bin/\(name)", args: name,
+                               cpu: cpu, cpuTime: 1, mem: mem, threads: 2)
+        }
+        let rows = RunningRow.rows([info(100, 1, "claude"), info(101, 100, "zsh"), info(102, 101, "git"), info(300, 1, "vim")])
+        let header = EventItem.SessionHeader(id: 100, topic: "Release 0.12", facts: "", agent: .claude, pids: [100, 101, 102])
+        let bySession = RunningRow.grouped(rows, by: .session, sessions: [header])
+        #expect(bySession.map(\.name) == ["Release 0.12", "No AI session"])
+        #expect(bySession[0].children?.count == 3 && bySession[0].mem == 30 && bySession[0].cpu == 3 && bySession[0].groupAgent == .claude)
+        let byParent = RunningRow.grouped(rows, by: .process, sessions: [])
+        #expect(byParent.map(\.name) == ["pid 1", "claude", "zsh"] && byParent[0].children?.count == 2)
+        #expect(RunningRow.grouped(rows, by: .none, sessions: [header]).count == 4)
+    }
+}

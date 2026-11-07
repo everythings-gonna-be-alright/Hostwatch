@@ -8,7 +8,9 @@
   `claude --resume` lists it (the topic, then project · branch · time · counts) with a small mark for its maker, and
   its events or patterns under it. Right-click a session for only its events, or its patterns. The Events table has
   a *Session* column, a Network destination a session reached says *via Claude · project*, a story inside a session
-  starts with its name, and Time Travel replays sessions from history. For Claude: the MCP tool `agent_sessions`.
+  starts with its name, and Time Travel replays sessions from history. Running Now groups the same way, with the
+  numbers added up per group. Sessions are named from Claude Code's own transcript, with or without the guard hook.
+  For Claude: the MCP tool `agent_sessions`.
 - **Patterns you can read.** The Pattern column wraps instead of cutting off, and an inspector beside the table
   shows the selected pattern in full: what it means in plain words, the exact text (selectable), who decided it and
   why, when and how often, the last example, the signer, and the mark buttons.

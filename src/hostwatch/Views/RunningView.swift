@@ -5,7 +5,11 @@ import SwiftUI
 struct RunningRow: Identifiable, Equatable {
     let info: RunningProcessInfo
     let parentName: String
-    var id: String { "\(info.pid)-\(info.start)" }
+    /// A group row (by parent process or by AI session): the processes under it, and the agent's maker.
+    var children: [RunningRow]? = nil
+    var groupAgent: CodingAgent? = nil
+    var isGroup: Bool { children != nil }
+    var id: String { isGroup ? "g:\(info.name)" : "\(info.pid)-\(info.start)" }
 
     var pid: Int { info.pid }
     var name: String { info.name }
@@ -39,6 +43,46 @@ struct RunningRow: Identifiable, Equatable {
     static func rows(_ list: [RunningProcessInfo]) -> [RunningRow] {
         let names = Dictionary(list.map { ($0.pid, $0.name) }, uniquingKeysWith: { a, _ in a })
         return list.map { RunningRow(info: $0, parentName: names[$0.ppid] ?? ($0.ppid == 0 ? "kernel" : "")) }
+    }
+
+    /// Grouped: one row per parent process (its children under it), or per AI session (its tree under it, the
+    /// rest under "No AI session"). A group's numbers are its members' added up.
+    static func grouped(_ rows: [RunningRow], by grouping: EventGrouping, sessions: [EventItem.SessionHeader]) -> [RunningRow] {
+        switch grouping {
+        case .none: return rows
+        case .process:
+            var order: [String] = [], byParent: [String: [RunningRow]] = [:]
+            for r in rows {
+                let key = r.parentName.isEmpty ? "pid \(r.info.ppid)" : r.parentName
+                if byParent[key] == nil { order.append(key) }
+                byParent[key, default: []].append(r)
+            }
+            return order.map { group(byParent[$0]!, title: $0, agent: nil) }
+        case .session:
+            var rest = rows, out: [RunningRow] = []
+            for s in sessions {
+                let mine = rest.filter { s.pids.contains($0.pid) }
+                guard !mine.isEmpty else { continue }
+                rest.removeAll { s.pids.contains($0.pid) }
+                out.append(group(mine, title: s.topic, agent: s.agent))
+            }
+            if !rest.isEmpty, !out.isEmpty { out.append(group(rest, title: "No AI session", agent: nil)) }
+            return out.isEmpty ? rows : out
+        }
+    }
+
+    private static func group(_ list: [RunningRow], title: String, agent: CodingAgent?) -> RunningRow {
+        let cpus = list.compactMap(\.info.cpu), writes = list.compactMap(\.info.written), rates = list.compactMap(\.info.writeRate)
+        let info = RunningProcessInfo(
+            pid: 0, ppid: 0, start: list.map(\.info.start).filter { $0 > 0 }.min() ?? 0, uid: list.map(\.info.uid).min() ?? 0,
+            user: Set(list.map(\.info.user)).count == 1 ? list[0].info.user : "", name: title, path: "", args: "",
+            cpu: cpus.isEmpty ? nil : cpus.reduce(0, +), cpuTime: list.reduce(0) { $0 + $1.info.cpuTime },
+            mem: list.reduce(0) { $0 + $1.info.mem }, threads: list.reduce(0) { $0 + $1.info.threads },
+            written: writes.isEmpty ? nil : writes.reduce(0, +), writeRate: rates.isEmpty ? nil : rates.reduce(0, +))
+        var g = RunningRow(info: info, parentName: "")
+        g.children = list
+        g.groupAgent = agent
+        return g
     }
 }
 
@@ -199,10 +243,13 @@ struct RunningProcessesView: View {
     let history: [ActivityEvent]
     let showSpawn: (RunningRow) -> Void
     let actions: HUDActions
+    var grouping = EventGrouping.none
+    var sessions: [EventItem.SessionHeader] = []
 
     var body: some View {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let rows = running.rows.filter { $0.matches(q) }.sorted(using: running.sortOrder)
+        let rows = RunningRow.grouped(running.rows.filter { $0.matches(q) }.sorted(using: running.sortOrder),
+                                      by: grouping, sessions: sessions)
         let launches = Dictionary(grouping: history.lazy.filter { $0.kind == .exec }, by: \.pid)
         let launchEvent = { (pid: Int, start: Double) in launches[pid].flatMap { TimeTravel.launch(in: $0, pid: pid, start: start) } }
         VStack(spacing: 0) {
@@ -237,12 +284,17 @@ struct RunningProcessesView: View {
 
     private func table(_ rows: [RunningRow], _ launchEvent: @escaping (Int, Double) -> ActivityEvent?) -> some View {
         let now = running.updated ?? Date()
-        return Table(rows, selection: $running.selection, sortOrder: $running.sortOrder) {
+        return Table(rows, children: \.children, selection: $running.selection, sortOrder: $running.sortOrder) {
             TableColumn("Process", value: \.sortName) { row in
                 HStack(spacing: 6) {
-                    Image(nsImage: ProcessIcons.icon(row.info.path)).resizable().frame(width: 16, height: 16)
+                    if row.isGroup {
+                        if let agent = row.groupAgent { AgentBadge(agent: agent) }
+                        else { Image(systemName: "rectangle.3.group").foregroundStyle(.secondary).frame(width: 16) }
+                    } else {
+                        Image(nsImage: ProcessIcons.icon(row.info.path)).resizable().frame(width: 16, height: 16)
+                    }
                     Text(row.name).fontWeight(.semibold).lineLimit(1)
-                    if launchEvent(row.pid, row.start) != nil {
+                    if !row.isGroup, launchEvent(row.pid, row.start) != nil {
                         Image(systemName: "sparkle").font(.system(size: 9)).foregroundStyle(.yellow)
                             .help("Started while Hostwatch was watching: its launch is in the timeline")
                     }
@@ -251,7 +303,8 @@ struct RunningProcessesView: View {
             }
             .width(min: 120, ideal: 190)
             TableColumn("PID", value: \.pid) { row in
-                Text(String(row.pid)).foregroundStyle(.secondary).monospacedDigit()
+                Text(row.isGroup ? "\(row.children!.count)×" : String(row.pid)).foregroundStyle(.secondary).monospacedDigit()
+                    .help(row.isGroup ? "\(row.children!.count) processes in this group" : "")
             }
             .width(min: 40, ideal: 54, max: 70)
             TableColumn("User", value: \.sortUser) { row in
@@ -294,14 +347,19 @@ struct RunningProcessesView: View {
             }
             .width(min: 70, ideal: 90, max: 110)
             TableColumn("Parent", value: \.sortParent) { row in
-                Text(row.parentName.isEmpty ? String(row.info.ppid) : "\(row.parentName) (\(row.info.ppid))")
-                    .foregroundStyle(.secondary).lineLimit(1)
+                if !row.isGroup {
+                    Text(row.parentName.isEmpty ? String(row.info.ppid) : "\(row.parentName) (\(row.info.ppid))")
+                        .foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             .width(min: 80, ideal: 140)
         }
         .font(.system(size: 12))
         .contextMenu(forSelectionType: RunningRow.ID.self) { ids in
             if let id = ids.first, let row = running.rows.first(where: { $0.id == id }) { menu(row, launchEvent(row.pid, row.start)) }
+            else if let id = ids.first, let group = rows.first(where: { $0.id == id }), group.isGroup {
+                Text("\(group.name): \(group.children!.count) processes")
+            }
         } primaryAction: { ids in
             guard let id = ids.first else { return }
             running.selection = id
@@ -323,7 +381,8 @@ struct RunningProcessesView: View {
         Button("Copy PID") { copy(String(row.pid)) }
     }
 
-    private func footer(_ rows: [RunningRow]) -> some View {
+    private func footer(_ grouped: [RunningRow]) -> some View {
+        let rows = grouped.flatMap { $0.children ?? [$0] }
         let cpu = rows.reduce(0) { $0 + ($1.info.cpu ?? 0) }
         let mem = rows.reduce(Int64(0)) { $0 + $1.mem }
         return HStack(spacing: 12) {

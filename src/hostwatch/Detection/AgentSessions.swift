@@ -84,9 +84,14 @@ struct AgentSession: Identifiable, Codable, Equatable {
     var destinations: Set<String> = []
 
     var isLive: Bool { ended == nil }
-    /// The topic, as `claude --resume` lists it: the title, else the first prompt, else the project.
+    /// The topic, as `claude --resume` lists it: the title, else the first prompt, else the project, else where and
+    /// when it started ("Claude in ~, 16:24").
     var topic: String {
-        !title.isEmpty ? title : !firstPrompt.isEmpty ? firstPrompt : project.isEmpty ? "\(agent.short) · pid \(id)" : project
+        if !title.isEmpty { return title }
+        if !firstPrompt.isEmpty { return firstPrompt }
+        if !project.isEmpty { return project }
+        let where_ = cwd.isEmpty ? "pid \(id)" : cwd == AppPaths.userHome ? "in ~" : "in \((cwd as NSString).lastPathComponent)"
+        return "\(agent.short) \(where_), \(started.formatted(date: .omitted, time: .shortened))"
     }
 
     /// "Claude · ProcessHUD · Pattern classifier noise reduction".
@@ -208,9 +213,17 @@ final class AgentSessions: ObservableObject {
         scheduleSave()
     }
 
-    /// Every 10 s (the app's timer): sessions whose agent process is gone end; old ended ones drop off.
+    /// Every 10 s (the app's timer): sessions whose agent process is gone end; old ended ones drop off; a live
+    /// Claude session still without a topic looks for its transcript again (Claude titles it a few turns in).
     func checkEnded() {
         var changed = false
+        for i in sessions.indices where sessions[i].ended == nil && sessions[i].agent == .claude && sessions[i].title.isEmpty {
+            if let facts = Self.transcriptFacts(cwd: sessions[i].cwd, started: sessions[i].started) {
+                if let t = facts.title { sessions[i].title = t; changed = true }
+                if sessions[i].firstPrompt.isEmpty, let p = facts.firstPrompt { sessions[i].firstPrompt = p; changed = true }
+                if sessions[i].branch.isEmpty, let b = facts.branch { sessions[i].branch = b; changed = true }
+            }
+        }
         for i in sessions.indices where sessions[i].ended == nil && !isAlive(sessions[i].id) {
             sessions[i].ended = now(); changed = true
             for pid in sessions[i].pids { sessionOf[pid] = nil }
@@ -263,6 +276,10 @@ final class AgentSessions: ObservableObject {
 
     private func add(_ s: AgentSession) {
         startTimerIfNeeded()
+        var s = s
+        if s.agent == .claude, s.title.isEmpty, let facts = Self.transcriptFacts(cwd: s.cwd, started: s.started) {
+            s.title = facts.title ?? ""; s.firstPrompt = facts.firstPrompt ?? ""; s.branch = facts.branch ?? ""
+        }
         sessions.insert(s, at: 0)
         sessionOf[s.id] = s.id
         reindex()
@@ -335,6 +352,31 @@ final class AgentSessions: ObservableObject {
         }
         if out.title == nil { out.title = ai }
         return out == TranscriptFacts() ? nil : out
+    }
+
+    /// Claude Code keeps a session's transcript under `~/.claude/projects/<working directory, "/" and "." as "-">/`:
+    /// the one that started with the session (created within 3 minutes of it, else the newest written since) is its
+    /// transcript, so a session can be named without the guard hook. `projectsRoot` is for tests.
+    nonisolated(unsafe) static var projectsRoot = URL(fileURLWithPath: AppPaths.userHome).appendingPathComponent(".claude/projects")
+
+    nonisolated static func transcriptPath(cwd: String, started: Date) -> String? {
+        guard !cwd.isEmpty else { return nil }
+        let folder = projectsRoot.appendingPathComponent(cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-"))
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return nil }
+        var best: (path: String, score: TimeInterval)?
+        for name in names where name.hasSuffix(".jsonl") {
+            let path = folder.appendingPathComponent(name).path
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+                  let created = attrs[.creationDate] as? Date, let modified = attrs[.modificationDate] as? Date else { continue }
+            let gap = abs(created.timeIntervalSince(started))
+            if gap < 180, best == nil || gap < best!.score { best = (path, gap) }
+            else if best == nil, modified >= started { best = (path, 1_000_000 - modified.timeIntervalSince1970) }
+        }
+        return best?.path
+    }
+
+    nonisolated static func transcriptFacts(cwd: String, started: Date) -> TranscriptFacts? {
+        transcriptPath(cwd: cwd, started: started).flatMap(facts(inTranscript:))
     }
 
     /// The title alone (tests and the chip).
