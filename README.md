@@ -57,6 +57,16 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.12.0**
+- **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
+  process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them; a *Session*
+  column, *via Claude* tags on the Network tab, session names on stories, and the MCP tool `agent_sessions`.
+- **🗂️ Two thirds fewer patterns** – system programs' reads, project trees, scratch trees, Homebrew formulas and
+  random temp names are one pattern each; your store shrinks by itself, your decisions untouched.
+- **📖 Patterns and rules you can read** – a wrapped Pattern column and an inspector with the pattern in full and in
+  plain words; every rule reads as *who does what → what happens*.
+- **⚡ Instant tab switching**, resizable columns, and a tab bar that keeps its titles.
+
 **0.11.1** – signed and notarized by Apple: no more *“Apple could not verify Hostwatch”*, and Full Disk Access
 survives updates.
 
