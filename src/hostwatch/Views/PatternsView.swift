@@ -97,6 +97,28 @@ struct PatternsView: View {
             toolbar(count: list.shown)
                 .sheet(isPresented: $combine.show) { CombineSheet(state: combine, signatures: signatures) }
             Divider()
+            HStack(spacing: 0) {
+            table(rows)
+            if inspector.shown {
+                Divider()
+                PatternInspector(signatures: signatures, actions: actions)
+                    .frame(width: 320)
+                    .background(.background.secondary)
+                    .transition(.move(edge: .trailing))
+            }
+            }
+            Divider()
+            footer(rows)
+        }
+        .onAppear { list.request(signatures) { filter } }
+        .onReceive(signatures.listChanges) { list.request(signatures) { filter } }
+        .onChange(of: filter) { list.request(signatures) { filter } }
+    }
+
+    /// Whether the Pattern column wraps (a probe turns it off to measure).
+    nonisolated(unsafe) static var wrapsPatterns = true
+
+    private func table(_ rows: [PatternItem]) -> some View {
             Table(rows, children: \.children, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
                     HStack(spacing: 4) {
@@ -132,8 +154,9 @@ struct PatternsView: View {
                         // Whole, wrapped: a pattern is what you decide on, so it must be readable without
                         // dragging the column wider. The inspector has it selectable, with the rest.
                         Text(item.pattern)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(Self.wrapsPatterns ? 3 : 1)
+                            .fixedSize(horizontal: false, vertical: Self.wrapsPatterns)
+                            .truncationMode(.middle)
                             .help(RuleText.does(kind: item.entry.kind, pattern: item.pattern))
                     }
                 }
@@ -187,10 +210,6 @@ struct PatternsView: View {
                     }
                 }
             }
-            .inspector(isPresented: $inspector.shown) {
-                PatternInspector(signatures: signatures, actions: actions)
-                    .inspectorColumnWidth(min: 260, ideal: 320, max: 480)
-            }
             // A click on the only selected row deselects it (the Table itself can't); Escape clears the selection.
             .onExitCommand { signatures.selection.removeAll() }
             .background(ClickTracker { signatures.selection = $0(signatures.selection) })
@@ -202,7 +221,9 @@ struct PatternsView: View {
             } primaryAction: { ids in
                 if let id = ids.first, let entry = signatures.entry(id) { actions.askAI(entry.exampleEvent) }
             }
-            Divider()
+    }
+
+    private func footer(_ rows: [PatternItem]) -> some View {
             HStack {
                 Text(!classifier.lastMessage.isEmpty ? classifier.lastMessage
                      : !signatures.tidySummary.isEmpty ? signatures.tidySummary
@@ -219,12 +240,6 @@ struct PatternsView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-        }
-        // Rebuilt when something it shows changed, at most a few times a second; never on a redraw.
-        // Shown again: refresh in the background (changes while another tab was showing weren't followed).
-        .onAppear { list.request(signatures) { filter } }
-        .onReceive(signatures.listChanges) { list.request(signatures) { filter } }
-        .onChange(of: filter) { list.request(signatures) { filter } }
     }
 
     private func toolbar(count: Int) -> some View {
@@ -276,7 +291,7 @@ struct PatternsView: View {
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
-            Toggle(isOn: $inspector.shown) { Image(systemName: "sidebar.trailing") }
+            Toggle(isOn: $inspector.shown.animation(.snappy(duration: 0.2))) { Image(systemName: "sidebar.trailing") }
                 .toggleStyle(.button)
                 .help(inspector.shown ? "Hide the inspector" : "Show the inspector: the selected pattern in full")
         }

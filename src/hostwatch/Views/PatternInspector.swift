@@ -35,7 +35,6 @@ struct PatternInspector: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 260, idealWidth: 320, maxWidth: 480)
     }
 }
 
