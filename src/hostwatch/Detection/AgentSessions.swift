@@ -31,7 +31,13 @@ enum CodingAgent: String, Codable, CaseIterable {
 
     /// An agent's helper process (Claude Code's pty host and spare daemons): not a session of its own.
     static func isHelper(args: String) -> Bool {
-        args.contains("bg-pty-host") || args.contains("--bg-spare") || args.contains("--bg-daemon")
+        ["bg-pty-host", "bg-spare", "--bg-daemon", "--chrome-native-host", "bridge-spawn", "--daemon"].contains { args.contains($0) }
+    }
+
+    /// The project a working directory names: its folder, unless it's the home folder itself (an agent started
+    /// from a daemon, not from a project).
+    static func project(ofCwd cwd: String) -> String {
+        cwd.isEmpty || cwd == AppPaths.userHome ? "" : (cwd as NSString).lastPathComponent
     }
 
     /// The agent an executable is, or nil.
@@ -137,7 +143,7 @@ final class AgentSessions: ObservableObject {
                 // A new agent, unless one agent runs another (a sub-agent): then it's part of the outer session.
                 let cwd = workingDirectory(e.pid) ?? ""
                 let s = AgentSession(id: e.pid, agent: agent, started: at, lastSeen: at,
-                                     project: (cwd as NSString).lastPathComponent, cwd: cwd, pids: [e.pid])
+                                     project: CodingAgent.project(ofCwd: cwd), cwd: cwd, pids: [e.pid])
                 add(s)
                 id = e.pid
             } else {
@@ -175,7 +181,7 @@ final class AgentSessions: ObservableObject {
             let at = p.start > 0 ? Date(timeIntervalSince1970: p.start) : now()
             let cwd = workingDirectory(p.pid) ?? ""
             add(AgentSession(id: p.pid, agent: CodingAgent.of(p.path)!, started: at, lastSeen: now(),
-                             project: (cwd as NSString).lastPathComponent, cwd: cwd, pids: [p.pid]))
+                             project: CodingAgent.project(ofCwd: cwd), cwd: cwd, pids: [p.pid]))
         }
         checkEnded()
     }
@@ -190,7 +196,7 @@ final class AgentSessions: ObservableObject {
         guard let i = index[pid] else { return }
         var s = sessions[i]
         if !sessionID.isEmpty { s.sessionID = sessionID }
-        if !cwd.isEmpty { s.cwd = cwd; s.project = (cwd as NSString).lastPathComponent }
+        if !cwd.isEmpty { s.cwd = cwd; s.project = CodingAgent.project(ofCwd: cwd) }
         // The title appears after a few turns: looked for again while it's missing (the file's first lines only).
         if s.title.isEmpty, !transcript.isEmpty, let facts = Self.facts(inTranscript: transcript) {
             if let t = facts.title { s.title = t }
@@ -281,9 +287,7 @@ final class AgentSessions: ObservableObject {
         guard let fileURL else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        // Keys can be large: the saved copy is the list without them.
-        let slim = sessions.map { s -> AgentSession in var c = s; c.keys = []; return c }
-        if let data = try? encoder.encode(slim) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? encoder.encode(sessions) { try? data.write(to: fileURL, options: .atomic) }
     }
 
     /// The saved list (the MCP server reads it while the app runs).

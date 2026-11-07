@@ -62,7 +62,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
             rest.removeAll { s.keys.contains($0.id) }
             groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name))
         }
-        if !rest.isEmpty, !groups.isEmpty { groups.append(group(rest, id: sessionPrefix + "0", name: "No session")) }
+        if !rest.isEmpty, !groups.isEmpty { groups.append(group(rest, id: sessionPrefix + "0", name: "No AI session")) }
         return groups.isEmpty ? items : groups
     }
 
@@ -163,6 +163,8 @@ struct PatternListInput: @unchecked Sendable {
     let scope: Set<String>?
     let showSeenOnce: Bool
     let filter: SignatureFilter
+    /// Listed even when seen once (an AI session's patterns, when grouping by session).
+    var alwaysListed: Set<String> = []
 
     /// One pass: the rows (unsorted) and every count. Same rules as the store's status, note and Decided By.
     func compute() -> (items: [PatternItem], counts: PatternCounts) {
@@ -179,7 +181,7 @@ struct PatternListInput: @unchecked Sendable {
             guard scope.map({ $0.contains(e.id) }) ?? true,
                   search.isEmpty || e.process.lowercased().contains(search) || e.pattern.lowercased().contains(search)
                     || e.exampleName.lowercased().contains(search),
-                  showSeenOnce || !search.isEmpty || scope != nil || !oneOff else { continue }
+                  showSeenOnce || !search.isEmpty || scope != nil || !oneOff || alwaysListed.contains(e.id) else { continue }
             if scope != nil || SignatureFilter.unclassified.admits(status, risk: e.risk, reviewed: reviewed) { c.new += 1 }
             if scope != nil || SignatureFilter.important.admits(status, risk: e.risk, reviewed: reviewed) { c.important += 1 }
             guard scope != nil || filter.admits(status, risk: e.risk, reviewed: reviewed) else { continue }
@@ -236,9 +238,10 @@ final class PatternListModel: ObservableObject {
     func build(_ store: SignatureStore, filter: SignatureFilter, wait: Bool = false) {
         lastBuild = ProcessInfo.processInfo.systemUptime
         built = true
-        let input = store.patternInput(filter: filter)                       // copies only: the main thread's share
         let order = store.patternOrder, group = store.groupByProcess
         let sessions = store.groupBySession ? sessionGroups() : []
+        var input = store.patternInput(filter: filter)                       // copies only: the main thread's share
+        input.alwaysListed = Set(sessions.flatMap(\.keys))
         generation += 1
         let g = generation
         let work: @Sendable () -> (rows: [PatternItem], shown: Int, counts: PatternCounts) = {
@@ -322,7 +325,7 @@ struct EventItem: Identifiable {
             rest.removeAll { s.pids.contains($0.event.pid) }
             out.append(group(mine, id: "session:\(s.id)", title: s.topic, subtitle: s.facts, agent: s.agent))
         }
-        if !rest.isEmpty, !out.isEmpty { out.append(group(rest, id: "session:0", title: "No session", subtitle: "", agent: nil)) }
+        if !rest.isEmpty, !out.isEmpty { out.append(group(rest, id: "session:0", title: "No AI session", subtitle: "", agent: nil)) }
         return out.isEmpty ? items : out
     }
 
@@ -356,7 +359,7 @@ enum EventGrouping: String, CaseIterable {
         switch self {
         case .none: "No Groups"
         case .process: "By Process"
-        case .session: "By Session"
+        case .session: "By AI Session"
         }
     }
     var symbol: String {

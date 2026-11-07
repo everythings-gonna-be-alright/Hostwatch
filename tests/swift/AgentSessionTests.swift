@@ -154,7 +154,7 @@ import Testing
         let rows = PatternItem.groupedBySession(items, sessions: groups, order: [KeyPathComparator(\.priority)])
         #expect(rows.map(\.id) == ["session:100", "session:0"])
         #expect(rows[0].entry.process == "Claude · ProcessHUD" && rows[0].children?.map(\.id) == ["a", "b"])
-        #expect(rows[1].entry.process == "No session" && rows[1].children?.count == 2)
+        #expect(rows[1].entry.process == "No AI session" && rows[1].children?.count == 2)
         #expect(PatternItem.groupedBySession(items, sessions: [groups[1]], order: []).map(\.id) == ["a", "b", "c", "d"])
     }
 }
@@ -186,7 +186,7 @@ import Testing
         let rows = EventItem.groupedBySession([a, b, c], sessions: [header])
         #expect(rows.count == 2 && rows[0].groupTitle == "Fewer patterns" && rows[0].children?.count == 2)
         #expect(rows[0].agent == .claude && rows[0].groupSubtitle == "2 events · ProcessHUD · 5 min")
-        #expect(rows[1].groupTitle == "No session" && rows[1].children?.map(\.id) == [c.id])
+        #expect(rows[1].groupTitle == "No AI session" && rows[1].children?.map(\.id) == [c.id])
         #expect(rows[0].id == EventItem.stableUUID("session:100") && EventItem.stableUUID("a") != EventItem.stableUUID("b"))
         #expect(EventItem.groupedByProcess([a, b, c]).map(\.groupTitle) == ["git", "vim"])
         #expect(EventItem.groupedBySession([c], sessions: [header]).count == 1 && !EventItem.groupedBySession([c], sessions: [header])[0].isGroup)

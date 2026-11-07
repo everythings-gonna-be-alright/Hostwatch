@@ -3,7 +3,7 @@
 ## Unreleased – Agent sessions, fewer patterns, rules in plain words
 
 - **Agent sessions.** Claude Code (and the Cursor agent, Codex, Gemini CLI) is followed as one session: the agent
-  and every process it started. Events and Patterns can be grouped *By Session* (or *By Process*): one row per
+  and every process it started. Events and Patterns can be grouped *By AI Session* (or *By Process*): one row per
   session, named the way `claude --resume` lists it (the topic, then project · branch · time · counts), with a small
   mark for the maker, and its events or patterns under it. Right-click a session for only its events or its
   patterns. Network destinations a session reached say *via Claude · project*, stories inside a session start with

@@ -146,7 +146,7 @@ struct PatternsView: View {
                 TableColumn("Process", value: \.processName) { item in
                     Text(displayProcessName(item.entry.process)).fontWeight(.semibold).help(item.entry.process)
                 }
-                .width(min: 60, ideal: 110)
+                .width(min: 60, ideal: signatures.groupBySession ? 260 : 110)
                 TableColumn("Pattern", value: \.pattern) { item in
                     if item.isGroup {
                         Text(item.pattern).foregroundStyle(item.newCount > 0 ? .primary : .secondary)
@@ -212,7 +212,7 @@ struct PatternsView: View {
             }
             // A click on the only selected row deselects it (the Table itself can't); Escape clears the selection.
             .onExitCommand { signatures.selection.removeAll() }
-            .background(ClickTracker { signatures.selection = $0(signatures.selection) })
+            .background(ClickTracker(current: { signatures.selection }, clear: { signatures.selection = [] }))
             // Double-click (primaryAction) asks AI; right-click acts on the selection.
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first, id.hasPrefix(PatternItem.groupPrefix) || id.hasPrefix(PatternItem.sessionPrefix) {
@@ -277,11 +277,11 @@ struct PatternsView: View {
             .help("One row per program, with its patterns under it")
             Toggle(isOn: Binding(get: { signatures.groupBySession },
                                  set: { on in signatures.groupBySession = on; if on { signatures.groupByProcess = false } })) {
-                Label("By Session", systemImage: "sparkles.rectangle.stack")
+                Label("By AI Session", systemImage: "sparkles.rectangle.stack")
             }
             .toggleStyle(.button)
             .fixedSize()
-            .help("One row per coding-agent session (Claude Code…), with the patterns it produced under it; the rest under No session")
+            .help("One row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI), with the patterns it produced under it, seen-once ones included; the rest under No AI session")
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
@@ -390,17 +390,21 @@ extension PatternsView {
 /// Watches clicks over the table: a single click on the row that was already the only selection, with no modifier
 /// keys, clears the selection on mouse-up (the Table keeps it selected otherwise, with no way to deselect but ⌘-click).
 private struct ClickTracker: NSViewRepresentable {
-    let update: (@escaping (Set<String>) -> Set<String>) -> Void
+    let current: () -> Set<String>
+    let clear: () -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = TrackerView()
-        view.update = update
+        view.current = current; view.clear = clear
         return view
     }
-    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? TrackerView)?.update = update }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? TrackerView)?.current = current; (nsView as? TrackerView)?.clear = clear
+    }
 
     final class TrackerView: NSView {
-        var update: ((@escaping (Set<String>) -> Set<String>) -> Void)?
+        var current: (() -> Set<String>)?
+        var clear: (() -> Void)?
         private var monitor: Any?
         private var before: Set<String> = []
         private var pending = false
@@ -409,18 +413,21 @@ private struct ClickTracker: NSViewRepresentable {
             super.viewDidMoveToWindow()
             if monitor != nil { NSEvent.removeMonitor(monitor!); monitor = nil }
             guard window != nil else { return }
+            // Only reads on mouse-down (writing the selection there re-rendered the table and cancelled a
+            // column-edge drag in the header); writes once, on mouse-up, and only to clear.
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
                 guard let self, let window = self.window, event.window == window else { return event }
                 let inTable = self.superview.map { $0.bounds.contains($0.convert(event.locationInWindow, from: nil)) } ?? false
                 guard inTable, event.modifierFlags.intersection([.command, .shift, .option]).isEmpty else { return event }
                 if event.type == .leftMouseDown {
                     self.pending = event.clickCount == 1
-                    self.update? { current in self.before = current; return current }
+                    self.before = self.current?() ?? []
                 } else if self.pending {
                     self.pending = false
                     let before = self.before
                     DispatchQueue.main.async { [weak self] in
-                        self?.update? { current in current.count == 1 && current == before ? [] : current }
+                        guard let self, let now = self.current?(), now.count == 1, now == before else { return }
+                        self.clear?()
                     }
                 }
                 return event
