@@ -110,17 +110,25 @@ struct ActivityWindowView: View {
                 TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
                                  noun: runningNow ? "processes" : "events"); Divider()
             }
-            // Every tab visited stays alive, hidden: switching back is instant instead of rebuilding a table of
-            // thousands of rows (and the Patterns list keeps following changes while another tab is showing).
-            ZStack {
-                ForEach(Array(visitedTabs).sorted(), id: \.self) { tab in
-                    tabContent(tab)
-                        .opacity(model.windowTab == tab ? 1 : 0)
-                        .allowsHitTesting(model.windowTab == tab)
-                        .accessibilityHidden(model.windowTab != tab)
-                        .zIndex(model.windowTab == tab ? 1 : 0)
+            // Every tab visited stays alive and *attached*: the tabs sit side by side in a strip as wide as all of
+            // them, slid so the current one shows. Hiding a tab (opacity, zIndex changes) made SwiftUI detach or
+            // re-add its AppKit table, and re-attaching a table costs ~2 ms per cell view (a sample showed 0.6 s of
+            // every switch in NSTableView _setWindow:). A slide is only a position change.
+            GeometryReader { geo in
+                let tabs = Array(visitedTabs).sorted()
+                let index = CGFloat(tabs.firstIndex(of: model.windowTab) ?? 0)
+                HStack(spacing: 0) {
+                    ForEach(tabs, id: \.self) { tab in
+                        tabContent(tab)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .allowsHitTesting(model.windowTab == tab)
+                            .accessibilityHidden(model.windowTab != tab)
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
+                .offset(x: -index * geo.size.width)
             }
+            .clipped()
             .onAppear { visitedTabs.insert(model.windowTab) }
             .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
         }
