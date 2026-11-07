@@ -176,6 +176,9 @@ final class MCPServer {
                           "children": ["type": "boolean", "description": "Include its child tree's activity (default true)."],
                           "limit": ["type": "integer", "description": "Timeline lines (default 100, max 300)."]],
              required: ["pid"]),
+        Tool(name: "agent_sessions", title: "Agent sessions",
+             description: "Coding-agent sessions (Claude Code, Cursor agent, Codex, Gemini CLI) Hostwatch is following or followed recently: the agent's pid, project, when it started and ended, and how many launches, file opens and connections its process tree made. For what one did, call trace_process with its pid (children included).",
+             properties: [:], required: []),
         Tool(name: "signing_info", title: "Signing info",
              description: "Code signature of a binary: signer, Team ID, ad-hoc, quarantine flag, Apple, whether Hostwatch trusts it, whether it was replaced at this path, and a full validity check.",
              properties: ["path": ["type": "string", "description": "Absolute path of the executable."]],
@@ -195,6 +198,7 @@ final class MCPServer {
             case "process_tree": text = try processTree(args)
             case "find_processes": text = try findProcesses(args)
             case "trace_process": text = try traceProcess(args)
+            case "agent_sessions": text = agentSessions()
             case "signing_info": text = try signingInfo(args)
             default: throw ToolError("Unknown tool: \(name)")
             }
@@ -418,6 +422,17 @@ final class MCPServer {
     }
 
     // MARK: Tool bodies
+
+    func agentSessions() -> String {
+        let sessions = AgentSessions.readSaved(from: data.support)
+        guard !sessions.isEmpty else { return "No agent sessions seen (Hostwatch lists them while it runs)." }
+        return sessions.map { s in
+            let state = s.ended.map { "ended \(show($0))" } ?? "live"
+            return "pid \(s.id) \(s.name)\(s.sessionID.isEmpty ? "" : " (session \(s.sessionID))"): started \(show(s.started)), \(state), "
+                + "\(s.launches) launches, \(s.files) file opens, \(s.connections) connections, \(s.newPatterns) new patterns, "
+                + "\(s.pids.count) processes" + (s.cwd.isEmpty ? "" : ", in \(s.cwd)")
+        }.joined(separator: "\n")
+    }
 
     func overview() -> String {
         let (entries, rules) = patterns()

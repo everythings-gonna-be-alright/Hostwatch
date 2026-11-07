@@ -104,7 +104,14 @@ struct ActivityWindowView: View {
             // A search left in the field filters quietly: say so where you look, with the way out.
             if searchFiltering && !showsHistoryScope { SearchActiveBar(text: searchText); Divider() }
             if model.windowTab == 0 { filterBar; Divider() }
-            if model.windowTab == 0 && !runningNow { heavySection }
+            if model.windowTab == 0 && !runningNow {
+                heavySection
+                SessionStrip(sessions: model.sessions, model: model) { title, keys in
+                    signatures.search = ""
+                    signatures.scope = .init(title: title, keys: keys)
+                    model.windowTab = 1
+                }
+            }
             if traveling {
                 if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
                 TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,

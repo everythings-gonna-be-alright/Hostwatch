@@ -117,7 +117,7 @@ import Testing
         let list = try #require(server.handle(#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
         let tools = try #require((try JSONSerialization.jsonObject(with: Data(list.utf8)) as? [String: Any])?["result"] as? [String: Any])
         let defs = try #require(tools["tools"] as? [[String: Any]])
-        #expect(defs.count == 10)
+        #expect(defs.count == 11)
         #expect(defs.allSatisfy { (($0["annotations"] as? [String: Any])?["readOnlyHint"] as? Bool) == true })
         // Everything a client loads into its context up front stays small: instructions and the tool list.
         print("MCP context: instructions \(MCPServer.instructions.count) chars, tool list \(list.utf8.count) bytes")

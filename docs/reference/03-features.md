@@ -374,6 +374,26 @@ changing nothing.
 
 One event rarely means much on its own; Hostwatch links related ones into a story.
 
+#### Agent sessions: what Claude Code did
+
+A coding agent (Claude Code, the Cursor agent, Codex, Gemini CLI) is one process that starts many others: shells,
+`git`, builds, `curl`. Hostwatch follows each agent process and its whole tree as one **session**, so you can see
+what one session did, not just what `zsh` or `git` did in general.
+
+- **Where:** a strip above the Events list, one chip per session: *● Claude · ProcessHUD · 12 min · 340 events ·
+  5 conn · 2 New*. The dot is green while the agent runs; ended sessions stay for 30 minutes, dimmed.
+- **Click a chip:** the list shows only that session's events (every process it started, however deep). *Show All
+  Events* takes it off. **Right-click ▸ Show Its Patterns…** opens Patterns scoped to the patterns that session
+  produced, New ones first: "what did this agent do that I haven't decided on yet?"
+- **How events are matched:** by process lineage at the moment each event arrives. A child that daemonizes and is
+  reparented to `launchd` keeps its session. An agent started by an agent (a sub-agent) is part of the outer session.
+- **Names:** the project is the agent's working directory (`ProcessHUD`), read from the live process. With the Claude
+  Code guard on, the hook also tells Hostwatch Claude's own session id, which the chip's tooltip shows.
+- **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
+  seconds while Running Now is open), with lineage for processes whose start wasn't seen.
+- **For Claude:** the MCP tool `agent_sessions` lists them; `trace_process` with a session's pid shows what it did.
+  The list is saved in `agent-sessions.json` while Hostwatch runs.
+
 #### Stories: chains, not single events
 
 Attacks are rarely one event. Hostwatch links small, harmless-looking steps of one program and its children (a
@@ -1051,6 +1071,7 @@ questions like what ran on your Mac yesterday, and it reads the answer from Host
 | `list_domains` | domain inventory: `only_new`, `query`, `limit` |
 | `process_tree` | ancestors (respecting PID reuse: the latest start of a pid before its child), children during the process's lifetime, its recent connections and file activity |
 | `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid; `since`/`until`): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. From the once-a-minute process lists, plus recorded starts for processes that lived under a minute |
+| `agent_sessions` | coding-agent sessions Hostwatch follows or followed in the last 30 minutes: pid, project, start and end, launches, file opens, connections, new patterns; `trace_process` with the pid for what one did |
 | `trace_process` | one process's life (`pid`; `at` picks the run when a pid was reused; `children`): ancestors, child tree, CPU/memory/disk use over its life, what it (and its tree) ran, opened and connected to, and a timeline. For a process running for days, children and activity cover its last 6 h; a huge tree is followed for its first 200 descendants |
 | `signing_info` | signer, Team ID, ad-hoc, quarantine, Apple, trusted, replaced-at-path, full validity check |
 

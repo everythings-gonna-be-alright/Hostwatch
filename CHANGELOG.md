@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased – Fewer patterns, rules in plain words
+## Unreleased – Agent sessions, fewer patterns, rules in plain words
+
+- **Agent sessions.** Claude Code (and the Cursor agent, Codex, Gemini CLI) is followed as one session: the agent
+  and every process it started. A strip above Events shows each session with its counts; click it to see only that
+  session's events, right-click for the patterns it produced. The MCP server lists them (`agent_sessions`).
 
 - **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside
   the table shows the selected pattern in full: what it means in plain words, the exact text (selectable), who

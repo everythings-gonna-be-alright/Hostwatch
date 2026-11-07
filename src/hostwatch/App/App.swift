@@ -26,7 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// One window per waiting question.
     var firewallPanels: [UUID: NSPanel] = [:]
     let sheets = WindowSheetState()
-    lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains)
+    let sessions = AgentSessions()
+    lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains, sessions: sessions)
     lazy var classifier = PatternClassifier(store: signatures)
     lazy var ruleBook = RuleBook(store: signatures)
     let collector = Collector()
@@ -113,6 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.onProcessList = { [weak self] list in
             self?.running.receive(list)
             self?.processRecorder.receive(list)             // about once a minute, for Running Now in Time Travel
+            self?.sessions.learn(list)
+        }
+        claudeGuard.onRequest = { [weak self] request in
+            self?.sessions.learn(hookAgentPid: request.agentPid, sessionID: request.session, cwd: request.cwd)
         }
         travel.onProcesses = { [weak self] snapshot, moment in self?.running.showRecorded(snapshot, at: moment) }
         running.historyDirectory = history.directory
