@@ -534,8 +534,9 @@ enum SignatureBuilder {
     // MARK: Signature
 
     /// The pattern for an event, after combined patterns (`PatternMerges`) have their say.
-    static func signature(for e: ActivityEvent) -> Signature {
-        var sig = baseSignature(for: e)
+    /// `signing`: who signed what (the shared cache in the app; tests pass their own).
+    static func signature(for e: ActivityEvent, signing: SigningCache = .shared) -> Signature {
+        var sig = baseSignature(for: e, signing: signing)
         if let (process, pattern) = PatternMerges.shared.apply(kind: e.kind, process: sig.process, pattern: sig.pattern) {
             sig.process = process
             sig.pattern = pattern
@@ -569,7 +570,7 @@ enum SignatureBuilder {
         return prefix.joined() + "*"
     }
 
-    static func baseSignature(for e: ActivityEvent) -> Signature {
+    static func baseSignature(for e: ActivityEvent, signing: SigningCache = .shared) -> Signature {
         let rawActor = e.proc
         let actor = e.proc.isEmpty ? e.name : normalizeExecutable(e.proc)
         switch e.kind {
@@ -600,7 +601,7 @@ enum SignatureBuilder {
             if risk != .high, let why = BuiltInSafe.reason(kind: .exec, parent: e.parent, pattern: pattern) {
                 risk = .routine; reason = why
             }
-            return withSigning(make(e.kind, parent, pattern, risk, reason), e)
+            return withSigning(make(e.kind, parent, pattern, risk, reason), e, signing: signing)
 
         case .net:
             let host = e.remoteHost ?? e.target
@@ -629,7 +630,7 @@ enum SignatureBuilder {
             } else if let gateway, !localBuckets.contains(bucket) {
                 reason = "from a \(gateway.lowercased()) (inside its virtual machine)"
             }
-            return withSigning(make(e.kind, actor, pattern, risk, reason), e)
+            return withSigning(make(e.kind, actor, pattern, risk, reason), e, signing: signing)
 
         case .file:
             // Pure in (actor, mode, path), and file events repeat those all day: remembered.
@@ -642,14 +643,13 @@ enum SignatureBuilder {
                 filePatterns.set(memoKey, (pattern, risk, reason))
                 return (pattern, risk, reason)
             }()
-            return withSigning(make(e.kind, actor, pattern, risk, reason), e)
+            return withSigning(make(e.kind, actor, pattern, risk, reason), e, signing: signing)
         }
     }
 
     /// Code-signing adjustments on top of the path rules. Looks only at the binary the key names:
     /// what runs (exec) or what acts (file/net), so risk stays a function of the pattern.
-    static func withSigning(_ sig: Signature, _ e: ActivityEvent) -> Signature {
-        let cache = SigningCache.shared
+    static func withSigning(_ sig: Signature, _ e: ActivityEvent, signing cache: SigningCache = .shared) -> Signature {
         let subject = e.kind == .exec ? e.target : e.proc
         guard cache.enabled, !subject.isEmpty, !isSealedSystem(subject), let id = cache.identity(subject) else { return sig }
         var s = sig

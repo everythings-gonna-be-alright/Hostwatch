@@ -6,11 +6,11 @@ import Foundation
 
 enum NetSignals {
     /// Untrusted program or LOLBin: what makes beacons and raw-IP connections worth attention.
-    static func suspiciousActor(_ e: ActivityEvent) -> Bool {
+    static func suspiciousActor(_ e: ActivityEvent, signing: SigningCache = .shared) -> Bool {
         if SignatureBuilder.isLolbin(e.proc) { return true }
         if SignatureBuilder.isSealedSystem(e.proc) { return false }
-        guard let id = SigningCache.shared.identity(e.proc) else { return true }
-        return !SigningCache.shared.trusts(e.proc, id)
+        guard let id = signing.identity(e.proc) else { return true }
+        return !signing.trusts(e.proc, id)
     }
 
     static func isPublic(_ e: ActivityEvent) -> Bool {

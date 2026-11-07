@@ -209,8 +209,11 @@ final class StoryEngine: ObservableObject {
     var liveLookups = true
     /// Off in replay: no sound, no saved stories, no ignore list.
     let persistent: Bool
+    /// Who signed what: the shared cache in the app, a scratch one in tests.
+    let signing: SigningCache
 
-    init(persistent: Bool = true) {
+    init(persistent: Bool = true, signing: SigningCache = .shared) {
+        self.signing = signing
         self.persistent = persistent
         let dir = AppPaths.support
         fileURL = dir.appendingPathComponent("stories.json")
@@ -461,7 +464,7 @@ final class StoryEngine: ObservableObject {
     func isUntrustedProgram(_ path: String) -> Bool {
         guard path.hasPrefix("/"), !SignatureBuilder.isSealedSystem(path), !Self.isOwn(path) else { return false }
         if Self.inZone(path, Self.dropZones) { return true }
-        return SigningCache.shared.cached(path)?.untrustedCode ?? false
+        return signing.cached(path)?.untrustedCode ?? false
     }
 
     private func rememberLoginItem(_ step: StoryStep, story: UUID) {
@@ -617,9 +620,9 @@ final class StoryEngine: ObservableObject {
         let sealedActor = SignatureBuilder.isSealedSystem(e.kind == .exec ? e.parent : e.proc)
         // Signing facts about the binary that runs (exec) or acts (file/net).
         let subject = e.kind == .exec ? e.target : e.proc
-        if let why = SigningCache.shared.swapReason(subject) {
+        if let why = signing.swapReason(subject) {
             out.append((.swappedBinary, "\(Self.base(subject)) \(why)"))
-        } else if e.kind == .exec, let id = SigningCache.shared.cached(subject), id.untrustedCode,
+        } else if e.kind == .exec, let id = signing.cached(subject), id.untrustedCode,
                   id.quarantined || Self.inZone(subject, Self.dropZones) {
             out.append((.unsignedCode, "\(id.label.lowercased()) \(Self.base(subject)) ran"))
         }
@@ -648,7 +651,7 @@ final class StoryEngine: ObservableObject {
             // Reading keychain secrets counts, unless a trusted, validly signed program reads its own
             // items (e.g. Claude Code reading "Claude Code-credentials").
             if name == "security", Self.keychainDump.firstMatch(in: e.args, range: range) != nil,
-               !(SigningCache.shared.identity(e.parent).map { SigningCache.shared.isTrusted($0) } ?? false),
+               !(signing.identity(e.parent).map { signing.isTrusted($0) } ?? false),
                !Self.readsOwnKeychainItem(args: e.args, parent: e.parent) {
                 out.append((.credential, "read keychain secrets: \(e.args)"))
             }
@@ -666,7 +669,7 @@ final class StoryEngine: ObservableObject {
             if writes, e.signaturePattern.hasSuffix("[persistence]") {
                 out.append((.persistence, "wrote \(e.target)"))
             } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor,
-                      !(SigningCache.shared.identity(e.proc).map { SigningCache.shared.trusts(e.proc, $0) } ?? false) {
+                      !(signing.identity(e.proc).map { signing.trusts(e.proc, $0) } ?? false) {
                 // A trusted, validly signed program reading credential files (its own config, an
                 // SDK's cache) is not theft; a swapped or modified binary is not trusted.
                 out.append((.credential, "accessed \(e.target)"))
