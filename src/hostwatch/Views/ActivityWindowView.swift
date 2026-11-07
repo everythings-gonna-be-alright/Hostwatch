@@ -10,15 +10,19 @@ struct ShowFilterPicker: View {
     @Binding var filter: SignatureFilter
     /// How many rows each choice would show in this tab (events on Events, patterns on Patterns).
     let counts: [SignatureFilter: Int]
+    /// In a very narrow toolbar, a popup menu instead of the buttons (never on Patterns: one click, like Events).
+    var allowsMenu = true
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             bar(counts, icons: true)
             bar(counts, icons: false)
-            Picker("Show", selection: $filter) {
-                ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+            if allowsMenu {
+                Picker("Show", selection: $filter) {
+                    ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .fixedSize()
             }
-            .fixedSize()
         }
         .help("Show: filter by how patterns are decided (Events, Patterns and the HUD)")
     }
@@ -118,8 +122,9 @@ struct ActivityWindowView: View {
                     model.windowTab = 1
                 })
                 .onReceive(model.sessions.objectWillChange) { _ in
-                    // A live session's tree grows: the filter follows it.
+                    // A live session's tree grows: the filter follows it, and the Patterns grouping too.
                     DispatchQueue.main.async {
+                        if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
                         if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
                             model.onlySessionPids = s.pids
                         }
@@ -155,7 +160,12 @@ struct ActivityWindowView: View {
         }
         .frame(minWidth: 900, minHeight: 480)
         // The Patterns rows are ready before the tab is opened.
-        .onAppear { if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) } }
+        .onAppear {
+            patternList.sessionGroups = { [weak model] in
+                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.name, keys: $0.keys, live: $0.isLive) }
+            }
+            if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) }
+        }
         .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }

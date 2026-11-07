@@ -6,7 +6,8 @@
   and every process it started. A strip above Events shows each session with its counts; click it to see only that
   session's events, right-click for the patterns it produced. Events have a *Session* column, Network destinations
   a session reached say *via Claude · project*, stories inside a session start with its name, and Time Travel
-  replays sessions from history. The MCP server lists them (`agent_sessions`).
+  replays sessions from history. Patterns can be grouped *By Session*. The MCP server lists them (`agent_sessions`).
+- **The Show filter on Patterns is a row of buttons again**, one click like on Events, however narrow the window.
 
 - **Patterns you can actually read.** The Pattern column wraps instead of cutting off, and a new inspector beside
   the table shows the selected pattern in full: what it means in plain words, the exact text (selectable), who

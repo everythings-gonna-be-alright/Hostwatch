@@ -704,8 +704,9 @@ final class SignatureStore: ObservableObject {
                               $scope.map { _ in () }.eraseToAnyPublisher(),
                               $patternOrder.map { _ in () }.eraseToAnyPublisher(),
                               $showSeenOnce.map { _ in () }.eraseToAnyPublisher(),
-                              $groupByProcess.map { _ in () }.eraseToAnyPublisher()])
-            .dropFirst(6)                                                    // each sends its current value at once
+                              $groupByProcess.map { _ in () }.eraseToAnyPublisher(),
+                              $groupBySession.map { _ in () }.eraseToAnyPublisher()])
+            .dropFirst(7)                                                    // each sends its current value at once
             .eraseToAnyPublisher()
     }()
 
@@ -713,6 +714,12 @@ final class SignatureStore: ObservableObject {
     @Published var groupByProcess = UserDefaults.standard.object(forKey: "patternsGroupByProcess") as? Bool ?? true {
         didSet { UserDefaults.standard.set(groupByProcess, forKey: "patternsGroupByProcess") }
     }
+    /// …or under the coding-agent session that produced them (instead of by program).
+    @Published var groupBySession = UserDefaults.standard.bool(forKey: "patternsGroupBySession") {
+        didSet { UserDefaults.standard.set(groupBySession, forKey: "patternsGroupBySession") }
+    }
+    /// A session's pattern keys, by its id (wired by the app; the store doesn't know sessions).
+    var sessionKeys: (Int) -> Set<String> = { _ in [] }
 
     /// A selection as pattern keys: a program's row (grouped) stands for its listed patterns.
     func keys(forSelection ids: Set<String>) -> [String] {
@@ -722,6 +729,9 @@ final class SignatureStore: ObservableObject {
             if id.hasPrefix(PatternItem.groupPrefix) {
                 let name = String(id.dropFirst(PatternItem.groupPrefix.count))
                 out += entries.values.filter { displayProcessName($0.process) == name && listed($0, searching: searching) }.map(\.id)
+            } else if id.hasPrefix(PatternItem.sessionPrefix) {
+                let keys = Int(id.dropFirst(PatternItem.sessionPrefix.count)).map(sessionKeys) ?? []
+                out += entries.values.filter { keys.contains($0.id) && listed($0, searching: searching) }.map(\.id)
             } else {
                 out.append(id)
             }
