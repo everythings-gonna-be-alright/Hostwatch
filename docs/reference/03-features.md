@@ -110,7 +110,7 @@ listed patterns. Right-click it for *Show Only* that program. Columns: Status, K
 Signer, Reason, Count, First Seen, Last Seen.
 
 **Reading a pattern.** The Pattern column wraps (up to three lines), so a long pattern reads without widening the
-column; hovering it says what it means in plain words (*reads anything under ~/Documents/work*). The **inspector**
+column, and hovering it says what it means in plain words (*reads anything under ~/Documents/work*). The **inspector**
 (the sidebar button at the right of the toolbar, shown by default) has the selected pattern in full: the plain
 words, the pattern and program as selectable text, who decided it and why, the AI's suggestion, count and exact
 first/last times, the last example it was seen in, the program's signature, and Safe / Suspicious / Dangerous
@@ -384,14 +384,14 @@ what one session did, not just what `zsh` or `git` did in general.
 - **Events ▸ Group:** *No Groups*, *By Process* or *By AI Session*, next to the Show buttons. *By AI Session* gives one
   row per session with its events under it, the rest under *No AI session*. A session row reads the way
   `claude --resume` lists sessions: the maker's mark, the topic, then *340 events · ProcessHUD · main · 12 min ·
-  5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree; *All Sessions* takes it
+  5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree, and *All Sessions* takes it
   off), **Show Its Patterns…** and the Claude session id.
 - **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's slanted A for Claude Code,
   OpenAI's knot for Codex, Google's four-colour G for Gemini CLI, a cube for the Cursor agent. It appears on session
   rows and in the *Session* column.
 - **The topic:** Claude Code's title for the session (`ai-title`, or a title you set yourself, which wins), else the
   first prompt, else the project folder. It comes from the transcript the guard hook names, so it needs the Claude
-  Code guard on; it's looked up again until found, since Claude titles a session a few turns in. The branch comes
+  Code guard on, and it's looked up again until found, since Claude titles a session a few turns in. The branch comes
   from the same place.
 - **How events are matched:** by process lineage at the moment each event arrives. A child that daemonizes and is
   reparented to `launchd` keeps its session. An agent started by an agent (a sub-agent) is part of the outer session.
@@ -406,8 +406,8 @@ what one session did, not just what `zsh` or `git` did in general.
   from there. A session with no topic yet is named by where and when it started (*Claude in ~, 16:24*).
 - **Patterns ▸ By AI Session:** one row per session with the patterns it produced under it, the rest under *No
   session*. It replaces *By Process* while it's on.
-- **Everywhere else:** the Events table has a *Session* column; a destination on the Network tab that a session
-  reached carries a *via Claude · ProcessHUD* tag; a story that happened inside a session starts with its name. In
+- **Everywhere else:** the Events table has a *Session* column, a destination on the Network tab that a session
+  reached carries a *via Claude · ProcessHUD* tag, and a story that happened inside a session starts with its name. In
   Time Travel, sessions are replayed from the window's recorded process starts, so the grouping and the column work
   for yesterday's session too (named when the saved list knows the pid and start, else by pid).
 - **For Claude:** the MCP tool `agent_sessions` lists them; `trace_process` with a session's pid shows what it did.

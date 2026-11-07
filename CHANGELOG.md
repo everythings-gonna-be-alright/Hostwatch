@@ -16,7 +16,7 @@
   why, when and how often, the last example, the signer, and the mark buttons.
 - **Rules in plain words.** Every learned rule and proposal says who does what and what happens then: *git reads
   anything under ~/Documents/ProcessHUD → Safe: decided for you, never asked about*. A proposal lists what approving
-  changes; the glob is behind *Details*. Baseline rules say what they trust.
+  changes, and the glob is behind *Details*. Baseline rules say what they trust.
 
 **Fewer patterns, same detection**
 - What macOS's own programs read is one pattern per program instead of one per folder. What a tool reads inside a
@@ -35,10 +35,15 @@
 - Columns resize on Events and Patterns (a click watcher on Patterns used to cancel the drag); every Events column
   has room to grow. Clicking the selected pattern again deselects it; Escape clears the selection.
 
+**Licence**
+- From this version Hostwatch is source available under the PolyForm Noncommercial License 1.0.0: free for personal
+  and non-commercial use, with the code public. Using it at work needs a commercial licence (contact@hostwatch.tech).
+  Versions up to 0.11.1 were released under MIT and stay under it.
+
 **For developers**
 - One folder per area under `src/hostwatch/`, one concept per file; `CLAUDE.md`, `docs/ARCHITECTURE.md` and
-  `docs/adr/` explain the shape and the decisions; a structure test keeps the dependency direction.
-- `./scripts/test.sh --changed` runs only the suites for the files you changed; `--only` takes a regex.
+  `docs/adr/` explain the shape and the decisions, and a structure test keeps the dependency direction.
+- `./scripts/test.sh --changed` runs only the suites for the files you changed, and `--only` takes a regex.
 
 ## 0.11.1 – Signed and notarized
 
