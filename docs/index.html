@@ -359,6 +359,48 @@
   footer .reach .btn { font-size: 13px; color: var(--text); }
   footer .reach .btn .gh { width: 14px; height: 14px; }
   footer .reach a[href^="mailto"] { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+
+  /* Phones: tighter rhythm, nothing cut off, comfortable tap targets. */
+  @media (max-width: 760px) {
+    .hero { padding-top: 32px; }
+    .brand.top { margin-bottom: 40px; }
+    section { padding-top: 104px; }
+    .closing { padding: 128px 0 96px; }
+    .closing .ua { margin-top: 56px; }
+    .proof span { padding: 20px 0; }
+
+    /* Feature tiles: the text and the screenshot start on the same edge; the screenshot shown a bit larger. */
+    .tile { min-height: 0; }
+    .tile .text { padding: 22px 20px 0; }
+    .tile .img { margin-top: 22px; min-height: 280px; }
+    .img.crop-left img { width: 820px; left: -14px; }  /* minus the shadow margin in the image: the window lines up with the text */
+    .img.crop-story img { width: 600px; left: -16px; }
+    .img.crop-watch img { width: 560px; left: -13px; top: -14px; }
+    .img.crop-running img { width: 700px; left: -10px; }
+
+    /* Buttons: one comfortable row in the hero, a centered stack of equal width at the end. */
+    .closing .actions { flex-direction: column; gap: 12px; }
+    .closing .actions .btn { width: min(100%, 300px); justify-content: center; }
+
+    /* Tap targets of at least 44 px for small links. */
+    .gk summary { padding: 12px 0; }
+    .hero .actions > a:not(.btn) { padding: 10px 0; }
+    .link-arrow { display: inline-block; padding: 10px 0; }
+    .pill { height: 36px; }
+    footer .cols { gap: 4px 24px; }
+    footer .cols a { display: inline-block; padding: 10px 0; }
+    footer .reach a[href^="mailto"] { display: inline-block; padding: 8px 0; }
+  }
+  @media (max-width: 560px) {
+    /* The version pill on one line: version, name, GitHub mark. */
+    .pill { max-width: 100%; white-space: nowrap; }
+    .pill .rn { display: none; }
+    .pill .ext { margin-left: -2px; }
+    /* Steps and the roadmap: one per row, so their text isn't squeezed into narrow columns. */
+    .install, .install.road { grid-template-columns: 1fr; }
+    .install div, .install div + div { padding: 22px 0; border-left: 0; }
+    .install div + div { border-top: 1px solid var(--line); }
+  }
 </style>
 </head>
 <body>
@@ -389,7 +431,7 @@
   <rect x="7.5" y="17.50" width="7.6" height="1.8" rx="0.9" fill="#f7f8f8" fill-opacity="0.32"/>
 </svg></span><span>Host<span class="soft">watch</span></span></a>
     <a class="pill" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/tag/v0.10.0" target="_blank" rel="noopener"
-       aria-label="Hostwatch 0.10: Running Now. Release notes on GitHub (opens in a new tab)"><b>0.10</b>Running Now<span class="sep"></span><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Release notes on GitHub<span class="ext">↗</span></a>
+       aria-label="Hostwatch 0.10: Running Now. Release notes on GitHub (opens in a new tab)"><b>0.10</b>Running Now<span class="sep"></span><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="rn">Release notes on GitHub</span><span class="ext">↗</span></a>
     <h1>Intrusion detection that <span class="quiet">understands your Mac</span></h1>
     <p class="sub">Learns what's normal on your Mac, flags what isn't, and <em>tells you the story.</em>
       <em>AI&#8209;ready</em>, <em>strict when you need it</em>, open source.</p>
