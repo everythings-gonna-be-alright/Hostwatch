@@ -226,7 +226,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 // (first run) or show where to approve it.
                 if self.collector.usesDaemon {
                     self.collector.daemon.refresh()
-                    if self.collector.daemon.isEnabled { return }
+                    if self.collector.daemon.isEnabled {
+                        // Registered but launchd can't spawn it (the app bundle was replaced while it restarted):
+                        // after a while with no collector, register it again.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+                            guard let self, !self.model.connected, CollectorDaemon.spawnFailed() else { return }
+                            self.collector.daemon.reregister()
+                        }
+                        return
+                    }
                     if self.collector.daemon.needsApproval { self.showServiceApproval(); return }
                 }
                 self.startCollector()

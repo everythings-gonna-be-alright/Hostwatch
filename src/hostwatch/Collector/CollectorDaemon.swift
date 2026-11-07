@@ -47,6 +47,26 @@ final class CollectorDaemon: ObservableObject {
 
     func openLoginItems() { SMAppService.openSystemSettingsLoginItems() }
 
+    /// launchd gave up spawning the registered service (exit 78, EX_CONFIG: it couldn't validate the app bundle,
+    /// typically because the bundle was replaced while the service restarted). Registering again repairs it.
+    static func spawnFailed(label: String = "tech.hostwatch.collectord") -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        p.arguments = ["print", "system/\(label)"]
+        let out = Pipe()
+        p.standardOutput = out; p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        p.waitUntilExit()
+        return text.contains("last exit code = 78") && !text.contains("state = running")
+    }
+
+    /// Unregisters and registers again (two admin prompts): the repair for a registration launchd refuses.
+    func reregister() {
+        unregister()
+        register()
+    }
+
     private static func describe(_ error: Error) -> String {
         let e = error as NSError
         // -128 / errAuthorizationCanceled: you pressed Cancel in the password dialog.
