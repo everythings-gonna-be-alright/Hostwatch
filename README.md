@@ -179,7 +179,7 @@ in **[docs/reference.md](docs/reference.md)**, changes in **[CHANGELOG.md](CHANG
 
 **Free for personal use, always.** Hostwatch is source available under the
 [PolyForm Noncommercial License 1.0.0](LICENSE): free for personal and non-commercial use, and the code stays public.
-Using it at work needs a commercial licence. Write to contact@hostwatch.tech. Companies will also get a server that
+Using it at work needs a commercial licence. Write to [contact@hostwatch.tech](mailto:contact@hostwatch.tech?subject=Hostwatch%20licence%20for%20work). Companies will also get a server that
 watches a whole fleet of Macs from one place, and a hosted cloud (SaaS) version.
 
 Versions up to 0.11.1 were released under the MIT license and stay under it.
