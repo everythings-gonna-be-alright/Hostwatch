@@ -47,3 +47,21 @@ import Testing
                                          requireRootFolder: false) != .ok)
     }
 }
+
+/// Only Hostwatch's own code may talk to the real collector: the peer's code must satisfy our designated requirement.
+@Suite struct CollectorPeerCode {
+    @Test func theSameCodePasses() throws {
+        var fds: [Int32] = [0, 0]
+        try #require(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0)
+        defer { close(fds[0]); close(fds[1]) }
+        #expect(AgentSocket.peerIsSameCode(fds[0]))                    // the other end is this very process
+        #expect(AgentSocket.peerIsSameCode(fds[1]))
+    }
+
+    @Test func aPipeIsNotAPeer() throws {
+        var fds: [Int32] = [0, 0]
+        try #require(pipe(&fds) == 0)
+        defer { close(fds[0]); close(fds[1]) }
+        #expect(!AgentSocket.peerIsSameCode(fds[0]))                   // no audit token: refused
+    }
+}

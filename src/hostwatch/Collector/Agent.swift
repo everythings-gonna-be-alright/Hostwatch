@@ -233,6 +233,40 @@ final class Agent: @unchecked Sendable {
     var shutdownToken: String?
     /// Started by launchd as a background service (see `--daemon`).
     var daemon = false
+    /// Service mode with no client for a while: eslogger and packet capture are stopped until one connects.
+    private(set) var idle = false
+    private var lastClientSeen = ProcessInfo.processInfo.systemUptime
+    /// How long without a client before going idle.
+    static let idleAfter: TimeInterval = 15
+    /// The sources an idle service stops (set by the loops that run them).
+    var currentESLogger: Spawned?
+    var currentSniffer: Spawned?
+
+    /// Service mode: idle once no client has been connected for `idleAfter`. Stops the sources; the loops notice.
+    func checkIdle() {
+        clientsLock.lock()
+        let none = clients.isEmpty, since = ProcessInfo.processInfo.systemUptime - lastClientSeen
+        let go = daemon && none && !idle && since >= Self.idleAfter
+        if go { idle = true }
+        clientsLock.unlock()
+        guard go else { return }
+        Agent.log("idle: no client for \(Int(Self.idleAfter)) s, stopping eslogger and packet capture until one connects")
+        currentESLogger?.terminate()
+        currentSniffer?.terminate()
+    }
+
+    /// Blocks until a client is connected (idle over) or shutdown; false when shutting down.
+    func waitForClient() -> Bool {
+        while !isStopped {
+            clientsLock.lock()
+            let has = !clients.isEmpty
+            if has { idle = false }
+            clientsLock.unlock()
+            if has { return true }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        return false
+    }
 
     // Hostwatch's own activity is not reported: the verified owner app (by pid), our helpers, and
     // their children. Other runs of the same program (e.g. the MCP server) are reported like any
@@ -372,14 +406,25 @@ final class Agent: @unchecked Sendable {
     // MARK: Publishing
 
     func addClient(_ client: AgentClient) {
-        clientsLock.lock(); clients[ObjectIdentifier(client)] = client; clientsLock.unlock()
+        clientsLock.lock()
+        clients[ObjectIdentifier(client)] = client
+        lastClientSeen = ProcessInfo.processInfo.systemUptime
+        if idle { idle = false; Agent.log("client connected: resuming") }
+        clientsLock.unlock()
     }
 
     func dropClient(_ client: AgentClient) {
         clientsLock.lock()
         let had = clients.removeValue(forKey: ObjectIdentifier(client)) != nil
+        let last = had && clients.isEmpty
+        if had { lastClientSeen = ProcessInfo.processInfo.systemUptime }
         clientsLock.unlock()
-        if had { close(client.fd); firewall.clientGone(client); watch.clientGone(client) }
+        guard had else { return }
+        close(client.fd)
+        // A service with nobody to ask: the firewall goes off, so nothing is held or blocked unanswered. The app
+        // sends its mode again when it reconnects.
+        if last, daemon { firewall.configure(["mode": "off"], from: client) }
+        firewall.clientGone(client); watch.clientGone(client)
     }
 
     var clientCount: Int { clientsLock.lock(); defer { clientsLock.unlock() }; return clients.count }

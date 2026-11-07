@@ -255,6 +255,7 @@ extension Agent {
                                                     (["-i", "any"], dnsOnly, false), ([], dnsOnly, false)]
         var choice = 0, failures = 0
         while !isStopped {
+            if daemon, idle || clientCount == 0 { guard waitForClient() else { return } }
             let (args, filter, connects) = attempts[choice]
             let child: Spawned
             do {
@@ -266,6 +267,7 @@ extension Agent {
                 return
             }
             ignore(Int(child.pid))
+            currentSniffer = child
             onShutdown { child.terminate() }
             Agent.log("packet capture: \(args.isEmpty ? "default" : args.joined(separator: " ")) (\(connects ? "DNS + connections" : "DNS only"))")
             let started = ProcessInfo.processInfo.systemUptime
@@ -273,7 +275,7 @@ extension Agent {
             let reader = LineReader(fd: child.stdout!)
             reader.forEach { raw in
                 let line = String(decoding: raw, as: UTF8.self)
-                if isStopped { return false }
+                if isStopped || idle { return false }
                 parsed += 1
                 // Metadata "(en0, proc curl:123, out, …)" is on the packet's first line.
                 if line.first?.isNumber == true { header = line; meta = AgentParse.metadata(line) }
@@ -293,8 +295,10 @@ extension Agent {
                 return true
             }
             child.wait()
+            currentSniffer = nil
             unignore(Int(child.pid))
             if isStopped { return }
+            if idle { continue }                             // stopped on purpose: not a failure
             if ProcessInfo.processInfo.systemUptime - started < 3 && parsed == 0 {
                 choice += 1                                  // unsupported here: try the next mode
                 failures += 1
@@ -433,6 +437,7 @@ extension Agent {
     func pollNetwork(interval: TimeInterval) {
         var previous: [LsofConnection: (ppid: Int, command: String)]?
         while !isStopped {
+          if daemon, idle { previous = nil; if wait(2) { return }; continue }
           autoreleasepool {
             let current = SocketOwner.connections()
             if let previous {
@@ -524,16 +529,24 @@ func runCollectorAgent(_ args: [String]) -> Never {
     agent.adoptOwnProcesses(ownerPid: ownerPid)              // before events flow: Hostwatch's own processes
     // "exit" only keeps the set of Hostwatch's own pids exact; it is never published.
     let events = ["exec", "exit"] + (kinds.contains("file") ? ["open"] : [])
-    let eslogger: Spawned
-    do {
-        eslogger = try Spawned.start("/usr/bin/eslogger", events, stderr: .inherit)
-    } catch {
-        Agent.logError("cannot start eslogger: \(error)"); exit(1)
-    }
-    agent.ignore(Int(eslogger.pid))
-    agent.onShutdown { eslogger.terminate() }
-    Agent.log("eslogger \(events.joined(separator: " ")) started (PID \(eslogger.pid))")
+    agent.onShutdown { agent.currentESLogger?.terminate() }
     if ownerPid > 0 { Thread.detachNewThread { agent.watchOwner(ownerPid) } }
+    if daemon {
+        // No client for a while: nothing is watched until one connects (a service shouldn't work for nobody).
+        Thread.detachNewThread { while !agent.wait(2) { agent.checkIdle() } }
+        // An update replaced the app: this process is the old binary. Exit; launchd (KeepAlive) starts the new one.
+        let me = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        let birth = (try? FileManager.default.attributesOfItem(atPath: me)[.modificationDate] as? Date) ?? .distantPast
+        Thread.detachNewThread {
+            while !agent.wait(30) {
+                let now = (try? FileManager.default.attributesOfItem(atPath: me)[.modificationDate] as? Date) ?? birth
+                if now != birth {
+                    Agent.log("the app was updated: restarting as the new version")
+                    agent.requestShutdown()
+                }
+            }
+        }
+    }
     Thread.detachNewThread { agent.runTopSampler() }
     // Its own memory once an hour in agent.log: a leak shows as a steady climb.
     Thread.detachNewThread {
@@ -559,18 +572,38 @@ func runCollectorAgent(_ args: [String]) -> Never {
         signalSources.append(source)
     }
 
-    let reader = LineReader(fd: eslogger.stdout!)
-    // One autorelease pool per event: this loop has no run loop to drain one (it kept GBs per hour).
-    reader.forEach { line in
-        if agent.isStopped { return false }
-        guard let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
-              let ev = agent.normalize(raw) else { return true }
-        agent.publish(ev)
-        return true
+    // eslogger runs while there is someone to tell; a service without a client stops it and waits.
+    while !agent.isStopped {
+        if daemon, agent.idle || agent.clientCount == 0 {
+            guard agent.waitForClient() else { break }
+        }
+        let eslogger: Spawned
+        do {
+            eslogger = try Spawned.start("/usr/bin/eslogger", events, stderr: .inherit)
+        } catch {
+            Agent.logError("cannot start eslogger: \(error)")
+            if daemon, !agent.wait(5) { continue }
+            exit(1)
+        }
+        agent.ignore(Int(eslogger.pid))
+        agent.currentESLogger = eslogger
+        Agent.log("eslogger \(events.joined(separator: " ")) started (PID \(eslogger.pid))")
+        let reader = LineReader(fd: eslogger.stdout!)
+        // One autorelease pool per event: this loop has no run loop to drain one (it kept GBs per hour).
+        reader.forEach { line in
+            if agent.isStopped || agent.idle { return false }
+            guard let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
+                  let ev = agent.normalize(raw) else { return true }
+            agent.publish(ev)
+            return true
+        }
+        eslogger.terminate()
+        eslogger.wait()
+        agent.currentESLogger = nil
+        agent.unignore(Int(eslogger.pid))
+        if !daemon { break }                                  // launched by the app: eslogger ending ends us
     }
     agent.requestShutdown()
-    eslogger.terminate()
-    eslogger.wait()
     close(server)
     agent.closeAllClients()
     withExtendedLifetime(signalSources) {}
