@@ -328,12 +328,14 @@
   .install.road .now small { color: var(--text); }
   @media (max-width: 900px) { .install, .install.road { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
 
-  .closing { text-align: center; padding: 200px 0 81px; position: relative; }  /* the space under the last line matches the space above "Free for personal use" */
+  .closing { text-align: center; padding: 200px 0 81px; position: relative; }  /* the space under the last line matches the space above "Free and open source" */
   .closing h2 { margin: 0 auto 32px; }
   .closing .actions { justify-content: center; }
 
   /* "Signed and notarized": a quiet note under the Download button that opens into how to check the download. */
   .gk { margin-top: 22px; max-width: 560px; }
+  .req { margin: 16px 0 0; font-size: 13px; color: var(--dim); }
+  .req + .gk, .req + .notices { margin-top: 10px; }
   .gk summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; color: var(--muted);
                 font-size: 14px; line-height: 1.4; }
   .gk summary::-webkit-details-marker { display: none; }
@@ -467,10 +469,11 @@
     <p class="sub">Learns what's normal on your Mac, flags what isn't, and <em>tells you the story.</em>
       <em>AI&#8209;ready</em>, <em>strict when you need it</em>, open source.</p>
     <div class="actions">
-      <a class="btn light lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
+      <a class="btn light lg dl" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
       <a class="btn ghost lg" href="docs/">Docs</a>
       <a class="link-arrow" href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span>↗</span></a>
     </div>
+    <p class="req">macOS 26 or later · Apple silicon and Intel</p>
     <details class="gk" id="open-it">
       <summary><svg class="ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 L6.6 11.6 L12.8 4.6"/></svg>
         <span><i>Signed and notarized by Apple</i> <span class="chev" aria-hidden="true">›</span></span></summary>
@@ -708,7 +711,7 @@
     <div class="label"><span class="num">7.0</span> What next</div>
     <h2>Today, one Mac. Next, every Mac in a company. <span class="quiet">The Mac app stays free.</span></h2>
     <div class="install road">
-      <div class="now"><svg class="road-art" viewBox="0 0 260 140" role="img" aria-label="One Mac with Hostwatch on its screen, available now"><g class="lg" transform="translate(64.5 26) scale(0.9) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><circle cx="183" cy="26" r="8" class="ok"/><path d="M179.4 26 l2.5 2.6 l4.7 -5.2" class="tick"/></svg><small>Now</small><h3>Hostwatch for Mac</h3><p>Everything on this page. Free for personal use, open source, all on your Mac.</p></div>
+      <div class="now"><svg class="road-art" viewBox="0 0 260 140" role="img" aria-label="One Mac with Hostwatch on its screen, available now"><g class="lg" transform="translate(64.5 26) scale(0.9) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><circle cx="183" cy="26" r="8" class="ok"/><path d="M179.4 26 l2.5 2.6 l4.7 -5.2" class="tick"/></svg><small>Now</small><h3>Hostwatch for Mac</h3><p>Everything on this page. Free and open source for everyone, at home and at work, all on your Mac.</p></div>
       <div><svg class="road-art planned" viewBox="0 0 260 140" role="img" aria-label="Many Macs sending their events to one server"><g class="sm" transform="translate(6 6) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><g class="sm" transform="translate(6 52) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><g class="sm" transform="translate(6 98) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><path d="M66 21 C120 21 130 50 178 50 M66 67 C110 67 130 72 178 72 M66 113 C120 113 130 94 178 94" class="flow"/><rect x="182" y="41" width="60" height="19" rx="3.5" class="laptop"/><circle cx="191.5" cy="50.5" r="1.6" class="led"/><path d="M200 50.5 h32" class="laptop thin"/><rect x="182" y="63" width="60" height="19" rx="3.5" class="laptop"/><circle cx="191.5" cy="72.5" r="1.6" class="led"/><path d="M200 72.5 h32" class="laptop thin"/><rect x="182" y="85" width="60" height="19" rx="3.5" class="laptop"/><circle cx="191.5" cy="94.5" r="1.6" class="led"/><path d="M200 94.5 h32" class="laptop thin"/></svg><small>Planned</small><h3>Hostwatch Server</h3><p>For companies: every Mac sends its events to one server you run. One timeline, stories and analytics across the whole fleet.</p></div>
       <div><svg class="road-art planned" viewBox="0 0 260 140" role="img" aria-label="Many Macs sending their events to Hostwatch Cloud"><g transform="translate(130 11) scale(1.25) translate(-120 -18)"><path d="M92 56 a12 12 0 0 1 2 -23.8 a18 18 0 0 1 34 -8 a14 14 0 0 1 22 10 a11 11 0 0 1 0 21.8 z" class="laptop"/></g><g class="sm" transform="translate(14 100) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><g class="sm" transform="translate(102 100) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><g class="sm" transform="translate(190 100) scale(0.38) translate(-190 -70)"><rect x="204" y="70" width="118" height="82" rx="6" class="laptop"/><rect x="208" y="74" width="110" height="74" rx="2.5" class="glass"/><rect x="256" y="74" width="14" height="4.5" rx="2" class="notch"/><path d="M193 155.5 H333 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H193 a3 3 0 0 1 -3 -3 v-0.5 a3 3 0 0 1 3 -3 z" class="laptop"/><path d="M253 155.5 q0 2.6 3.5 2.6 h13 q3.5 0 3.5 -2.6" class="laptop thin"/><g class="mark" transform="translate(239 87) scale(2)"><circle cx="4" cy="4.9" r="1.25" opacity=".5"/><rect x="7.5" y="4" width="9.8" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="9.4" r="1.25" opacity=".5"/><rect x="7.5" y="8.5" width="13.2" height="1.8" rx=".9" opacity=".32"/><circle cx="4" cy="13.9" r="1.7"/><rect x="7.5" y="13" width="11.8" height="1.8" rx=".9"/><circle cx="4" cy="18.4" r="1.25" opacity=".5"/><rect x="7.5" y="17.5" width="7.6" height="1.8" rx=".9" opacity=".32"/></g></g><path d="M42 98 C42 82 96 86 112 64 M130 98 V64 M218 98 C218 82 164 86 148 64" class="flow"/></svg><small>Planned</small><h3>Hostwatch Cloud</h3><p>The same server as a service (SaaS), run for you. Nothing to install or maintain.</p></div>
     </div>
@@ -719,9 +722,10 @@
   <div class="wrap">
     <h2>Know what your Mac is doing.<br><span class="quiet">Starting now.</span></h2>
     <div class="actions">
-      <a class="btn light lg" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
+      <a class="btn light lg dl" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest">Download for macOS</a>
       <a class="btn ghost lg" href="docs/">Read the docs</a>
     </div>
+    <p class="req">macOS 26 or later · Apple silicon and Intel</p>
     <div class="notices">
     <details class="gk" id="open-it-end">
       <summary><svg class="ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 L6.6 11.6 L12.8 4.6"/></svg>
@@ -736,7 +740,7 @@
       </div>
     </details>
     </div>
-    <p class="ua"><b>Free for personal use, always.</b><br><span class="made">Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</span></p>
+    <p class="ua"><b>Free and open source, for everyone.</b><br><span class="made">Made in Ukraine <svg class="flag" viewBox="0 0 18 12" role="img" aria-label="Ukrainian flag"><rect width="18" height="6" rx="0" fill="#0057B7"/><rect y="6" width="18" height="6" fill="#FFD700"/></svg>, between ballistic missile attacks.</span></p>
     <a class="link-arrow" href="https://u24.gov.ua/" target="_blank" rel="noopener">Help Ukraine on United24 <span>↗</span></a>
   </div>
 </div>
@@ -758,7 +762,7 @@
   // The version pill shows the latest release on GitHub (read once an hour per visit; the page's own text is the fallback).
   (async () => {
     const pill = document.querySelector("a.pill"); if (!pill) return;
-    const KEY = "hw-latest-release", now = Date.now();
+    const KEY = "hw-latest-release-2", now = Date.now();
     let rel = null;
     try { const c = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (c && now - c.t < 36e5) rel = c.r; } catch {}
     if (!rel) {
@@ -767,7 +771,8 @@
                               { headers: { Accept: "application/vnd.github+json" } });
         if (!r.ok) return;
         const j = await r.json();
-        rel = { tag: j.tag_name, name: j.name || "", url: j.html_url };
+        const zip = (j.assets || []).find(a => /^Hostwatch-[\w.-]+\.zip$/.test(a.name));
+        rel = { tag: j.tag_name, name: j.name || "", url: j.html_url, zip: zip ? zip.browser_download_url : "" };
         try { sessionStorage.setItem(KEY, JSON.stringify({ t: now, r: rel })); } catch {}
       } catch { return; }
     }
@@ -779,6 +784,9 @@
     pill.querySelector(".rt").textContent = title;
     if (/^https:\/\/github\.com\/everythings-gonna-be-alright\/Hostwatch\/releases\//.test(rel.url)) pill.href = rel.url;
     pill.setAttribute("aria-label", `Hostwatch ${ver}: ${title}. Release notes on GitHub (opens in a new tab)`);
+    // One click downloads the app itself; without an answer the buttons keep opening the release page.
+    if (/^https:\/\/github\.com\/everythings-gonna-be-alright\/Hostwatch\/releases\/download\/[^/]+\/Hostwatch-[\w.-]+\.zip$/.test(rel.zip || ""))
+      document.querySelectorAll("a.dl").forEach(a => { a.href = rel.zip; a.setAttribute("aria-label", `Download Hostwatch ${ver} for macOS`); });
   })();
   // Reduce Motion: the recording stays on its first frame.
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll(".backdrop video").forEach(v => { v.autoplay = false; v.pause(); });

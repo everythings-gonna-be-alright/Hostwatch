@@ -177,6 +177,6 @@ in **[docs/reference.md](docs/reference.md)**; changes in **[CHANGELOG.md](CHANG
 
 ## License
 
-**Free for personal use, always.** A paid edition will be only for companies: a server that watches a whole fleet
-of Macs from one place, and a hosted cloud (SaaS) version. The Mac app stays free and open source under the
-[MIT license](LICENSE).
+**Free and open source, for everyone**, at home and at work, under the [MIT license](LICENSE). A paid edition
+will come only for companies: a server that watches a whole fleet of Macs from one place, and a hosted cloud (SaaS)
+version.
