@@ -115,8 +115,18 @@ final class Vault: @unchecked Sendable {
             }
             problem = "The Secure Enclave key for Hostwatch's data is gone (vault.key can't be opened)."
         }
-        // 2. The keychain item (a Mac without an Enclave, or earlier versions).
-        if let data = Self.keychainRead() { key = SymmetricKey(data: data); backend = .keychain; return }
+        // 2. The keychain item (a Mac without an Enclave, or earlier versions). With an Enclave at hand the key moves
+        //    into it: wrapped into vault.key, then the keychain item goes (a password alone no longer opens the data).
+        if let data = Self.keychainRead() {
+            key = SymmetricKey(data: data); backend = .keychain
+            if let privateKey = Self.enclaveKey(create: true), let publicKey = SecKeyCopyPublicKey(privateKey),
+               let blob = Self.wrap(data, with: publicKey), (try? blob.write(to: wrapped, options: .atomic)) != nil {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: wrapped.path)
+                Self.keychainDelete()
+                backend = .enclave
+            }
+            return
+        }
         // 3. New: make one.
         let fresh = SymmetricKey(size: .bits256)
         let raw = fresh.withUnsafeBytes { Data($0) }
@@ -176,6 +186,12 @@ final class Vault: @unchecked Sendable {
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
         return item as? Data
+    }
+
+    private static func keychainDelete() {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount]
+        SecItemDelete(query as CFDictionary)
     }
 
     /// Adds the item with an access list of one: this application (its code, by designated requirement).

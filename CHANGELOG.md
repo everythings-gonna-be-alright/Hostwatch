@@ -3,8 +3,8 @@
 ## Unreleased – Encrypted at rest
 
 - **Everything Hostwatch keeps is encrypted now.** Patterns, stories, domains, sessions, rules, logs and the whole
-  activity history are sealed with a key that lives in the Secure Enclave (or, on a Mac without one, in a keychain
-  item only Hostwatch's own code may read). Another program running as you, an AI agent included, can't read your
+  activity history are sealed with a key kept in a keychain item that only Hostwatch's own code may read (the
+  Secure Enclave takes over once the build is provisioned for it). Another program running as you, an AI agent included, can't read your
   activity. Older files still read and are rewritten sealed as they're saved. `zcat` on history files is replaced by
   `Hostwatch --export-history`. Settings ▸ General shows the state.
 
