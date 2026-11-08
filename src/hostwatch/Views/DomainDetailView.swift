@@ -171,7 +171,7 @@ struct DomainDetailView: View {
             Card(title: "Recent connections", symbol: "clock") {
                 ForEach(Array(details.connections.prefix(10).enumerated()), id: \.offset) { _, e in
                     HStack(spacing: 8) {
-                        Text(e.time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text(e.clockTime).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         Text(e.name).fontWeight(.medium).lineLimit(1).frame(width: 140, alignment: .leading)
                         Text(e.host.isEmpty ? e.target : "\(e.host) [\(e.target)]")
                             .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)

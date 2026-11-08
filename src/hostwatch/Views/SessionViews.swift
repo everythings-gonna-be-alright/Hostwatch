@@ -124,14 +124,19 @@ extension CodingAgent {
 
 extension AgentSession {
     /// "ProcessHUD · main · 12 min · 340 events · 5 conn", the way `claude --resume` lists a session.
-    var facts: String {
+    var facts: String { facts(withEvents: true) }
+
+    /// For a group row, whose count capsule already says how many events are listed.
+    var groupFacts: String { facts(withEvents: false) }
+
+    private func facts(withEvents: Bool) -> String {
         var parts: [String] = []
         if !project.isEmpty { parts.append(project) }
         if !branch.isEmpty { parts.append(branch) }
         let minutes = Int(duration / 60)
         parts.append(isLive ? (minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min")
                      : "ended " + RelativeDateTimeFormatter.short.localizedString(for: ended ?? lastSeen, relativeTo: Date()))
-        parts.append("\(events.formatted()) events")
+        if withEvents { parts.append("\(events.formatted()) events") }
         if connections > 0 { parts.append("\(connections) conn") }
         return parts.joined(separator: " · ")
     }

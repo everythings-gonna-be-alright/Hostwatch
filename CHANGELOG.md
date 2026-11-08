@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Faster and lighter
+
+- **Less CPU while the window is open.** With a coding agent at work, every one of its events re-drew the whole
+  window: the AI-session counters were published one event at a time, and each publish rebuilt the list and its
+  Show counts over all 5,000 events. Session counters now reach the window at most once a second (a session
+  starting, ending or getting its name still shows at once), the Show counts are made in one pass together with
+  the rows and kept until something changes, and batches of events arrive twice a second instead of five times.
+
+### New
+
+- **Grouping reads at a glance.** By Process and By AI Session groups open when shown (your clicks on a group are
+  kept while the window is open), each group row shows its count as a capsule beside the session's facts, and the
+  catch-all group (*No AI session*) is drawn quieter. In Events the Session column is gone: an event of an AI
+  agent's process carries the maker's mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in
+  the tooltip.
+- **A Parent column in Events** names the program that started the process ("zsh", "Claude", "launchd"), for
+  file and network events as well as launches. The PPID column stays for the number.
+- **The Time column shows the fraction of a second** ("14:05:09.483271", the collector stamps to the microsecond),
+  so events a burst apart read in order, and the column is wide enough for it by default.
+
+### Fixes
+
+- Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint, which counts
+  shared and compressed memory many times. It now shows used memory of the total, as Activity Monitor does.
+
 ## 0.13.0 – No password at launch, encrypted at rest
 
 - **Everything Hostwatch keeps is encrypted now.** Patterns, stories, domains, sessions, rules, logs and the whole

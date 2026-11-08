@@ -27,6 +27,13 @@ import Testing
         #expect(r.netIn >= 0 && r.netOut >= 0)
     }
 
+    /// Running Now's footer shows this: it must stay within what the Mac holds (summing process footprints didn't).
+    @Test func usedMemoryFitsTheMac() {
+        let used = SystemSampler.memoryUsedBytes()
+        #expect(used > 0)
+        #expect(used <= ProcessInfo.processInfo.physicalMemory)
+    }
+
     @Test func compactJSONAndCollectorFormat() throws {
         let data = try JSONEncoder().encode(sample(Date(timeIntervalSince1970: 1_800_000_000)))
         let text = String(decoding: data, as: UTF8.self)

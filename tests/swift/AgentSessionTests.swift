@@ -187,8 +187,9 @@ import Testing
         let header = EventItem.SessionHeader(id: 100, topic: "Fewer patterns", facts: "ProcessHUD · 5 min", agent: .claude, pids: [100, 101])
         let rows = EventItem.groupedBySession([a, b, c], sessions: [header])
         #expect(rows.count == 2 && rows[0].groupTitle == "Fewer patterns" && rows[0].children?.count == 2)
-        #expect(rows[0].agent == .claude && rows[0].groupSubtitle == "2 events · ProcessHUD · 5 min")
-        #expect(rows[1].groupTitle == "No AI session" && rows[1].children?.map(\.id) == [c.id])
+        // The count is drawn as a capsule by the view: the subtitle holds the session's facts alone.
+        #expect(rows[0].agent == .claude && rows[0].groupSubtitle == "ProcessHUD · 5 min")
+        #expect(rows[1].groupTitle == "No AI session" && rows[1].isCatchAll && rows[1].children?.map(\.id) == [c.id])
         #expect(rows[0].id == EventItem.stableUUID("session:100") && EventItem.stableUUID("a") != EventItem.stableUUID("b"))
         #expect(EventItem.groupedByProcess([a, b, c]).map(\.groupTitle) == ["git", "vim"])
         #expect(EventItem.groupedBySession([c], sessions: [header]).map(\.groupTitle) == ["No AI session"])

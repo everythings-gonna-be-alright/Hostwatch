@@ -99,6 +99,9 @@ struct ActivityEvent: Identifiable, Decodable {
         applySignature()
     }
 
+    /// "14:02:11", without the fraction of a second: for narrow places (the overlay, story steps).
+    var clockTime: String { String(time.prefix(8)) }
+
     /// "Tue 3 Nov 14:02:11" for a recorded event; the clock time when the day is unknown.
     var dayTime: String {
         guard ts > 0 else { return time }

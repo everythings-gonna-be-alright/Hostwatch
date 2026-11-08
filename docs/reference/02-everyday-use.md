@@ -122,7 +122,9 @@ event list. While the window is on screen, the list refreshes every 3 s.
 | running for | time since it started |
 | parent | the process that started it |
 
-The search field matches name, path, command line, user or PID. The footer totals CPU and memory.
+The search field matches name, path, command line, user or PID. The footer totals CPU and shows the Mac's used
+memory the way Activity Monitor counts it (app, wired and compressed). The rows don't add up to it: a footprint
+includes memory the process shares with others.
 
 **Information.** Double-click a row, or right-click ▸ *Show Info*. A panel opens below the list and follows the
 selection until you close it. It shows:

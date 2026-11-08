@@ -228,7 +228,7 @@ extension Agent {
         let ip = AgentParse.stripHost(remote)
         let name = Agent.base(exe)
         var ev = AgentEvent([("kind", .str("net")), ("time", .str(Agent.nowHMS())), ("pid", .int(pid)),
-                             ("ppid", .int(pidParent(pid))), ("name", .str(name.isEmpty ? (nameHint.isEmpty ? "?" : nameHint) : name)),
+                             ("ppid", .int(pidParent(pid))), ("parent", .str(parentPath(ppid: pidParent(pid)))), ("name", .str(name.isEmpty ? (nameHint.isEmpty ? "?" : nameHint) : name)),
                              ("proc", .str(exe)), ("target", .str(remote)), ("extra", .str(proto))])
         if !host.isEmpty {
             ev.set("host", .str(host)); ev.set("host_src", .str("dns"))          // the name it asked for (TLS)
@@ -417,7 +417,7 @@ extension Agent {
                 let exe = pidPath(pid)
                 let name = Agent.base(exe)
                 var ev = AgentEvent([("kind", .str("net")), ("time", .str(Agent.nowHMS())), ("pid", .int(pid)),
-                                     ("ppid", .int(pidParent(pid))),
+                                     ("ppid", .int(pidParent(pid))), ("parent", .str(parentPath(ppid: pidParent(pid)))),
                                      ("name", .str(name.isEmpty ? (info.name.isEmpty ? "?" : info.name) : name)),
                                      ("proc", .str(exe)), ("target", .str(dest.target)), ("extra", .str("TCP")),
                                      ("inferred", .bool(true)),

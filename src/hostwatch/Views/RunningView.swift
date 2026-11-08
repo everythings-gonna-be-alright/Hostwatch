@@ -92,6 +92,9 @@ final class RunningProcesses: ObservableObject {
     @Published var showing = false { didSet { showing ? start() : stop() } }
     @Published private(set) var rows: [RunningRow] = []
     @Published private(set) var updated: Date?
+    /// The Mac's used memory when the list arrived (footprints summed would show 40 GB on an 18 GB Mac).
+    @Published private(set) var memoryUsed: Int64 = 0
+    let memoryTotal = Int64(ProcessInfo.processInfo.physicalMemory)
     @Published private(set) var unavailable = false        // the collector isn't connected
     @Published var selection: RunningRow.ID?
     /// The selected process's information below the list: opened by double-click (or Show Info), then it follows
@@ -161,6 +164,7 @@ final class RunningProcesses: ObservableObject {
         lastWritten = seen
         rows = RunningRow.rows(list)
         updated = now
+        memoryUsed = Int64(SystemSampler.memoryUsedBytes())
         unavailable = false
     }
 
@@ -384,11 +388,12 @@ struct RunningProcessesView: View {
     private func footer(_ grouped: [RunningRow]) -> some View {
         let rows = grouped.flatMap { $0.children ?? [$0] }
         let cpu = rows.reduce(0) { $0 + ($1.info.cpu ?? 0) }
-        let mem = rows.reduce(Int64(0)) { $0 + $1.mem }
         return HStack(spacing: 12) {
             Text("\(rows.count) processes").monospacedDigit()
             Text("CPU \(String(format: "%.0f", cpu))%").monospacedDigit()
-            Text("Memory \(RunningFormat.bytes(mem))").monospacedDigit()
+            Text("Memory \(RunningFormat.bytes(running.memoryUsed)) of \(RunningFormat.bytes(running.memoryTotal)) used")
+                .monospacedDigit()
+                .help("Used memory as Activity Monitor counts it: app, wired and compressed. Each row shows the process's own footprint, which includes memory shared with others, so the rows don't add up to this.")
             Spacer()
             Text("Double-click a process for its information")
                 .foregroundStyle(.tertiary)
