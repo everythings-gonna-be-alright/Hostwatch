@@ -12,15 +12,16 @@
 
 ### New
 
-- **Grouping reads at a glance.** By Process and By AI Session groups open when shown (your clicks on a group are
-  kept while the window is open), each group row shows its count as a capsule beside the session's facts, and the
-  catch-all group (*No AI session*) is drawn quieter. In Events the Session column is gone: an event of an AI
+- **Grouping reads at a glance.** By Process and By AI Session group rows are section headings: a tinted band with
+  the agent's mark, the title and the session's facts, the worst status and the count on the right. Groups start
+  folded (your clicks on them are kept while the window is open) and the catch-all group (*No AI session*) is drawn
+  quieter. In Events the Session column is gone: an event of an AI
   agent's process carries the maker's mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in
   the tooltip.
 - **A Parent column in Events** names the program that started the process ("zsh", "Claude", "launchd"), for
   file and network events as well as launches. The PPID column stays for the number.
-- **The Time column shows the fraction of a second** ("14:05:09.483271", the collector stamps to the microsecond),
-  so events a burst apart read in order, and the column is wide enough for it by default.
+- **The Time column shows hundredths of a second** ("14:05:09.48"), so events a burst apart read in order. The
+  collector stamps to the microsecond: the full stamp is in the cell's tooltip and in exported history.
 
 ### Fixes
 

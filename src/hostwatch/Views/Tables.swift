@@ -16,8 +16,9 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     /// A program's row: the kinds of activity among its patterns, and how many are New.
     var kinds: [EventKind] = []
     var newCount = 0
-    /// An AI session's row: the agent's maker, for its mark.
+    /// An AI session's row: the agent's maker, for its mark, and the session's facts for the header.
     var agent: CodingAgent? = nil
+    var groupFacts = ""
 
     // Sort keys, worked out once (sorting compares them many times).
     /// Status, then high-risk first within it.
@@ -51,7 +52,11 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     static let sessionPrefix = "session:"
 
     /// A coding-agent session, for grouping: its row's name and the keys of its patterns.
-    struct SessionGroup: Sendable { var id: Int; var name: String; var keys: Set<String>; var live: Bool; var agent: CodingAgent? = nil }
+    struct SessionGroup: Sendable {
+        var id: Int; var name: String; var keys: Set<String>; var live: Bool
+        var agent: CodingAgent? = nil
+        var facts = ""                  // the header's second line: project, branch, duration
+    }
 
     /// One row per session that produced patterns (its patterns under it), then the rest under "No session".
     static func groupedBySession(_ items: [PatternItem], sessions: [SessionGroup],
@@ -62,7 +67,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
             let mine = rest.filter { s.keys.contains($0.id) }
             guard !mine.isEmpty else { continue }
             rest.removeAll { s.keys.contains($0.id) }
-            groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name, agent: s.agent))
+            groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name, agent: s.agent, facts: s.facts))
         }
         // With Show ▸ New or Important, a session may have nothing listed: the rest still says it's outside any
         // session (a flat list looked like the grouping had stopped working).
@@ -71,7 +76,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     }
 
     /// A group row standing for `list` (its worst status, counts added up), with the list under it.
-    private static func group(_ list: [PatternItem], id: String, name: String, agent: CodingAgent? = nil) -> PatternItem {
+    private static func group(_ list: [PatternItem], id: String, name: String, agent: CodingAgent? = nil, facts: String = "") -> PatternItem {
         let worst = list.min { $0.statusRank != $1.statusRank ? $0.statusRank < $1.statusRank : $0.entry.risk > $1.entry.risk }!
         let new = list.filter { $0.status == .unclassified }.count
         var e = worst.entry
@@ -88,6 +93,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
         var row = PatternItem(entry: e, status: worst.status, statusRank: worst.statusRank, source: nil, note: nil,
                               decidedBy: deciders.count == 1 ? deciders.first! : "Mixed", children: list, kinds: kinds, newCount: new)
         row.agent = agent
+        row.groupFacts = facts
         return row
     }
 

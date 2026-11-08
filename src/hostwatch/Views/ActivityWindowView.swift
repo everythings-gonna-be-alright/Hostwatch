@@ -155,7 +155,7 @@ struct ActivityWindowView: View {
         // The Patterns rows are ready before the tab is opened.
         .onAppear {
             patternList.sessionGroups = { [weak model] in
-                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.name, keys: $0.keys, live: $0.isLive, agent: $0.agent) }
+                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.topic, keys: $0.keys, live: $0.isLive, agent: $0.agent, facts: $0.groupFacts) }
             }
             if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) }
         }
@@ -244,7 +244,7 @@ struct ActivityWindowView: View {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
         switch model.windowTab {
-        case 0: return "\(state) · \(model.history.count) events"
+        case 0: return state                         // the list is capped at 5,000, so its count said nothing
         case 1: return "\(state) · \(signatures.total) patterns"
         case 2: return "\(state) · \(stories.activeCount) open stories"
         case 3:
@@ -534,21 +534,26 @@ struct ActivityWindowView: View {
           ScrollViewReader { proxy in
             Table(selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
-                    Text(withDay ? item.event.dayTime : item.event.time).foregroundStyle(.secondary).monospacedDigit()
-                        .opacity(item.isGroup ? 0.7 : 1)
-                        // The end of a Time Travel window's list: its next older page.
-                        .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
+                    Group {
+                    if item.isGroup {
+                        // The group's header sits by its disclosure triangle and runs over the empty cells beside it,
+                        // so the row reads as a section heading rather than as another event.
+                        GroupHeader(title: item.groupTitle, facts: item.groupSubtitle, agent: item.agent, dimmed: item.isCatchAll)
+                            .help(item.groupTitle)
+                    } else {
+                        Text(withDay ? item.event.dayTime : item.event.shortTime).foregroundStyle(.secondary).monospacedDigit()
+                            .help(item.event.time)              // the full microsecond stamp
+                            // The end of a Time Travel window's list: its next older page.
+                            .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
+                    }
+                    }
+                    .background(RowTint(color: item.isGroup ? RowTint.group : nil))
                 }
-                // Room for "14:05:09.483271" (the collector stamps to the microsecond).
-                .width(min: 72, ideal: withDay ? 170 : 140, max: 240)   // grouped rows are indented
+                // Room for "14:05:09.48" in an indented (grouped) row.
+                .width(min: 72, ideal: withDay ? 160 : 108, max: 240)
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
-                        HStack(spacing: 2) {
-                            ForEach(item.groupKinds.prefix(3), id: \.self) {
-                                Image(systemName: $0.symbol).font(.system(size: 10, weight: .bold)).foregroundStyle($0.color)
-                            }
-                        }
-                        .help(item.groupKinds.map(\.title).joined(separator: ", "))
+                        EmptyView()                          // the header runs over this cell
                     } else {
                         HStack(spacing: 5) {
                             Image(systemName: item.event.kind.symbol)
@@ -566,7 +571,7 @@ struct ActivityWindowView: View {
                 .width(min: 20, ideal: 56, max: 120)
                 TableColumn("Status", value: \.statusRank) { item in
                     if item.isGroup {
-                        StatusPill(status: item.status).help("The most serious status among these events")
+                        EmptyView()                          // the header runs over this cell
                     } else {
                     HStack(spacing: 4) {
                         if let bad = intel.flag(for: item.event) {
@@ -602,14 +607,11 @@ struct ActivityWindowView: View {
                 .width(min: 70, ideal: 84, max: 240)
                 TableColumn("Process", value: \.name) { item in
                     if item.isGroup {
-                        HStack(spacing: 5) {
-                            if let agent = item.agent { AgentBadge(agent: agent) }
-                            Text(item.groupTitle).fontWeight(.semibold).lineLimit(1).truncationMode(.tail)
-                                .foregroundStyle(item.isCatchAll ? .secondary : .primary)
-                        }
-                        .help(item.groupTitle)
+                        EmptyView()
                     } else {
-                        Text(item.event.name).fontWeight(.semibold).lineLimit(1).help(item.event.proc)
+                        // Under a group row the names step back, so the groups read first.
+                        Text(item.event.name).fontWeight(model.eventGrouping == .none ? .semibold : .regular)
+                            .lineLimit(1).help(item.event.proc)
                     }
                 }
                 .width(min: 60, ideal: model.eventGrouping == .session ? 260 : 110, max: 600)
@@ -631,10 +633,8 @@ struct ActivityWindowView: View {
                 TableColumn("Detail", value: \.detail) { item in
                     if item.isGroup {
                         HStack(spacing: 8) {
+                            StatusPill(status: item.status).help("The most serious status among these events")
                             CountCapsule(count: item.children?.count ?? 0, noun: "event")
-                            if !item.groupSubtitle.isEmpty {
-                                Text(item.groupSubtitle).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                            }
                         }
                     } else {
                     HStack(spacing: 6) {
@@ -655,7 +655,7 @@ struct ActivityWindowView: View {
                 }
                 .width(min: 120, ideal: 900)
             } rows: {
-                // Group rows open when first shown; a click on one is remembered while the window lives.
+                // Group rows start folded; a click on one is remembered while the window lives.
                 ForEach(rows) { item in
                     if let kids = item.children {
                         DisclosureTableRow(item, isExpanded: groups.isOpen(item.id)) {

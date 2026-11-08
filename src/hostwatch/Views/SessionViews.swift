@@ -31,14 +31,18 @@ private struct AnthropicMark: View {
             let w = geo.size.width, h = geo.size.height
             ZStack {
                 RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color(red: 0.85, green: 0.47, blue: 0.34))
+                // Anthropic's logomark (the published 24-unit outline), drawn at 62 % of the box.
                 Path { p in
-                    // Left leg (shorter, thinner) and right leg: the two strokes of the mark.
-                    p.move(to: CGPoint(x: w * 0.30, y: h * 0.78)); p.addLine(to: CGPoint(x: w * 0.47, y: h * 0.26))
-                    p.addLine(to: CGPoint(x: w * 0.56, y: h * 0.26)); p.addLine(to: CGPoint(x: w * 0.39, y: h * 0.78)); p.closeSubpath()
-                    p.move(to: CGPoint(x: w * 0.50, y: h * 0.22)); p.addLine(to: CGPoint(x: w * 0.60, y: h * 0.22))
-                    p.addLine(to: CGPoint(x: w * 0.80, y: h * 0.78)); p.addLine(to: CGPoint(x: w * 0.70, y: h * 0.78)); p.closeSubpath()
+                    let s = w * 0.62 / 24, ox = (w - 24 * s) / 2, oy = (h - 24 * s) / 2
+                    func pt(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: ox + x * s, y: oy + y * s) }
+                    p.move(to: pt(17.3041, 3.541)); p.addLine(to: pt(13.6323, 3.541)); p.addLine(to: pt(20.3283, 20.459))
+                    p.addLine(to: pt(24, 20.459)); p.closeSubpath()
+                    p.move(to: pt(6.6959, 3.541)); p.addLine(to: pt(0, 20.459)); p.addLine(to: pt(3.7442, 20.459))
+                    p.addLine(to: pt(5.1135, 16.9063)); p.addLine(to: pt(12.1187, 16.9063)); p.addLine(to: pt(13.488, 20.4591))
+                    p.addLine(to: pt(17.2322, 20.4591)); p.addLine(to: pt(10.5363, 3.5409)); p.closeSubpath()
+                    p.move(to: pt(6.3247, 13.7641)); p.addLine(to: pt(8.6161, 7.8185)); p.addLine(to: pt(10.9075, 13.7641)); p.closeSubpath()
                 }
-                .fill(Color.white)
+                .fill(Color.white, style: FillStyle(eoFill: true))
             }
         }
     }
