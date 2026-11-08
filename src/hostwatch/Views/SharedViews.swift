@@ -210,15 +210,68 @@ final class TravelRowsCache: ObservableObject {
     }
 }
 
-/// Which group rows are closed. Groups open when first shown (a grouping you chose is there to be read, not
-/// unfolded one by one); a click on a disclosure is kept while the window lives.
+/// Which group rows are open. Groups start folded, so a grouping reads as its list of headings; a click on a
+/// disclosure is kept while the window lives.
 final class GroupExpansion: ObservableObject {
-    @Published private var closed: Set<AnyHashable> = []
+    @Published private var open: Set<AnyHashable> = []
 
     func isOpen(_ id: some Hashable) -> Binding<Bool> {
         let key = AnyHashable(id)
-        return Binding(get: { !self.closed.contains(key) },
-                       set: { open in if open { self.closed.remove(key) } else { self.closed.insert(key) } })
+        return Binding(get: { self.open.contains(key) },
+                       set: { isOpen in if isOpen { self.open.insert(key) } else { self.open.remove(key) } })
+    }
+}
+
+/// A group row's heading. It is drawn in the outline column and left to run over the empty cells beside it, on a
+/// tinted band the width of the table: a SwiftUI Table has no row background of its own, and a group should read
+/// as a section heading, not as one more row.
+struct GroupHeader: View {
+    let title: String
+    var facts = ""
+    var agent: CodingAgent?
+    var dimmed = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let agent {
+                AgentBadge(agent: agent, size: 16)
+            } else {
+                RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary).frame(width: 16, height: 16)
+            }
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(dimmed ? .secondary : .primary)
+            if !facts.isEmpty { Text(facts).font(.system(size: 12)).foregroundStyle(.secondary) }
+        }
+        .fixedSize()
+        .padding(.leading, 2)
+    }
+}
+
+/// Tints the whole table row the cell sits in. SwiftUI's Table has no row background of its own, but AppKit's
+/// row view does, so a group row can be a band the width of the table. Every row carries one (group rows with a
+/// colour, the rest with none), because AppKit reuses row views and a tint would otherwise stay behind.
+struct RowTint: NSViewRepresentable {
+    var color: NSColor?
+
+    /// The band behind a group row, over either appearance.
+    static let group = NSColor.controlAccentColor.withAlphaComponent(0.13)
+
+    func makeNSView(context: Context) -> TintView { TintView() }
+    func updateNSView(_ view: TintView, context: Context) { view.color = color; view.apply() }
+
+    final class TintView: NSView {
+        var color: NSColor?
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
+        override func viewDidMoveToSuperview() { super.viewDidMoveToSuperview(); apply() }
+        func apply() {
+            var v = superview
+            while let s = v, !(s is NSTableRowView) { v = s.superview }
+            guard let row = v as? NSTableRowView else { return }
+            // A table with alternating row colours ignores `backgroundColor`: the group-row style is drawn
+            // regardless, and is AppKit's own section-heading look.
+            row.isGroupRowStyle = color != nil
+            row.backgroundColor = color ?? .clear
+            row.needsDisplay = true
+        }
     }
 }
 

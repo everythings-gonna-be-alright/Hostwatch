@@ -101,6 +101,8 @@ struct ActivityEvent: Identifiable, Decodable {
 
     /// "14:02:11", without the fraction of a second: for narrow places (the overlay, story steps).
     var clockTime: String { String(time.prefix(8)) }
+    /// "14:02:11.48": the Events table's Time column (the full microsecond stamp is in its tooltip).
+    var shortTime: String { String(time.prefix(11)) }
 
     /// "Tue 3 Nov 14:02:11" for a recorded event; the clock time when the day is unknown.
     var dayTime: String {

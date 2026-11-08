@@ -122,21 +122,27 @@ struct PatternsView: View {
     private func table(_ rows: [PatternItem]) -> some View {
             Table(selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
-                    HStack(spacing: 4) {
-                        StatusPill(status: item.status)
-                        if item.entry.risk == .high {
-                            Image(systemName: "flame.fill").foregroundStyle(.red).help("High-risk pattern")
+                    Group {
+                    if item.isGroup {
+                        // The group's header sits by its disclosure triangle and runs over the empty cells beside it.
+                        GroupHeader(title: displayProcessName(item.entry.process), facts: item.groupFacts, agent: item.agent,
+                                    dimmed: item.entry.process == "No AI session")
+                            .help(item.entry.process)
+                    } else {
+                        HStack(spacing: 4) {
+                            StatusPill(status: item.status)
+                            if item.entry.risk == .high {
+                                Image(systemName: "flame.fill").foregroundStyle(.red).help("High-risk pattern")
+                            }
                         }
                     }
+                    }
+                    .background(RowTint(color: item.isGroup ? RowTint.group : nil))
                 }
                 .width(min: 100, ideal: 112, max: 160)
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
-                        // A program's kinds, side by side; the column is sized for all three.
-                        HStack(spacing: 3) {
-                            ForEach(item.kinds.prefix(3), id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
-                        }
-                        .help(item.kinds.map(\.title).joined(separator: ", "))
+                        EmptyView()                          // the header runs over this cell
                     } else {
                         Image(systemName: item.entry.kind.symbol)
                             .foregroundStyle(item.entry.kind.color)
@@ -145,21 +151,28 @@ struct PatternsView: View {
                 }
                 .width(min: 24, ideal: 56, max: 64)
                 TableColumn("Process", value: \.processName) { item in
-                    HStack(spacing: 5) {
-                        if let agent = item.agent { AgentBadge(agent: agent) }
-                        Text(displayProcessName(item.entry.process)).fontWeight(.semibold).lineLimit(1).truncationMode(.tail)
-                            .foregroundStyle(item.isGroup && item.entry.process == "No AI session" ? .secondary : .primary)
+                    if item.isGroup {
+                        EmptyView()
+                    } else {
+                        // Under a group row the names step back, so the groups read first.
+                        let grouped = signatures.groupBySession || signatures.groupByProcess
+                        Text(displayProcessName(item.entry.process)).fontWeight(grouped ? .regular : .semibold)
+                            .lineLimit(1).truncationMode(.tail).help(item.entry.process)
                     }
-                    .help(item.entry.process)
                 }
                 .width(min: 60, ideal: signatures.groupBySession ? 260 : 110)
                 TableColumn("Pattern", value: \.pattern) { item in
                     if item.isGroup {
                         HStack(spacing: 8) {
-                            CountCapsule(count: item.children?.count ?? 0, noun: "pattern")
+                            HStack(spacing: 3) {
+                                ForEach(item.kinds.prefix(3), id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
+                            }
+                            .help(item.kinds.map(\.title).joined(separator: ", "))
+                            StatusPill(status: item.status).help("The most serious status among these patterns")
                             if item.newCount > 0 {
                                 Text("\(item.newCount) New").font(.system(size: 11)).foregroundStyle(.orange)
                             }
+                            CountCapsule(count: item.children?.count ?? 0, noun: "pattern")
                         }
                     } else {
                         // Whole, wrapped: a pattern is what you decide on, so it must be readable without
@@ -173,11 +186,12 @@ struct PatternsView: View {
                 }
                 .width(min: 160, ideal: 360)
                 TableColumn("Decided By", value: \.decidedBy) { item in
-                    DeciderLabel(text: item.decidedBy)
+                    if !item.isGroup { DeciderLabel(text: item.decidedBy) }
                 }
                 .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Signer", value: \.signer) { item in
                     let id = SigningCache.shared.cached(SignatureStore.subjectPath(item.entry))
+                    if !item.isGroup {
                     HStack(spacing: 4) {
                         if let id, id.untrustedCode || id.valid == false {
                             Image(systemName: "exclamationmark.shield").foregroundStyle(.orange)
@@ -188,10 +202,11 @@ struct PatternsView: View {
                     }
                     .help(id.map { "\($0.label) · Team \($0.teamID ?? "none")"
                         + (SigningCache.shared.isTrusted($0) ? " · trusted" : "") } ?? "not inspected yet")
+                    }
                 }
                 .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Reason", value: \.reason) { item in
-                    Text(item.reason).foregroundStyle(.secondary).help(item.reason)
+                    if !item.isGroup { Text(item.reason).foregroundStyle(.secondary).help(item.reason) }
                 }
                 .width(min: 60, ideal: 140)
                 TableColumn("Count", value: \.count) { item in
@@ -209,7 +224,7 @@ struct PatternsView: View {
                 }
                 .width(min: 70, ideal: 90, max: 130)
             } rows: {
-                // Group rows open when first shown; a click on one is remembered while the window lives.
+                // Group rows start folded; a click on one is remembered while the window lives.
                 ForEach(rows) { item in
                     if let kids = item.children {
                         DisclosureTableRow(item, isExpanded: groups.isOpen(item.id)) {
