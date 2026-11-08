@@ -258,7 +258,8 @@ import Testing
         #expect(ev.pairs.map(\.0) == ["kind", "time", "pid", "ppid", "name", "proc", "target", "parent", "args"])
         #expect(ev.string("name") == "curl" && ev.string("parent") == "/bin/sh" && ev.string("args") == "/usr/bin/curl")
         let f = try #require(agent.normalize(open(43, "/etc/hosts")))
-        #expect(f.pairs.map(\.0) == ["kind", "time", "pid", "ppid", "name", "proc", "target", "extra"])
+        // The parent program is named for file events too (the Events table's Parent column).
+        #expect(f.pairs.map(\.0) == ["kind", "time", "pid", "ppid", "parent", "name", "proc", "target", "extra"])
         #expect(f.string("extra") == "w")
         #expect(agent.normalize(open(43, "/etc/hosts")) == nil)                 // same open again within 2 min
     }

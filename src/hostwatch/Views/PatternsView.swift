@@ -90,6 +90,7 @@ struct PatternsView: View {
     @ObservedObject var list: PatternListModel
     @StateObject private var combine = CombineState()
     @StateObject private var inspector = InspectorState()
+    @StateObject private var groups = GroupExpansion()
 
     var body: some View {
         let rows = list.rows
@@ -119,7 +120,7 @@ struct PatternsView: View {
     nonisolated(unsafe) static var wrapsPatterns = true
 
     private func table(_ rows: [PatternItem]) -> some View {
-            Table(rows, children: \.children, selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
+            Table(selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
                     HStack(spacing: 4) {
                         StatusPill(status: item.status)
@@ -144,12 +145,22 @@ struct PatternsView: View {
                 }
                 .width(min: 24, ideal: 56, max: 64)
                 TableColumn("Process", value: \.processName) { item in
-                    Text(displayProcessName(item.entry.process)).fontWeight(.semibold).help(item.entry.process)
+                    HStack(spacing: 5) {
+                        if let agent = item.agent { AgentBadge(agent: agent) }
+                        Text(displayProcessName(item.entry.process)).fontWeight(.semibold).lineLimit(1).truncationMode(.tail)
+                            .foregroundStyle(item.isGroup && item.entry.process == "No AI session" ? .secondary : .primary)
+                    }
+                    .help(item.entry.process)
                 }
                 .width(min: 60, ideal: signatures.groupBySession ? 260 : 110)
                 TableColumn("Pattern", value: \.pattern) { item in
                     if item.isGroup {
-                        Text(item.pattern).foregroundStyle(item.newCount > 0 ? .primary : .secondary)
+                        HStack(spacing: 8) {
+                            CountCapsule(count: item.children?.count ?? 0, noun: "pattern")
+                            if item.newCount > 0 {
+                                Text("\(item.newCount) New").font(.system(size: 11)).foregroundStyle(.orange)
+                            }
+                        }
                     } else {
                         // Whole, wrapped: a pattern is what you decide on, so it must be readable without
                         // dragging the column wider. The inspector has it selectable, with the rest.
@@ -197,6 +208,17 @@ struct PatternsView: View {
                         .foregroundStyle(.secondary).help(item.lastSeen.formatted())
                 }
                 .width(min: 70, ideal: 90, max: 130)
+            } rows: {
+                // Group rows open when first shown; a click on one is remembered while the window lives.
+                ForEach(rows) { item in
+                    if let kids = item.children {
+                        DisclosureTableRow(item, isExpanded: groups.isOpen(item.id)) {
+                            ForEach(kids) { TableRow($0) }
+                        }
+                    } else {
+                        TableRow(item)
+                    }
+                }
             }
             .font(.system(size: 12, design: .monospaced))
             .overlay {

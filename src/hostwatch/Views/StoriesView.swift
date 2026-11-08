@@ -112,7 +112,7 @@ private struct StoryCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(story.steps) { step in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(step.time).foregroundStyle(.secondary).frame(width: 62, alignment: .leading)
+                            Text(step.time.prefix(8)).foregroundStyle(.secondary).frame(width: 62, alignment: .leading)
                             Image(systemName: step.stage.symbol)
                                 .foregroundStyle(step.stage.isStrong ? story.severity.color : .secondary)
                                 .frame(width: 16)

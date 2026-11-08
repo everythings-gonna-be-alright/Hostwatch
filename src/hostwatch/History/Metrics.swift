@@ -81,6 +81,12 @@ final class SystemSampler {
 
     /// Used memory as Activity Monitor counts it (app + wired + compressed), as a fraction.
     static func memoryUsed() -> Double {
+        min(1, Double(memoryUsedBytes()) / Double(ProcessInfo.processInfo.physicalMemory))
+    }
+
+    /// Used memory in bytes. Summing process footprints instead counts shared and compressed pages many times
+    /// over and lands far above what the Mac holds.
+    static func memoryUsedBytes() -> UInt64 {
         var stats = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         let ok = withUnsafeMutablePointer(to: &stats) {
@@ -91,8 +97,7 @@ final class SystemSampler {
         guard ok == KERN_SUCCESS else { return 0 }
         let page = UInt64(vm_kernel_page_size)
         let app = UInt64(stats.internal_page_count) &- UInt64(stats.purgeable_count)
-        let used = (app + UInt64(stats.wire_count) + UInt64(stats.compressor_page_count)) * page
-        return min(1, Double(used) / Double(ProcessInfo.processInfo.physicalMemory))
+        return (app + UInt64(stats.wire_count) + UInt64(stats.compressor_page_count)) * page
     }
 
     static func memoryPressure() -> Int {

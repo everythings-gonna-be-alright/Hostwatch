@@ -94,6 +94,7 @@ struct ActivityWindowView: View {
     /// Sessions replayed from the Time Travel window's events.
     @StateObject private var travelSessions = ReplayedSessions()
     @StateObject private var visited = VisitedTabs()
+    @StateObject private var groups = GroupExpansion()
     private var visitedTabs: Set<Int> {
         get { visited.tabs }
         nonmutating set { visited.tabs = newValue }
@@ -154,7 +155,7 @@ struct ActivityWindowView: View {
         // The Patterns rows are ready before the tab is opened.
         .onAppear {
             patternList.sessionGroups = { [weak model] in
-                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.name, keys: $0.keys, live: $0.isLive) }
+                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.name, keys: $0.keys, live: $0.isLive, agent: $0.agent) }
             }
             if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) }
         }
@@ -372,7 +373,7 @@ struct ActivityWindowView: View {
             } else {
                 Divider().frame(height: 16)
                 ShowFilterPicker(filter: $model.signatureFilter,
-                                 counts: traveling ? travelDerived.counts : model.showCounts(model.history))
+                                 counts: (traveling ? travelDerived : liveDerived).counts)
                 groupingPicker
                 if model.onlySession != nil {
                     Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
@@ -466,24 +467,28 @@ struct ActivityWindowView: View {
         case .process: return EventItem.groupedByProcess(sorted)
         case .session:
             return EventItem.groupedBySession(sorted, sessions: sessions.map {
-                .init(id: $0.id, topic: $0.topic, facts: $0.facts, agent: $0.agent, pids: $0.pids)
+                .init(id: $0.id, topic: $0.topic, facts: $0.groupFacts, agent: $0.agent, pids: $0.pids)
             })
         }
     }
 
-    /// A stamp of the sessions a grouping depends on (their count, members and events).
+    /// A stamp of the sessions a grouping depends on (their count and members). Not their event counts: those
+    /// move with every event, and the rows are rebuilt for new events anyway.
     private var sessionsStamp: Int {
-        shownSessions.reduce(0) { $0 &* 31 &+ $1.id &* 7 &+ $1.pids.count &* 3 &+ $1.events }
+        shownSessions.reduce(0) { $0 &* 31 &+ $1.id &* 7 &+ $1.pids.count &* 3 &+ ($1.ended == nil ? 0 : 1) }
     }
 
-    /// The live rows, from the cache when nothing they depend on changed.
-    private var liveDerived: [EventItem] {
+    /// The live rows and Show counts, from the cache when nothing they depend on changed (the window's body runs
+    /// for every observed object, far more often than a batch arrives).
+    private var liveDerived: TravelRowsCache.Result {
         let key = TravelRowsCache.Key(revision: model.history.count &* 1_000_003 &+ (model.history.first?.seq ?? 0),
                                       showingSearch: false, kinds: model.visibleKinds, filter: model.signatureFilter,
                                       search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
                                       signatures: signatures.revision, order: model.eventOrder,
                                       grouping: model.eventGrouping, sessions: sessionsStamp)
-        return liveRows.result(for: key) { TravelRowsCache.Result(rows: makeRows(model.searchResults)) }.rows
+        return liveRows.result(for: key) {
+            TravelRowsCache.Result(rows: makeRows(model.searchResults), counts: model.showCounts(model.history))
+        }
     }
 
     /// A row by id, group rows and their events alike.
@@ -521,20 +526,21 @@ struct ActivityWindowView: View {
     }
 
     private var eventsList: some View {
-        let rows = traveling ? travelDerived.rows : liveDerived
+        let rows = (traveling ? travelDerived : liveDerived).rows
         // Search hits span days: their Time column shows the day too.
         let withDay = traveling && travel.showingSearch
         let lastRowID = rows.last?.id
         return VStack(spacing: 0) {
           ScrollViewReader { proxy in
-            Table(rows, children: \.children, selection: $model.eventSelection, sortOrder: $model.eventOrder) {
+            Table(selection: $model.eventSelection, sortOrder: $model.eventOrder) {
                 TableColumn("Time", value: \.seq) { item in
                     Text(withDay ? item.event.dayTime : item.event.time).foregroundStyle(.secondary).monospacedDigit()
                         .opacity(item.isGroup ? 0.7 : 1)
                         // The end of a Time Travel window's list: its next older page.
                         .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
                 }
-                .width(min: 56, ideal: withDay ? 104 : 60, max: 200)
+                // Room for "14:05:09.483271" (the collector stamps to the microsecond).
+                .width(min: 72, ideal: withDay ? 170 : 140, max: 240)   // grouped rows are indented
                 TableColumn("Kind", value: \.kind) { item in
                     if item.isGroup {
                         HStack(spacing: 2) {
@@ -544,10 +550,17 @@ struct ActivityWindowView: View {
                         }
                         .help(item.groupKinds.map(\.title).joined(separator: ", "))
                     } else {
-                        Image(systemName: item.event.kind.symbol)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(item.event.kind.color)
-                            .help(item.event.kind.title)
+                        HStack(spacing: 5) {
+                            Image(systemName: item.event.kind.symbol)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(item.event.kind.color)
+                                .help(item.event.kind.title)
+                            // The maker's mark says "an AI agent's process" without a column of its own.
+                            if let agent = item.agent {
+                                AgentBadge(agent: agent, size: 11)
+                                    .help("In the \(agent.short) session: \(item.session)")
+                            }
+                        }
                     }
                 }
                 .width(min: 20, ideal: 56, max: 120)
@@ -592,6 +605,7 @@ struct ActivityWindowView: View {
                         HStack(spacing: 5) {
                             if let agent = item.agent { AgentBadge(agent: agent) }
                             Text(item.groupTitle).fontWeight(.semibold).lineLimit(1).truncationMode(.tail)
+                                .foregroundStyle(item.isCatchAll ? .secondary : .primary)
                         }
                         .help(item.groupTitle)
                     } else {
@@ -603,23 +617,25 @@ struct ActivityWindowView: View {
                     if !item.isGroup { Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
                 .width(min: 38, ideal: 48, max: 140)
-                TableColumn("Session", value: \.session) { item in
-                    if !item.session.isEmpty, !item.isGroup {
-                        HStack(spacing: 5) {
-                            if let agent = item.agent { AgentBadge(agent: agent) }
-                            Text(item.session).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                        }
-                        .help("The coding-agent session this process belongs to: \(item.session)")
-                    }
-                }
-                .width(min: 60, ideal: 160, max: 600)
                 TableColumn("PPID", value: \.ppid) { item in
                     if !item.isGroup { Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit() }
                 }
                 .width(min: 38, ideal: 48, max: 140)
+                TableColumn("Parent", value: \.parentName) { item in
+                    if !item.isGroup, !item.parentName.isEmpty {
+                        Text(item.parentName).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                            .help("Started by \(item.event.parent) (pid \(item.event.ppid))")
+                    }
+                }
+                .width(min: 50, ideal: 100, max: 400)
                 TableColumn("Detail", value: \.detail) { item in
                     if item.isGroup {
-                        Text(item.groupSubtitle).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        HStack(spacing: 8) {
+                            CountCapsule(count: item.children?.count ?? 0, noun: "event")
+                            if !item.groupSubtitle.isEmpty {
+                                Text(item.groupSubtitle).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                            }
+                        }
                     } else {
                     HStack(spacing: 6) {
                         if let bad = intel.flag(for: item.event) { KnownBadTag(detail: bad) }
@@ -638,6 +654,17 @@ struct ActivityWindowView: View {
                     }
                 }
                 .width(min: 120, ideal: 900)
+            } rows: {
+                // Group rows open when first shown; a click on one is remembered while the window lives.
+                ForEach(rows) { item in
+                    if let kids = item.children {
+                        DisclosureTableRow(item, isExpanded: groups.isOpen(item.id)) {
+                            ForEach(kids) { TableRow($0) }
+                        }
+                    } else {
+                        TableRow(item)
+                    }
+                }
             }
             .font(.system(size: 12, design: .monospaced))
             .contextMenu(forSelectionType: UUID.self) { ids in

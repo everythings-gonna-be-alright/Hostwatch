@@ -210,6 +210,32 @@ final class TravelRowsCache: ObservableObject {
     }
 }
 
+/// Which group rows are closed. Groups open when first shown (a grouping you chose is there to be read, not
+/// unfolded one by one); a click on a disclosure is kept while the window lives.
+final class GroupExpansion: ObservableObject {
+    @Published private var closed: Set<AnyHashable> = []
+
+    func isOpen(_ id: some Hashable) -> Binding<Bool> {
+        let key = AnyHashable(id)
+        return Binding(get: { !self.closed.contains(key) },
+                       set: { open in if open { self.closed.remove(key) } else { self.closed.insert(key) } })
+    }
+}
+
+/// "2,341 events" (or "1 event"): a group row's count, as a quiet capsule.
+struct CountCapsule: View {
+    let count: Int
+    let noun: String
+
+    var body: some View {
+        Text("\(count.formatted()) \(noun)\(count == 1 ? "" : "s")")
+            .font(.system(size: 11)).monospacedDigit()
+            .padding(.horizontal, 7).padding(.vertical, 1)
+            .background(Capsule().fill(.quaternary.opacity(0.6)))
+            .foregroundStyle(.secondary)
+    }
+}
+
 /// Under the toolbar while the search field filters the list: what it's filtered by, in the accent color, and Clear.
 /// `accessory` adds controls (Time Travel's search scope).
 struct SearchActiveBar<Accessory: View>: View {

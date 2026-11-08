@@ -156,8 +156,9 @@ final class HUDModel: ObservableObject {
 
     // UI batching: detection (patterns, stories, hold, domains) sees every event at once; the list,
     // counters and HUD get them in batches at most every `uiInterval`, and not at all while nothing
-    // is on screen (they catch up when shown).
-    static let uiInterval: TimeInterval = 0.2
+    // is on screen (they catch up when shown). Each batch re-lays out the whole window and diffs the
+    // list's 5,000 rows, so the interval is most of the app's idle CPU: twice a second reads as live.
+    static let uiInterval: TimeInterval = 0.5
     private var uiBuffer: [ActivityEvent] = []
     private var countBuffer: [EventKind: Int] = [:]
     private var flushScheduled = false
@@ -229,10 +230,19 @@ final class HUDModel: ObservableObject {
     }
 
     /// How many of these events each Show choice would list (with the other filters as they are).
+    /// One pass: the pattern lookups are per event, not per event and choice (the window's filter bar asks
+    /// for these after every batch, and the lookups hash long pattern keys).
     func showCounts(_ events: [ActivityEvent], applyExclusions: Bool = false) -> [SignatureFilter: Int] {
-        var out: [SignatureFilter: Int] = [:]
-        for f in SignatureFilter.allCases where f != .all {
-            out[f] = filtered(events, applyExclusions: applyExclusions, show: f).count
+        let choices = SignatureFilter.allCases.filter { $0 != .all }
+        var out = Dictionary(uniqueKeysWithValues: choices.map { ($0, 0) })
+        for e in filtered(events, applyExclusions: applyExclusions, show: .all) {
+            if e.networkSignal || !e.knownBad.isEmpty {
+                for f in choices { out[f]! += 1 }
+                continue
+            }
+            let status = signatures.status(for: e)
+            let reviewed = signatures.reviewedByYou(e.signatureKey)
+            for f in choices where f.admits(status, risk: e.signatureRisk, reviewed: reviewed) { out[f]! += 1 }
         }
         return out
     }

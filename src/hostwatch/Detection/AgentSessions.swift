@@ -103,8 +103,12 @@ struct AgentSession: Identifiable, Codable, Equatable {
 
 @MainActor
 final class AgentSessions: ObservableObject {
-    /// Live sessions, and ended ones for a while (newest first).
+    /// Live sessions, and ended ones for a while (newest first): what views see. A snapshot of `store`, taken at
+    /// once when a session starts, ends or is named, and at most once a second for the counts every event moves
+    /// (publishing those as they came re-rendered the window per event).
     @Published private(set) var sessions: [AgentSession] = []
+    private var store: [AgentSession] = []
+    private var publishScheduled = false
     /// Ended sessions stay listed this long.
     static let keepEnded: TimeInterval = 30 * 60
 
@@ -133,9 +137,9 @@ final class AgentSessions: ObservableObject {
         }
     }
 
-    func session(_ id: Int) -> AgentSession? { index[id].map { sessions[$0] } }
+    func session(_ id: Int) -> AgentSession? { index[id].map { store[$0] } }
     func session(forPid pid: Int) -> AgentSession? { sessionOf[pid].flatMap { session($0) } }
-    var live: [AgentSession] { sessions.filter(\.isLive) }
+    var live: [AgentSession] { store.filter(\.isLive) }
 
     /// Records an event; returns the session it belongs to, if any.
     @discardableResult
@@ -159,7 +163,7 @@ final class AgentSessions: ObservableObject {
             id = root(of: e.pid)
         }
         guard let id, let i = index[id] else { return nil }
-        var s = sessions[i]
+        var s = store[i]
         s.lastSeen = max(s.lastSeen, at)
         s.events += 1
         switch e.kind {
@@ -172,7 +176,8 @@ final class AgentSessions: ObservableObject {
         }
         if !e.signatureKey.isEmpty { s.keys.insert(e.signatureKey) }
         if e.isFirst { s.newPatterns += 1 }
-        sessions[i] = s
+        store[i] = s
+        publishSoon()
         scheduleSave()
         return id
     }
@@ -199,7 +204,7 @@ final class AgentSessions: ObservableObject {
             add(AgentSession(id: pid, agent: .claude, started: now(), lastSeen: now(), pids: [pid]))
         }
         guard let i = index[pid] else { return }
-        var s = sessions[i]
+        var s = store[i]
         if !sessionID.isEmpty { s.sessionID = sessionID }
         if !cwd.isEmpty { s.cwd = cwd; s.project = CodingAgent.project(ofCwd: cwd) }
         // The title appears after a few turns: looked for again while it's missing (the file's first lines only).
@@ -209,7 +214,8 @@ final class AgentSessions: ObservableObject {
             if let b = facts.branch { s.branch = b }
         }
         s.lastSeen = now()
-        sessions[i] = s
+        store[i] = s
+        publish()
         scheduleSave()
     }
 
@@ -217,28 +223,28 @@ final class AgentSessions: ObservableObject {
     /// Claude session still without a topic looks for its transcript again (Claude titles it a few turns in).
     func checkEnded() {
         var changed = false
-        for i in sessions.indices where sessions[i].ended == nil && sessions[i].agent == .claude && sessions[i].title.isEmpty {
-            if let facts = Self.transcriptFacts(cwd: sessions[i].cwd, started: sessions[i].started) {
-                if let t = facts.title { sessions[i].title = t; changed = true }
-                if sessions[i].firstPrompt.isEmpty, let p = facts.firstPrompt { sessions[i].firstPrompt = p; changed = true }
-                if sessions[i].branch.isEmpty, let b = facts.branch { sessions[i].branch = b; changed = true }
+        for i in store.indices where store[i].ended == nil && store[i].agent == .claude && store[i].title.isEmpty {
+            if let facts = Self.transcriptFacts(cwd: store[i].cwd, started: store[i].started) {
+                if let t = facts.title { store[i].title = t; changed = true }
+                if store[i].firstPrompt.isEmpty, let p = facts.firstPrompt { store[i].firstPrompt = p; changed = true }
+                if store[i].branch.isEmpty, let b = facts.branch { store[i].branch = b; changed = true }
             }
         }
-        for i in sessions.indices where sessions[i].ended == nil && !isAlive(sessions[i].id) {
-            sessions[i].ended = now(); changed = true
-            for pid in sessions[i].pids { sessionOf[pid] = nil }
+        for i in store.indices where store[i].ended == nil && !isAlive(store[i].id) {
+            store[i].ended = now(); changed = true
+            for pid in store[i].pids { sessionOf[pid] = nil }
         }
         let cutoff = now().addingTimeInterval(-Self.keepEnded)
-        if sessions.contains(where: { ($0.ended ?? .distantFuture) < cutoff }) {
-            sessions.removeAll { ($0.ended ?? .distantFuture) < cutoff }
+        if store.contains(where: { ($0.ended ?? .distantFuture) < cutoff }) {
+            store.removeAll { ($0.ended ?? .distantFuture) < cutoff }
             changed = true
         }
-        if changed { reindex(); scheduleSave() }
+        if changed { reindex(); publish(); scheduleSave() }
     }
 
     /// The session (if any) a destination belongs to: live ones first, then recent.
     func session(forDestination d: String) -> AgentSession? {
-        sessions.first { $0.destinations.contains(d) }
+        store.first { $0.destinations.contains(d) }
     }
 
     /// Sessions in recorded events (Time Travel): replayed in time order, so lineage works as it did live. Ended at
@@ -249,7 +255,7 @@ final class AgentSessions: ObservableObject {
             engine.isAlive = { _ in true }
             engine.workingDirectory = { _ in nil }
             for e in events.sorted(by: { $0.ts < $1.ts }) { engine.observe(e) }
-            return engine.sessions.map { s in
+            return engine.store.map { s in
                 var c = s
                 c.ended = s.lastSeen
                 if let known = named.first(where: { $0.id == s.id && abs($0.started.timeIntervalSince(s.started)) < 120 }) {
@@ -280,14 +286,25 @@ final class AgentSessions: ObservableObject {
         if s.agent == .claude, s.title.isEmpty, let facts = Self.transcriptFacts(cwd: s.cwd, started: s.started) {
             s.title = facts.title ?? ""; s.firstPrompt = facts.firstPrompt ?? ""; s.branch = facts.branch ?? ""
         }
-        sessions.insert(s, at: 0)
+        store.insert(s, at: 0)
         sessionOf[s.id] = s.id
         reindex()
+        publish()
         scheduleSave()
     }
 
     private func reindex() {
-        index = Dictionary(uniqueKeysWithValues: sessions.enumerated().map { ($1.id, $0) })
+        index = Dictionary(uniqueKeysWithValues: store.enumerated().map { ($1.id, $0) })
+    }
+
+    private func publish() { sessions = store }
+
+    private func publishSoon() {
+        guard !publishScheduled else { return }
+        publishScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            MainActor.assumeIsolated { self?.publishScheduled = false; self?.publish() }
+        }
     }
 
     // MARK: Saving (for the MCP server)
@@ -304,7 +321,7 @@ final class AgentSessions: ObservableObject {
         guard let fileURL else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(sessions) { try? Vault.shared.write(data, to: fileURL) }
+        if let data = try? encoder.encode(store) { try? Vault.shared.write(data, to: fileURL) }
     }
 
     /// The saved list (the MCP server reads it while the app runs).

@@ -16,6 +16,8 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     /// A program's row: the kinds of activity among its patterns, and how many are New.
     var kinds: [EventKind] = []
     var newCount = 0
+    /// An AI session's row: the agent's maker, for its mark.
+    var agent: CodingAgent? = nil
 
     // Sort keys, worked out once (sorting compares them many times).
     /// Status, then high-risk first within it.
@@ -49,7 +51,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     static let sessionPrefix = "session:"
 
     /// A coding-agent session, for grouping: its row's name and the keys of its patterns.
-    struct SessionGroup: Sendable { var id: Int; var name: String; var keys: Set<String>; var live: Bool }
+    struct SessionGroup: Sendable { var id: Int; var name: String; var keys: Set<String>; var live: Bool; var agent: CodingAgent? = nil }
 
     /// One row per session that produced patterns (its patterns under it), then the rest under "No session".
     static func groupedBySession(_ items: [PatternItem], sessions: [SessionGroup],
@@ -60,7 +62,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
             let mine = rest.filter { s.keys.contains($0.id) }
             guard !mine.isEmpty else { continue }
             rest.removeAll { s.keys.contains($0.id) }
-            groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name))
+            groups.append(group(mine, id: sessionPrefix + String(s.id), name: s.name, agent: s.agent))
         }
         // With Show ▸ New or Important, a session may have nothing listed: the rest still says it's outside any
         // session (a flat list looked like the grouping had stopped working).
@@ -69,7 +71,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
     }
 
     /// A group row standing for `list` (its worst status, counts added up), with the list under it.
-    private static func group(_ list: [PatternItem], id: String, name: String) -> PatternItem {
+    private static func group(_ list: [PatternItem], id: String, name: String, agent: CodingAgent? = nil) -> PatternItem {
         let worst = list.min { $0.statusRank != $1.statusRank ? $0.statusRank < $1.statusRank : $0.entry.risk > $1.entry.risk }!
         let new = list.filter { $0.status == .unclassified }.count
         var e = worst.entry
@@ -83,8 +85,10 @@ struct PatternItem: Identifiable, @unchecked Sendable {
         e.note = nil; e.suggestion = nil
         let deciders = Set(list.map(\.decidedBy))
         let kinds = EventKind.allCases.filter { k in list.contains { $0.entry.kind == k } }
-        return PatternItem(entry: e, status: worst.status, statusRank: worst.statusRank, source: nil, note: nil,
-                           decidedBy: deciders.count == 1 ? deciders.first! : "Mixed", children: list, kinds: kinds, newCount: new)
+        var row = PatternItem(entry: e, status: worst.status, statusRank: worst.statusRank, source: nil, note: nil,
+                              decidedBy: deciders.count == 1 ? deciders.first! : "Mixed", children: list, kinds: kinds, newCount: new)
+        row.agent = agent
+        return row
     }
 
     /// One row per program (by name) with its patterns under it; a program with a single pattern stays a plain row.
@@ -291,12 +295,17 @@ struct EventItem: Identifiable {
     var groupKinds: [EventKind] = []
 
     var isGroup: Bool { children != nil }
+    /// The group for what belongs to no session or program group: drawn quieter.
+    var isCatchAll: Bool { isGroup && agent == nil && groupTitle == EventItem.noSessionTitle }
+    static let noSessionTitle = "No AI session"
     var id: UUID { isGroup ? groupID : event.id }
     var seq: Int { event.seq }             // arrival order: the Time column
     var kind: String { event.kind.rawValue }
     var name: String { event.name.lowercased() }
     var pid: Int { event.pid }
     var ppid: Int { event.ppid }
+    /// The parent program's name ("zsh", "Claude"), "" when the collector didn't know it.
+    var parentName: String { (event.parent as NSString).lastPathComponent }
     var detail: String { event.fullDetail }
 
     static let sortColumns: [String: (SortOrder) -> KeyPathComparator<EventItem>] = [
@@ -306,6 +315,7 @@ struct EventItem: Identifiable {
         "process": { KeyPathComparator(\.name, order: $0) },
         "pid": { KeyPathComparator(\.pid, order: $0) },
         "ppid": { KeyPathComparator(\.ppid, order: $0) },
+        "parent": { KeyPathComparator(\.parentName, order: $0) },
         "session": { KeyPathComparator(\.session, order: $0) },
         "detail": { KeyPathComparator(\.detail, order: $0) },
     ]
@@ -327,7 +337,7 @@ struct EventItem: Identifiable {
             rest.removeAll { s.pids.contains($0.event.pid) }
             out.append(group(mine, id: "session:\(s.id)", title: s.topic, subtitle: s.facts, agent: s.agent))
         }
-        if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, id: "session:0", title: "No AI session", subtitle: "", agent: nil)) }
+        if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, id: "session:0", title: noSessionTitle, subtitle: "", agent: nil)) }
         return out.isEmpty ? items : out
     }
 
@@ -339,7 +349,7 @@ struct EventItem: Identifiable {
         g.children = list
         g.groupID = stableUUID(id)
         g.groupTitle = title
-        g.groupSubtitle = subtitle.isEmpty ? "\(list.count.formatted()) events" : "\(list.count.formatted()) events · \(subtitle)"
+        g.groupSubtitle = subtitle                  // the count is drawn as a capsule beside it
         g.groupKinds = EventKind.allCases.filter { k in list.contains { $0.event.kind == k } }
         return g
     }

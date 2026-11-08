@@ -387,6 +387,9 @@ final class Agent: @unchecked Sendable {
         return path
     }
 
+    /// The parent program's path for a file or network event (the exec event carries its own).
+    func parentPath(ppid: Int) -> String { ppid > 0 ? pidPath(ppid) : "" }
+
     func pidParent(_ pid: Int) -> Int {
         pidLock.lock()
         let cached = pidParents[pid]
@@ -460,11 +463,14 @@ final class Agent: @unchecked Sendable {
 
     // MARK: Helpers
 
+    /// "14:05:09.483271": to the microsecond, so events a burst apart still read in order.
     static func nowHMS() -> String {
-        var t = time(nil)
+        var tv = timeval()
+        gettimeofday(&tv, nil)
+        var t = tv.tv_sec
         var tmv = tm()
         localtime_r(&t, &tmv)
-        return String(format: "%02d:%02d:%02d", tmv.tm_hour, tmv.tm_min, tmv.tm_sec)
+        return String(format: "%02d:%02d:%02d.%06d", tmv.tm_hour, tmv.tm_min, tmv.tm_sec, tv.tv_usec)
     }
 
     /// "2026-11-01T05:41:56.360+02:00", like Python's datetime.now().astimezone().isoformat("milliseconds").
@@ -615,6 +621,7 @@ final class Agent: @unchecked Sendable {
             return AgentEvent([
                 ("kind", .str("file")), ("time", .str(Self.nowHMS())), ("pid", .int(pid)),
                 ("ppid", .int(Self.intValue(caller["ppid"]))),
+                ("parent", .str(parentPath(ppid: Self.intValue(caller["ppid"])))),
                 ("name", .str(name.isEmpty ? "?" : name)), ("proc", .str(exe)),
                 ("target", .str(fpath)), ("extra", .str(mode)),
             ])

@@ -537,7 +537,7 @@ struct EventRow: View {
                     .foregroundStyle(.yellow)
                     .help("First time this pattern was ever seen")
             }
-            Text(event.time)
+            Text(event.clockTime)
                 .font(.system(size: 9.5 * s, design: .monospaced).monospacedDigit())
                 .foregroundStyle(HUDInk.tertiary)
         }
