@@ -83,7 +83,7 @@ struct ActivityWindowView: View {
     @ObservedObject var running: RunningProcesses
     let actions: HUDActions
 
-    private var traveling: Bool { travel.active && model.windowTab == 0 }
+    var traveling: Bool { travel.active && model.windowTab == 0 }
     /// Time Travel rows, derived only when the events or a filter change (not on every playhead or hover update).
     @StateObject private var travelRows = TravelRowsCache()
     /// The live list's rows, remade only when the list or a filter changed (not on every redraw: 5,000 status
@@ -94,7 +94,6 @@ struct ActivityWindowView: View {
     /// Sessions replayed from the Time Travel window's events.
     @StateObject private var travelSessions = ReplayedSessions()
     @StateObject private var visited = VisitedTabs()
-    @StateObject private var groups = GroupExpansion()
     private var visitedTabs: Set<Int> {
         get { visited.tabs }
         nonmutating set { visited.tabs = newValue }
@@ -372,8 +371,11 @@ struct ActivityWindowView: View {
                 Spacer(minLength: 0)
             } else {
                 Divider().frame(height: 16)
-                ShowFilterPicker(filter: $model.signatureFilter,
-                                 counts: (traveling ? travelDerived : liveDerived).counts)
+                if traveling {
+                    ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
+                } else {
+                    LiveShowFilter(feed: model.live, filter: $model.signatureFilter, counts: { liveDerived.counts })
+                }
                 groupingPicker
                 if model.onlySession != nil {
                     Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
@@ -441,18 +443,21 @@ struct ActivityWindowView: View {
     }
 
     /// The sessions the list's events belong to: live ones, or the ones replayed from the Time Travel window.
-    private var shownSessions: [AgentSession] {
+    var shownSessions: [AgentSession] {
         traveling ? travelSessions.sessions(for: travel, named: model.sessions.sessions) : model.sessions.sessions
     }
 
-    private func makeRows(_ events: [ActivityEvent]) -> [EventItem] {
+    /// `reuse`: rows from the last build whose status and session can't have changed (a new batch rebuilds
+    /// only its own events, not all 5,000).
+    private func makeRows(_ events: [ActivityEvent], reuse: [UUID: EventItem] = [:]) -> [EventItem] {
         let sessions = shownSessions
         func session(_ e: ActivityEvent) -> AgentSession? {
             if traveling { return sessions.first { $0.pids.contains(e.pid) } }
             return e.session > 0 ? model.sessions.session(e.session) : nil
         }
         let items = events.map { e -> EventItem in
-            let status = signatures.status(for: e)
+            if let kept = reuse[e.id] { return kept }
+            let status = model.statusAndReviewed(e).status
             let s = session(e)
             // Known bad sorts above Dangerous.
             return EventItem(event: e, status: status, statusRank: intel.flag(for: e) != nil ? -1 : signatures.rank(status),
@@ -486,202 +491,41 @@ struct ActivityWindowView: View {
                                       search: model.searchText, only: model.onlyPids, exclusions: model.exclusionText,
                                       signatures: signatures.revision, order: model.eventOrder,
                                       grouping: model.eventGrouping, sessions: sessionsStamp)
-        return liveRows.result(for: key) {
-            TravelRowsCache.Result(rows: makeRows(model.searchResults), counts: model.showCounts(model.history))
+        return liveRows.result(for: key) { previous, previousKey in
+            var reuse: [UUID: EventItem] = [:]
+            if let previous, let previousKey, previousKey.signatures == key.signatures, previousKey.sessions == key.sessions {
+                for row in previous.rows {
+                    if let kids = row.children { for k in kids { reuse[k.id] = k } } else { reuse[row.id] = row }
+                }
+            }
+            return TravelRowsCache.Result(rows: makeRows(model.searchResults, reuse: reuse), counts: model.showCounts(model.history))
         }
     }
 
-    /// A row by id, group rows and their events alike.
-    private static func row(_ id: UUID, in rows: [EventItem]) -> EventItem? {
-        for r in rows {
-            if r.id == id { return r }
-            if let c = r.children?.first(where: { $0.id == id }) { return c }
-        }
-        return nil
-    }
 
     /// Right-click on a group row.
-    @ViewBuilder private func groupMenu(_ item: EventItem) -> some View {
-        if let session = shownSessions.first(where: { $0.topic == item.groupTitle }) {
-            Button(model.onlySession == session.id ? "Show All Sessions" : "Show Only This Session") {
-                let on = model.onlySession != session.id
-                model.onlySession = on ? session.id : nil
-                model.onlySessionPids = on ? session.pids : nil
-            }
-            Button("Show Its Patterns…") {
-                signatures.search = ""
-                signatures.scope = .init(title: "Session: \(session.name)", keys: session.keys)
-                model.windowTab = 1
-            }
-            .disabled(session.keys.isEmpty)
-            if !session.sessionID.isEmpty {
-                Button("Copy Claude Session ID") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(session.sessionID, forType: .string)
-                }
-            }
-        } else {
-            Button("Show Only \(item.groupTitle)") { model.searchText = item.groupTitle }
-        }
-    }
-
     private var eventsList: some View {
-        let rows = (traveling ? travelDerived : liveDerived).rows
+        let derived = traveling ? travelDerived : liveDerived
+        let rows = derived.rows
         // Search hits span days: their Time column shows the day too.
         let withDay = traveling && travel.showingSearch
-        let lastRowID = rows.last?.id
         return VStack(spacing: 0) {
-          ScrollViewReader { proxy in
-            Table(selection: $model.eventSelection, sortOrder: $model.eventOrder) {
-                TableColumn("Time", value: \.seq) { item in
-                    Group {
-                    if item.isGroup {
-                        // The group's header sits by its disclosure triangle and runs over the empty cells beside it,
-                        // so the row reads as a section heading rather than as another event.
-                        GroupHeader(title: item.groupTitle, facts: item.groupSubtitle, agent: item.agent, dimmed: item.isCatchAll)
-                            .help(item.groupTitle)
-                    } else {
-                        Text(withDay ? item.event.dayTime : item.event.shortTime).foregroundStyle(.secondary).monospacedDigit()
-                            .help(item.event.time)              // the full microsecond stamp
-                            // The end of a Time Travel window's list: its next older page.
-                            .onAppear { if traveling, !withDay, item.id == lastRowID { travel.loadMore() } }
-                    }
-                    }
-                    .background(RowTint(color: item.isGroup ? RowTint.group : nil))
-                }
-                // Room for "14:05:09.48" in an indented (grouped) row.
-                .width(min: 72, ideal: withDay ? 160 : 108, max: 240)
-                TableColumn("Kind", value: \.kind) { item in
-                    if item.isGroup {
-                        EmptyView()                          // the header runs over this cell
-                    } else {
-                        HStack(spacing: 5) {
-                            Image(systemName: item.event.kind.symbol)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(item.event.kind.color)
-                                .help(item.event.kind.title)
-                            // The maker's mark says "an AI agent's process" without a column of its own.
-                            if let agent = item.agent {
-                                AgentBadge(agent: agent, size: 11)
-                                    .help("In the \(agent.short) session: \(item.session)")
-                            }
-                        }
-                    }
-                }
-                .width(min: 20, ideal: 56, max: 120)
-                TableColumn("Status", value: \.statusRank) { item in
-                    if item.isGroup {
-                        EmptyView()                          // the header runs over this cell
-                    } else {
-                    HStack(spacing: 4) {
-                        if let bad = intel.flag(for: item.event) {
-                            // A listed destination or file outranks the pattern's own status (often Safe: the
-                            // pattern is the program's connections in general).
-                            KnownBadPill()
-                                .help("On a threat list: \(bad)\nThe pattern itself is \(item.status.title.lowercased()).")
-                        } else {
-                            StatusPill(status: item.status)
-                        }
-                        if intel.flag(for: item.event) != nil {
-                            EmptyView()                   // the known-bad pill says it all
-                        } else if case .heavy = heavy.badge(for: item.event) {
-                            Image(systemName: "flame.fill").foregroundStyle(.orange)
-                                .help("Still running and using a lot of CPU or memory")
-                        } else if !item.event.beacon.isEmpty {
-                            Image(systemName: "dot.radiowaves.right").foregroundStyle(.red)
-                                .help("BEACON: connects \(item.event.beacon)")
-                        } else if item.event.rawIP {
-                            Image(systemName: "number").foregroundStyle(.orange)
-                                .help("RAW IP: public IP on an unusual port with no DNS lookup")
-                        } else if !item.event.newDomain.isEmpty {
-                            Image(systemName: "globe.badge.chevron.backward").foregroundStyle(.purple)
-                                .help("NEW DOMAIN: first contact with \(item.event.newDomain)")
-                        } else if item.event.isFirst {
-                            Image(systemName: "sparkle").foregroundStyle(.yellow)
-                                .help("First time this pattern was ever seen")
-                                .accessibilityLabel("First seen")
-                        }
-                    }
-                    }
-                }
-                .width(min: 70, ideal: 84, max: 240)
-                TableColumn("Process", value: \.name) { item in
-                    if item.isGroup {
-                        EmptyView()
-                    } else {
-                        // Under a group row the names step back, so the groups read first.
-                        Text(item.event.name).fontWeight(model.eventGrouping == .none ? .semibold : .regular)
-                            .lineLimit(1).help(item.event.proc)
-                    }
-                }
-                .width(min: 60, ideal: model.eventGrouping == .session ? 260 : 110, max: 600)
-                TableColumn("PID", value: \.pid) { item in
-                    if !item.isGroup { Text(String(item.event.pid)).foregroundStyle(.secondary).monospacedDigit() }
-                }
-                .width(min: 38, ideal: 48, max: 140)
-                TableColumn("PPID", value: \.ppid) { item in
-                    if !item.isGroup { Text(String(item.event.ppid)).foregroundStyle(.secondary).monospacedDigit() }
-                }
-                .width(min: 38, ideal: 48, max: 140)
-                TableColumn("Parent", value: \.parentName) { item in
-                    if !item.isGroup, !item.parentName.isEmpty {
-                        Text(item.parentName).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                            .help("Started by \(item.event.parent) (pid \(item.event.ppid))")
-                    }
-                }
-                .width(min: 50, ideal: 100, max: 400)
-                TableColumn("Detail", value: \.detail) { item in
-                    if item.isGroup {
-                        HStack(spacing: 8) {
-                            StatusPill(status: item.status).help("The most serious status among these events")
-                            CountCapsule(count: item.children?.count ?? 0, noun: "event")
-                        }
-                    } else {
-                    HStack(spacing: 6) {
-                        if let bad = intel.flag(for: item.event) { KnownBadTag(detail: bad) }
-                        if let badge = heavy.badge(for: item.event) { VitalBadgeView(badge: badge) }
-                        if item.event.kind == .file {
-                            FileModeIcon(mode: item.event.extra)
-                            Text(item.event.target).truncationMode(.middle).help(item.event.target)
-                        } else if item.event.kind == .net, !item.event.extra.isEmpty {
-                            ProtocolTag(proto: item.event.extra)
-                            Text(item.event.fullDetail.dropFirst(item.event.extra.count).trimmingCharacters(in: .whitespaces))
-                                .truncationMode(.middle).help(item.event.target)
-                        } else {
-                            Text(item.event.fullDetail).truncationMode(.middle).help(item.event.target)
-                        }
-                    }
-                    }
-                }
-                .width(min: 120, ideal: 900)
-            } rows: {
-                // Group rows start folded; a click on one is remembered while the window lives.
-                ForEach(rows) { item in
-                    if let kids = item.children {
-                        DisclosureTableRow(item, isExpanded: groups.isOpen(item.id)) {
-                            ForEach(kids) { TableRow($0) }
-                        }
-                    } else {
-                        TableRow(item)
-                    }
-                }
-            }
-            .font(.system(size: 12, design: .monospaced))
-            .contextMenu(forSelectionType: UUID.self) { ids in
-                if let id = ids.first, let item = Self.row(id, in: rows) {
-                    if item.isGroup { groupMenu(item) } else { rowMenu(item.event) }
-                }
-            } primaryAction: { ids in
-                guard let id = ids.first, let item = Self.row(id, in: rows), !item.isGroup else { return }
-                // A search hit opens its moment; elsewhere a double-click asks the AI.
-                if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
-            }
+            EventsTable(rows: rows, version: derived.version,
+                        feed: traveling ? nil : model.live, derive: traveling ? nil : { liveDerived },
+                        withDay: withDay, grouped: model.eventGrouping != .none,
+                        selection: $model.eventSelection, sortOrder: $model.eventOrder,
+                        flag: { intel.flag(for: $0) }, badge: { heavy.badge(for: $0) },
+                        // The end of a Time Travel window's list: its next older page.
+                        onReachEnd: traveling && !withDay ? { travel.loadMore() } : nil,
+                        onDoubleClick: { item in
+                            // A search hit opens its moment; elsewhere a double-click asks the AI.
+                            if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
+                        },
+                        menu: eventMenu)
             .onChange(of: travel.focusID) { _, id in
                 guard let id, let event = travel.events.first(where: { $0.id == id }) else { return }
-                revealLaunch(event)
-                DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
+                revealLaunch(event)                 // selecting the row scrolls the list to it
             }
-          }
             Divider()
             HStack {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
@@ -690,15 +534,11 @@ struct ActivityWindowView: View {
                     .buttonStyle(.link)
                     .help("Show history files in Finder")
                 Text("·")
-                let total = traveling ? travel.listed.count : model.history.count
-                if !traveling, model.restoredCount > 0 {
-                    Text("\(model.restoredCount) from before the restart ·")
-                        .help("Loaded from recorded history at launch, so the list isn't empty. Time Travel shows all of it.")
+                if traveling {
+                    EventCountText(shown: rows.count, total: travel.listed.count, restored: 0, filtering: searchFiltering)
+                } else {
+                    LiveEventCount(feed: model.live, filtering: searchFiltering) { (liveDerived.rows.count, model.history.count, model.restoredCount) }
                 }
-                Text(rows.count == total ? "\(total) events" : "\(rows.count) of \(total) events")
-                    .monospacedDigit()
-                    .foregroundStyle(searchFiltering && rows.count != total ? Color.accentColor : .secondary)
-                    .fontWeight(searchFiltering && rows.count != total ? .medium : .regular)
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
@@ -706,51 +546,44 @@ struct ActivityWindowView: View {
             .padding(.vertical, 6)
         }
     }
-
-    @ViewBuilder
-    private func rowMenu(_ event: ActivityEvent) -> some View {
-        if traveling && travel.showingSearch && event.ts > 0 {
-            Button("Show in Timeline") { travel.reveal(event) }
-            Divider()
-        }
-        Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
-        Button("Watch \(event.name) Closely…") { actions.watch(event) }
-        Divider()
-        Text("Pattern: \(event.signatureProcess) → \(event.signaturePattern)")
-        ForEach(SignatureStatus.allCases, id: \.self) { status in
-            Button("Mark Pattern \(status.title)") { signatures.set(status, keys: [event.signatureKey]) }
-        }
-        Menu("Mark All \(event.kind.title) From This Process") {
-            ForEach(SignatureStatus.allCases, id: \.self) { status in
-                Button(status == .unclassified ? "Clear Rule" : status.title) {
-                    signatures.setProcessRule(status, kind: event.kind, process: event.signatureProcess)
-                }
-                .disabled(status == .safe && !SignatureStore.canTrustWholeProcess(event.signatureProcess))
-            }
-        }
-        Menu("Exclude") {
-            ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
-                Button(title) { model.addExclusion(pattern) }
-            }
-            Divider()
-            Button("Edit Exclusions…", action: actions.openExclusions)
-        }
-        Divider()
-        Button("Copy Detail") { copy(event.target) }
-        Button("Copy Process Path") { copy(event.proc) }
-            .disabled(event.proc.isEmpty)
-        if event.kind == .file || event.kind == .exec {
-            Button("Reveal in Finder") {
-                NSWorkspace.shared.selectFile(event.target, inFileViewerRootedAtPath: "")
-            }
-        }
-    }
-
-    private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
 }
 
 /// Tabs shown at least once (kept alive, see the window body).
 final class VisitedTabs: ObservableObject { @Published var tabs: Set<Int> = [] }
+
+/// "6 of 5,000 events", with the restored count: the live version follows every batch on its own.
+private struct EventCountText: View {
+    let shown: Int, total: Int, restored: Int
+    let filtering: Bool
+
+    var body: some View {
+        if restored > 0 {
+            Text("\(restored) from before the restart ·")
+                .help("Loaded from recorded history at launch, so the list isn't empty. Time Travel shows all of it.")
+        }
+        Text(shown == total ? "\(total) events" : "\(shown) of \(total) events")
+            .monospacedDigit()
+            .foregroundStyle(filtering && shown != total ? Color.accentColor : .secondary)
+            .fontWeight(filtering && shown != total ? .medium : .regular)
+    }
+}
+
+private struct LiveEventCount: View {
+    @ObservedObject var feed: LiveFeed
+    let filtering: Bool
+    let numbers: () -> (shown: Int, total: Int, restored: Int)
+
+    var body: some View {
+        let n = numbers()
+        EventCountText(shown: n.shown, total: n.total, restored: n.restored, filtering: filtering)
+    }
+}
+
+/// The Show choices with the live list's counts, re-rendered per batch here rather than with the window.
+private struct LiveShowFilter: View {
+    @ObservedObject var feed: LiveFeed
+    @Binding var filter: SignatureFilter
+    let counts: () -> [SignatureFilter: Int]
+
+    var body: some View { ShowFilterPicker(filter: $filter, counts: counts()) }
+}

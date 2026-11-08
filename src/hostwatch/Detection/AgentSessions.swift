@@ -302,7 +302,7 @@ final class AgentSessions: ObservableObject {
     private func publishSoon() {
         guard !publishScheduled else { return }
         publishScheduled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             MainActor.assumeIsolated { self?.publishScheduled = false; self?.publish() }
         }
     }

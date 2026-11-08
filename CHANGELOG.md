@@ -9,6 +9,11 @@
   Show counts over all 5,000 events. Session counters now reach the window at most once a second (a session
   starting, ending or getting its name still shows at once), the Show counts are made in one pass together with
   the rows and kept until something changes, and batches of events arrive twice a second instead of five times.
+- **The Events list is now an AppKit table.** The SwiftUI table built eight views for every new row and tore them
+  down as rows scrolled off, which under a busy agent cost a quarter to half of a core. The new list reuses its
+  cells, keeps selection and folded groups across batches, and only the list, its counts and the footer redraw
+  when a batch arrives, not the whole window. Pattern counts reach the window every five seconds instead of
+  every second. Same columns, menus, sorting, tooltips and Time Travel behaviour.
 
 ### New
 

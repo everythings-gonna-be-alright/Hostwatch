@@ -14,3 +14,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0007](0007-fewer-patterns.md) | Fewer patterns where the detail says nothing, with a launch-time regroup |
 | [0008](0008-flat-module-one-concept-files.md) | One module, one concept per file; no architecture framework |
 | [0009](0009-encryption-at-rest.md) | Everything on disk encrypted; the key in the Secure Enclave or a code-bound keychain item |
+| [0010](0010-appkit-event-list.md) | The Events list is an AppKit outline view with reused cells (SwiftUI's Table cost a core under a busy agent) |
