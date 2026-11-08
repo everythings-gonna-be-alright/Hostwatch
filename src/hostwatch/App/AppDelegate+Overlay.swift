@@ -14,7 +14,7 @@ extension AppDelegate {
             backing: .buffered,
             defer: false
         )
-        let hud = NSHostingView(rootView: HUDView(model: model, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, intel: intel, actions: actions))
+        let hud = NSHostingView(rootView: HUDView(model: model, feed: model.live, stories: stories, collector: collector, signatures: signatures, metrics: metrics, vitals: vitals, intel: intel, actions: actions))
         // The panel's size is set only by `resizeOverlay` (top-right corner fixed). Left to itself the hosting
         // view would resize the panel to its content first, from the bottom-left, so the right edge jumped.
         hud.sizingOptions = []

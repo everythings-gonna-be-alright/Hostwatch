@@ -36,13 +36,25 @@ enum OverlayBackground: String, CaseIterable {
 
 // MARK: - Model
 
+/// What a batch of events changes. Kept apart from the model's settings so that only the views showing the
+/// feed (the list, its counts, the overlay) re-render per batch, not the whole window.
+@MainActor
+final class LiveFeed: ObservableObject {
+    @Published var history: [ActivityEvent] = []
+    @Published var counts: [EventKind: Int] = [:]
+    /// How many events were restored from history at launch (0 = none).
+    @Published var restoredCount = 0
+}
+
 @MainActor
 final class HUDModel: ObservableObject {
-    @Published private(set) var history: [ActivityEvent] = []
+    let live = LiveFeed()
+    var history: [ActivityEvent] { live.history }
+    var counts: [EventKind: Int] { live.counts }
+    var restoredCount: Int { live.restoredCount }
     @Published private(set) var connected = false
     /// Why the collector socket was refused (it exists but can't be trusted); nil when fine.
     @Published private(set) var socketWarning: String?
-    @Published private(set) var counts: [EventKind: Int] = [:]
     @Published var paused = false
     @Published var searchText = ""
     /// "Show Only These" in the heavy-process strip: only events of these processes.
@@ -226,7 +238,25 @@ final class HUDModel: ObservableObject {
         if filter == .all { return true }
         // New domains, beacons, raw-IP connections and known-bad matches count as new and important on their own.
         if e.networkSignal || !e.knownBad.isEmpty { return true }
-        return filter.admits(signatures.status(for: e), risk: e.signatureRisk, reviewed: signatures.reviewedByYou(e.signatureKey))
+        let (status, reviewed) = statusAndReviewed(e)
+        return filter.admits(status, risk: e.signatureRisk, reviewed: reviewed)
+    }
+
+    private var statusMemo: [UUID: (status: SignatureStatus, reviewed: Bool)] = [:]
+    private var statusMemoRevision = -1
+
+    /// A pattern lookup hashes a long key: the list and its counts ask for every event's status after each
+    /// batch, so the answers are kept until a pattern changes.
+    func statusAndReviewed(_ e: ActivityEvent) -> (status: SignatureStatus, reviewed: Bool) {
+        if statusMemoRevision != signatures.revision {
+            statusMemo.removeAll(keepingCapacity: true)
+            statusMemoRevision = signatures.revision
+        }
+        if let known = statusMemo[e.id] { return known }
+        let value = (signatures.status(for: e), signatures.reviewedByYou(e.signatureKey))
+        if statusMemo.count > 20_000 { statusMemo.removeAll(keepingCapacity: true) }
+        statusMemo[e.id] = value
+        return value
     }
 
     /// How many of these events each Show choice would list (with the other filters as they are).
@@ -240,8 +270,7 @@ final class HUDModel: ObservableObject {
                 for f in choices { out[f]! += 1 }
                 continue
             }
-            let status = signatures.status(for: e)
-            let reviewed = signatures.reviewedByYou(e.signatureKey)
+            let (status, reviewed) = statusAndReviewed(e)
             for f in choices where f.admits(status, risk: e.signatureRisk, reviewed: reviewed) { out[f]! += 1 }
         }
         return out
@@ -288,12 +317,12 @@ final class HUDModel: ObservableObject {
     func clear() {
         uiBuffer.removeAll()
         countBuffer.removeAll()
-        history.removeAll()
-        counts = [:]
+        live.history.removeAll()
+        live.counts = [:]
     }
 
     private func applyFilters() {
-        history.removeAll { rules.excludes($0) }
+        live.history.removeAll { rules.excludes($0) }
         sendConfig()
     }
 
@@ -527,14 +556,11 @@ final class HUDModel: ObservableObject {
             for i in older.indices { older[i].seq = -(i + 1) }        // below every live event
             var updated = history
             updated.append(contentsOf: older.prefix(max(0, limit - updated.count)))
-            history = updated
-            restoredCount = min(restored.count, limit)
+            live.history = updated
+            live.restoredCount = min(restored.count, limit)
             completion?()
         }
     }
-
-    /// How many events were restored from history at launch (0 = none).
-    @Published private(set) var restoredCount = 0
 
     /// Hands buffered events to the list, counters and HUD in one update.
     func flushUI() {
@@ -544,13 +570,13 @@ final class HUDModel: ObservableObject {
             var updated = history
             updated.insert(contentsOf: uiBuffer.reversed(), at: 0)
             if updated.count > historyLimit { updated.removeLast(updated.count - historyLimit) }
-            history = updated
+            live.history = updated
             uiBuffer.removeAll(keepingCapacity: true)
         }
         if !countBuffer.isEmpty {
             var c = counts
             for (kind, n) in countBuffer { c[kind, default: 0] += n }
-            counts = c
+            live.counts = c
             countBuffer.removeAll()
         }
     }

@@ -45,13 +45,19 @@ struct FileModeIcon: View {
     private var writes: Bool { mode.contains("w") }
     private var reads: Bool { mode.contains("r") || !writes }
 
+    /// "Read and write", "Write" or "Read", for tooltips.
+    static func title(_ mode: String) -> String {
+        let writes = mode.contains("w"), reads = mode.contains("r") || !writes
+        return reads && writes ? "Read and write" : writes ? "Write" : "Read"
+    }
+
     var body: some View {
         Image(systemName: reads && writes ? "square.and.pencil" : writes ? "pencil" : "eye")
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(writes ? Color.orange : Color.secondary)
             .frame(width: 14)
-            .help(reads && writes ? "Read and write" : writes ? "Write" : "Read")
-            .accessibilityLabel(reads && writes ? "Read and write" : writes ? "Write" : "Read")
+            .help(Self.title(mode))
+            .accessibilityLabel(Self.title(mode))
     }
 }
 
@@ -196,14 +202,25 @@ final class TravelRowsCache: ObservableObject {
     struct Result {
         var rows: [EventItem] = []
         var counts: [SignatureFilter: Int] = [:]
+        /// Counts up each time the rows are rebuilt: the AppKit list reloads only then.
+        var version = 0
     }
 
     private var key: Key?
     private var cached = Result()
+    private var builds = 0
 
     func result(for key: Key, _ make: () -> Result) -> Result {
+        result(for: key) { _, _ in make() }
+    }
+
+    /// `make` also gets the previous rows and their key, to reuse what a new batch didn't change.
+    func result(for key: Key, _ make: (Result?, Key?) -> Result) -> Result {
         if key != self.key {
-            cached = make()
+            builds += 1
+            let previous = self.key == nil ? nil : cached
+            cached = make(previous, self.key)
+            cached.version = builds
             self.key = key
         }
         return cached

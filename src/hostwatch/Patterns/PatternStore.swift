@@ -919,7 +919,8 @@ final class SignatureStore: ObservableObject {
 
     private var ticks = 0
     private func tick() {
-        if pendingRevision { pendingRevision = false; revision += 1 }
+        // Counts and last-seen times reach the views every few seconds: each publish re-renders the window.
+        if pendingRevision, ticks % 5 == 0 { pendingRevision = false; revision += 1 }
         ticks += 1
         if ticks % 10 == 0, dirty { save() }
         if ticks % Self.statsSaveEvery == 0, statsDirty { save() }

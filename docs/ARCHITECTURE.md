@@ -82,7 +82,9 @@ wiring), `AppDelegate+Features/Overlay/Menus/Windows.swift`, `Settings.swift`, `
 tab or window (`PatternsView` with `PatternInspector`, `RulesView`, `StoriesView`, `NetworkView`, `RunningView`, `WatchView`,
 `FirewallView`, `StoryDetails`, `DiskView`, `TimelineBar`, `ClaudeGuardView`, `FullDiskAccessView`, `HeldView`,
 `DomainDetailView`, `MetricsViews`, `VitalsViews`),
-`OverviewView.swift` (the tab bar), `SharedViews.swift`, `SessionViews.swift` (the makers' marks, session facts), `Tables.swift` (row models), `Demo.swift` (demo build only).
+`OverviewView.swift` (the tab bar), `SharedViews.swift`, `SessionViews.swift` (the makers' marks, session facts), `Tables.swift` (row models),
+`EventsTable.swift` + `EventsTableCells.swift` (the Events list as an AppKit outline view with reused cells, ADR 0010), `EventMenus.swift` (its
+right-click menus), `Demo.swift` (demo build only).
 
 ## Where things live on disk
 

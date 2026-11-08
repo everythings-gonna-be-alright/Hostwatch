@@ -27,6 +27,7 @@ struct HUDActions {
 
 struct HUDView: View {
     @ObservedObject var model: HUDModel
+    @ObservedObject var feed: LiveFeed             // the overlay follows every batch
     @ObservedObject var stories: StoryEngine
     @ObservedObject var collector: Collector
     @ObservedObject var signatures: SignatureStore
