@@ -682,8 +682,10 @@ The app answers with the rules:
 - **Something new:** refused in Strict. In Ask it waits, with no time limit, while its own window asks **Allow /
   Block**.
 
-**The question window.** There is one window per question, in the middle of the screen. Your answer marks the pattern
-Safe or Suspicious and answers its other waiting connections.
+**The question window.** There is one window per question, in the middle of the screen, a Liquid Glass card like
+macOS's own alerts. It says who started the program: the launch chain as a short trail from its origin (a terminal,
+an app, Claude Code) down to the program, and the program's own command line, so *python3.12* shows the script it
+runs. Your answer marks the pattern Safe or Suspicious and answers its other waiting connections.
 
 *Ask Claude* in a question window gathers the same evidence as Ask AI: signature, location, parent, quarantine and the
 connection, with the firewall's question first. The window then shows Claude's short advice: **Allow** or **Block** and

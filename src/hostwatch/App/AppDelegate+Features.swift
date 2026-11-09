@@ -153,7 +153,8 @@ extension AppDelegate {
         }
         var added = false
         for prompt in firewall.prompts where firewallPanels[prompt.id] == nil {
-            let panel = QuestionPanel.make(FirewallPromptView(firewall: firewall, id: prompt.id))
+            let panel = QuestionPanel.make(FirewallPromptView(firewall: firewall, id: prompt.id,
+                                                              chain: launchChainReport(for: prompt.event)))
             QuestionPanel.show(panel, slot: firewallPanels.count)
             firewallPanels[prompt.id] = panel
             added = true

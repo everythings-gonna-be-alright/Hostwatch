@@ -120,16 +120,27 @@ struct FirewallWaitingRow: View {
 /// A question window in the style of macOS's own permission alerts: centered, no title bar, the program's icon,
 /// a bold question, two equal buttons (Allow is the default, Escape blocks). Non-activating: answering doesn't
 /// bring Hostwatch's other windows forward.
+/// A borderless panel that can still take Return and Escape (borderless windows refuse key status by default).
+final class GlassPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 @MainActor enum QuestionPanel {
+    static let corner: CGFloat = 26
+
     static func make<V: View>(_ view: V) -> NSPanel {
-        // The content draws under the hidden title bar: no safe area, so it measures the same before and after.
-        let host = NSHostingController(rootView: view.ignoresSafeArea())
+        // Liquid Glass, as macOS 26's own alerts: no window chrome, the content is a glass card the desktop shows
+        // through. The window is clear, so its shadow follows the card's rounded shape.
+        let glass = view
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .ignoresSafeArea()
+        let host = NSHostingController(rootView: glass)
         host.sizingOptions = [.preferredContentSize]
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: host.view.fittingSize),
-                            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        let panel = GlassPanel(contentRect: NSRect(origin: .zero, size: host.view.fittingSize),
+                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.isReleasedWhenClosed = false
@@ -139,9 +150,6 @@ struct FirewallWaitingRow: View {
         // Sized before placing, so it's really centered. The content fills the whole frame (it draws under the
         // hidden title bar), so the frame is the content's size; setContentSize would add a title bar's height.
         panel.setFrame(NSRect(origin: .zero, size: host.view.fittingSize), display: false)
-        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {   // a question: answer it
-            panel.standardWindowButton(button)?.isHidden = true
-        }
         // Growing (Claude's advice coming in) keeps the window where it was centred.
         NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak panel] _ in
             MainActor.assumeIsolated {
@@ -149,6 +157,7 @@ struct FirewallWaitingRow: View {
                 let f = panel.frame
                 let origin = NSPoint(x: (centre.x - f.width / 2).rounded(), y: (centre.y - f.height / 2).rounded())
                 if origin != f.origin { panel.setFrameOrigin(origin) }
+                panel.invalidateShadow()                    // the clear window's shadow follows the card's new size
             }
         }
         return panel
@@ -191,6 +200,8 @@ struct FirewallWaitingRow: View {
 struct FirewallPromptView: View {
     @ObservedObject var firewall: FirewallMonitor
     let id: UUID
+    /// Who started the program ("python3.12, started by Claude Code"): the launch chain, rebuilt when the question came.
+    var chain: LaunchChainReport? = nil
 
     var body: some View {
         if let prompt = firewall.prompts.first(where: { $0.id == id }) {
@@ -226,12 +237,16 @@ struct FirewallPromptView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(prompt.event.proc)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(prompt.event.proc)
+                if let chain, gateway == nil {
+                    LaunchChainStrip(report: chain)
+                } else {
+                    Text(prompt.event.proc)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(prompt.event.proc)
+                }
                 if let analysis = firewall.advice[prompt.id] {
                     FirewallAdviceView(analysis: analysis)
                 } else {
@@ -276,7 +291,7 @@ struct FirewallPromptView: View {
             .padding(.horizontal, 22)
             .padding(.top, 26)
             .padding(.bottom, 16)
-            .frame(width: firewall.advice[prompt.id] == nil ? 340 : 420)     // room to read the advice
+            .frame(width: firewall.advice[prompt.id] == nil && chain == nil ? 340 : 420)  // room for the chain and the advice
         }
     }
 
