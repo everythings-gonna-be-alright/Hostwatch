@@ -542,6 +542,15 @@ Open a row to see the programs that connected, with **Block** / **Allow**. These
 blocked destination you get **Allow Instead**, and **Show Program in Finder** takes you to the program.
 
 Right-click a row to **Mark Known** or mark as not known, to Block or Allow, to copy, or to **Forget** the domain.
+
+**Block one domain for one app.** Block and Allow decide the connection's pattern, and an ordinary app has one
+pattern for the whole web (`TCP internet:443`): blocking it stops the app everywhere. To stop an app reaching just
+one domain, right-click the domain ▸ *Block for an App* and pick the app (the apps that reached it are listed), or
+right-click one of its connections ▸ *Block example.com for Slack*. The rule covers the domain's hosts
+(`api.example.com` counts under `example.com`), comes before any pattern status (a Safe pattern doesn't let it
+through), and shows as *Blocked by you* with an **Unblock** button. It is kept with the firewall's other data and
+stops connections in Ask and Strict. In Watch it shows what it would block. A connection already open finishes, and
+one let through in the last five minutes may pass until that answer runs out.
 Forget does three things:
 
 1. The domain is new again next time.

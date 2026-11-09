@@ -369,12 +369,15 @@ struct RowBand: NSViewRepresentable {
                     host.centerYAnchor.constraint(equalTo: row.centerYAnchor),
                 ])
             }
-            // The right end follows the visible edge (a table wider than its window would carry it off-screen).
-            // The scroll view is there only once the row is placed, so the anchor is checked on every pass.
+            // The right end sits 22 pt inside the visible width (a table wider than its window would carry it
+            // off-screen). A width, not a position: tying the band to the clip view's edge made Auto Layout solve
+            // it again on every scroll step, and the list shook. The scroll view is there only once the row is
+            // placed, so the relation is checked on every pass.
             let edge: NSView = row.enclosingScrollView?.contentView ?? row
             if trailing?.secondItem !== edge {
                 trailing?.isActive = false
-                trailing = host.trailingAnchor.constraint(equalTo: edge.trailingAnchor, constant: -22)
+                trailing = host.widthAnchor.constraint(equalTo: edge.widthAnchor, constant: -44)
+                trailing?.priority = .defaultHigh
                 trailing?.isActive = true
             }
             Self.centreDisclosure(in: row)
@@ -387,10 +390,11 @@ struct RowBand: NSViewRepresentable {
                     // SwiftUI's own disclosure control is a small button at the row's left edge.
                     if let button = sub as? NSButton, button.frame.width <= 24 && button.frame.minX < 40
                         || String(describing: type(of: sub)).lowercased().contains("disclosure") {
+                        // Only when it is off: setting a frame while scrolling asks for another layout pass.
                         var frame = button.frame
                         let rowFrame = button.superview!.convert(row.bounds, from: row)
-                        frame.origin.y = rowFrame.midY - frame.height / 2
-                        button.frame = frame
+                        let y = (rowFrame.midY - frame.height / 2).rounded()
+                        if abs(frame.origin.y - y) > 0.5 { frame.origin.y = y; button.frame = frame }
                     } else {
                         visit(sub)
                     }

@@ -58,6 +58,41 @@ import Testing
     }
 }
 
+/// Network ▸ Block for an App: one domain stopped for one program, whatever the program's pattern says.
+@MainActor @Suite struct FirewallDomainBlocks {
+    let app = "/Applications/Tool.app/Contents/MacOS/Tool"
+    func facts(_ program: String, host: String, ip: String = "93.184.216.34") -> FirewallFacts {
+        FirewallFacts(program: program, proto: "TCP", ip: ip, port: "443", host: host, risk: .normal, riskReason: "",
+                      knownBad: "", patternKey: "net|\(program)|TCP internet:443")
+    }
+
+    @Test func yourBlockWinsOverASafePatternButNotTheLocalNetwork() {
+        let hw = "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
+        let blocked = FirewallPolicy.decide(facts(app, host: "api.example.com"), status: .safe, blockedDomain: "example.com", hostwatch: hw)
+        #expect(blocked.verdict == .block && blocked.reason.contains("example.com"))
+        // The app's one web pattern stays Safe: nothing else of it is stopped.
+        #expect(FirewallPolicy.decide(facts(app, host: "other.org"), status: .safe, hostwatch: hw).verdict == .allow)
+        #expect(FirewallPolicy.decide(facts(app, host: "nas.local", ip: "192.168.1.5"), status: .safe,
+                                      blockedDomain: "nas.local", hostwatch: hw).verdict == .allow)
+    }
+
+    @Test func aBlockCoversTheDomainsHostsForThatAppOnly() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-fwd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-fwd"), fileURL: dir.appendingPathComponent("fw.json"))
+        fw.setBlocked(true, domain: "example.com", program: "Tool")      // as the Network tab names the app
+        #expect(fw.blockedDomain(facts(app, host: "api.example.com")) == "example.com")
+        #expect(fw.blockedDomain(facts(app, host: "example.com")) == "example.com")
+        #expect(fw.blockedDomain(facts(app, host: "example.org")) == nil)
+        #expect(fw.blockedDomain(facts("/usr/bin/curl", host: "api.example.com")) == nil)
+        #expect(fw.blockedDomain(facts(app, host: "")) == nil)                            // an address alone
+        let again = FirewallMonitor(defaults: scratchDefaults("hw-fwd"), fileURL: dir.appendingPathComponent("fw.json"))
+        #expect(again.isBlocked(domain: "example.com", program: app))                       // kept, path or name alike
+        again.setBlocked(false, domain: "example.com", program: "Tool")
+        #expect(again.blockedDomain(facts(app, host: "api.example.com")) == nil)
+    }
+}
+
 /// When the relay fails, the firewall falls back to Watch and says so until you pick a mode again.
 @MainActor @Suite struct FirewallFallbackWarning {
     @Test func failingRelayFallsBackAndWarnsUntilYouChoose() {

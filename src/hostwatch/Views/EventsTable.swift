@@ -159,6 +159,13 @@ struct EventsTable: NSViewRepresentable {
                 }
             }
             reachedEnd = false
+            // A reload keeps the selected row *numbers*: with new rows above, another row (or none) would be selected
+            // until the window's next update put it back, so the selection flickered. It goes back by id at once.
+            applyingSelection = true
+            defer {
+                applyingSelection = false
+                syncSelection(scroll: false, reveal: false)
+            }
             // A batch on a flat list prepends rows and drops some at the end: tell the outline just that, so the
             // rows in between keep their views (a reload makes every visible cell again).
             if !hadGroups, children.isEmpty, let edit = Self.prependAndTrim(from: previous, to: order) {
@@ -196,7 +203,9 @@ struct EventsTable: NSViewRepresentable {
         }
 
         /// The binding's selection into the view, when they differ (a reveal from elsewhere selects a row).
-        private func syncSelection(scroll: Bool) {
+        /// `reveal`: open a folded group to show a selected event in it (a selection made elsewhere). Not after a
+        /// batch: a group you folded stays folded.
+        private func syncSelection(scroll: Bool, reveal: Bool = true) {
             guard let outline else { return }
             let current = Set(outline.selectedRowIndexes.compactMap { (outline.item(atRow: $0) as? NSUUID).map { $0 as UUID } })
             guard current != parent.selection else { return }
@@ -205,7 +214,7 @@ struct EventsTable: NSViewRepresentable {
             var indexes = IndexSet()
             for id in parent.selection {
                 var row = outline.row(forItem: NSUUID(uuidString: id.uuidString)!)
-                if row < 0, let group = children.first(where: { $0.value.contains(NSUUID(uuidString: id.uuidString)!) })?.key {
+                if reveal, row < 0, let group = children.first(where: { $0.value.contains(NSUUID(uuidString: id.uuidString)!) })?.key {
                     outline.expandItem(NSUUID(uuidString: group.uuidString)!)
                     row = outline.row(forItem: NSUUID(uuidString: id.uuidString)!)
                 }

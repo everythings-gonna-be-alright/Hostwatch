@@ -211,7 +211,7 @@ struct NetworkView: View {
         let now = Date()
         return NetworkRow.build(records: Array(domains.records.values), isNew: { domains.isNew($0, now: now) },
                                 entries: firewall.list(status: { signatures.status(forKey: $0) }),
-                                byYou: { signatures.entry($0.facts.patternKey)?.source == "you" },
+                                byYou: { firewall.blockedDomain($0.facts) != nil || signatures.entry($0.facts.patternKey)?.source == "you" },
                                 waiting: Set(firewall.prompts.map(\.patternKey)), firewallOn: firewall.mode != .off)
     }
 
@@ -399,7 +399,12 @@ struct NetworkView: View {
     }
 
     @ViewBuilder private func actions(_ row: NetworkRow) -> some View {
-        if row.isConnection, let e = row.entry, row.firewall.needsAttention, !e.facts.patternKey.isEmpty, e.facts.knownBad.isEmpty {
+        if row.isConnection, let e = row.entry, let domain = firewall.blockedDomain(e.facts) {
+            Button("Unblock") { firewall.setBlocked(false, domain: domain, program: e.facts.program) }
+                .help("Let \(row.destination) reach \(domain) again")
+                .controlSize(.small)
+                .font(.system(size: 11))
+        } else if row.isConnection, let e = row.entry, row.firewall.needsAttention, !e.facts.patternKey.isEmpty, e.facts.knownBad.isEmpty {
             let pattern = e.facts.patternKey.split(separator: "|").last.map(String.init) ?? ""
             HStack(spacing: 6) {
                 if row.firewall == .blockedByYou {
@@ -440,6 +445,7 @@ struct NetworkView: View {
             Button(keys.count > 1 ? "Block \(keys.count) Patterns" : "Block") { decide(keys, allow: false) }
             Divider()
         }
+        domainBlockItems(picked)
         if !named.isEmpty {
             Button("Mark \(named.count > 1 ? "\(named.count) Domains" : "Domain") Known") { domains.setKnown(named, true) }
             Button("Mark as Not Known") { domains.setKnown(named, false) }
@@ -456,6 +462,40 @@ struct NetworkView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(picked.map { $0.isConnection ? "\($0.destination) \($0.detail)" : $0.destination }
                 .joined(separator: "\n"), forType: .string)
+        }
+    }
+
+    /// Block one domain for one app: from a domain (an item per app that reached it) or from a connection (its app).
+    /// An ordinary app has one pattern for the whole web, so this is a rule of the firewall's own, not a pattern.
+    @ViewBuilder private func domainBlockItems(_ picked: [NetworkRow]) -> some View {
+        if picked.count == 1, let row = picked.first {
+            if let e = row.entry, row.isConnection, let domain = FirewallMonitor.domain(of: e.facts) {
+                let blocked = firewall.isBlocked(domain: domain, program: e.facts.program)
+                Button(blocked ? "Unblock \(domain) for \(row.destination)" : "Block \(domain) for \(row.destination)") {
+                    firewall.setBlocked(!blocked, domain: domain, program: e.facts.program)
+                }
+                firewallOffNote
+                Divider()
+            } else if let record = row.record, !record.programs.isEmpty {
+                Menu("Block for an App") {
+                    ForEach(record.programs, id: \.self) { program in
+                        let blocked = firewall.isBlocked(domain: record.domain, program: program)
+                        Button(blocked ? "Unblock \(program)" : "Block \(program)") {
+                            firewall.setBlocked(!blocked, domain: record.domain, program: program)
+                        }
+                    }
+                    firewallOffNote
+                }
+                Divider()
+            }
+        }
+    }
+
+    /// A block is kept either way, but only an active firewall stops anything.
+    @ViewBuilder private var firewallOffNote: some View {
+        if firewall.mode == .off || firewall.mode == .watch {
+            Text(firewall.mode == .off ? "The firewall is off: turn it on to stop the connections"
+                 : "The firewall only watches: choose Ask or Strict to stop the connections")
         }
     }
 

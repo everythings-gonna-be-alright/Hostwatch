@@ -30,9 +30,16 @@
   file and network events as well as launches. The PPID column stays for the number.
 - **The Time column shows hundredths of a second** ("14:05:09.48"), so events a burst apart read in order. The
   collector stamps to the microsecond: the full stamp is in the cell's tooltip and in exported history.
+- **Block one domain for one app.** In the Network tab, right-click a domain ▸ *Block for an App* lists the apps that
+  reached it, or right-click a connection ▸ *Block example.com for Slack*. Until now Block marked the app's network
+  pattern, which for an ordinary app is the whole web. The rule covers the domain's hosts (`api.example.com` under
+  `example.com`), wins over a Safe pattern, shows as *Blocked by you* with an **Unblock** button, and needs the
+  firewall in Ask or Strict to stop anything.
 
 ### Fixes
 
+- With Events grouped, a selected event flickered between selected and not as new events arrived: each batch kept
+  the selected row number while rows moved down. The selection now follows the event.
 - Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint, which counts
   shared and compressed memory many times. It now shows used memory of the total, as Activity Monitor does.
 
