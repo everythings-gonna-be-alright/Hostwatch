@@ -8,6 +8,8 @@ struct Sparkline: View {
     let color: Color
     var width: CGFloat? = 48               // nil: as wide as offered
     var height: CGFloat = 14
+    var lineWidth: CGFloat = 1.2
+    var fillOpacity: Double = 0.18
 
     var body: some View {
         Canvas { ctx, size in
@@ -34,8 +36,8 @@ struct Sparkline: View {
                 last = x
             }
             close()
-            ctx.fill(fill, with: .color(color.opacity(0.18)))
-            ctx.stroke(path, with: .color(color), lineWidth: 1.2)
+            ctx.fill(fill, with: .color(color.opacity(fillOpacity)))
+            ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
         }
         .frame(width: width, height: height)
         .frame(maxWidth: width == nil ? .infinity : nil)
@@ -88,10 +90,12 @@ struct MetricsStrip: View {
     var body: some View {
         HStack(spacing: 12) {
             if let s = current {
-                metric("CPU", "\(Int(s.cpu.rounded()))%", samples.map { $0.cpu / 100 }, .blue,
+                // Grey like the text around it: colour only when it means something (busy CPU, memory pressure).
+                metric("CPU", "\(Int(s.cpu.rounded()))%", samples.map { $0.cpu / 100 }, s.cpu >= 85 ? .orange : .secondary,
                        help: "CPU: share of all cores in use")
-                metric("Mem", "\(Int((s.mem * 100).rounded()))%", samples.map(\.mem), s.pressureColor,
-                       help: "Memory used (app, wired, compressed); memory pressure \(s.pressureText)")
+                metric("Memory", "\(Int((s.mem * 100).rounded()))%", samples.map(\.mem), s.pressure >= 2 ? s.pressureColor : .secondary,
+                       help: "Memory used (app, wired and compressed): \(Self.memoryText(s.mem)). Memory pressure \(s.pressureText). "
+                           + "A process's own footprint counts memory it shares with others, so processes don't add up to this.")
                 Label("\(Rate.text(s.netIn)) ↓ \(Rate.text(s.netOut)) ↑", systemImage: "network")
                     .help("Network: download ↓ and upload ↑ on Wi-Fi, Ethernet and cellular")
                 if let r = s.diskRead, let w = s.diskWrite {
@@ -124,10 +128,19 @@ struct MetricsStrip: View {
     private func metric(_ name: String, _ value: String, _ series: [Double], _ color: Color, help: String) -> some View {
         HStack(spacing: 5) {
             Text(name).foregroundStyle(.secondary)
-            Sparkline(values: series, color: color)
-            Text(value).frame(minWidth: 30, alignment: .leading)
+            Sparkline(values: series, color: color, width: 40, height: 11, lineWidth: 1, fillOpacity: 0.08)
+            Text(value).foregroundStyle(color == .secondary ? .secondary : color).frame(minWidth: 28, alignment: .leading)
         }
         .help(help)
+    }
+
+    /// "14.0 GB of 18 GB used".
+    static func memoryText(_ fraction: Double) -> String {
+        let total = Int64(ProcessInfo.processInfo.physicalMemory)
+        let used = Int64(Double(total) * fraction)
+        let f = ByteCountFormatter()
+        f.countStyle = .memory
+        return "\(f.string(fromByteCount: used)) of \(f.string(fromByteCount: total))"
     }
 }
 
