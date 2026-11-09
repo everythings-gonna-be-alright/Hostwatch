@@ -519,8 +519,8 @@ struct ActivityWindowView: View {
                         // The end of a Time Travel window's list: its next older page.
                         onReachEnd: traveling && !withDay ? { travel.loadMore() } : nil,
                         onDoubleClick: { item in
-                            // A search hit opens its moment; elsewhere a double-click asks the AI.
-                            if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
+                            // A search hit opens its moment; elsewhere the details panel, as in Running Now.
+                            if withDay { travel.reveal(item.event) } else { model.eventInfo = true }
                         },
                         menu: eventMenu, groupLinks: groupLinks)
             .onChange(of: travel.focusID) { _, id in
@@ -528,6 +528,10 @@ struct ActivityWindowView: View {
                 revealLaunch(event)                 // selecting the row scrolls the list to it
             }
             Divider()
+            if model.eventInfo, let event = Self.selectedEvent(rows, model.eventSelection) {
+                EventDetailPanel(event: event, signatures: signatures, actions: actions) { model.eventInfo = false }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
             HStack {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
                 Spacer(minLength: 12)
@@ -549,7 +553,22 @@ struct ActivityWindowView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            }
         }
+        .animation(.smooth(duration: 0.2), value: model.eventInfo)
+    }
+
+    /// The details panel's event: the first selected row that is an event, inside groups too.
+    static func selectedEvent(_ rows: [EventItem], _ selection: Set<UUID>) -> ActivityEvent? {
+        guard !selection.isEmpty else { return nil }
+        for row in rows {
+            if let children = row.children {
+                if let hit = children.first(where: { selection.contains($0.id) }) { return hit.event }
+            } else if selection.contains(row.id) {
+                return row.event
+            }
+        }
+        return nil
     }
 }
 
