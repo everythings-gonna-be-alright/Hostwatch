@@ -4,7 +4,7 @@
 
 Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three exceptions:
 
-- what you send to an AI you chose
+- what you send to an AI you chose: Claude, or a custom AI server that isn't on this Mac
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
 

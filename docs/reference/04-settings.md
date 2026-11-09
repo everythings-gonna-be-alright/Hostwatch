@@ -67,8 +67,11 @@ This pane sets the firewall mode and shows what it did recently. See [Firewall](
 
 This pane controls how Hostwatch uses AI and how Claude Code can work with it.
 
-- **Classifying new patterns and Ask AI:** choose the engine: hybrid (the default), on-device or Claude. The pane also
-  shows the on-device model's status and the Claude Code command.
+- **Classifying new patterns and Ask AI:** choose the engine: hybrid (the default), the local model or Claude. The
+  pane also shows the local model's status and the Claude Code command.
+- **Local model:** Apple On-Device (*General* or *Content Tagging*) or a custom OpenAI-compatible server, with its
+  address, model, API key and a *Test* button.
+- **Claude:** which Claude model to use: Claude Code's default, Opus, Sonnet or Haiku.
 - **Suggestions:** *Suggest for new patterns automatically* and *Accept AI suggestions without asking*.
 - **Claude Code guard:** turn it on or off, see the hook fragment, and read the log. See
   [Claude Code guard](03-features.md#claude-code-guard).

@@ -13,6 +13,7 @@ You don't need any of these: the app runs without flags, and most are for testin
 | `--claude-hook` | Claude Code's PreToolUse hook (see [Claude Code guard](03-features.md#claude-code-guard)). |
 | `--suggest-rules` | Dry run of rule suggestions from your decisions. |
 | `--signature-report <history.jsonl>` | How events group into patterns (`REPORT_NOSIGN=1` skips signing checks). |
+| `--triage-benchmark` | Compares local models on your own decisions and on attack-shaped patterns: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>` picks them, `BENCH_N` the sample size. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts for files (`HOSTWATCH_SIGNING_DB` for a scratch database). |
 | `--story-replay <history.jsonl>` | Replays history through the story engine (`REPLAY_LEARN_MINUTES`, `HOSTWATCH_OWN_BUNDLE`). |
 | `--metrics-probe` | Prints CPU, memory, network and disk samples. |

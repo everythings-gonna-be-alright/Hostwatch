@@ -44,8 +44,8 @@ enum LocalModelStatus: Equatable {
     var isReady: Bool { self == .ready }
     var label: String {
         switch self {
-        case .ready: return "On-device model ready"
-        case .unavailable(let why): return "On-device model unavailable: \(why)"
+        case .ready: return "Local model ready"
+        case .unavailable(let why): return "Local model unavailable: \(why)"
         }
     }
 }
@@ -65,7 +65,9 @@ struct AppleOnDeviceModel: LocalTriageModel {
     Answer SAFE only for clearly ordinary activity of Apple or well-known signed software, and use high \
     confidence only then. Unsigned or ad-hoc programs in temp or download folders, apps starting shells, \
     encoded commands, credential or keychain access, autostart (LaunchAgent) writes and unusual network \
-    destinations are at least SUSPICIOUS. When unsure, answer UNSURE.
+    destinations are at least SUSPICIOUS. Apple's signature on a shell or a tool that runs whatever it is told \
+    (sh, bash, zsh, osascript, curl, python, xattr, sqlite3, launchctl) says nothing about the command: judge what \
+    it runs, reads or writes, never the signer. When unsure, answer UNSURE.
     """
 
     private static let schema: GenerationSchema? = {
@@ -79,7 +81,7 @@ struct AppleOnDeviceModel: LocalTriageModel {
     }()
 
     func status() -> LocalModelStatus {
-        switch SystemLanguageModel.default.availability {
+        switch AppleModelChoice.current.model.availability {
         case .available:
             return Self.schema == nil ? .unavailable("schema error") : .ready
         case .unavailable(.deviceNotEligible):
@@ -96,7 +98,7 @@ struct AppleOnDeviceModel: LocalTriageModel {
     func triage(_ prompt: String) async throws -> LocalVerdict {
         guard let schema = Self.schema else { throw CocoaError(.featureUnsupported) }
         // A fresh session per pattern: no context carried between unrelated patterns.
-        let session = LanguageModelSession(model: .default, instructions: Self.instructions)
+        let session = LanguageModelSession(model: AppleModelChoice.current.model, instructions: Self.instructions)
         let response = try await session.respond(to: Secrets.mask(prompt), schema: schema,
                                                  options: GenerationOptions(samplingMode: .greedy))
         let word = try response.content.value(String.self, forProperty: "verdict")
@@ -167,17 +169,17 @@ enum AIEngine: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .onDevice: return "Apple On-Device (private)"
+        case .onDevice: return "Local Model"
         case .claude: return "Claude"
-        case .hybrid: return "On-Device First, Claude for the Rest"
+        case .hybrid: return "Local Model First, Claude for the Rest"
         }
     }
 
     var help: String {
         switch self {
-        case .onDevice: return "Only Apple's on-device model: free, offline, nothing leaves the Mac. Patterns it can't settle stay New."
+        case .onDevice: return "Only the local model (Apple's, or your server below). Patterns it can't settle stay New."
         case .claude: return "Only Claude (Claude Code CLI): strongest analysis; evidence is sent to Anthropic."
-        case .hybrid: return "On-device model first; Claude only for what it can't settle. Ask uses Claude."
+        case .hybrid: return "The local model first, Claude only for what it can't settle. Ask uses Claude."
         }
     }
 

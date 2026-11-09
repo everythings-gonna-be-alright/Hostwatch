@@ -52,7 +52,7 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
   `--daemon` mode serves the console user, idles without a client, ignores shutdown) and as an admin-prompted job
   otherwise. It talks over a Unix socket that accepts only Hostwatch's own code (audit token + designated requirement). Everything it sends is masked
   (`Secrets`) before it reaches history or any prompt. Nothing leaves the Mac except: Claude calls you enabled,
-  threat-list downloads, the update check, and the firewall relay's self-check.
+  a custom AI server you configured off this Mac, threat-list downloads, the update check, and the firewall relay's self-check.
 - **Every file is sealed through `Vault.shared`** (`read`/`write`/`appendLine`/`lines`, history blocks as records):
   never `Data(contentsOf:)` or `write(to:)` a Hostwatch data file directly. Tests get an in-memory key; the real
   key is in the Secure Enclave or a keychain item only Hostwatch's code may read (ADR 0009).

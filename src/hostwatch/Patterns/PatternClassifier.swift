@@ -31,7 +31,9 @@ final class PatternClassifier: ObservableObject {
     }
 
     private let store: SignatureStore
-    private let localModel: LocalTriageModel
+    /// Tests inject a model; otherwise the one chosen in Settings, read at each use.
+    private let injectedModel: LocalTriageModel?
+    private var localModel: LocalTriageModel { injectedModel ?? LocalModelChoice.model() }
     private var timer: Timer?
     private var process: Process?
     private var localTask: Task<Void, Never>?
@@ -42,9 +44,9 @@ final class PatternClassifier: ObservableObject {
 
     var localStatus: LocalModelStatus { localModel.status() }
 
-    init(store: SignatureStore, localModel: LocalTriageModel = AppleOnDeviceModel()) {
+    init(store: SignatureStore, localModel: LocalTriageModel? = nil) {
         self.store = store
-        self.localModel = localModel
+        self.injectedModel = localModel
         autoClassify = UserDefaults.standard.bool(forKey: "autoClassifyPatterns")
         engine = AIEngine.load()
         timer = Timer.scheduledTimer(withTimeInterval: 90, repeats: true) { [weak self] _ in
@@ -243,7 +245,7 @@ final class PatternClassifier: ObservableObject {
         process.currentDirectoryURL = AppPaths.support
         process.arguments = ["-p", "--output-format", "json", "--no-session-persistence",
                              "--setting-sources", "", "--strict-mcp-config", "--tools", "",
-                             "--system-prompt", Self.systemPrompt]
+                             "--system-prompt", Self.systemPrompt] + ClaudeModelChoice.arguments
         process.environment = ClaudeLocator.environment
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin

@@ -318,7 +318,7 @@ final class AIAnalysis: ObservableObject {
             "--strict-mcp-config",            // no MCP servers
             "--tools", allowFileTools ? "Read,Grep,Glob" : "",
             "--system-prompt", instructions,
-        ]
+        ] + ClaudeModelChoice.arguments
         if allowFileTools { process.arguments! += ["--add-dir", "/"] }
         process.environment = ClaudeLocator.environment
 
@@ -355,7 +355,7 @@ final class AIAnalysis: ObservableObject {
 
     /// Same answer shape as Claude (VERDICT line first), from Apple's on-device model.
     private func askOnDevice() {
-        let model = AppleOnDeviceModel()
+        let model = LocalModelChoice.model()
         let status = model.status()
         guard status.isReady else { state = .failed(status.label + ". Switch the engine to Claude."); return }
         answer = ""
@@ -372,7 +372,7 @@ final class AIAnalysis: ObservableObject {
                 let text: String
                 do {
                     text = try await model.explain(prompt, instructions: instructions)
-                } catch where AppleOnDeviceModel.isRefusal(error) && core != prompt {
+                } catch where AppleOnDeviceModel.isRefusal(error) && core != prompt && model is AppleOnDeviceModel {
                     // The safety filter refused the full evidence: one try with its core only.
                     shortened = true
                     text = try await model.explain(core, instructions: instructions)
@@ -380,13 +380,15 @@ final class AIAnalysis: ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 self.answer = text
                 self.updateVerdict()
-                self.footer = String(format: "on-device · %.1fs · nothing left this Mac", Date().timeIntervalSince(start))
+                self.footer = String(format: "%@ · %.1fs", model.origin, Date().timeIntervalSince(start))
+                    + (model.staysOnMac ? " · nothing left this Mac" : " · evidence sent there, secrets masked")
                     + (shortened ? " · core evidence only (the full text was refused by Apple's safety filter)" : "")
                 self.state = .done
                 if let verdict = self.verdict { self.onVerdict?(verdict, self.summaryLine) }
             } catch {
                 guard let self, !Task.isCancelled else { return }
-                self.state = .failed(AppleOnDeviceModel.describe(error))
+                self.state = .failed(model is AppleOnDeviceModel ? AppleOnDeviceModel.describe(error)
+                                     : "\(model.origin): \(error.localizedDescription)")
             }
         }
     }
