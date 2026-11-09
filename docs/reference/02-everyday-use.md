@@ -42,9 +42,11 @@ glance and quick actions.
 off. The menu offers:
 
 - **Ask AI: Is This Dangerous?…** and **Watch <name> Closely…**
-- **Show Launch Chain…**: who started the process, parent by parent up to launchd, with each one's command line and
-  the origin (terminal, app, AI session, launchd…). It is rebuilt from what Hostwatch recorded, so it still works
-  after every process in the chain has exited. Ask AI gets the same chain.
+- **Show Launch Chain…**: who started the process, in its own window. One sentence says where it came from (a
+  terminal, an app, an AI session, macOS itself), then the chain reads top-down from launchd to the process, each
+  step with its icon, pid and command line. The step that decided the origin is marked, and each says how Hostwatch
+  knows it: a recorded launch, the process list, or running now. It is rebuilt from what Hostwatch recorded, so it
+  still works after every process in the chain has exited. *Copy* gives it as text, and Ask AI gets the same chain.
 - Mark its pattern, or **Mark All … From This Process** (with *Clear Rule*). With several events selected, the menu
   marks all their patterns at once.
 - **Exclude ▸** *Hide process*, *Hide spawns of*, *Hide host*, *Hide domain \*.x*, or *Edit Exclusions…*

@@ -32,4 +32,18 @@ import Testing
         let known: [Int: LaunchStep] = [10: step(10, 20, "/bin/sh"), 20: step(20, 10, "/bin/sh")]
         #expect(LaunchChain.build(from: 10) { known[$0] }.steps.count == 2)
     }
+
+    @Test func theReportNamesTheProgramPastTheShells() {
+        let report = LaunchChainReport(process: step(54973, 54970, "/usr/bin/curl"),
+                                       steps: [step(54970, 54955, "/bin/sh"), step(54955, 1, "/usr/sbin/auditd", "auditd -l", .list)],
+                                       broken: false, session: nil)
+        #expect(report.origin == .other && report.originIndex == 1)
+        #expect(report.summary == "Started by auditd")
+    }
+
+    @Test func aGapSaysRecordingStartedLater() {
+        let report = LaunchChainReport(process: step(9, 8, "/bin/ls"), steps: [step(8, 7, "/bin/zsh")], broken: true, session: nil)
+        #expect(report.origin == .unknown && report.originIndex == nil)
+        #expect(report.summary.contains("before Hostwatch was recording"))
+    }
 }
