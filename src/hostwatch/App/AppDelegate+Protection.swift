@@ -51,31 +51,19 @@ extension AppDelegate {
                              deadline: Date().addingTimeInterval(seconds))
     }
 
-    /// One floating panel for the questions, above full-screen apps: a launch waits only a few seconds.
+    /// One glass question panel at a time, like the firewall's: a launch waits only a few seconds.
     func refreshProtectionPanels() {
-        guard let ask = protection.prompts.first else { protectionPanel?.orderOut(nil); return }
-        let panel = protectionPanel ?? {
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 180),
-                            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
-            p.title = "Held by Hostwatch"
-            p.titlebarAppearsTransparent = true
-            p.level = .floating
-            p.isReleasedWhenClosed = false
-            p.hidesOnDeactivate = false
-            p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            protectionPanel = p
-            return p
-        }()
-        let origin = ask.area == .launches ? launchChainReport(for: ask.event).summary : ""
-        let host = NSHostingController(rootView: ProtectionPromptView(ask: ask, origin: origin,
-                                                                      waiting: protection.prompts.count) { [weak self] choice in
+        protectionPanel?.orderOut(nil)
+        protectionPanel = nil
+        guard let ask = protection.prompts.first else { return }
+        let chain = launchChainReport(for: ask.event)
+        let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, waiting: protection.prompts.count) { [weak self] choice in
             self?.protection.respond(ask.id, choice)
         } expired: { [weak self] in
             self?.protection.expire(ask.id)
         })
-        host.sizingOptions = [.preferredContentSize]
-        panel.contentViewController = host
-        if !panel.isVisible { panel.center() }
-        panel.orderFrontRegardless()
+        protectionPanel = panel
+        QuestionPanel.show(panel, slot: 0)
+        NSSound(named: "Tink")?.play()
     }
 }

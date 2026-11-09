@@ -268,3 +268,54 @@ private struct OriginTag: View {
             .background(Capsule().fill(.quaternary.opacity(0.6)))
     }
 }
+
+/// "Started by Claude Code": the launch chain in one card, for a question panel. The origin's sentence, the chain as
+/// a breadcrumb from the origin down to the program (the middle folded when it's long), and what the program runs.
+struct LaunchChainStrip: View {
+    let report: LaunchChainReport
+
+    /// Origin first, the program last: at most the origin, the two nearest parents and the program.
+    private var crumbs: [LaunchStep?] {
+        let ancestors = Array(report.steps.reversed())              // oldest first
+        let from = report.originIndex.map { report.steps.count - 1 - $0 } ?? 0
+        var shown = Array(ancestors[min(from, ancestors.count)...])
+        var out: [LaunchStep?] = []
+        if shown.count > 3 { out = [shown.first, nil]; shown = Array(shown.suffix(2)) }   // nil: "…"
+        return out + shown.map { Optional($0) } + [report.process]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(report.summary).font(.callout.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 4) {
+                ForEach(Array(crumbs.enumerated()), id: \.offset) { i, step in
+                    if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary) }
+                    if let step { crumb(step, last: i == crumbs.count - 1) } else { Text("…").foregroundStyle(.secondary) }
+                }
+            }
+            .lineLimit(1)
+            let what = report.process.args.isEmpty ? report.process.path : report.process.args
+            Text(what)
+                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                .help(report.process.path)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05)))
+    }
+
+    private func crumb(_ step: LaunchStep, last: Bool) -> some View {
+        HStack(spacing: 4) {
+            if let agent = CodingAgent.of(step.path) {
+                AgentBadge(agent: agent, size: 14)
+            } else {
+                Image(nsImage: ProcessIcons.icon(step.path)).resizable().frame(width: 14, height: 14)
+            }
+            // An agent's binary is named by its version ("2.1.318"): its name says more.
+            Text(CodingAgent.of(step.path)?.title ?? step.name)
+                .font(.caption.weight(last ? .semibold : .regular)).foregroundStyle(last ? .primary : .secondary)
+        }
+        .help("\(step.path) (pid \(step.pid))")
+    }
+}

@@ -11,8 +11,10 @@ extension AppDelegate {
         // The latest launch of each pid at or before the event (history is newest first).
         var launches: [Int: ActivityEvent] = [:]
         var earlier: [LaunchStep] = []
+        var own: ActivityEvent?             // a connection's or file's process: its own launch, for its command line
         for e in model.history where e.kind == .exec && (e.ts == 0 || e.ts <= at + 1) {
             if e.pid == event.pid, e.id != event.id, e.ts <= at {
+                if event.kind != .exec, own == nil { own = e; continue }
                 // The same pid ran something else first (sh exec'ing bash): shown, but not a parent.
                 earlier.append(LaunchStep(pid: e.pid, ppid: e.ppid, path: e.target, args: e.args, source: .launch))
                 continue
@@ -21,7 +23,7 @@ extension AppDelegate {
         }
         let snapshot = ProcessHistory(directory: history.directory).snapshot(at: Date(timeIntervalSince1970: at))
         let listed = Dictionary((snapshot?.processes ?? []).map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
-        let chain = LaunchChain.build(from: event.ppid) { pid in
+        let chain = LaunchChain.build(from: event.ppid > 0 ? event.ppid : own?.ppid ?? 0) { pid in
             if let e = launches[pid] { return LaunchStep(pid: pid, ppid: e.ppid, path: e.target, args: e.args, source: .launch) }
             if let p = listed[pid] { return LaunchStep(pid: pid, ppid: p.ppid, path: p.path, args: p.args, source: .list) }
             let path = ProcessList.path(pid)
@@ -30,8 +32,8 @@ extension AppDelegate {
         }
         let session = event.session > 0 ? model.sessions.session(event.session)?.name : nil
         let path = event.kind == .exec && !event.target.isEmpty ? event.target : event.proc
-        let process = LaunchStep(pid: event.pid, ppid: event.ppid, path: path, args: event.kind == .exec ? event.args : "",
-                                 source: .launch)
+        let args = event.kind == .exec ? event.args : own?.args ?? listed[event.pid]?.args ?? ""
+        let process = LaunchStep(pid: event.pid, ppid: event.ppid, path: path, args: args, source: .launch)
         return LaunchChainReport(process: process, steps: chain.steps, broken: chain.broken, session: session,
                                  earlier: Array(earlier.prefix(3)))
     }

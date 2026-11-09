@@ -65,7 +65,9 @@ struct LaunchChainReport: Sendable {
     var summary: String {
         let name = originIndex.map { steps[$0].name } ?? ""
         switch origin {
-        case .agent: return "Started by an AI agent" + (session.map { " in the session \($0)" } ?? "")
+        case .agent:
+            let agent = originIndex.flatMap { CodingAgent.of(steps[$0].path)?.title } ?? "an AI agent"
+            return "Started by \(agent)" + (session.map { " in the session “\($0)”" } ?? "")
         case .terminal: return "Started from \(name), a terminal"
         case .app: return "Started by the app \(name)"
         case .launchd: return "Started by macOS itself, as a system or login service"
