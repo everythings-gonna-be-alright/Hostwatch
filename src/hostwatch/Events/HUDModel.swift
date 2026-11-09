@@ -89,6 +89,13 @@ final class HUDModel: ObservableObject {
     let beacons = BeaconDetector()
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
+    weak var protection: ProtectionMonitor?
+    /// Endpoint Security: the collector's questions, its state and what it stopped on its own.
+    var onGuardAsk: (([String: Any]) -> Void)?
+    var onGuardStatus: ((String, String) -> Void)?
+    var onGuardBlock: (([String: Any]) -> Void)?
+    /// Protection's settings for the collector, sent again on every connect.
+    var guardConfig: [String: Any] = [:] { didSet { sendGuard() } }
     /// Threat lists: a connection to a listed domain or IP carries `knownBad` into stories and the rows.
     var intel: ThreatIntel?
     /// The collector's 5-second "top processes" samples (procs, disk read B/s, disk write B/s).
@@ -398,6 +405,7 @@ final class HUDModel: ObservableObject {
     private func sendConfig() {
         send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue), "top": true])
         sendFirewall()
+        sendGuard()
     }
 
     func sendFirewall(flush: Bool = false) {
@@ -417,6 +425,16 @@ final class HUDModel: ObservableObject {
         guard connected else { return false }
         send(["processes": true])
         return true
+    }
+
+    func sendGuard() {
+        guard !guardConfig.isEmpty else { return }
+        send(["guard": guardConfig])
+    }
+
+    /// The answer to a held launch or file access; the collector may reuse it for `ttl` seconds.
+    func sendGuardAnswer(id: Int, allow: Bool, ttl: TimeInterval) {
+        send(["guard_answer": ["id": id, "allow": allow, "ttl": ttl]])
     }
 
     func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
@@ -452,6 +470,7 @@ final class HUDModel: ObservableObject {
     private static let askMarker = Data(#""kind":"fw_ask""#.utf8)
     private static let statusMarker = Data(#""kind":"fw_status""#.utf8)
     private static let watchMarker = Data(#""kind":"watch""#.utf8)
+    private static let guardMarker = Data(#""kind":"guard_"#.utf8)
     private static let processListMarker = Data(#""kind":"proc_list""#.utf8)
     private struct TopMessage: Decodable {
         var procs: [TopProcess]
@@ -485,6 +504,18 @@ final class HUDModel: ObservableObject {
                        .data(using: .utf8),
                    let event = try? decoder.decode(ActivityEvent.self, from: netLine) {
                     onFirewallAsk?(key, event)
+                }
+                continue
+            }
+            // Protection's questions are answered even while paused: a launch or file access is waiting.
+            if line.prefix(40).range(of: Self.guardMarker) != nil {
+                if let obj = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any] {
+                    switch obj["kind"] as? String {
+                    case "guard_ask": onGuardAsk?(obj)
+                    case "guard_status": onGuardStatus?(obj["state"] as? String ?? "", obj["detail"] as? String ?? "")
+                    case "guard_block": onGuardBlock?(obj)
+                    default: break
+                    }
                 }
                 continue
             }
@@ -523,7 +554,9 @@ final class HUDModel: ObservableObject {
             }
             let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event),
                                         session: event.session > 0 ? sessions.session(event.session)?.name : nil)
-            hold?.consider(event, stages: stages, status: signatures.status(for: event))
+            let status = signatures.status(for: event)
+            hold?.consider(event, stages: stages, status: status)
+            protection?.consider(&event, status: status)
             onEvent?(event)
             fresh.append(event)
             countBuffer[event.kind, default: 0] += 1

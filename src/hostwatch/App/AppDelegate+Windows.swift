@@ -167,6 +167,7 @@ extension AppDelegate {
         stories.save()
         domains.save()
         firewall.save()
+        protection.save()
         // A background service keeps running after the app quits: nothing to stop.
         guard collector.isRunning, !collector.usesDaemon, !terminating else { return .terminateNow }
         terminating = true

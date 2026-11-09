@@ -4,6 +4,12 @@
 
 ### New
 
+- **Launch and file protection, in rehearsal.** Rules ▸ Protection shows what Hostwatch would stop: launches, and
+  programs that aren't expected reading your SSH keys, developer credentials, keychains, browser passwords and other
+  protected places. It decides as the firewall does, your pattern decisions first. Watch is on by default and stops
+  nothing: Events marks what would be stopped, and the page lists it to Allow or Block before anything is enforced.
+  Stopping for real (Ask, Strict) needs Apple's Endpoint Security approval, which is pending.
+
 - **A quieter window.** The event kinds are plain on and off filters in the Show row now, their running totals in
   the tooltip, so Time Travel, Pause and HUD sit in the same place on every tab, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The
   heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of

@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     var guardPanel: NSPanel?
     /// Firewall rules; Watch mode lists what they would block (nothing is blocked yet).
     let firewall = FirewallMonitor()
+    /// Launch and file protection: Watch rehearses on the live feed, Ask and Strict need Endpoint Security.
+    let protection = ProtectionMonitor()
+    var protectionPanel: NSPanel?
     /// One window per waiting question.
     var firewallPanels: [UUID: NSPanel] = [:]
     let sheets = WindowSheetState()
@@ -177,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             setUpClaudeGuard()
         }
         setUpFirewall()
+        setUpProtection()
         // A pattern an open story points at is kept while the story is open, even a one-off.
         signatures.inUse = { [weak self] in
             Set((self?.stories.stories ?? []).filter { !$0.dismissed }.flatMap(\.steps).map(\.event.signatureKey))

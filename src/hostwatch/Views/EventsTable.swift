@@ -326,7 +326,13 @@ struct EventsTable: NSViewRepresentable {
                                        toolTip: "On a threat list: \(bad)\nThe pattern itself is \(row.status.title.lowercased())."))
                 } else {
                     icons.append(.init(image: badges.statusPill(row.status)))
-                    if case .heavy = parent.badge(e) {
+                    if e.protection != .none {
+                        icons.append(.init(image: badges.symbol("nosign", size: 11,
+                                                                weight: e.protection == .blocked ? .bold : .regular),
+                                           tint: .systemRed,
+                                           toolTip: e.protection == .blocked ? "Stopped: \(e.protectionReason)"
+                                               : "Would be stopped: \(e.protectionReason)\nProtection is watching: nothing was stopped."))
+                    } else if case .heavy = parent.badge(e) {
                         icons.append(.init(image: badges.symbol("flame.fill", size: 11), tint: .systemOrange,
                                            toolTip: "Still running and using a lot of CPU or memory"))
                     } else if !e.beacon.isEmpty {

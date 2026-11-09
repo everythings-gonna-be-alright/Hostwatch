@@ -133,7 +133,10 @@ extension AppDelegate {
         firewall.answer = { [weak self] key, pass, ttl in self?.model.sendFirewallAnswer(key: key, pass: pass, ttl: ttl) }
         firewall.onPromptsChange = { [weak self] in self?.refreshFirewallPanels() }
         firewall.flushAnswers = { [weak self] in self?.model.sendFirewall(flush: true) }
-        signatures.onYouDecided = { [weak firewall] keys in firewall?.decided(patternKeys: keys) }
+        signatures.onYouDecided = { [weak firewall, weak protection] keys in
+            firewall?.decided(patternKeys: keys)
+            protection?.decided(patternKeys: keys)
+        }
         firewall.onModeChange = { [weak self] mode in self?.model.firewallMode = mode.collector }
         model.onFirewallAsk = { [weak self] key, event in self?.firewall.handleAsk(key: key, event: event) }
         model.onFirewallStatus = { [weak self] state, detail in self?.firewall.relayStatus(state, detail) }

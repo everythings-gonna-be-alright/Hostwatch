@@ -62,6 +62,8 @@ struct ActivityEvent: Identifiable, Decodable {
     var rawIP = false            // net: public IP, unusual port, no DNS, untrusted program
     var knownBad = ""            // on a threat list: "ThreatFox: AsyncRAT command server, reported …"
     var session = 0              // the coding-agent session (the agent's pid) it belongs to, 0 if none
+    var protection = ProtectionMark.none   // launches and files: would be (or was) stopped
+    var protectionReason = ""
 
     /// Any per-connection network signal that deserves attention.
     var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }

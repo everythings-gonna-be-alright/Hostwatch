@@ -204,6 +204,7 @@ struct ActivityWindowView: View {
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
+                               protection: model.protection,
                                showPatterns: { app in
                                    signatures.scope = nil
                                    signatures.search = app
@@ -239,7 +240,9 @@ struct ActivityWindowView: View {
     }
 
     private var subtitle: String {
-        let state = model.paused ? "Paused" : model.connected ? "Live" : "Collector off"
+        // Protection's state costs no toolbar room: "Live · Rehearsing", "Live · Protection paused".
+        let state = (model.paused ? "Paused" : model.connected ? "Live" : "Collector off")
+            + (model.protection?.stateWord.map { " · \($0)" } ?? "")
         if traveling {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }

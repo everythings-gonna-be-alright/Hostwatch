@@ -732,6 +732,27 @@ In a firewall question, **Ask Claude** has the shortcut ⌘K.
 
 When something looks wrong, pause it, or watch it closely to see what it does.
 
+#### Launch and file protection (Rules ▸ Protection)
+
+Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
+the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
+curl and other programs that run whatever they're told are judged by what they run.
+
+- **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
+  nothing, it marks what would be stopped and counts what would be asked about.
+- **Stopping for real needs Endpoint Security.** Ask and Strict are unavailable until Apple approves Hostwatch's
+  Endpoint Security access and the collector can use it. The page says which.
+- **Protected files:** cards for SSH keys, developer credentials (cloud, Kubernetes, registries, GitHub, GPG),
+  keychains, browser passwords and cookies, Messages and Mail, privacy settings and accounts, and autostart locations
+  (writes only). The programs expected there pass. For everyone else a card asks, or blocks. A card can be off.
+- **What protection found:** each launch or file access that would be stopped or asked about, folded by pattern.
+  *Allow* marks the pattern Safe, *Block* marks it Dangerous, and it leaves the list. Deciding it anywhere else does
+  the same.
+- **In Events:** a red no-entry sign after the status marks what would be stopped, with the reason in its tooltip.
+  Questions are only counted, so the list stays quiet.
+- **Pause for 15 Minutes** stops everything, rehearsal included. The window's subtitle says *Rehearsing*,
+  *Protecting* or *Protection paused*.
+
 #### Hold suspicious processes (opt-in)
 
 Optional: when a process does something clearly dangerous, Hostwatch pauses it and asks you whether to let it go on

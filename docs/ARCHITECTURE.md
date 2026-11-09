@@ -62,6 +62,11 @@ disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 00
 **`Firewall/`** — `Firewall.swift` (modes, what it would do), `FirewallRelay.swift` (the relay), `PFRedirect.swift`
 (pf rules), `SocketOwner.swift`, `FirewallProbe.swift`, `FirewallRelayTest.swift` (the `sudo` self-checks).
 
+**`Protection/`** — `ProtectionPolicy.swift` (modes, protected-file cards, what a launch or file access gets: pure),
+`ProtectionMonitor.swift` (the Watch rehearsal on the live feed, findings, the collector's settings and questions,
+ADR 0011). The page is `Views/ProtectionView.swift` (Rules ▸ Protection), the question panel
+`Views/ProtectionPromptView.swift`, the wiring `App/AppDelegate+Protection.swift`.
+
 **`History/`** — `HistoryRecorder.swift` (what to write, rotation, the cap), `HistoryStream.swift` (compressed as
 written, crash safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryArchive.swift` (reading by time),
 `TimeTravel.swift` (state), `ProcessHistory.swift`, `Metrics.swift`, `ProcessVitals.swift`.
