@@ -328,21 +328,37 @@ enum HistoryFiles {
 
     /// Lines of a plain or gzip file at `path`, or of a whole history folder in time order (for the
     /// replay and report tools; any .gz works).
-    static func forEachLine(path: String, _ body: (Data) -> Void) {
+    /// `since`: for a folder, skip files that end before it (their index says so without opening them).
+    static func forEachLine(path: String, since: Date? = nil, _ body: (Data) -> Void) {
         let url = URL(fileURLWithPath: path)
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
-            for file in list(in: url) {
+            func lines(_ chunk: Data) {
+                var start = chunk.startIndex
+                while let nl = chunk[start...].firstIndex(of: 0x0A) {
+                    if nl > start { body(chunk[start..<nl]) }
+                    start = nl + 1
+                }
+            }
+            let files = list(in: url)
+            for (i, file) in files.enumerated() {
+                let newest = i == files.count - 1          // the file being written: its end isn't in its index yet
                 switch file {
-                case .plain(let plain): forEachLine(path: plain.path, body)
-                case .compressed:
-                    forEachChunk(file) { chunk in
-                        var start = chunk.startIndex
-                        while let nl = chunk[start...].firstIndex(of: 0x0A) {
-                            if nl > start { body(chunk[start..<nl]) }
-                            start = nl + 1
+                case .plain(let plain):
+                    if !newest, let since, let modified = (try? plain.resourceValues(forKeys: [.contentModificationDateKey]))?
+                        .contentModificationDate, modified < since { continue }
+                    forEachLine(path: plain.path, body)
+                case .compressed(let gz, let index):
+                    if !newest, let since, let end = index.end, end < since { continue }
+                    forEachChunk(file) { chunk in lines(chunk); return true }
+                    // The newest file's events since its last finished block: the unfinished member after it.
+                    if newest, let handle = try? FileHandle(forReadingFrom: gz) {
+                        defer { try? handle.close() }
+                        let finished = index.blocks.last.map { $0.offset + $0.length } ?? 0
+                        try? handle.seek(toOffset: UInt64(finished))
+                        if let tail = try? handle.readToEnd(), !tail.isEmpty {
+                            lines(HistoryStream.wholeLines(HistoryStream.inflatePartial(tail)))
                         }
-                        return true
                     }
                 }
             }
