@@ -6,6 +6,8 @@ import SwiftUI
 struct ProtectionPromptView: View {
     let ask: ProtectionAsk
     let chain: LaunchChainReport
+    /// The protected card's or your place's name ("SSH keys", "contracts").
+    var place: String? = nil
     let waiting: Int
     let respond: (ProtectionMonitor.PromptAnswer) -> Void
     let expired: () -> Void
@@ -13,8 +15,7 @@ struct ProtectionPromptView: View {
     private var title: String {
         let name = ask.event.name
         if ask.area == .launches { return "\(name) wants to run" }
-        let place = ask.group.flatMap(ProtectedGroup.group(id:))?.title ?? "a protected file"
-        return "\(name) wants to \(ask.event.extra.contains("w") ? "change" : "read") \(place)"
+        return "\(name) wants to \(ask.event.extra.contains("w") ? "change" : "read") \(place ?? "a protected file")"
     }
 
     private var detail: String {

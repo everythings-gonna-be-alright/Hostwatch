@@ -70,6 +70,10 @@ final class ProtectionMonitor: ObservableObject {
     @Published var groups: [String: ProtectedGroupSetting] {
         didSet { defaults.set(try? JSONEncoder().encode(groups), forKey: Keys.groups); changed() }
     }
+    /// Folders and files you protect yourself (Rules ▸ Protection ▸ Protected Files and Folders).
+    @Published var customPlaces: [CustomPlace] {
+        didSet { defaults.set(try? JSONEncoder().encode(customPlaces), forKey: Keys.custom); changed() }
+    }
     /// The kill switch: nothing is stopped (or rehearsed) until then.
     @Published var pausedUntil: Date? { didSet { changed() } }
     @Published private(set) var enforcer: EnforcerState = .unknown
@@ -99,7 +103,7 @@ final class ProtectionMonitor: ObservableObject {
 
     private enum Keys {
         static let launch = "protectionLaunchMode", file = "protectionFileMode", groups = "protectionGroups"
-        static let since = "protectionSince"
+        static let since = "protectionSince", custom = "protectionCustomPlaces"
     }
 
     init(defaults: UserDefaults = .standard,
@@ -110,6 +114,7 @@ final class ProtectionMonitor: ObservableObject {
         launchMode = defaults.string(forKey: Keys.launch).flatMap(ProtectionMode.init) ?? .watch
         fileMode = defaults.string(forKey: Keys.file).flatMap(ProtectionMode.init) ?? .watch
         groups = defaults.data(forKey: Keys.groups).flatMap { try? JSONDecoder().decode([String: ProtectedGroupSetting].self, from: $0) } ?? [:]
+        customPlaces = defaults.data(forKey: Keys.custom).flatMap { try? JSONDecoder().decode([CustomPlace].self, from: $0) } ?? []
         let started = defaults.object(forKey: Keys.since) as? Date ?? Date()
         since = started
         defaults.set(started, forKey: Keys.since)
@@ -166,10 +171,13 @@ final class ProtectionMonitor: ObservableObject {
             return (.launches, ProtectionPolicy.decideLaunch(target: e.target, status: status, risk: e.signatureRisk,
                                                              riskReason: e.signatureReason, knownBad: e.knownBad))
         case .file:
-            guard fileMode != .off, let d = ProtectionPolicy.decideFile(pattern: e.signaturePattern, status: status,
-                                                                        risk: e.signatureRisk, settings: groups)
-            else { return nil }
-            return (.files, d)
+            guard fileMode != .off else { return nil }
+            if let d = ProtectionPolicy.decideFile(pattern: e.signaturePattern, status: status, risk: e.signatureRisk,
+                                                   settings: groups) {
+                return (.files, d)
+            }
+            return ProtectionPolicy.decideCustom(path: e.target, actor: e.proc, status: status, places: customPlaces)
+                .map { (.files, $0) }
         case .net:
             return nil
         }
@@ -218,6 +226,30 @@ final class ProtectionMonitor: ObservableObject {
 
     func count(_ area: ProtectionArea, _ verdict: ProtectionVerdict) -> Int { today[area]?[verdict] ?? 0 }
 
+    /// Adds folders and files to protect (already protected paths are skipped).
+    func addPlaces(_ urls: [URL]) {
+        var places = customPlaces
+        for url in urls {
+            let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+            guard !places.contains(where: { $0.path == path }) else { continue }
+            places.append(CustomPlace(path: path, isFolder: url.hasDirectoryPath))
+        }
+        customPlaces = places
+    }
+
+    func removePlace(_ id: String) {
+        let group = "custom:\(id)"
+        customPlaces.removeAll { $0.id == id }
+        findings = findings.filter { $0.value.group != group }
+        dirty = true
+        publishSoon()
+    }
+
+    /// A card's or your place's name, for the question panel and the findings.
+    func placeTitle(group: String) -> String? {
+        ProtectedGroup.group(id: group)?.title ?? customPlaces.first { $0.groupID == group }?.name
+    }
+
     /// Per protected-files card: what was (or would be) stopped there, in the findings kept.
     func findings(group: String) -> [ProtectionFinding] { findings.values.filter { $0.group == group } }
 
@@ -255,6 +287,8 @@ final class ProtectionMonitor: ObservableObject {
             guard s.on else { return nil }
             return ["id": g.id, "prefixes": g.prefixes(home: home), "owners": g.owners, "writesOnly": g.writesOnly,
                     "others": s.others.rawValue]
+        } + customPlaces.filter(\.on).map {
+            ["id": $0.groupID, "prefixes": [$0.path], "owners": [String](), "writesOnly": false, "others": $0.others.rawValue]
         }
         return ["launches": paused ? "off" : launchMode.rawValue, "files": paused ? "off" : fileMode.rawValue,
                 "groups": cards, "hostwatch": Bundle.main.executablePath ?? ""]

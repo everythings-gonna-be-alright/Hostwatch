@@ -9,7 +9,7 @@ struct ProtectionSidebarRows: View {
         let _ = protection.revision
         let stops = protection.findings.values.filter { $0.verdict == .block }.count
         Label("Overview", systemImage: "shield.lefthalf.filled").tag(RulesSegment.protectionOverview)
-        Label("Protected Files", systemImage: "lock.doc").tag(RulesSegment.protectedFiles)
+        Label("Protected Files and Folders", systemImage: "lock.doc").tag(RulesSegment.protectedFiles)
         Label("Found", systemImage: "exclamationmark.shield").badge(stops).tag(RulesSegment.protectionFound)
     }
 }
@@ -18,7 +18,7 @@ struct ProtectionSidebarRows: View {
 /// anything is stopped. source: docs/adr/0011-protection.md
 struct ProtectionView: View {
     @ObservedObject var protection: ProtectionMonitor
-    /// Which page of Rules ▸ Protection: Overview, Protected Files or Found.
+    /// Which page of Rules ▸ Protection: Overview, Protected Files and Folders, or Found.
     let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
     let mark: ([String], SignatureStatus) -> Void
@@ -90,12 +90,62 @@ struct ProtectionView: View {
 
     private var files: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Protected files").font(.headline)
+            Text("Protected files and folders").font(.headline)
             Text("Programs that aren't expected in these places are asked about, or blocked. Allow one by marking its "
                  + "pattern Safe, here or in Patterns.")
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(ProtectedGroup.all) { group in card(group) }
+            HStack {
+                Text("Your folders and files").font(.headline)
+                Spacer()
+                Button { addPlaces() } label: { Label("Add Folder or File…", systemImage: "plus") }
+            }
+            .padding(.top, 12)
+            if protection.customPlaces.isEmpty {
+                Text("Add a project, a folder of documents or a single file. Only macOS's own programs pass without asking.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(protection.customPlaces) { place in customRow(place) }
         }
+    }
+
+    /// A standard Open panel: folders and files, several at once.
+    private func addPlaces() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Protect"
+        panel.message = "Choose folders or files to protect"
+        if panel.runModal() == .OK { protection.addPlaces(panel.urls) }
+    }
+
+    private func customRow(_ place: CustomPlace) -> some View {
+        let hits = protection.findings(group: place.groupID).reduce(0) { $0 + $1.count }
+        let binding = { (change: @escaping (inout CustomPlace) -> Void) in
+            if let i = protection.customPlaces.firstIndex(where: { $0.id == place.id }) { change(&protection.customPlaces[i]) }
+        }
+        return HStack(spacing: 10) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: place.path)).resizable().frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(place.name).fontWeight(.medium)
+                Text(place.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    .help(place.path)
+            }
+            Spacer()
+            if hits > 0 { Text("\(hits)×").foregroundStyle(.secondary).monospacedDigit().help("Found by the rehearsal") }
+            Picker("Others", selection: Binding(get: { place.others }, set: { v in binding { $0.others = v } })) {
+                Text("Others: Ask").tag(ProtectionVerdict.ask)
+                Text("Others: Block").tag(ProtectionVerdict.block)
+            }
+            .labelsHidden().fixedSize().disabled(!place.on)
+            Toggle("", isOn: Binding(get: { place.on }, set: { on in binding { $0.on = on } }))
+                .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            Button { protection.removePlace(place.id) } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless).help("Stop protecting \(place.name)")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary.opacity(0.35)))
     }
 
     private func card(_ group: ProtectedGroup) -> some View {

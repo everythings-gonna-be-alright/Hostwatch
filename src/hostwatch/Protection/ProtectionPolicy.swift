@@ -93,6 +93,25 @@ struct ProtectedGroup: Identifiable, Sendable {
     var owners: [String] { labels.flatMap { SignatureBuilder.owners[$0] ?? [] } }
 }
 
+/// A folder or file you protect yourself. Nobody is expected there but macOS's own programs: allow one by marking
+/// its pattern Safe, as for any card.
+struct CustomPlace: Codable, Identifiable, Equatable, Sendable {
+    var id = UUID().uuidString
+    var path: String                               // absolute, standardized
+    var isFolder: Bool
+    var on = true
+    var others: ProtectionVerdict = .ask
+
+    var groupID: String { "custom:\(id)" }
+    var name: String { (path as NSString).lastPathComponent }
+
+    /// The place itself or anything inside it. "/var" and "/private/var" are the same place on macOS.
+    func covers(_ raw: String) -> Bool {
+        let paths = [raw, raw.hasPrefix("/private/") ? String(raw.dropFirst(8)) : "/private" + raw]
+        return paths.contains { $0 == path || isFolder && $0.hasPrefix(path.hasSuffix("/") ? path : path + "/") }
+    }
+}
+
 /// One card's settings: on or off, and what happens to programs that aren't expected there.
 struct ProtectedGroupSetting: Codable, Equatable, Sendable {
     var on = true
@@ -141,6 +160,24 @@ enum ProtectionPolicy {
         }
         if risk != .high { return .init(verdict: .allow, reason: "expected here", group: group.id) }
         return .init(verdict: setting.others, reason: "\(group.title): not a program expected there", group: group.id)
+    }
+
+    /// A file access in a place you protect yourself: nil when it's elsewhere (or the place is off). Your decision
+    /// on the pattern first, then macOS's own programs (Finder, Spotlight, backups) pass, then the place's choice.
+    static func decideCustom(path: String, actor: String, status: SignatureStatus, places: [CustomPlace],
+                             hostwatch: String = Bundle.main.executablePath ?? "") -> ProtectionDecision? {
+        guard let place = places.first(where: { $0.on && $0.covers(path) }) else { return nil }
+        switch status {
+        case .dangerous, .suspicious:
+            return .init(verdict: .block, reason: "its pattern is marked \(status.title)", group: place.groupID)
+        case .safe:
+            return .init(verdict: .allow, reason: "its pattern is Safe", group: place.groupID)
+        case .unclassified: break
+        }
+        if actor == hostwatch || SignatureBuilder.isSealedSystem(actor) && !SignatureBuilder.isLolbin(actor) {
+            return .init(verdict: .allow, reason: "macOS system program", group: place.groupID)
+        }
+        return .init(verdict: place.others, reason: "\(place.name): protected by you", group: place.groupID)
     }
 
     /// What a mode does with a decision: nil when nothing is shown or done. Strict turns a question into a block,

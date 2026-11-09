@@ -12,6 +12,9 @@
 - **Questions say who started the program, on Liquid Glass.** A firewall question (and Claude Code's and
   Protection's) is a glass card now, like macOS's own alerts. It shows the launch chain as a short trail, for example
   *Claude Code › zsh › python3.12*, with the program's command line, so you see the script python runs and who ran it.
+- **Protect your own folders and files.** Rules ▸ Protection ▸ *Protected Files and Folders* has *Add Folder or
+  File…*: a project, a documents folder or one file. Only macOS's own programs pass without asking, anyone else is
+  asked about or blocked, and the rehearsal shows who reads them.
 - **The Rules tab has a sidebar.** *Patterns* (Needs You, Rules, Decisions) and *Protection* (Overview, Protected
   Files, Found) are two groups of pages, as in System Settings, instead of one row of segments. Badges only on Needs
   You and Found.
