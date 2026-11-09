@@ -84,7 +84,7 @@ tab or window (`PatternsView` with `PatternInspector`, `RulesView`, `StoriesView
 `DomainDetailView`, `MetricsViews`, `VitalsViews`),
 `OverviewView.swift` (the tab bar), `SharedViews.swift`, `SessionViews.swift` (the makers' marks, session facts), `Tables.swift` (row models),
 `EventsTable.swift` + `EventsTableCells.swift` (the Events list as an AppKit outline view with reused cells, ADR 0010), `EventMenus.swift` (its
-right-click menus), `Demo.swift` (demo build only).
+right-click menus), `LaunchChainView.swift` (the Show Launch Chain window), `Demo.swift` (demo build only).
 
 ## Where things live on disk
 

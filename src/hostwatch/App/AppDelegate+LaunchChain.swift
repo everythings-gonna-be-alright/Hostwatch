@@ -1,9 +1,12 @@
 import AppKit
+import SwiftUI
 
 /// Who really started an event's process: the recorded launches in memory first (short-lived shells), then the
 /// process list recorded around that moment (long-lived ancestors: a terminal, Claude Code), then what is running now.
 extension AppDelegate {
-    func launchChainText(for event: ActivityEvent) -> String {
+    func launchChainText(for event: ActivityEvent) -> String { launchChainReport(for: event).text }
+
+    func launchChainReport(for event: ActivityEvent) -> LaunchChainReport {
         let at = event.ts > 0 ? event.ts : Date().timeIntervalSince1970
         // The latest launch of each pid at or before the event (history is newest first).
         var launches: [Int: ActivityEvent] = [:]
@@ -26,29 +29,31 @@ extension AppDelegate {
             return LaunchStep(pid: pid, ppid: ProcessList.parent(pid), path: path, args: "", source: .live)
         }
         let session = event.session > 0 ? model.sessions.session(event.session)?.name : nil
-        return LaunchChain.text(chain, session: session, earlier: Array(earlier.prefix(3)))
+        let path = event.kind == .exec && !event.target.isEmpty ? event.target : event.proc
+        let process = LaunchStep(pid: event.pid, ppid: event.ppid, path: path, args: event.kind == .exec ? event.args : "",
+                                 source: .launch)
+        return LaunchChainReport(process: process, steps: chain.steps, broken: chain.broken, session: session,
+                                 earlier: Array(earlier.prefix(3)))
     }
 
-    /// Events ▸ right-click ▸ Show Launch Chain.
+    /// Events ▸ right-click ▸ Show Launch Chain: its own small window, one per request.
     func showLaunchChain(for event: ActivityEvent) {
-        let alert = NSAlert()
-        alert.messageText = "Who started \(event.name) (pid \(event.pid))"
-        alert.informativeText = "Rebuilt from what Hostwatch recorded, so it works after the processes have exited."
-        let text = NSTextView(frame: NSRect(x: 0, y: 0, width: 620, height: 220))
-        text.string = launchChainText(for: event)
-        text.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        text.isEditable = false
-        text.drawsBackground = false
-        let scroll = NSScrollView(frame: text.frame)
-        scroll.documentView = text
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        alert.accessoryView = scroll
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Copy")
-        if alert.runModal() == .alertSecondButtonReturn {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text.string, forType: .string)
+        let report = launchChainReport(for: event)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.titlebarAppearsTransparent = true
+        window.title = "Launch Chain: \(event.name)"
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        window.contentMinSize = NSSize(width: 480, height: 320)
+        let close: () -> Void = { [weak window] in window?.close() }
+        window.contentView = NSHostingView(rootView: LaunchChainView(report: report, close: close))
+        window.center()
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated { self?.askWindows.removeAll { $0 === note.object as? NSWindow } }
         }
+        askWindows.append(window)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### New
+
+- **Show Launch Chain opens a window** instead of a text box: a plain sentence on where the process came from, then
+  the chain from launchd down to it with icons, pids and command lines you can select. The step that decided the
+  origin is marked, and each step says how Hostwatch knows it. *Copy* still gives the text.
+
 ### Fixes
 
 - In Events, a status pill followed by a marker (✦ first seen, new domain) slid left and the marker overlapped it.

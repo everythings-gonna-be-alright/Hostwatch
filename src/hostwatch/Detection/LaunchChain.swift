@@ -45,3 +45,36 @@ enum LaunchChain {
         return lines.joined(separator: "\n")
     }
 }
+
+/// Everything the Launch Chain window shows: the process, its chain and where it came from.
+struct LaunchChainReport: Sendable {
+    var process: LaunchStep                       // the event's own process, last in the tree
+    var steps: [LaunchStep]                       // parent first, as `LaunchChain.build` returns them
+    var broken: Bool
+    var session: String?
+    var earlier: [LaunchStep] = []                // what the same pid ran before (sh exec'ing bash)
+
+    var origin: ProcessOrigin { ProcessOrigin.classify(ancestors: steps.map(\.path), brokenAt: broken) }
+
+    /// The step that decided the origin: the first ancestor that isn't a shell passing a command on.
+    var originIndex: Int? {
+        steps.firstIndex { CodingAgent.of($0.path) != nil || !ProcessOrigin.passesThrough($0.path) }
+    }
+
+    /// One sentence for people: who started it, in plain words.
+    var summary: String {
+        let name = originIndex.map { steps[$0].name } ?? ""
+        switch origin {
+        case .agent: return "Started by an AI agent" + (session.map { " in the session \($0)" } ?? "")
+        case .terminal: return "Started from \(name), a terminal"
+        case .app: return "Started by the app \(name)"
+        case .launchd: return "Started by macOS itself, as a system or login service"
+        case .scheduled: return "Started on a schedule by \(name)"
+        case .ssh: return "Started over a remote login (\(name))"
+        case .other: return "Started by \(name)"
+        case .unknown: return "Its first parent started before Hostwatch was recording"
+        }
+    }
+
+    var text: String { LaunchChain.text((steps, broken), session: session, earlier: earlier) }
+}
