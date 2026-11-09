@@ -37,7 +37,7 @@ struct EventsTable: NSViewRepresentable {
     static let columns: [Column] = [
         Column(id: "time", title: "Time", width: 108, min: 72, max: 240, keyPath: \EventItem.seq),
         Column(id: "kind", title: "Kind", width: 56, min: 20, max: 120, keyPath: \EventItem.kind),
-        Column(id: "status", title: "Status", width: 84, min: 70, max: 240, keyPath: \EventItem.statusRank),
+        Column(id: "status", title: "Status", width: 116, min: 100, max: 240, keyPath: \EventItem.statusRank),
         Column(id: "process", title: "Process", width: 110, min: 60, max: 600, keyPath: \EventItem.name),
         Column(id: "pid", title: "PID", width: 48, min: 38, max: 140, keyPath: \EventItem.pid),
         Column(id: "ppid", title: "PPID", width: 48, min: 38, max: 140, keyPath: \EventItem.ppid),

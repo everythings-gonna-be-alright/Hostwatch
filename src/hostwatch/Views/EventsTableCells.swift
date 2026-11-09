@@ -59,6 +59,7 @@ final class EventCellView: NSTableCellView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        clipsToBounds = true                             // a column too narrow cuts its content, never the next column's
         stack.orientation = .horizontal
         stack.spacing = 5
         stack.alignment = .centerY
@@ -76,9 +77,13 @@ final class EventCellView: NSTableCellView {
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         stack.addArrangedSubview(label)
         addSubview(stack)
+        // The right edge gives way first: when the images don't fit, a required right edge broke the left one,
+        // so the row slid left and a marker overlapped the status pill.
+        let trailing = stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2)
+        trailing.priority = .defaultHigh
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
+            trailing,
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
         textField = label

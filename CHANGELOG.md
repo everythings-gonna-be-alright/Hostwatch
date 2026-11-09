@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- In Events, a status pill followed by a marker (✦ first seen, new domain) slid left and the marker overlapped it.
+  The Status column is wider, and a cell too narrow for its content now cuts it at the right edge.
+
 ## 0.14.0 – Who started it, and a lighter Events list
 
 ### New
