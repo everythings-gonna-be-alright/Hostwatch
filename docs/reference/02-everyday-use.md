@@ -54,11 +54,7 @@ off. The menu offers:
 
 **Events toolbar.** It holds the tab bar, Time Travel, Pause, **HUD** and search, in the same places on every tab.
 The row under it starts with one filter per event kind (launches, connections, files: click one to hide that kind,
-its tooltip has the count since launch), then Show and Group.
-
-**Status in the lists.** Events and Patterns mark status the way Mail marks unread mail: a blue dot for New, nothing
-for Safe, and a full pill only for what stands out (Suspicious, Dangerous, on a threat list). Group rows, the
-pattern inspector and Stories still show the pill. Clear Events (⌘K) is in
+its tooltip has the count since launch), then Show and Group. Clear Events (⌘K) is in
 the Activity menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
 patterns stay monospaced.
 

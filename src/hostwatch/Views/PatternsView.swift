@@ -58,29 +58,6 @@ struct StatusPill: View {
     }
 }
 
-/// A status in a list row, as Mail marks unread mail: a dot for New, nothing for Safe, the pill only for what
-/// stands out. When every row said "New" the pill carried nothing, and a Suspicious one drowned among them.
-struct StatusMark: View {
-    let status: SignatureStatus
-
-    var body: some View {
-        switch status {
-        case .unclassified: NewDot()
-        case .safe: Color.clear.frame(width: 16, height: 16).help("Safe")
-        default: StatusPill(status: status)
-        }
-    }
-}
-
-/// New, not decided yet: Mail's unread dot.
-struct NewDot: View {
-    var body: some View {
-        Circle().fill(Color(nsColor: .systemBlue)).frame(width: 7, height: 7)
-            .frame(width: 16, height: 16)
-            .help("New: not decided yet")
-    }
-}
-
 /// "12 dangerous · 3 suspicious · 80 new · 900 safe"
 struct PatternTally: View {
     let counts: [SignatureStatus: Int]
@@ -174,7 +151,7 @@ struct PatternsView: View {
                         Color.clear.frame(width: 1, height: 30)        // the band carries the whole row, as tall as on Events
                     } else {
                         HStack(spacing: 4) {
-                            StatusMark(status: item.status)
+                            StatusPill(status: item.status)
                             if item.entry.risk == .high {
                                 Image(systemName: "flame.fill").foregroundStyle(.red).help("High-risk pattern")
                             }
