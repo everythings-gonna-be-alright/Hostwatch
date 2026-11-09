@@ -50,6 +50,8 @@
 
 ### Fixes
 
+- Multi-line commands (shell scripts) showed as an empty or clipped Detail in Events: the cell is one line and
+  drew the first line shifted out of view. Line breaks now show as ⏎.
 - **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the
   row you clicked. Inside a selection it now acts on all of it: *Mark 3 Patterns Safe* over every pattern of the
   selected events, and *Copy Details* copies them all. And an event whose pattern had since been combined into
