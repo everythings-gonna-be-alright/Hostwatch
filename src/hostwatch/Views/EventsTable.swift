@@ -304,7 +304,9 @@ struct EventsTable: NSViewRepresentable {
         }
 
         private static let mono = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        private static let monoBold = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        // Names read in SF Pro, as in Activity Monitor; times, pids, paths and commands stay monospaced.
+        private static let name = NSFont.systemFont(ofSize: 12)
+        private static let nameBold = NSFont.systemFont(ofSize: 12, weight: .semibold)
 
         private func configure(_ cell: EventCellView, _ row: EventItem, column: String) {
             let e = row.event, badges = BadgeImages.shared
@@ -343,13 +345,13 @@ struct EventsTable: NSViewRepresentable {
                 }
                 cell.set(icons: icons, font: Self.mono)
             case "process":
-                cell.set(text: e.name, font: parent.grouped ? Self.mono : Self.monoBold, toolTip: e.proc)
+                cell.set(text: e.name, font: parent.grouped ? Self.name : Self.nameBold, toolTip: e.proc)
             case "pid":
                 cell.set(text: String(e.pid), color: .secondaryLabelColor, font: Self.mono)
             case "ppid":
                 cell.set(text: String(e.ppid), color: .secondaryLabelColor, font: Self.mono)
             case "parent":
-                cell.set(text: row.parentName.isEmpty ? nil : row.parentName, color: .secondaryLabelColor, font: Self.mono,
+                cell.set(text: row.parentName.isEmpty ? nil : row.parentName, color: .secondaryLabelColor, font: Self.name,
                          toolTip: row.parentName.isEmpty ? nil : "Started by \(e.parent) (pid \(e.ppid))")
             default:
                 var icons: [EventCellView.Icon] = []

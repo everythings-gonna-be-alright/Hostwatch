@@ -185,7 +185,7 @@ struct PatternsView: View {
                             .lineLimit(1).truncationMode(.tail).help(item.entry.process)
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))                   // a name: SF Pro, the pattern beside it stays monospaced
                 }
                 .width(min: 60, ideal: signatures.groupBySession ? 260 : 110)
                 TableColumn("Pattern", value: \.pattern) { item in
