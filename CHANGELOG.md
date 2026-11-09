@@ -1,80 +1,62 @@
 # Changelog
 
-## Unreleased
-
-### Faster and lighter
-
-- **Less CPU while the window is open.** With a coding agent at work, every one of its events re-drew the whole
-  window: the AI-session counters were published one event at a time, and each publish rebuilt the list and its
-  Show counts over all 5,000 events. Session counters now reach the window at most once a second (a session
-  starting, ending or getting its name still shows at once), the Show counts are made in one pass together with
-  the rows and kept until something changes, and batches of events arrive twice a second instead of five times.
-- **The Events list is now an AppKit table.** The SwiftUI table built eight views for every new row and tore them
-  down as rows scrolled off, which under a busy agent cost a quarter to half of a core. The new list reuses its
-  cells, keeps selection and folded groups across batches, and only the list, its counts and the footer redraw
-  when a batch arrives, not the whole window. Pattern counts reach the window every five seconds instead of
-  every second. Same columns, menus, sorting, tooltips and Time Travel behaviour.
+## 0.14.0 – Who started it, and a lighter Events list
 
 ### New
-
-- **Grouping reads at a glance.** By Process and By AI Session group rows are section headings across the whole
-  row: the agent's mark, the title and the session's facts, then *Only this session* and *Patterns* links, the worst
-  status and the count on the right (on Patterns, *Mark all Safe…* for a session). Events and Patterns share the
-  toolbar's *Show* and *Group* controls and the list style of Running Now (alternating rows, bands across the
-  whole row). Groups open
-  when shown in Events, Patterns and Running Now (one you fold stays folded while the window is open) and the catch-all group (*No AI session*) is drawn
-  quieter. In Events the Session column is gone: an event of an AI
-  agent's process carries the maker's mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in
-  the tooltip.
-- **A Parent column in Events** names the program that started the process ("zsh", "Claude", "launchd"), for
-  file and network events as well as launches. The PPID column stays for the number.
-- **The Time column shows hundredths of a second** ("14:05:09.48"), so events a burst apart read in order. The
-  collector stamps to the microsecond: the full stamp is in the cell's tooltip and in exported history.
-- **Block one domain for one app.** In the Network tab, right-click a domain ▸ *Block for an App* lists the apps that
-  reached it, or right-click a connection ▸ *Block example.com for Slack*. Until now Block marked the app's network
-  pattern, which for an ordinary app is the whole web. The rule covers the domain's hosts (`api.example.com` under
-  `example.com`), wins over a Safe pattern, shows as *Blocked by you* with an **Unblock** button, and needs the
-  firewall in Ask or Strict to stop anything.
-
-- **The heavy-process card is one line** for one process: the program, what it uses (CPU, memory, for how
-  long) with the heavy measure in orange, and *Ask AI…* (its arrow has Show in Finder and Copy Path). Several
-  processes fold into one summary line with a disclosure. Neutral background, colour only on what is heavy.
-
-- **New icons for connections and files**: a globe and a document with text. Launches keep their play triangle.
-  Each sits in a small tile of its colour in the lists (the colours stay as they were).
 
 - **Who really started it.** Right-click an event ▸ *Show Launch Chain…* lists the process's parents up to launchd,
   each with its command line, and names the origin (terminal, app, AI session, launchd…). It is rebuilt from the
   recorded launches and process lists, so it works after the parents have exited, where the old chain stopped at
   "(exited)". Ask AI's evidence carries the same chain.
+- **Block one domain for one app.** In the Network tab, right-click a domain ▸ *Block for an App* lists the apps that
+  reached it, or right-click a connection ▸ *Block example.com for Slack*. Until now Block marked the app's network
+  pattern, which for an ordinary app is the whole web. The rule covers the domain's hosts (`api.example.com` under
+  `example.com`), wins over a Safe pattern, shows as *Blocked by you* with an **Unblock** button, and needs the
+  firewall in Ask or Strict to stop anything.
+- **A Parent column in Events** names the program that started the process ("zsh", "Claude", "launchd"), for file
+  and network events as well as launches. The PPID column stays for the number.
+- **The Time column shows hundredths of a second** ("14:05:09.48"), so events a burst apart read in order. The
+  collector stamps to the microsecond: the full stamp is in the cell's tooltip and in exported history.
+- **Grouping reads at a glance.** By Process and By AI Session group rows are section headings across the whole row:
+  the program's icon or the agent's mark, the title and the session's facts, then *Only this session* and
+  *Patterns* (on Patterns, *Mark all Safe…*), the worst status and the count. Events, Patterns and Running Now share
+  one list style and the toolbar's *Show* and *Group* controls. Groups open when shown, and one you fold stays
+  folded while the window is open. In Events the Session column is gone: an AI agent's event carries the maker's
+  mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in the tooltip.
+- **The heavy-process card is one line** for one process: the program, what it uses (CPU, memory, for how long) with
+  the heavy measure in orange, and *Ask AI…* (its arrow has Show in Finder and Copy Path). Several processes fold
+  into one summary line.
+- **New icons for connections and files**, a globe and a document with text, in small tiles of their colour.
+  Launches keep their play triangle.
+- **A quieter resource strip** under Events and now Running Now: thin grey graphs like the text around them, orange
+  or red only when the CPU is busy or memory is under pressure.
 
-- **A quieter resource strip** under Events and Running Now: thin grey graphs like the text around them, orange or
-  red only when the CPU is busy or memory is under pressure.
+### Faster and lighter
+
+- **The Events list is an AppKit table now.** The SwiftUI table built eight views for every new row and tore them
+  down as rows scrolled off, which under a busy coding agent cost a quarter to half of a core. The new list reuses
+  its cells, and only the list, its counts and the footer redraw when events arrive, not the whole window. Measured
+  with an agent at work: 7–19% of a core instead of 25–45%. Same columns, menus, sorting and Time Travel.
+- **Less work per event elsewhere too.** AI-session counters reach the window at most once a second, pattern counts
+  every five seconds, the Show counts are made in one pass with the rows, and events arrive in batches twice a
+  second instead of five times.
 
 ### Fixes
 
-- The Events footer said *5,000 events* (the list keeps the latest 5,000, so it always did once full) and *5,000
-  from before the restart* long after those events had scrolled out. It now shows *73 of 5,000 events* only while
-  a search or filter hides some, counts events rather than group rows, and counts the restored events down as
-  live ones replace them.
-- Multi-line commands (shell scripts) showed as an empty or clipped Detail in Events: the cell is one line and
-  drew the first line shifted out of view. Line breaks now show as ⏎.
-- **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the
-  row you clicked. Inside a selection it now acts on all of it: *Mark 3 Patterns Safe* over every pattern of the
-  selected events, and *Copy Details* copies them all. And an event whose pattern had since been combined into
-  another (by you, or by the automatic tidy) showed the combined pattern's status but couldn't change it: Mark
-  now decides the combined pattern.
 - **Forget in the Network tab let a blocked destination straight through.** It reset your Block to New, and a
   trusted app's web pattern (or a macOS service's) passes without asking when nothing is decided, so the next
   connection was simply allowed. A forgotten destination is now asked about again until you decide, ahead of
   rules, AI verdicts and routine trust, and Forget also lifts a Block for an App on it.
-- The Events list no longer draws a line above or before its column headers, and its column legend looks like the
-  Patterns tab's (same ground, bold titles, dim separators).
-- With Events grouped, a selected event flickered between selected and not as new events arrived: each batch kept
-  the selected row number while rows moved down. The selection now follows the event.
-- Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint, which counts
-  shared and compressed memory many times. It now shows the window's CPU and memory strip, memory used as
-  Activity Monitor counts it (the tooltip has "14 GB of 18 GB").
+- **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the row
+  you clicked. Inside a selection it now acts on all of it. And an event whose pattern had since been combined into
+  another (by you, or by the automatic tidy) showed the combined pattern's status but couldn't change it.
+- Multi-line commands (shell scripts) showed as an empty or clipped Detail in Events. Line breaks now show as ⏎.
+- With Events grouped, a selected event flickered between selected and not as new events arrived.
+- Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint. It now shows
+  memory used as Activity Monitor counts it.
+- The Events footer no longer says *5,000 events* all the time: the count shows while a search or filter hides
+  events, and *from before the restart* counts down as live events replace the restored ones.
+- The Events column legend matches the Patterns tab's, without the extra lines above and before it.
 
 ## 0.13.0 – No password at launch, encrypted at rest
 
