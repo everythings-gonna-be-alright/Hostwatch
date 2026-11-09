@@ -37,6 +37,7 @@ final class BadgeImages {
     }
 
     func statusPill(_ status: SignatureStatus) -> NSImage { image("status:\(status.rawValue)") { StatusPill(status: status) } }
+    func newDot() -> NSImage { image("newdot") { NewDot() } }
     func knownBadPill() -> NSImage { image("knownbad") { KnownBadPill() } }
     func knownBadTag(_ detail: String) -> NSImage { image("knownbadtag") { KnownBadTag(detail: detail) } }
     func vital(_ badge: ProcessVitals.Badge) -> NSImage { image("vital:\(badge)") { VitalBadgeView(badge: badge) } }
