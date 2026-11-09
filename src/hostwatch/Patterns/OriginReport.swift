@@ -65,8 +65,12 @@ func runOriginReport(_ folder: String?) -> Never {
     SigningCache.shared.trustInstalledAppsInMemory()
     let dir = folder ?? HistoryRecorder.defaultDirectory.path
     guard FileManager.default.fileExists(atPath: dir) else { print("no history in \(dir)"); exit(1) }
-    let learnDays = Double(ProcessInfo.processInfo.environment["LEARN_DAYS"] ?? "") ?? 2
-    let top = Int(ProcessInfo.processInfo.environment["REPORT_TOP"] ?? "") ?? 25
+    // The last few days only (a week of history takes long): learn on the first day, check the rest.
+    let env = ProcessInfo.processInfo.environment
+    let windowDays = Double(env["HOURS"] ?? "").map { $0 / 24 } ?? Double(env["DAYS"] ?? "") ?? 3
+    let learnDays = Double(env["LEARN_DAYS"] ?? "") ?? windowDays / 3
+    let since = Date().addingTimeInterval(-windowDays * 86_400)
+    let top = Int(ProcessInfo.processInfo.environment["REPORT_TOP"] ?? "") ?? 15
     let all = ProcessOrigin.allCases
     func bit(_ o: ProcessOrigin) -> UInt8 { 1 << UInt8(all.firstIndex(of: o)!) }
 
@@ -95,14 +99,18 @@ func runOriginReport(_ folder: String?) -> Never {
         return (paths, false)
     }
 
-    HistoryFiles.forEachLine(path: dir) { line in autoreleasepool {
+    HistoryFiles.forEachLine(path: dir, since: since) { line in autoreleasepool {
         // A command-line loop has no run loop to drain Foundation's temporaries: without a pool per line they pile
         // up (13 GB of footprint over a week of history).
-        guard let e = try? decoder.decode(ActivityEvent.self, from: line) else { return }
+        // The time is read from the line itself: the decoder doesn't fill `ts` (the app does that on its own path),
+        // and a line outside the window is skipped before the costly decode.
+        guard let at = HistoryArchive.timestamp(line)?.timeIntervalSince1970, at >= since.timeIntervalSince1970,
+              var e = try? decoder.decode(ActivityEvent.self, from: line) else { return }
+        e.ts = at
         total += 1
         if e.kind == .exec { launches[e.pid] = Launch(ppid: e.ppid, path: e.target, parent: e.parent) }
         let subject = e.kind == .exec ? e.target : e.proc
-        guard e.ts > 0, !e.signatureKey.isEmpty, ProcessOrigin.isToolLike(subject) else { return }
+        guard !e.signatureKey.isEmpty, ProcessOrigin.isToolLike(subject) else { return }
         toolEvents += 1
         if first == 0 { first = e.ts }
         last = max(last, e.ts)
@@ -132,10 +140,11 @@ func runOriginReport(_ folder: String?) -> Never {
         patterns[e.signatureKey] = p
     } }
     guard toolEvents > 0 else { print("no tool events"); exit(0) }
-    let days = max(0.1, (last - first) / 86_400)
+    let days = max(1.0 / 1440, (last - first) / 86_400)
     func names(_ mask: UInt8) -> String { all.filter { mask & bit($0) != 0 }.map(\.rawValue).joined(separator: "+") }
 
-    print("\(total) events over \(String(format: "%.1f", days)) days, \(toolEvents) by interpreters and tools")
+    func span(_ d: Double) -> String { d < 1 ? String(format: "%.0f min", d * 1440) : String(format: "%.1f days", d) }
+    print("\(total) events over \(span(days)), \(toolEvents) by interpreters and tools")
     var spread: [Int: Int] = [:]
     for p in patterns.values { spread[min(p.seen.nonzeroBitCount, 4), default: 0] += 1 }
     print("\n\(patterns.count) tool patterns, by how many kinds of origin they were seen from:")
@@ -148,9 +157,9 @@ func runOriginReport(_ folder: String?) -> Never {
     let flagged = patterns.filter(\.value.flagged).map(\.key)
     let safe = flagged.filter { status[$0]?.status == .safe }
     let byYou = safe.filter { ["you", "rule"].contains(status[$0]?.source ?? "") }
-    let afterDays = max(0.1, days - learnDays)
-    print("\nrule: learn \(String(format: "%.1f", learnDays)) days, then flag a known pattern seen from a new kind of origin")
-    print("  \(hitCount) flags over \(String(format: "%.1f", afterDays)) days (\(String(format: "%.1f", Double(hitCount) / afterDays)) a day) on \(flagged.count) patterns")
+    let afterDays = max(1.0 / 1440, days - learnDays)
+    print("\nrule: learn \(span(learnDays)), then flag a known pattern seen from a new kind of origin")
+    print("  \(hitCount) flags over \(span(afterDays)) (\(String(format: "%.1f", Double(hitCount) / afterDays)) a day) on \(flagged.count) patterns")
     print("  \(safe.count) of those patterns are Safe today and would be reopened (\(byYou.count) decided by you or a rule)")
     print("  new origin was: " + hitsByOrigin.sorted { $0.value > $1.value }.map { "\($0.key.rawValue) \($0.value)" }.joined(separator: ", "))
 
