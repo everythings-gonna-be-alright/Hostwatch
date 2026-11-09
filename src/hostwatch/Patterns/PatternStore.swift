@@ -250,6 +250,9 @@ final class SignatureStore: ObservableObject {
     // MARK: Classifying
 
     func set(_ status: SignatureStatus, keys: [String], source: String = "you", note: String? = nil) {
+        // An event recorded before its pattern was combined carries the old key: it decides the combined one, as
+        // reading its status already does (setting through the alias used to do nothing).
+        let keys = Array(Set(keys.map(resolve)))
         for key in keys {
             guard var e = entries[key] else { continue }
             e.status = status
@@ -273,6 +276,7 @@ final class SignatureStore: ObservableObject {
     /// as a suggestion for you, or applied when you let AI accept by itself. Never Safe for a high-risk
     /// pattern: event text (paths, names, hosts) can be crafted to talk a model into it.
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
+        let key = resolve(key)
         guard status != .unclassified, self.status(forKey: key) == .unclassified, var e = entries[key] else { return }
         if status == .safe, e.risk == .high || SignatureBuilder.runsAnyCode(e) { return }
         if autoAcceptAI, e.risk != .high, e.reopened == nil {
