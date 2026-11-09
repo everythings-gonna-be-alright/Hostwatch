@@ -3,11 +3,32 @@ import SwiftUI
 
 /// Right-click menus of the Events list (an AppKit table: its menus are NSMenus).
 extension ActivityWindowView {
-    func eventMenu(_ item: EventItem) -> NSMenu {
+    func eventMenu(_ items: [EventItem]) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        if item.isGroup { fillGroupMenu(menu, item) } else { fillRowMenu(menu, item.event) }
+        if items.count > 1 {
+            fillSelectionMenu(menu, items.map(\.event))
+        } else if let item = items.first {
+            if item.isGroup { fillGroupMenu(menu, item) } else { fillRowMenu(menu, item.event) }
+        }
         return menu
+    }
+
+    /// Several events selected: decide all their patterns at once, copy them all.
+    private func fillSelectionMenu(_ menu: NSMenu, _ events: [ActivityEvent]) {
+        let keys = Array(Set(events.map(\.signatureKey).filter { !$0.isEmpty })).sorted()
+        let noun = keys.count == 1 ? "Pattern" : "\(keys.count) Patterns"
+        menu.addLabel("\(events.count) events · \(keys.count) pattern\(keys.count == 1 ? "" : "s")")
+        for status in SignatureStatus.allCases {
+            menu.addItem(ClosureMenuItem("Mark \(noun) \(status.title)", enabled: !keys.isEmpty) {
+                signatures.set(status, keys: keys)
+            })
+        }
+        menu.addItem(.separator())
+        menu.addItem(ClosureMenuItem("Copy Details") { Self.copyToPasteboard(events.map(\.target).joined(separator: "\n")) })
+        let paths = Array(Set(events.map(\.proc).filter { !$0.isEmpty })).sorted()
+        menu.addItem(ClosureMenuItem(paths.count > 1 ? "Copy \(paths.count) Process Paths" : "Copy Process Path",
+                                     enabled: !paths.isEmpty) { Self.copyToPasteboard(paths.joined(separator: "\n")) })
     }
 
     private func fillRowMenu(_ menu: NSMenu, _ event: ActivityEvent) {

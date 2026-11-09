@@ -20,7 +20,8 @@ struct EventsTable: NSViewRepresentable {
     /// The last row came into view (Time Travel loads its next older page).
     var onReachEnd: (() -> Void)?
     var onDoubleClick: (EventItem) -> Void
-    var menu: (EventItem) -> NSMenu
+    /// The right-clicked row, or the whole selection when the click is inside it (events only, groups left out).
+    var menu: ([EventItem]) -> NSMenu
     /// Links shown in a group's band ("Only this session", "Patterns").
     var groupLinks: (EventItem) -> [BandLink] = { _ in [] }
 
@@ -381,7 +382,15 @@ struct EventsTable: NSViewRepresentable {
             parent.onDoubleClick(row)
         }
 
-        func menu(for id: UUID) -> NSMenu? { byID[id].map(parent.menu) }
+        func menu(for id: UUID) -> NSMenu? {
+            guard let clicked = byID[id] else { return nil }
+            // Inside a selection of several: the menu acts on all of them (Mark Safe on one row only was a bug).
+            if !clicked.isGroup, parent.selection.count > 1, parent.selection.contains(id) {
+                let picked = parent.selection.compactMap { byID[$0] }.filter { !$0.isGroup }.sorted { $0.seq > $1.seq }
+                if picked.count > 1 { return parent.menu(picked) }
+            }
+            return parent.menu([clicked])
+        }
 
         @objc func scrolled() {
             guard let onReachEnd = parent.onReachEnd, !reachedEnd, let outline, outline.numberOfRows > 0 else { return }
