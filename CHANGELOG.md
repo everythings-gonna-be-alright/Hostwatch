@@ -4,6 +4,9 @@
 
 ### New
 
+- **Watch Classify with AI work.** A live list shows the pattern being asked about right now and every pattern of
+  the run with its verdict and reason as it lands, or why it was left for you. It reopens from the progress bar, and
+  after a run from the list button next to *Classify with AI*.
 - **Choose your models.** Settings ▸ AI picks the local model: Apple's on-device model (*General* or *Content
   Tagging*) or any OpenAI-compatible server, such as Ollama or LM Studio on this Mac, or a cloud endpoint, with a *Test*
   button and the key stored encrypted. It also picks the Claude model: Claude Code's default, Opus, Sonnet or Haiku.

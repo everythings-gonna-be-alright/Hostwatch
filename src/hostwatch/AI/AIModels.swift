@@ -75,7 +75,7 @@ protocol LocalAIModel: LocalTriageModel {
 }
 
 extension AppleOnDeviceModel: LocalAIModel {
-    var origin: String { "on-device (\(AppleModelChoice.current.title))" }
+    var origin: String { "Apple \(AppleModelChoice.current.title), on-device" }
     var staysOnMac: Bool { true }
 }
 

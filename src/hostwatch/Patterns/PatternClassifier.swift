@@ -30,6 +30,8 @@ final class PatternClassifier: ObservableObject {
         didSet { UserDefaults.standard.set(engine.rawValue, forKey: AIEngine.key); leftForYou.removeAll() }
     }
 
+    /// Pattern by pattern, as it happens (Classify with AI ▸ the live list).
+    let live = ClassifyLive()
     private let store: SignatureStore
     /// Tests inject a model; otherwise the one chosen in Settings, read at each use.
     private let injectedModel: LocalTriageModel?
@@ -95,13 +97,28 @@ final class PatternClassifier: ObservableObject {
         let todo = classifiable
         guard !todo.isEmpty else { lastMessage = "Nothing to classify."; return }
         bulk = BulkRun(total: todo.count, apply: apply)
+        live.start(engine: engineText)
         continueAll()
     }
 
     func cancelAll() {
         bulk = nil
         cancel()
+        live.finishOpen(.left("cancelled"))
     }
+
+    /// The engine and its models in words, for the live list's header.
+    var engineText: String {
+        let local = (localModel as? any LocalAIModel)?.origin ?? "local model"
+        let claude = ClaudeModelChoice.current == .cliDefault ? "Claude" : "Claude \(ClaudeModelChoice.current.rawValue.capitalized)"
+        switch engine {
+        case .onDevice: return "Local model: \(local)"
+        case .claude: return claude
+        case .hybrid: return "Local model first (\(local)), then \(claude)"
+        }
+    }
+
+    private var localName: String { (localModel as? any LocalAIModel)?.origin ?? "local model" }
 
     private func continueAll() {
         guard var run = bulk, !running else { return }
@@ -181,6 +198,8 @@ final class PatternClassifier: ObservableObject {
         running = true
         lastMessage = "On-device triage of \(batch.count) patterns…"
         let model = localModel
+        let asker = localName
+        live.add(batch, as: .waiting("local model"))
         let prompts = batch.map { e -> String in
             let path = SignatureStore.subjectPath(e)
             let id = SigningCache.shared.cached(path)
@@ -192,16 +211,20 @@ final class PatternClassifier: ObservableObject {
             var settled = 0, flagged = 0, left = 0
             for (entry, prompt) in zip(batch, prompts) {
                 if Task.isCancelled { return }
+                self?.live.set(entry.id, .asking(asker))
                 let verdict = try? await model.triage(prompt)
                 guard let self else { return }
                 switch TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: claudeOn) {
                 case .settle(let status, let note):
                     self.store.suggest(status, key: entry.id, source: "on-device", note: note)
+                    self.live.set(entry.id, .done(status, by: "Local", reason: note))
                     if status == .safe { settled += 1 } else { flagged += 1 }
                 case .escalate:
                     escalate.append(entry)
+                    self.live.set(entry.id, .waiting("Claude next" + (verdict.map { ": local said \($0.verdict.rawValue.lowercased()), \($0.confidence.rawValue) confidence" } ?? "")))
                 case .leave:
                     self.leftForYou.insert(entry.id)
+                    self.live.set(entry.id, .left(verdict.map { "local model: \($0.verdict.rawValue.lowercased()), \($0.reason)" } ?? "the local model didn't answer"))
                     left += 1
                 }
             }
@@ -225,6 +248,9 @@ final class PatternClassifier: ObservableObject {
         }
         running = true
         lastMessage = (prefix.isEmpty ? "" : prefix + " · ") + "Classifying \(batch.count) patterns with Claude…"
+        live.add(batch, as: .waiting("Claude"))
+        let who = ClaudeModelChoice.current == .cliDefault ? "Claude" : "Claude \(ClaudeModelChoice.current.rawValue.capitalized)"
+        for e in batch { live.set(e.id, .asking(who)) }
 
         let procs = Set(batch.flatMap { [$0.exampleProc, $0.exampleParent] }.filter { !$0.isEmpty })
         let cached = signingCache
@@ -260,6 +286,7 @@ final class PatternClassifier: ObservableObject {
         do { try process.run() } catch {
             running = false
             lastMessage = "Cannot start claude: \(error.localizedDescription)"
+            live.finishOpen(.failed("Claude didn't start"))
             return
         }
         self.process = process
@@ -280,6 +307,7 @@ final class PatternClassifier: ObservableObject {
               let text = obj["result"] as? String
         else {
             lastMessage = "Claude failed: " + String(err.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200))
+            live.finishOpen(.failed("Claude failed"))
             return
         }
         totalCost += obj["total_cost_usd"] as? Double ?? 0
@@ -288,6 +316,7 @@ final class PatternClassifier: ObservableObject {
               let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else {
             lastMessage = "Could not parse Claude's answer."
+            live.finishOpen(.failed("Claude's answer couldn't be read"))
             return
         }
         var tally: [SignatureStatus: Int] = [:]
@@ -297,9 +326,11 @@ final class PatternClassifier: ObservableObject {
                   let verdict = Verdict(rawValue: word) else { continue }
             let status = SignatureStatus(verdict: verdict)
             store.suggest(status, key: batch[id - 1].id, source: "claude", note: item["reason"] as? String)
+            live.set(batch[id - 1].id, .done(status, by: "Claude", reason: item["reason"] as? String ?? ""))
             tally[status, default: 0] += 1
         }
         let summary = SignatureStatus.allCases.compactMap { s in tally[s].map { "\($0) \(s.rawValue)" } }
+        for e in batch { if case .asking? = live.steps.first(where: { $0.id == e.id })?.state { live.set(e.id, .left("Claude gave no answer for it")) } }
         lastMessage = "Claude classified \(items.count): " + summary.joined(separator: ", ")
             + String(format: " · total $%.3f", totalCost)
     }
