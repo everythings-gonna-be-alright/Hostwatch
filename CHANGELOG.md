@@ -9,6 +9,9 @@
   protected places. It decides as the firewall does, your pattern decisions first. Watch is on by default and stops
   nothing: Events marks what would be stopped, and the page lists it to Allow or Block before anything is enforced.
   Stopping for real (Ask, Strict) needs Apple's Endpoint Security approval, which is pending.
+- **The Rules tab has a sidebar.** *Patterns* (Needs You, Rules, Decisions) and *Protection* (Overview, Protected
+  Files, Found) are two groups of pages, as in System Settings, instead of one row of segments. Badges only on Needs
+  You and Found.
 
 - **A quieter window.** The event kinds are plain on and off filters in the Show row now, their running totals in
   the tooltip, so Time Travel, Pause and HUD sit in the same place on every tab, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The

@@ -3,7 +3,8 @@ import SwiftUI
 /// Rules tab, three views of one idea: every pattern is decided by you, a rule, the baseline (code
 /// signatures) or an AI suggestion you accepted. *Needs You* is what's still New, *Rules* is what decides
 /// automatically, *Decided* shows who decided what (AI apart from you).
-enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protection }
+/// The Rules tab's pages: what you decide about patterns, and what protection does with those decisions.
+enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound }
 
 final class RulesTabState: ObservableObject {
     @Published var segment: RulesSegment = .needsYou
@@ -28,27 +29,46 @@ struct RulesView: View {
 
     var body: some View {
         let _ = signatures.revision
-        VStack(spacing: 0) {
-            Picker("", selection: Binding(get: { tab.segment }, set: { tab.segment = $0; tab.chosen = true })) {
-                Text(waiting > 0 ? "Needs You  \(waiting)" : "Needs You").tag(RulesSegment.needsYou)
-                Text("Rules  \(baseline.rules.filter { !$0.paused }.count + book.activeCount)").tag(RulesSegment.rules)
-                Text("Decisions").tag(RulesSegment.decided)
-                if protection != nil { Text("Protection").tag(RulesSegment.protection) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .padding(.vertical, 10)
+        // A source list, as System Settings and Mail do it: two groups of pages, a badge only where something
+        // waits for you. A row of four segments mixed the two groups and had no room to grow.
+        HStack(spacing: 0) {
+            sidebar
             Divider()
+            detail
+        }
+        .onAppear {
+            if !tab.chosen { tab.segment = waiting > 0 ? .needsYou : .rules }
+        }
+    }
+
+    private var sidebar: some View {
+        List(selection: Binding<RulesSegment?>(get: { tab.segment }, set: { if let s = $0 { tab.segment = s; tab.chosen = true } })) {
+            Section("Patterns") {
+                Label("Needs You", systemImage: "tray.full").badge(waiting).tag(RulesSegment.needsYou)
+                Label("Rules", systemImage: "checklist").tag(RulesSegment.rules)
+                Label("Decisions", systemImage: "person.crop.circle.badge.checkmark").tag(RulesSegment.decided)
+            }
+            if let protection {
+                Section("Protection") {
+                    ProtectionSidebarRows(protection: protection)
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .frame(width: 210)
+    }
+
+    private var detail: some View {
+        VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     switch tab.segment {
                     case .needsYou: needsYou
                     case .rules: baselineSection; learnedSection
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
-                    case .protection:
+                    case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
-                            ProtectionView(protection: protection) { keys, status in
+                            ProtectionView(protection: protection, page: tab.segment) { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                             }
@@ -69,9 +89,6 @@ struct RulesView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-        }
-        .onAppear {
-            if !tab.chosen { tab.segment = waiting > 0 ? .needsYou : .rules }
         }
     }
 
