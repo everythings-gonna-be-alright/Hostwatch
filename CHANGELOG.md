@@ -16,6 +16,9 @@
   a protected file, as soon as Hostwatch sees it, and pauses one it should ask about until you answer on a glass
   panel. A few milliseconds late, and a read can't be undone, but the program goes no further. Only your own
   programs, never the system UI, terminals or Hostwatch, and a paused program goes on if you don't answer.
+- **A clearer Protection overview.** The state at a glance (a coloured shield, one sentence, the pause), a card per
+  area with all four modes in view, what the chosen one does and today's numbers, a caution for Strict on launches,
+  and links to the groups and to what to review.
 - **Protect your own folders and files.** Rules ▸ Protection ▸ *Protected Files and Folders* has *Add Folder or
   File…*: a project, a documents folder or one file. Only macOS's own programs pass without asking, anyone else is
   asked about or blocked, and the rehearsal shows who reads them.
