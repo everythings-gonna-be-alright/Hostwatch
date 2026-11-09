@@ -57,23 +57,22 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.14.0**
+- **🧬 Who really started it** – *Show Launch Chain* rebuilds a process's parents up to launchd from what was
+  recorded, so it works after they've exited, and names the origin: terminal, app, AI session. Ask AI gets it too.
+- **🚫 Block one domain for one app** – right-click a domain in the Network tab ▸ *Block for an App*, instead of
+  blocking an app's whole web access.
+- **⚡ A lighter Events list** – rebuilt on AppKit: a quarter of the CPU it took under a busy coding agent.
+- **🗂️ One list style** for Events, Patterns and Running Now, with a *Parent* column, hundredths of a second, and
+  group rows that read as headings.
+- **🛡️ Fixes** – Forget no longer lets a blocked destination through, and marking several events Safe marks them all.
+
 **0.13.0**
 - **🔑 No password at launch** – the collector is a background service: registered once, approved once, started by
   macOS at boot from then on. Only Hostwatch's own signed code may talk to it, and it idles when the app is closed.
 - **🔒 Encrypted at rest** – patterns, stories, history and logs are sealed with a key only Hostwatch's own code can
   use, so no other program running as you (an AI agent included) can read your activity.
 - **🪪 New identity** `tech.hostwatch.app` – settings carry over, and Full Disk Access is granted once more.
-
-**0.12.0**
-- **🤖 AI sessions** – Claude Code (and Cursor agent, Codex, Gemini CLI) followed as one session: the agent and every
-  process it started. Group Events or Patterns *By AI Session*, named as `claude --resume` lists them, with a *Session*
-  column, *via Claude* tags on the Network tab, session names on stories, and the MCP tool `agent_sessions`.
-- **🗂️ Two thirds fewer patterns** – system programs' reads, project trees, scratch trees, Homebrew formulas and
-  random temp names are one pattern each. Your store shrinks by itself, your decisions untouched.
-- **📖 Patterns and rules you can read** – a wrapped Pattern column and an inspector with the pattern in full and in
-  plain words, and every rule reads as *who does what → what happens*.
-- **⚡ Instant tab switching**, resizable columns, and a tab bar that keeps its titles.
-- **🪪 Free for everyone**, at home and at work, under the PolyForm Shield licence (see [License](#license)).
 
 
 Earlier versions: see the [changelog](CHANGELOG.md).
