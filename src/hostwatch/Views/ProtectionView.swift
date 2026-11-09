@@ -1,10 +1,25 @@
 import AppKit
 import SwiftUI
 
+/// The Protection rows of the Rules sidebar: Found carries a badge while something would be stopped.
+struct ProtectionSidebarRows: View {
+    @ObservedObject var protection: ProtectionMonitor
+
+    var body: some View {
+        let _ = protection.revision
+        let stops = protection.findings.values.filter { $0.verdict == .block }.count
+        Label("Overview", systemImage: "shield.lefthalf.filled").tag(RulesSegment.protectionOverview)
+        Label("Protected Files", systemImage: "lock.doc").tag(RulesSegment.protectedFiles)
+        Label("Found", systemImage: "exclamationmark.shield").badge(stops).tag(RulesSegment.protectionFound)
+    }
+}
+
 /// Rules ▸ Protection: a mode per area, the protected-files cards, and what the rehearsal found, to decide before
 /// anything is stopped. source: docs/adr/0011-protection.md
 struct ProtectionView: View {
     @ObservedObject var protection: ProtectionMonitor
+    /// Which page of Rules ▸ Protection: Overview, Protected Files or Found.
+    let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
     let mark: ([String], SignatureStatus) -> Void
 
@@ -16,9 +31,11 @@ struct ProtectionView: View {
     var body: some View {
         let _ = protection.revision
         VStack(alignment: .leading, spacing: 22) {
-            modes
-            files
-            findings
+            switch page {
+            case .protectedFiles: files
+            case .protectionFound: findings
+            default: modes
+            }
         }
     }
 

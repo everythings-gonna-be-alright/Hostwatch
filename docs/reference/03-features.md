@@ -278,14 +278,16 @@ Debug helper: `Hostwatch.app/Contents/MacOS/Hostwatch --signature-report <histor
 groups into patterns and risk levels (`REPORT_KIND=file|net|exec|routine|normal|high`, `REPORT_GREP=…`,
 `REPORT_TOP=n`).
 
-#### Rules tab: Needs You, Rules, Decisions
+#### Rules tab: Patterns and Protection
 
 Your to-do list and your decisions in one place: what's waiting for you, the rules that decide for you, and
 everything you've already decided.
 
 Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted. That is
-also the order of authority: you come first. The Rules tab shows this in three views. Its toolbar label counts what
-waits for you.
+also the order of authority: you come first. The Rules tab has a sidebar with two groups. *Patterns* holds three
+pages: Needs You, Rules and Decisions. *Protection* holds Overview, Protected Files and Found (see Launch and file
+protection). Only Needs You and Found carry a badge, because only they wait for you. The tab's own badge counts what
+waits in Needs You.
 
 - **Needs You:** what waits for your decision. Rebuilt live as patterns change. Interpreters, shells and Hostwatch
   itself aren't listed. It shows:
@@ -733,6 +735,9 @@ In a firewall question, **Ask Claude** has the shortcut ⌘K.
 When something looks wrong, pause it, or watch it closely to see what it does.
 
 #### Launch and file protection (Rules ▸ Protection)
+
+Three pages in the Rules sidebar: *Overview* has the modes and the pause, *Protected Files* the cards, *Found*
+what the rehearsal found.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
