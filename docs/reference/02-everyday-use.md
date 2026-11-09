@@ -52,8 +52,9 @@ off. The menu offers:
 - **Exclude ▸** *Hide process*, *Hide spawns of*, *Hide host*, *Hide domain \*.x*, or *Edit Exclusions…*
 - **Copy Detail**, **Copy Process Path**, **Reveal in Finder**.
 
-**Events toolbar.** It holds the tab bar, one filter per event kind (launches, connections, files: click one to hide
-that kind, its tooltip has the count since launch), Time Travel, Pause, **HUD** and search. Clear Events (⌘K) is in
+**Events toolbar.** It holds the tab bar, Time Travel, Pause, **HUD** and search, in the same places on every tab.
+The row under it starts with one filter per event kind (launches, connections, files: click one to hide that kind,
+its tooltip has the count since launch), then Show and Group. Clear Events (⌘K) is in
 the Activity menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
 patterns stay monospaced.
 
