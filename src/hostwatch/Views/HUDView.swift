@@ -21,6 +21,8 @@ struct HUDActions {
     /// Running Now ▸ Show Spawn in Timeline: Time Travel at a process's launch.
     var showSpawn: (_ pid: Int, _ start: Date) -> Void = { _, _ in }
     var openStory: (Story) -> Void = { _ in }
+    /// Events ▸ Show Launch Chain: who started this process, all the way up.
+    var showLaunchChain: (ActivityEvent) -> Void = { _ in }
 }
 
 // MARK: - Overlay

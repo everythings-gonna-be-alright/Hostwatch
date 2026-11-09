@@ -77,7 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         openFirewallSettings: { [weak self] in self?.openSettings(.firewall) },
         watch: { [weak self] event in self?.openWatch(for: event) },
         showSpawn: { [weak self] pid, start in self?.showSpawn(pid: pid, start: start) },
-        openStory: { [weak self] story in self?.openStoryDetails(story) }
+        openStory: { [weak self] story in self?.openStoryDetails(story) },
+        showLaunchChain: { [weak self] event in self?.showLaunchChain(for: event) }
     )
     var askWindows: [NSWindow] = []
     /// Watch Closely windows, by session id.

@@ -31,7 +31,7 @@ extension AppDelegate {
         // The threat-list match (a connection's, or a program file's hash) goes into the window and the evidence.
         var event = event
         if event.knownBad.isEmpty, let bad = intel.flag(for: event) { event.knownBad = bad }
-        let analysis = AIAnalysis(event: event, related: related, preface: preface)
+        let analysis = AIAnalysis(event: event, related: related, preface: preface, lineage: launchChainText(for: event))
         analysis.patternStatus = signatures.status(for: event)
         analysis.patternRisk = signatures.entry(event.signatureKey)?.risk ?? event.signatureRisk
         let key = event.signatureKey

@@ -43,6 +43,11 @@
 - **New icons for connections and files**: a globe and a document with text. Launches keep their play triangle.
   Each sits in a small tile of its colour in the lists (the colours stay as they were).
 
+- **Who really started it.** Right-click an event ▸ *Show Launch Chain…* lists the process's parents up to launchd,
+  each with its command line, and names the origin (terminal, app, AI session, launchd…). It is rebuilt from the
+  recorded launches and process lists, so it works after the parents have exited, where the old chain stopped at
+  "(exited)". Ask AI's evidence carries the same chain.
+
 ### Fixes
 
 - **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the
