@@ -93,6 +93,44 @@ import Testing
     }
 }
 
+/// Network ▸ Forget promises the destination is asked about again. A trusted app's web pattern is routine, which on
+/// its own passes without asking, so forgetting a Block must not turn it into a silent Allow.
+@MainActor @Suite struct FirewallForgetAsksAgain {
+    @Test func aForgottenBlockIsAskedAboutAgainUntilYouDecide() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-fwf-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-fwf"), fileURL: dir.appendingPathComponent("fw.json"))
+        fw.mode = .ask
+        // macOS's own trustd: undecided, it passes without asking (as a trusted app's routine pattern does).
+        let app = "/usr/libexec/trustd"
+        let e = net(app, pid: 7, to: "93.184.216.34:443", host: "api.example.com")
+        let store = SignatureStore(directory: dir)
+        store.observe(e)
+        #expect(fw.observe(e, status: store.status(for: e)) == nil || fw.entries.isEmpty)   // passes, not listed
+        store.set(.suspicious, keys: [e.signatureKey], note: "blocked in Network")
+        #expect(fw.observe(e, status: store.status(for: e))?.verdict == .block)
+        let id = try #require(fw.entries.keys.first)
+
+        _ = fw.forget([id], signatures: store)
+        #expect(store.status(for: e) == .unclassified)
+        // Today this passes silently: routine and undecided means Allow.
+        #expect(fw.observe(e, status: store.status(for: e))?.verdict == .ask)
+        // Another destination of the same program is not affected.
+        let other = net(app, pid: 7, to: "1.2.3.4:443", host: "other.org")
+        #expect(fw.observe(other, status: store.status(for: other))?.verdict == .allow)
+
+        // A rule or the AI marking it Safe doesn't answer for you…
+        #expect(FirewallPolicy.decide(FirewallMonitor.facts(e)!, status: .safe, askAgain: true).verdict == .ask)
+        // …your own decision does, wherever you make it.
+        store.onYouDecided = { fw.decided(patternKeys: $0) }
+        store.set(.safe, keys: [e.signatureKey])
+        #expect(!fw.asksAgain(FirewallMonitor.facts(e)!))
+        #expect(fw.observe(e, status: store.status(for: e))?.verdict == .allow)
+        let again = FirewallMonitor(defaults: scratchDefaults("hw-fwf"), fileURL: dir.appendingPathComponent("fw.json"))
+        #expect(again.askAgain.isEmpty)
+    }
+}
+
 /// When the relay fails, the firewall falls back to Watch and says so until you pick a mode again.
 @MainActor @Suite struct FirewallFallbackWarning {
     @Test func failingRelayFallsBackAndWarnsUntilYouChoose() {
