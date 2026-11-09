@@ -161,3 +161,71 @@ import Testing
         #expect(m.customPlaces.isEmpty)
     }
 }
+
+/// Ask and Strict without Endpoint Security: stop what's blocked, pause what's asked about, never root's processes.
+@MainActor @Suite struct ProtectionReactive {
+    final class Signals { var sent: [(Int32, Int32)] = [] }
+
+    func monitor(uid: uid_t = getuid(), path: String = "/tmp/dropper") -> (ProtectionMonitor, Signals) {
+        let suite = "reactive-\(UUID().uuidString)"
+        let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
+                                  fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(suite))
+        let signals = Signals()
+        m.engine.signal = { pid, sig in signals.sent.append((pid, sig)); return 0 }
+        m.engine.inspect = { _ in ProcessFacts(uid: uid, path: path) }
+        m.engine.startWatchdog = { _, _ in nil }
+        return (m, signals)
+    }
+
+    func launch(_ target: String = "/tmp/dropper") -> ActivityEvent {
+        ActivityEvent(kind: .exec, time: "12:00:00", pid: 4242, ppid: 9, name: "dropper", proc: target, target: target,
+                      extra: "", parent: "/bin/zsh")
+    }
+
+    @Test func strictStopsWhatIsBlocked() {
+        let (m, s) = monitor()
+        m.launchMode = .strict
+        var e = launch()
+        m.consider(&e, status: .dangerous)
+        #expect(s.sent.map(\.1) == [SIGKILL] && e.protection == .blocked)
+        #expect(m.findings.values.first?.enforced == true)
+    }
+
+    @Test func askPausesThenYourAnswerDecides() {
+        let (m, s) = monitor(path: "/usr/bin/curl")
+        m.launchMode = .ask
+        var e = launch("/usr/bin/curl")
+        m.consider(&e, status: .unclassified)            // curl runs what it's told: a new one is asked about
+        #expect(s.sent.map(\.1) == [SIGSTOP] && m.prompts.count == 1 && m.prompts[0].reactive)
+        m.respond(m.prompts[0].id, .block)
+        #expect(s.sent.map(\.1) == [SIGSTOP, SIGKILL] && m.prompts.isEmpty)
+    }
+
+    @Test func noAnswerLetsItGoOn() {
+        let (m, s) = monitor(path: "/usr/bin/curl")
+        m.launchMode = .ask
+        var e = launch("/usr/bin/curl")
+        m.consider(&e, status: .unclassified)
+        #expect(m.prompts.count == 1)
+        m.expire(m.prompts[0].id)
+        #expect(s.sent.map(\.1) == [SIGSTOP, SIGCONT] && m.prompts.isEmpty)
+    }
+
+    @Test func rootsProcessesAreNeverTouched() {
+        let (m, s) = monitor(uid: 0)
+        m.launchMode = .strict
+        var e = launch()
+        m.consider(&e, status: .dangerous)
+        #expect(s.sent.isEmpty && e.protection == .wouldBlock)
+        #expect(m.findings.values.first?.enforced == false)
+    }
+
+    @Test func turningTheModeDownReleasesThePaused() {
+        let (m, s) = monitor(path: "/usr/bin/curl")
+        m.launchMode = .ask
+        var e = launch("/usr/bin/curl")
+        m.consider(&e, status: .unclassified)
+        m.launchMode = .watch
+        #expect(s.sent.map(\.1) == [SIGSTOP, SIGCONT] && m.prompts.isEmpty)
+    }
+}

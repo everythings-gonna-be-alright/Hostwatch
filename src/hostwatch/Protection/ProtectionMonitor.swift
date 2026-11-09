@@ -24,11 +24,12 @@ enum EnforcerState: Equatable, Sendable {
     /// For the Protection page, in plain words.
     var text: String {
         switch self {
-        case .unknown: "Stopping launches and file access needs an Endpoint Security client, which this version "
-            + "doesn't have yet. Watch shows what would be stopped."
+        case .unknown: "Ask and Strict act right after a program starts or opens a protected file, a few milliseconds "
+            + "late: blocked ones are stopped, questions pause the program until you answer. Only your own programs. "
+            + "Endpoint Security, once Apple approves it, will stop them before they run."
         case .available: "Endpoint Security is on: Ask and Strict stop things for real."
-        case .notEntitled: "Stopping needs Apple's Endpoint Security approval for Hostwatch, which is pending. "
-            + "Until then Watch shows what would be stopped."
+        case .notEntitled: "Endpoint Security approval is pending, so Ask and Strict act right after a program starts "
+            + "or opens a protected file, a few milliseconds late. Only your own programs."
         case .notPermitted: "Endpoint Security needs Full Disk Access for the collector."
         case .unsupported: "This Mac's collector can't use Endpoint Security."
         case .failed(let why): "Endpoint Security didn't start: \(why)"
@@ -61,6 +62,8 @@ struct ProtectionAsk: Identifiable, Sendable {
     var reason: String
     var group: String?
     var deadline: Date
+    /// Paused by Hostwatch itself (no Endpoint Security): the answer stops or resumes the process.
+    var reactive = false
 }
 
 @MainActor
@@ -86,6 +89,7 @@ final class ProtectionMonitor: ObservableObject {
     private(set) var since: Date
     private(set) var today: [ProtectionArea: [ProtectionVerdict: Int]] = [:]
     private var todayKey = ""
+    private var nextLocalAsk = 0
 
     /// The collector's configuration changed: send it.
     var onConfigChange: (() -> Void)?
@@ -95,6 +99,8 @@ final class ProtectionMonitor: ObservableObject {
     var markPattern: ((String, SignatureStatus) -> Void)?
     var onPromptsChange: (() -> Void)?
 
+    /// Acts on programs until Endpoint Security can: stops what's blocked, pauses what's asked about.
+    let engine = ReactiveEnforcer()
     private let defaults: UserDefaults
     private let fileURL: URL
     private var dirty = false
@@ -134,11 +140,22 @@ final class ProtectionMonitor: ObservableObject {
     func pause(minutes: Double) { pausedUntil = Date().addingTimeInterval(minutes * 60) }
     func resume() { pausedUntil = nil }
 
+    /// Hostwatch is quitting: every program it paused goes on (never left frozen).
+    func releaseAll() {
+        let hadReactive = prompts.contains(where: \.reactive)
+        engine.releaseAll()
+        prompts.removeAll(where: \.reactive)
+        if hadReactive { onPromptsChange?() }
+    }
+
+    /// The program an event is about: what was launched, or what opened the file.
+    static func subject(_ e: ActivityEvent) -> String { e.kind == .exec ? e.target : e.proc }
+
     /// What the window's subtitle says: nil when everything is off.
     var stateWord: String? {
         if paused { return "Protection paused" }
         let modes = ProtectionArea.allCases.map(mode)
-        if modes.contains(where: \.enforces) && enforcer.canEnforce { return "Protecting" }
+        if modes.contains(where: \.enforces) { return "Protecting" }
         return modes.contains(where: { $0 != .off }) ? "Rehearsing" : nil
     }
 
@@ -149,17 +166,38 @@ final class ProtectionMonitor: ObservableObject {
 
     // MARK: The live feed (Watch)
 
-    /// One live event: marks it when protection would stop it, and counts what it would do.
+    /// One live event: in Watch, marks what would be stopped and counts the rest. In Ask and Strict (without
+    /// Endpoint Security) the reactive engine acts: a blocked program is stopped, a question pauses it.
     func consider(_ e: inout ActivityEvent, status: SignatureStatus) {
         guard !paused, let (area, decision) = decide(e, status: status) else { return }
         let mode = self.mode(area)
         // With Endpoint Security enforcing, what reaches the feed was allowed: the collector reports what it stopped.
         if mode.enforces && enforcer.canEnforce { return }
         guard let verdict = ProtectionPolicy.effective(decision.verdict, mode: mode), verdict != .allow else { return }
-        record(area: area, event: e, decision: decision, verdict: verdict, enforced: false)
-        if verdict == .block {
-            e.protection = .wouldBlock
-            e.protectionReason = decision.reason
+        guard mode.enforces else {
+            record(area: area, event: e, decision: decision, verdict: verdict, enforced: false)
+            if verdict == .block { e.protection = .wouldBlock; e.protectionReason = decision.reason }
+            return
+        }
+        let path = Self.subject(e)
+        switch verdict {
+        case .block:
+            let stopped = engine.stop(pid: e.pid, path: path)
+            record(area: area, event: e, decision: decision, verdict: .block, enforced: stopped)
+            e.protection = stopped ? .blocked : .wouldBlock
+            e.protectionReason = stopped ? decision.reason : decision.reason + " (couldn't be stopped: not yours, or protected)"
+        case .ask:
+            guard engine.pause(pid: e.pid, path: path) else {
+                record(area: area, event: e, decision: decision, verdict: .ask, enforced: false)
+                return
+            }
+            nextLocalAsk += 1                              // negative ids: never the collector's
+            prompts.append(ProtectionAsk(id: -nextLocalAsk, event: e,
+                                         area: area, reason: decision.reason, group: decision.group,
+                                         deadline: Date().addingTimeInterval(ReactiveEnforcer.pauseTimeout), reactive: true))
+            onPromptsChange?()
+        case .allow:
+            break
         }
     }
 
@@ -273,6 +311,12 @@ final class ProtectionMonitor: ObservableObject {
     }
 
     private func changed() {
+        if paused || !launchMode.enforces || !fileMode.enforces {
+            // A question about an area that no longer enforces (or everything paused) lets its program go.
+            let stale = prompts.filter { $0.reactive && (paused || !mode($0.area).enforces) }
+            for ask in stale { engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: false) }
+            if !stale.isEmpty { prompts.removeAll { p in stale.contains { $0.id == p.id } }; onPromptsChange?() }
+        }
         onConfigChange?()
         revision += 1
     }
@@ -321,22 +365,30 @@ final class ProtectionMonitor: ObservableObject {
         guard let i = prompts.firstIndex(where: { $0.id == id }) else { return }
         let ask = prompts.remove(at: i)
         onPromptsChange?()
+        if ask.reactive {
+            engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: choice == .block)
+        }
         switch choice {
         case .block:
-            answer?(id, false, 60)
+            if !ask.reactive { answer?(id, false, 60) }
             markPattern?(ask.event.signatureKey, .dangerous)
             record(area: ask.area, event: ask.event,
                    decision: .init(verdict: .block, reason: "you blocked it", group: ask.group), verdict: .block, enforced: true)
         case .allowOnce:
-            answer?(id, true, 0)
+            if !ask.reactive { answer?(id, true, 0) }
         case .alwaysAllow:
-            answer?(id, true, 300)
+            if !ask.reactive { answer?(id, true, 300) }
             markPattern?(ask.event.signatureKey, .safe)
         }
     }
 
-    /// The collector gave up waiting (it decides by the mode then): the question goes.
+    /// No answer in time: the collector decides by the mode, a program Hostwatch paused goes on (as Hold does).
     func expire(_ id: Int) {
+        if let ask = prompts.first(where: { $0.id == id }), ask.reactive {
+            engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: false)
+            record(area: ask.area, event: ask.event, decision: .init(verdict: .ask, reason: "no answer: it went on", group: ask.group),
+                   verdict: .ask, enforced: false)
+        }
         prompts.removeAll { $0.id == id }
         onPromptsChange?()
     }

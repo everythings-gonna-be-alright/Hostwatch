@@ -68,7 +68,6 @@ struct ProtectionView: View {
             Picker(area.title, selection: Binding(get: { protection.mode(area) }, set: { protection.setMode($0, for: area) })) {
                 ForEach(ProtectionMode.allCases, id: \.self) { mode in
                     Text(mode.short).tag(mode)
-                        .selectionDisabled(mode.enforces && !protection.enforcer.canEnforce)
                 }
             }
             .labelsHidden()
@@ -82,7 +81,7 @@ struct ProtectionView: View {
     private func todayText(_ area: ProtectionArea) -> String {
         guard protection.mode(area) != .off else { return "" }
         let stop = protection.count(area, .block), ask = protection.count(area, .ask)
-        let verb = protection.mode(area).enforces && protection.enforcer.canEnforce ? "stopped" : "would stop"
+        let verb = protection.mode(area).enforces ? "stopped" : "would stop"
         return "Today: \(verb) \(stop) · would ask \(ask)"
     }
 
