@@ -1006,6 +1006,11 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
 
 Earlier versions' two toggles are migrated to the matching engine.
 
+**Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
+asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,
+left for you, or failed). The local model answers one pattern at a time, Claude a batch at once. *Show* on the
+progress bar reopens it, and after a run the list button next to *Classify with AI* shows what the last run did.
+
 **Per question.** The Ask window also has a **Claude / On-device** switch for each question.
 
 - On-device answers use the same format, with the VERDICT line first.

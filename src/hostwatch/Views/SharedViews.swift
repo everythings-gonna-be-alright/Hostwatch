@@ -122,19 +122,31 @@ struct ClassifyAllButton: View {
     @StateObject private var ui = ClassifyAllState()
 
     var body: some View {
-        if let run = classifier.bulk {
-            HStack(spacing: 8) {
-                ProgressView(value: Double(run.done), total: Double(max(run.total, 1))).frame(width: 110)
-                Text("Classifying \(run.done.formatted()) of \(run.total.formatted())").font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Button("Cancel") { classifier.cancelAll() }.buttonStyle(.glass)
+        Group {
+            if let run = classifier.bulk {
+                HStack(spacing: 8) {
+                    ProgressView(value: Double(run.done), total: Double(max(run.total, 1))).frame(width: 110)
+                    Text("Classifying \(run.done.formatted()) of \(run.total.formatted())").font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Button { ui.live.toggle() } label: { Label("Show", systemImage: "list.bullet.rectangle") }
+                        .buttonStyle(.glass)
+                        .help("Which patterns are being classified, live")
+                    Button("Cancel") { classifier.cancelAll() }.buttonStyle(.glass)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    LastRunButton(live: classifier.live) { ui.live = true }
+                    Button { ui.show = true } label: { Label("Classify with AI", systemImage: "sparkles") }
+                        .buttonStyle(.glass)
+                        .disabled(classifier.running)
+                        .help("Ask AI about every New pattern")
+                        .popover(isPresented: $ui.show, arrowEdge: .bottom) { confirm }
+                }
             }
-        } else {
-            Button { ui.show = true } label: { Label("Classify with AI", systemImage: "sparkles") }
-                .buttonStyle(.glass)
-                .disabled(classifier.running)
-                .help("Ask AI about every New pattern")
-                .popover(isPresented: $ui.show, arrowEdge: .bottom) { confirm }
+        }
+        // On the whole control: it stays open when the button turns into the progress bar and back.
+        .popover(isPresented: $ui.live, arrowEdge: .bottom) {
+            ClassifyLiveView(live: classifier.live, classifier: classifier)
         }
     }
 
@@ -167,6 +179,8 @@ struct ClassifyAllButton: View {
                 Button("Classify") {
                     ui.show = false
                     classifier.classifyAll(apply: ui.apply)
+                    // You asked to see it: the live list opens once the confirmation has closed.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ui.live = classifier.bulk != nil }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(count == 0)
@@ -179,6 +193,7 @@ struct ClassifyAllButton: View {
 
 final class ClassifyAllState: ObservableObject {
     @Published var show = false
+    @Published var live = false
     @Published var apply = true
 }
 
