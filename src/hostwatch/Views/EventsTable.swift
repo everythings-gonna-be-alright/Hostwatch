@@ -21,6 +21,8 @@ struct EventsTable: NSViewRepresentable {
     var onReachEnd: (() -> Void)?
     var onDoubleClick: (EventItem) -> Void
     var menu: (EventItem) -> NSMenu
+    /// Links shown in a group's band ("Only this session", "Patterns").
+    var groupLinks: (EventItem) -> [BandLink] = { _ in [] }
 
     struct Column {
         let id: String
@@ -46,6 +48,9 @@ struct EventsTable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let outline = OutlineView()
+        // The inset look with alternating rows, like the other lists (Running Now, Patterns). Group rows are
+        // ordinary rows with their own row view, not AppKit group items (those float and get a gap above).
+        outline.style = .inset
         outline.rowSizeStyle = .custom                  // else AppKit picks its own, taller rows
         outline.intercellSpacing = NSSize(width: 3, height: 2)
         outline.usesAlternatingRowBackgroundColors = true
@@ -228,12 +233,22 @@ struct EventsTable: NSViewRepresentable {
             (item as? NSUUID).map { children[$0 as UUID] != nil } ?? false
         }
 
-        func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
-            self.item(item)?.isGroup ?? false
-        }
+        // Group rows are not AppKit "group items": that style floats them and puts a row-high gap above each.
+        // The band is the row view itself (`GroupRowView`), with no cells in the columns.
 
         func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
-            self.item(item)?.isGroup == true ? 28 : 24
+            self.item(item)?.isGroup == true ? 32 : 24
+        }
+
+        func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+            guard let row = self.item(item) else { return nil }
+            if row.isGroup {
+                let view = outlineView.makeView(withIdentifier: GroupRowView.identifier, owner: nil) as? GroupRowView
+                    ?? { let r = GroupRowView(); r.identifier = GroupRowView.identifier; return r }()
+                view.set(row, links: parent.groupLinks(row))
+                return view
+            }
+            return nil                                      // plain rows, like the Patterns list
         }
 
         func outlineView(_ outlineView: NSOutlineView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
@@ -245,13 +260,7 @@ struct EventsTable: NSViewRepresentable {
         // MARK: Cells
 
         func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
-            guard let row = self.item(item) else { return nil }
-            if row.isGroup || tableColumn == nil {
-                let cell = outlineView.makeView(withIdentifier: GroupCellView.identifier, owner: nil) as? GroupCellView
-                    ?? { let c = GroupCellView(frame: .zero); c.identifier = GroupCellView.identifier; return c }()
-                cell.set(row)
-                return cell
-            }
+            guard let row = self.item(item), !row.isGroup, tableColumn != nil else { return nil }   // a group is its row view
             let cell = outlineView.makeView(withIdentifier: EventCellView.identifier, owner: nil) as? EventCellView
                 ?? { let c = EventCellView(frame: .zero); c.identifier = EventCellView.identifier; return c }()
             configure(cell, row, column: tableColumn!.identifier.rawValue)
@@ -351,9 +360,26 @@ struct EventsTable: NSViewRepresentable {
     }
 }
 
-/// An outline view whose context menu comes from the clicked row.
+/// An outline view whose context menu comes from the clicked row, and whose zebra stops at the last row.
 final class OutlineView: NSOutlineView {
     var menuProvider: ((UUID) -> NSMenu?)?
+
+    /// Alternating rows only where there are rows: the space below the list stays plain.
+    override func drawBackground(inClipRect clipRect: NSRect) {
+        let used = numberOfRows > 0 ? rect(ofRow: numberOfRows - 1).maxY : 0
+        if clipRect.minY >= used {
+            backgroundColor.setFill()
+            clipRect.fill()
+            return
+        }
+        if clipRect.maxY > used {
+            backgroundColor.setFill()
+            NSRect(x: clipRect.minX, y: used, width: clipRect.width, height: clipRect.maxY - used).fill()
+            super.drawBackground(inClipRect: NSRect(x: clipRect.minX, y: clipRect.minY, width: clipRect.width, height: used - clipRect.minY))
+        } else {
+            super.drawBackground(inClipRect: clipRect)
+        }
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)

@@ -336,6 +336,7 @@ struct ActivityWindowView: View {
     private var groupingPicker: some View {
         HStack(spacing: 12) {
             Divider().frame(height: 16)
+            Text("Group").font(.system(size: 11)).foregroundStyle(.secondary)
             Picker("Group", selection: $model.eventGrouping) {
                 ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
             }
@@ -371,6 +372,7 @@ struct ActivityWindowView: View {
                 Spacer(minLength: 0)
             } else {
                 Divider().frame(height: 16)
+                Text("Show").font(.system(size: 11)).foregroundStyle(.secondary)
                 if traveling {
                     ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
                 } else {
@@ -386,6 +388,7 @@ struct ActivityWindowView: View {
             }
         }
         .controlSize(.small)
+        .buttonBorderShape(.capsule)                    // every toolbar button the shape of the Show and Group controls
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
     }
@@ -521,7 +524,7 @@ struct ActivityWindowView: View {
                             // A search hit opens its moment; elsewhere a double-click asks the AI.
                             if withDay { travel.reveal(item.event) } else { actions.askAI(item.event) }
                         },
-                        menu: eventMenu)
+                        menu: eventMenu, groupLinks: groupLinks)
             .onChange(of: travel.focusID) { _, id in
                 guard let id, let event = travel.events.first(where: { $0.id == id }) else { return }
                 revealLaunch(event)                 // selecting the row scrolls the list to it
