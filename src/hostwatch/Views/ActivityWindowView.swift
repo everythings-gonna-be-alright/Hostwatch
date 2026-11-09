@@ -275,24 +275,6 @@ struct ActivityWindowView: View {
         ToolbarItem(placement: .navigation) {
             WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
         }
-        ToolbarItemGroup(placement: .principal) {
-          if model.windowTab == 0 && !runningNow {
-            // Filters, not a scoreboard: the running totals said nothing you'd act on and squeezed the title.
-            ForEach(EventKind.allCases, id: \.self) { kind in
-                let on = model.visibleKinds.contains(kind)
-                // A plain icon, coloured when shown and faded when hidden: a toggle's "on" disc made all three
-                // look pressed at once.
-                Button { model.toggle(kind) } label: {
-                    Label(kind.title, systemImage: kind.symbol)
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(on ? kind.color : .secondary)
-                        .opacity(on ? 1 : 0.4)
-                }
-                .help("\(kind.title): \(model.counts[kind, default: 0].formatted()) since launch. "
-                      + (on ? "Click to hide them." : "Hidden, click to show them."))
-            }
-          }
-        }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
                 // Running Now stays on: in Time Travel it shows what was running at the playhead.
@@ -374,6 +356,7 @@ struct ActivityWindowView: View {
             } else {
                 Divider().frame(height: 16)
                 Text("Show").font(.system(size: 11)).foregroundStyle(.secondary)
+                KindFilters(model: model, feed: model.live)
                 if traveling {
                     ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
                 } else {
@@ -611,6 +594,37 @@ private struct LiveEventCount: View {
 }
 
 /// The Show choices with the live list's counts, re-rendered per batch here rather than with the window.
+/// Launches, connections, files: which kinds the list shows. In the Show row rather than the toolbar, so the toolbar
+/// is the same on every tab (in it, Time Travel, Pause and HUD moved on Events only). The counts are in the tooltips:
+/// running totals said nothing you'd act on.
+private struct KindFilters: View {
+    @ObservedObject var model: HUDModel
+    @ObservedObject var feed: LiveFeed
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(EventKind.allCases, id: \.self) { kind in
+                let on = model.visibleKinds.contains(kind)
+                Button { model.toggle(kind) } label: {
+                    Image(systemName: kind.symbol)
+                        .foregroundStyle(on ? kind.color : .secondary)
+                        .opacity(on ? 1 : 0.4)
+                        .frame(width: 24, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("\(kind.title): \(feed.counts[kind, default: 0].formatted()) since launch. "
+                      + (on ? "Click to hide them." : "Hidden, click to show them."))
+                .accessibilityLabel(kind.title)
+                .accessibilityValue(on ? "shown" : "hidden")
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(.quaternary.opacity(0.5)))
+    }
+}
+
 private struct LiveShowFilter: View {
     @ObservedObject var feed: LiveFeed
     @Binding var filter: SignatureFilter

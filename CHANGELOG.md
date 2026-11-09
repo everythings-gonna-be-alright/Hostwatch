@@ -4,8 +4,8 @@
 
 ### New
 
-- **A quieter window.** The toolbar's event kinds are plain on and off filters now, their running totals moved to
-  the tooltip, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The
+- **A quieter window.** The event kinds are plain on and off filters in the Show row now, their running totals in
+  the tooltip, so Time Travel, Pause and HUD sit in the same place on every tab, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The
   heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
   holding its place for hours. Process names read in the system font, as in Activity Monitor. Times, pids and paths
   stay monospaced.
