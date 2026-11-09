@@ -48,6 +48,9 @@
   recorded launches and process lists, so it works after the parents have exited, where the old chain stopped at
   "(exited)". Ask AI's evidence carries the same chain.
 
+- **A quieter resource strip** under Events and Running Now: thin grey graphs like the text around them, orange or
+  red only when the CPU is busy or memory is under pressure.
+
 ### Fixes
 
 - Multi-line commands (shell scripts) showed as an empty or clipped Detail in Events: the cell is one line and
@@ -66,7 +69,8 @@
 - With Events grouped, a selected event flickered between selected and not as new events arrived: each batch kept
   the selected row number while rows moved down. The selection now follows the event.
 - Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint, which counts
-  shared and compressed memory many times. It now shows used memory of the total, as Activity Monitor does.
+  shared and compressed memory many times. It now shows the window's CPU and memory strip, memory used as
+  Activity Monitor counts it (the tooltip has "14 GB of 18 GB").
 
 ## 0.13.0 – No password at launch, encrypted at rest
 
