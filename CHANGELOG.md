@@ -45,9 +45,11 @@
 
 ### Fixes
 
-- **Marking several selected events Safe marked only one.** The Events right-click menu acted on the row you
-  clicked. Inside a selection it now acts on all of it: *Mark 3 Patterns Safe* over every pattern of the
-  selected events, and *Copy Details* copies them all.
+- **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the
+  row you clicked. Inside a selection it now acts on all of it: *Mark 3 Patterns Safe* over every pattern of the
+  selected events, and *Copy Details* copies them all. And an event whose pattern had since been combined into
+  another (by you, or by the automatic tidy) showed the combined pattern's status but couldn't change it: Mark
+  now decides the combined pattern.
 - **Forget in the Network tab let a blocked destination straight through.** It reset your Block to New, and a
   trusted app's web pattern (or a macOS service's) passes without asking when nothing is decided, so the next
   connection was simply allowed. A forgotten destination is now asked about again until you decide, ahead of

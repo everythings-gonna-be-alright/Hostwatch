@@ -206,6 +206,11 @@ import Testing
         #expect(store.allEntries.count == 1 && store.entry(merged)?.count == 5)
         #expect(store.status(forKey: merged) == .unclassified)                    // Safe and New mixed: New
         #expect(store.entry(keys[2])?.id == merged)                               // old rows follow it
+        // An event recorded before the combine still carries its old key: deciding it decides the combined pattern
+        // (it used to do nothing: reading followed the alias, setting didn't).
+        store.set(.safe, keys: [keys[3]])
+        #expect(store.status(forKey: merged) == .safe && store.status(for: events[3]) == .safe)
+        store.set(.unclassified, keys: [merged])
         let later = file(tool, pid: 2, "r", "\(home)/Documents/work/zeta/plan.md")
         #expect(later.signatureKey == merged)                                      // joins instead of a new pattern
         _ = store.observe(later)
