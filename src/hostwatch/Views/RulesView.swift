@@ -3,7 +3,7 @@ import SwiftUI
 /// Rules tab, three views of one idea: every pattern is decided by you, a rule, the baseline (code
 /// signatures) or an AI suggestion you accepted. *Needs You* is what's still New, *Rules* is what decides
 /// automatically, *Decided* shows who decided what (AI apart from you).
-enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided }
+enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protection }
 
 final class RulesTabState: ObservableObject {
     @Published var segment: RulesSegment = .needsYou
@@ -16,6 +16,8 @@ struct RulesView: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var tab: RulesTabState
+    /// Launch and file protection (its own segment: the toolbar has no room, and these are rules too).
+    var protection: ProtectionMonitor? = nil
     /// Opens Patterns filtered to an app.
     var showPatterns: (String) -> Void = { _ in }
     /// Opens Patterns showing exactly these patterns.
@@ -31,6 +33,7 @@ struct RulesView: View {
                 Text(waiting > 0 ? "Needs You  \(waiting)" : "Needs You").tag(RulesSegment.needsYou)
                 Text("Rules  \(baseline.rules.filter { !$0.paused }.count + book.activeCount)").tag(RulesSegment.rules)
                 Text("Decisions").tag(RulesSegment.decided)
+                if protection != nil { Text("Protection").tag(RulesSegment.protection) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -43,6 +46,13 @@ struct RulesView: View {
                     case .needsYou: needsYou
                     case .rules: baselineSection; learnedSection
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
+                    case .protection:
+                        if let protection {
+                            ProtectionView(protection: protection) { keys, status in
+                                signatures.set(status, keys: keys,
+                                               note: status == .safe ? "allowed in Protection" : "blocked in Protection")
+                            }
+                        }
                     }
                 }
                 .padding(16)

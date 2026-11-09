@@ -9,7 +9,7 @@ import Testing
         .deletingLastPathComponent().appendingPathComponent("src/hostwatch")
 
     /// The area folders, as `docs/ARCHITECTURE.md` lists them.
-    static let areas = ["App", "Events", "Patterns", "Detection", "Firewall", "History", "Collector", "AI", "Views"]
+    static let areas = ["App", "Events", "Patterns", "Detection", "Firewall", "Protection", "History", "Collector", "AI", "Views"]
 
     /// (folder, file name, text) for every Swift file, one folder deep.
     static func files() throws -> [(area: String, name: String, text: String)] {
@@ -48,7 +48,7 @@ import Testing
     /// What decides (patterns, detection, history, the firewall) has no SwiftUI in it: it must stay testable as
     /// values. Views live in Views/ (or are named …View.swift next to their engine).
     @Test func logicFoldersHaveNoSwiftUI() throws {
-        for f in try Self.files() where ["Patterns", "Detection", "Firewall", "History", "Collector"].contains(f.area)
+        for f in try Self.files() where ["Patterns", "Detection", "Firewall", "Protection", "History", "Collector"].contains(f.area)
                 && !f.name.hasSuffix("View.swift") {
             #expect(!f.text.contains("import SwiftUI"), "\(f.area)/\(f.name) imports SwiftUI")
             #expect(!f.text.contains(": View {"), "\(f.area)/\(f.name) declares a View")
