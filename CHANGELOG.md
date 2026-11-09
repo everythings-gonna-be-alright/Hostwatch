@@ -45,6 +45,10 @@
 
 ### Fixes
 
+- **Forget in the Network tab let a blocked destination straight through.** It reset your Block to New, and a
+  trusted app's web pattern (or a macOS service's) passes without asking when nothing is decided, so the next
+  connection was simply allowed. A forgotten destination is now asked about again until you decide, ahead of
+  rules, AI verdicts and routine trust, and Forget also lifts a Block for an App on it.
 - The Events list no longer draws a line above its column headers.
 - With Events grouped, a selected event flickered between selected and not as new events arrived: each batch kept
   the selected row number while rows moved down. The selection now follows the event.

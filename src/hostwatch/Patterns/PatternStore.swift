@@ -56,6 +56,8 @@ final class SignatureStore: ObservableObject {
     private(set) var learnedRules: [LearnedRule] = []
     /// Called after you mark something, so rules can re-check themselves against your decisions.
     var onDecisionsChanged: (() -> Void)?
+    /// You decided these patterns (Safe, Suspicious or Dangerous): the firewall stops asking again about them.
+    var onYouDecided: (([String]) -> Void)?
 
     var allEntries: [SignatureEntry] { Array(entries.values) }
     var entriesByKey: [String: SignatureEntry] { entries }
@@ -259,6 +261,7 @@ final class SignatureStore: ObservableObject {
         }
         changedNow()
         if source == "you" { onDecisionsChanged?() }
+        if source == "you", status != .unclassified { onYouDecided?(keys) }
     }
 
     /// Accept AI suggestions by itself (Settings ▸ AI), for patterns that aren't high risk. Off: AI only suggests.

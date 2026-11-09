@@ -110,7 +110,9 @@ enum FirewallPolicy {
     /// The firewall's rule for one connection, given its pattern's current status.
     /// `blockedDomain`: the domain you blocked for this program (Network ▸ Block for an App), nil if none. It wins over
     /// the pattern's status: an ordinary app has one pattern for the whole web (`TCP internet:443`).
-    static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil,
+    /// `askAgain`: you forgot your decision for this destination (Network ▸ Forget): it is asked about again
+    /// until you decide, even where the pattern on its own would pass (a trusted app's routine web pattern).
+    static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil, askAgain: Bool = false,
                        hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
         let bucket = SignatureBuilder.hostBucket(f.ip)
         if SignatureBuilder.localBuckets.contains(bucket) {
@@ -124,6 +126,11 @@ enum FirewallPolicy {
         }
         if !f.knownBad.isEmpty {
             return FirewallDecision(verdict: .block, reason: "known malware address (\(f.knownBad))")
+        }
+        // Before any status: a rule, the AI or a routine risk must not answer for you here. Your next decision
+        // ends it (FirewallMonitor.decided).
+        if askAgain {
+            return FirewallDecision(verdict: .ask, reason: "you forgot your decision: asked again")
         }
         switch status {
         case .dangerous, .suspicious:
@@ -219,6 +226,7 @@ final class FirewallMonitor: ObservableObject {
             entries = saved.entries
             allowedCount = saved.allowed
             domainBlocks = Set(saved.domainBlocks ?? [])
+            askAgain = Set(saved.askAgain ?? [])
         }
     }
 
@@ -226,6 +234,7 @@ final class FirewallMonitor: ObservableObject {
         var entries: [String: FirewallEntry]
         var allowed: Int
         var domainBlocks: [String]? = nil        // "program name|domain" (older files have none)
+        var askAgain: [String]? = nil
     }
 
     /// nil for anything but a connection with a known destination (an inferred "?:?" can't be judged: the firewall
@@ -241,7 +250,7 @@ final class FirewallMonitor: ObservableObject {
     @discardableResult
     func observe(_ e: ActivityEvent, status: SignatureStatus, now: Date = Date()) -> FirewallDecision? {
         guard mode != .off, let f = Self.facts(e) else { return nil }
-        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f))
+        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f))
         guard decision.verdict != .allow else { allowedCount += 1; return decision }
         let id = [f.program, f.proto, f.host.isEmpty ? f.ip : f.host, f.port].joined(separator: "|")
         if var old = entries[id] {
@@ -258,7 +267,8 @@ final class FirewallMonitor: ObservableObject {
     /// Entries with today's verdict (a pattern you've allowed since drops out), most serious and newest first.
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
         entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
-            .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts))) }
+            .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts),
+                                              askAgain: asksAgain($0.facts))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
@@ -287,6 +297,27 @@ final class FirewallMonitor: ObservableObject {
         return domain
     }
 
+    // MARK: Asked about again after Forget
+
+    /// "program name|domain" (or the address when there is no name).
+    @Published private(set) var askAgain: Set<String> = []
+
+    nonisolated static func askKey(_ f: FirewallFacts) -> String {
+        domainBlockKey(program: f.program, domain: domain(of: f) ?? f.ip)
+    }
+
+    func asksAgain(_ f: FirewallFacts) -> Bool { !askAgain.isEmpty && askAgain.contains(Self.askKey(f)) }
+
+    /// You decided again (Allow or Block, here or in a prompt): those destinations follow the pattern again.
+    func decided(patternKeys: [String]) {
+        let keys = Set(patternKeys)
+        let done = entries.values.filter { keys.contains($0.facts.patternKey) }.map { Self.askKey($0.facts) }
+        guard !done.isEmpty, !askAgain.isDisjoint(with: done) else { return }
+        askAgain.subtract(done)
+        dirty = true
+        save()
+    }
+
     func isBlocked(domain: String, program: String) -> Bool {
         domainBlocks.contains(Self.domainBlockKey(program: program, domain: domain))
     }
@@ -297,6 +328,7 @@ final class FirewallMonitor: ObservableObject {
         let key = Self.domainBlockKey(program: program, domain: domain)
         guard blocked != domainBlocks.contains(key) else { return }
         if blocked { domainBlocks.insert(key) } else { domainBlocks.remove(key) }
+        askAgain.remove(key)
         revision += 1
         dirty = true
         save()                                   // a decision of yours: kept at once, not on the slow schedule
@@ -315,7 +347,16 @@ final class FirewallMonitor: ObservableObject {
     func forget(_ ids: [String], signatures: SignatureStore) -> [String] {
         let gone = ids.compactMap { entries[$0] }
         guard !gone.isEmpty else { return [] }
-        for e in gone { entries[e.id] = nil }
+        for e in gone {
+            entries[e.id] = nil
+            // Undecided isn't enough: a routine pattern would then pass without asking. Ask about it again.
+            askAgain.insert(Self.askKey(e.facts))
+            if let domain = Self.domain(of: e.facts) {
+                domainBlocks.remove(Self.domainBlockKey(program: e.facts.program, domain: domain))
+            }
+        }
+        revision += 1
+        dirty = true
         let keys = Set(gone.map(\.facts.patternKey)).filter { key in
             !key.isEmpty && signatures.entry(key)?.source == "you" && Self.isFirewallDecision(signatures.entry(key)?.note)
         }
@@ -348,7 +389,7 @@ final class FirewallMonitor: ObservableObject {
         var e = event
         e.knownBad = knownBad(e)
         guard let f = Self.facts(e) else { answer?(key, true, 60); return }
-        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f))
+        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f))
         switch d.verdict {
         case .allow:
             answer?(key, true, 300)
@@ -394,6 +435,7 @@ final class FirewallMonitor: ObservableObject {
         prompts.removeAll { p in same.contains { $0.id == p.id } }
         dropAdvice(same.map(\.id))
         markPattern(prompt.patternKey, allow ? .safe : .suspicious)
+        decided(patternKeys: [prompt.patternKey])
         for p in same {
             answer?(p.key, allow, 300)
             if !allow { blockedCount += 1 }
@@ -419,7 +461,8 @@ final class FirewallMonitor: ObservableObject {
 
     func save() {
         guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount,
-                                                                 domainBlocks: domainBlocks.sorted())) else { return }
+                                                                 domainBlocks: domainBlocks.sorted(),
+                                                                 askAgain: askAgain.sorted())) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
         chmod(fileURL.path, 0o600)
