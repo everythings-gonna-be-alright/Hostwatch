@@ -2,7 +2,7 @@
 
 One Swift package, one binary. `Hostwatch` is the menu-bar app; the same binary run with a flag is the root
 collector (`--collector`), its launcher, the MCP server (`--mcp`), the Claude Code hook (`--claude-hook`) and the
-developer tools (`--signature-report`, `--regroup-report`, `--origin-report`, `--story-replay`, `--time-travel-probe`,
+developer tools (`--signature-report`, `--regroup-report`, `--origin-report`, `--triage-benchmark`, `--story-replay`, `--time-travel-probe`,
 `--firewall-probe`…). `Main.swift` dispatches on the flag; everything else is ordinary code.
 
 ## The flow

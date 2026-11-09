@@ -16,6 +16,7 @@ enum Entry {
         if let i = args.firstIndex(of: AgentWatch.testFlag) { AgentWatch.runTest(Array(args[(i + 1)...])) }
         if args.contains("--mcp") { MCPServer().run() }      // read-only MCP server for Claude Code
         if args.contains("--suggest-rules") { runRuleSuggestionDryRun() }
+        if args.contains("--triage-benchmark") { runTriageBenchmark() }   // local models against your decisions
         if let i = args.firstIndex(of: "--signature-report"), i + 1 < args.count {
             runSignatureReport(args[i + 1])
         }
