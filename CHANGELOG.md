@@ -53,6 +53,10 @@
 
 ### Fixes
 
+- The Events footer said *5,000 events* (the list keeps the latest 5,000, so it always did once full) and *5,000
+  from before the restart* long after those events had scrolled out. It now shows *73 of 5,000 events* only while
+  a search or filter hides some, counts events rather than group rows, and counts the restored events down as
+  live ones replace them.
 - Multi-line commands (shell scripts) showed as an empty or clipped Detail in Events: the cell is one line and
   drew the first line shifted out of view. Line breaks now show as ⏎.
 - **Marking several selected events Safe marked only one, or nothing.** The Events right-click menu acted on the

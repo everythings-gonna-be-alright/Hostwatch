@@ -537,11 +537,15 @@ struct ActivityWindowView: View {
                 Button(history.statusText) { history.revealInFinder() }
                     .buttonStyle(.link)
                     .help("Show history files in Finder")
-                Text("·")
                 if traveling {
-                    EventCountText(shown: rows.count, total: travel.listed.count, restored: 0, filtering: searchFiltering)
+                    EventCountText(shown: Self.eventCount(rows), total: travel.listed.count, restored: 0, filtering: searchFiltering,
+                                   always: true)
                 } else {
-                    LiveEventCount(feed: model.live, filtering: searchFiltering) { (liveDerived.rows.count, model.history.count, model.restoredCount) }
+                    LiveEventCount(feed: model.live, filtering: searchFiltering) {
+                        // Restored events are the oldest: those still listed are what live arrivals haven't pushed out.
+                        (Self.eventCount(liveDerived.rows), model.history.count,
+                         max(0, min(model.restoredCount, model.history.count - model.live.arrived)))
+                    }
                 }
             }
             .font(.system(size: 11))
@@ -556,19 +560,32 @@ struct ActivityWindowView: View {
 final class VisitedTabs: ObservableObject { @Published var tabs: Set<Int> = [] }
 
 /// "6 of 5,000 events", with the restored count: the live version follows every batch on its own.
+extension ActivityWindowView {
+    /// Events in the rows (a group row counts its events, not itself).
+    static func eventCount(_ rows: [EventItem]) -> Int { rows.reduce(0) { $0 + ($1.children?.count ?? 1) } }
+}
+
 private struct EventCountText: View {
     let shown: Int, total: Int, restored: Int
     let filtering: Bool
 
+    /// Live: counts only when they say something (the list keeps the latest 5,000, so its size alone doesn't).
+    var always = false
+
     var body: some View {
+        if restored > 0 || always || shown != total { Text("·") }      // after the history size, only if something follows
         if restored > 0 {
-            Text("\(restored) from before the restart ·")
+            Text("\(restored.formatted()) from before the restart")
+                .monospacedDigit()
                 .help("Loaded from recorded history at launch, so the list isn't empty. Time Travel shows all of it.")
         }
-        Text(shown == total ? "\(total) events" : "\(shown) of \(total) events")
-            .monospacedDigit()
-            .foregroundStyle(filtering && shown != total ? Color.accentColor : .secondary)
-            .fontWeight(filtering && shown != total ? .medium : .regular)
+        if always || shown != total {
+            if restored > 0 { Text("·") }
+            Text(shown == total ? "\(total.formatted()) events" : "\(shown.formatted()) of \(total.formatted()) events")
+                .monospacedDigit()
+                .foregroundStyle(filtering && shown != total ? Color.accentColor : .secondary)
+                .fontWeight(filtering && shown != total ? .medium : .regular)
+        }
     }
 }
 
