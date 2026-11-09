@@ -22,6 +22,8 @@ struct ProtectionView: View {
     let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
     let mark: ([String], SignatureStatus) -> Void
+    /// Opens another page of the Rules sidebar (the overview's links).
+    var go: (RulesSegment) -> Void = { _ in }
 
     private static let limit = 40
     private static let relative: RelativeDateTimeFormatter = {
@@ -34,55 +36,9 @@ struct ProtectionView: View {
             switch page {
             case .protectedFiles: files
             case .protectionFound: findings
-            default: modes
+            default: ProtectionOverview(protection: protection, go: go)
             }
         }
-    }
-
-    // MARK: Modes
-
-    private var modes: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Protection").font(.headline)
-                Spacer()
-                if protection.paused, let until = protection.pausedUntil {
-                    Text("Paused until \(until.formatted(date: .omitted, time: .shortened))").foregroundStyle(.orange)
-                    Button("Resume") { protection.resume() }
-                } else {
-                    Button("Pause for 15 Minutes") { protection.pause(minutes: 15) }
-                }
-            }
-            ForEach(ProtectionArea.allCases, id: \.self) { area in modeRow(area) }
-            Text(protection.enforcer.text + " Watching since \(protection.since.formatted(date: .abbreviated, time: .omitted)).")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.45)))
-    }
-
-    private func modeRow(_ area: ProtectionArea) -> some View {
-        HStack(spacing: 10) {
-            KindTile(kind: area == .launches ? .exec : .file)
-            Text(area.title).fontWeight(.medium).frame(width: 80, alignment: .leading)
-            Picker(area.title, selection: Binding(get: { protection.mode(area) }, set: { protection.setMode($0, for: area) })) {
-                ForEach(ProtectionMode.allCases, id: \.self) { mode in
-                    Text(mode.short).tag(mode)
-                }
-            }
-            .labelsHidden()
-            .fixedSize()
-            .help(ProtectionMode.allCases.map(\.title).joined(separator: "\n"))
-            Text(todayText(area)).foregroundStyle(.secondary).monospacedDigit()
-            Spacer()
-        }
-    }
-
-    private func todayText(_ area: ProtectionArea) -> String {
-        guard protection.mode(area) != .off else { return "" }
-        let stop = protection.count(area, .block), ask = protection.count(area, .ask)
-        let verb = protection.mode(area).enforces ? "stopped" : "would stop"
-        return "Today: \(verb) \(stop) · would ask \(ask)"
     }
 
     // MARK: Protected files

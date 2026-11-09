@@ -738,7 +738,9 @@ When something looks wrong, pause it, or watch it closely to see what it does.
 
 #### Launch and file protection (Rules ▸ Protection)
 
-Three pages in the Rules sidebar: *Overview* has the modes and the pause, *Protected Files and Folders* the cards and your own places, *Found*
+Three pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
+while rehearsing, green while protecting, orange while paused), a card per area with its four modes, what the chosen
+one does and today's numbers, and the pause, *Protected Files and Folders* the cards and your own places, *Found*
 what the rehearsal found.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way

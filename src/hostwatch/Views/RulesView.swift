@@ -68,10 +68,10 @@ struct RulesView: View {
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
-                            ProtectionView(protection: protection, page: tab.segment) { keys, status in
+                            ProtectionView(protection: protection, page: tab.segment, mark: { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")
-                            }
+                            }, go: { tab.segment = $0; tab.chosen = true })
                         }
                     }
                 }
