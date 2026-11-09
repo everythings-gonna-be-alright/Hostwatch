@@ -318,18 +318,25 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{title}</title>
-<meta name="description" content="Hostwatch documentation: how the collector, patterns, stories, firewall, Watch Closely, Running Now, Time Travel, AI and every setting work.">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="{site}docs/">
+<meta name="description" content="{description}">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="{url}">
+<link rel="alternate" type="text/markdown" href="{markdown}" title="This page as Markdown">
 <meta name="theme-color" content="#08090a">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Hostwatch">
-<meta property="og:url" content="{site}docs/">
-<meta property="og:title" content="Hostwatch docs">
-<meta property="og:description" content="Every feature, setting and rule of Hostwatch, intrusion detection for macOS.">
+<meta property="og:url" content="{url}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
 <meta property="og:image" content="{site}images/site/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{description}">
+<meta name="twitter:image" content="{site}images/site/og.jpg">
+<script type="application/ld+json">{jsonld}</script>
 <link rel="icon" href="../images/site/mark.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../images/site/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -398,11 +405,11 @@ PAGE = """<!doctype html>
   h1 .quiet {{ color: var(--dim); }}
   .hero p {{ color: var(--muted); font-size: 17px; max-width: 640px; margin: 0; }}
   .chapter {{ border-bottom: 1px solid var(--line); padding: 8px 0 32px; }}
-  h2 {{ font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.025em; margin: 40px 0 14px; position: relative; }}
+  h2, .chapter > h1 {{ font-weight: 500; font-size: 30px; line-height: 1.15; letter-spacing: -0.025em; margin: 40px 0 14px; position: relative; }}
   h3 {{ font-weight: 500; font-size: 20px; letter-spacing: -0.015em; margin: 32px 0 10px; position: relative; }}
   h4 {{ font-weight: 600; font-size: 16px; margin: 24px 0 8px; }}
   .anchor {{ position: absolute; left: -22px; color: var(--dim); text-decoration: none; opacity: 0; font-weight: 400; }}
-  h2:hover .anchor, h3:hover .anchor {{ opacity: 1; }}
+  .chapter > h1:hover .anchor, h2:hover .anchor, h3:hover .anchor {{ opacity: 1; }}
   p, li {{ color: #c9ccd1; max-width: 76ch; }}
   b {{ color: var(--text); font-weight: 600; }}
   i {{ color: var(--text); font-style: normal; }}
@@ -475,7 +482,7 @@ PAGE = """<!doctype html>
   nav.toc .contents li li:has(> ol) > a::after {{ content: "›"; margin-left: auto; color: var(--dim); transition: transform .2s; }}
   nav.toc .contents li li.open:has(> ol) > a::after {{ transform: rotate(90deg); }}
   nav.toc .contents > ol > li.here > a {{ color: var(--text); }}
-  .chapter > h2:first-child {{ font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.03em; margin-top: 8px; }}
+  .chapter > h1:first-child, .chapter > h2:first-child {{ font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.03em; margin-top: 8px; }}
   .hero.slim {{ padding: 8px 0 0; border: 0; margin: 0; }}
   .cards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 28px 0 8px; }}
   .cards a {{ display: block; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); text-decoration: none; }}
@@ -521,7 +528,7 @@ PAGE = """<!doctype html>
     .onpage-in:has(ol:empty) {{ visibility: hidden; }}
   }}
   /* Anchors land below the sticky header; long paths and commands wrap instead of widening the page. */
-  h2[id], h3[id], h4[id] {{ scroll-margin-top: 84px; }}
+  h1[id], h2[id], h3[id], h4[id] {{ scroll-margin-top: 84px; }}
   p, li, td {{ overflow-wrap: anywhere; }}
   p code, li code, td code {{ white-space: normal; overflow-wrap: anywhere; }}
   .contents > summary {{ display: none; }}
@@ -550,9 +557,9 @@ PAGE = """<!doctype html>
     .hero {{ padding: 12px 0 28px; }}
     h1 {{ font-size: 34px; }}
     .hero p {{ font-size: 16px; }}
-    h2 {{ font-size: 24px; margin-top: 32px; }}
+    h2, .chapter > h1 {{ font-size: 24px; margin-top: 32px; }}
     h3 {{ font-size: 18px; margin-top: 26px; }}
-    h2[id], h3[id], h4[id] {{ scroll-margin-top: 128px; }}
+    h1[id], h2[id], h3[id], h4[id] {{ scroll-margin-top: 128px; }}
     pre {{ margin: 14px -16px; border-radius: 0; border-left: 0; border-right: 0; padding: 14px 16px; }}
     pre code {{ font-size: 12px; }}
     .table {{ margin: 14px -16px; padding: 0 16px; -webkit-overflow-scrolling: touch; }}
@@ -639,7 +646,7 @@ PAGE = """<!doctype html>
   // Search: an index of every section (h2-h4 and the text under it), ranked results with excerpts, keyboard driven.
   const main = document.querySelector("main"), q = document.querySelector(".q");
   const results = document.querySelector(".results"), contents = document.querySelector(".contents");
-  const heads = [...main.querySelectorAll("h2[id], h3[id], h4[id]")];
+  const heads = [...main.querySelectorAll("h1[id], h2[id], h3[id], h4[id]")];
   const level = h => +h.tagName[1];
   const index = DOCS_INDEX;
   const esc = t => t.replace(/[&<>"]/g, c => ({{"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}})[c]);
@@ -738,7 +745,7 @@ PAGE = """<!doctype html>
   function showChapter(section) {{
     if (section === chapterShown) return;
     chapterShown = section;
-    const h2 = section && section.querySelector("h2[id]");
+    const h2 = section && section.querySelector("h1[id], h2[id]");
     document.querySelectorAll(".contents li.current").forEach(li => li.classList.remove("current"));
     const top = h2 && links.get(h2.id);
     if (top) top.closest("li").classList.add("current");
@@ -823,7 +830,7 @@ PAGE = """<!doctype html>
     const a = e.target.closest("a.anchor"); if (!a) return;
     e.preventDefault();
     history.replaceState(null, "", a.getAttribute("href"));
-    a.closest("h2, h3, h4").scrollIntoView({{ behavior: "smooth" }});
+    a.closest("h1, h2, h3, h4").scrollIntoView({{ behavior: "smooth" }});
     try {{ await navigator.clipboard.writeText(location.href); a.classList.add("copied"); setTimeout(() => a.classList.remove("copied"), 1400); }} catch {{}}
   }});
 </script>
@@ -872,6 +879,78 @@ def menu(chapters, here):
     return "".join(out)
 
 
+def last_changed(path):
+    """The day a file last changed: today when it has uncommitted edits, else its last commit."""
+    import subprocess, datetime
+    rel = str(path.relative_to(ROOT))
+    dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", rel], capture_output=True, text=True).stdout.strip()
+    day = "" if dirty else subprocess.run(["git", "-C", str(ROOT), "log", "-1", "--format=%cs", "--", rel],
+                                          capture_output=True, text=True).stdout.strip()
+    return day or datetime.date.today().isoformat()
+
+
+AUTHOR = {"@type": "Person", "name": "everythings-gonna-be-alright", "url": "https://github.com/everythings-gonna-be-alright"}
+APP = {"@type": "SoftwareApplication", "name": "Hostwatch", "applicationCategory": "SecurityApplication",
+       "operatingSystem": "macOS 26 or later", "url": SITE}
+
+
+def crumbs(*items):
+    return {"@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": n, "name": name, "item": url} for n, (name, url) in enumerate(items, 1)]}
+
+
+def ld(*nodes):
+    return json.dumps({"@context": "https://schema.org", "@graph": list(nodes)}, ensure_ascii=False).replace("</", "<\\/")
+
+
+def plain(html_text):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", html_text))).strip()
+
+
+def faq(md):
+    """'### Question' followed by its answer: (question, answer as Markdown) pairs."""
+    return [(q.strip(), a.strip()) for q, a in re.findall(r"^### (.+?)\n(.*?)(?=^### |\Z)", md, re.S | re.M)]
+
+
+def write_sitemap(pages):
+    rows = "".join(f'  <url><loc>{u}</loc><lastmod>{d}</lastmod><priority>{p}</priority></url>\n' for u, d, p in pages)
+    (ROOT / "docs" / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
+                                              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + rows + "</urlset>\n")
+
+
+def write_llms(chapters, blurbs, intro_md, faq_pairs):
+    """llms.txt: what Hostwatch is and where everything is, for AI assistants (llmstxt.org).
+    llms-full.txt: the whole reference as one Markdown file."""
+    md_url = lambda f: f"{SITE}reference/{f}"
+    strip_links = lambda t: re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", t)
+    lines = ["# Hostwatch", "",
+             "> Hostwatch is a host intrusion detection system (HIDS) for macOS. It watches processes, files and network "
+             "connections through Apple's Endpoint Security, learns what is normal on your Mac, flags what isn't and joins "
+             "related events into stories, so an attack chain reads as one alert. Free for everyone, at home and at work. "
+             "Everything stays on your Mac.", "",
+             "- Website: " + SITE,
+             "- Download: https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
+             "- Source code: " + REPO,
+             "- Requirements: macOS 26 or later, Apple silicon and Intel. Signed and notarized by Apple.",
+             "- Licence: PolyForm Shield 1.0.0. Free to use, change, fork and share, personally or in a company. "
+             "Only a competing server or cloud product needs a licence.",
+             "- Contact: contact@hostwatch.tech (security reports: security@hostwatch.tech)", "",
+             "## Docs", ""]
+    lines += [f"- [{ch['title']}]({SITE}docs/{ch['page']}): {blurbs.get(ch['title'], '')} "
+              f"(Markdown: {md_url(ch['file'])})" for ch in chapters]
+    lines += ["", "## Questions and answers", ""]
+    lines += [f"- **{q}** {strip_links(' '.join(a.split()))}" for q, a in faq_pairs]
+    lines += ["", "## Optional", "",
+              f"- [Full reference as one file]({SITE}llms-full.txt)",
+              f"- [Changelog]({REPO}/blob/main/CHANGELOG.md)",
+              f"- [Architecture]({SITE}ARCHITECTURE.md)", ""]
+    (ROOT / "docs" / "llms.txt").write_text("\n".join(lines))
+    full = [f"# Hostwatch reference\n\nSource: {SITE}docs/ · Markdown: {SITE}reference.md\n", intro_md.split("\n", 1)[1].strip(), ""]
+    for ch in chapters:
+        full += [f"<!-- {SITE}docs/{ch['page']} -->", (CHAPTERS / ch["file"]).read_text().strip(), ""]
+    (ROOT / "docs" / "llms-full.txt").write_text("\n\n".join(full) + "\n")
+
+
 def main():
     files = sorted(CHAPTERS.glob("[0-9][0-9]-*.md"))
     PAGES.clear()
@@ -897,6 +976,11 @@ def main():
     # The overview: the front page's intro, and a card per chapter.
     front = SRC.read_text()
     intro_md, _, listing = front.partition("## Chapters")
+    listing, _, faq_md = listing.partition("## Questions and answers")
+    faq_pairs = faq(faq_md)
+    faq_html = ""
+    if faq_pairs:
+        faq_html, _ = convert("## Questions and answers\n\n" + faq_md.strip() + "\n", seen)
     intro_html, _ = convert(intro_md)
     blurbs = dict(re.findall(r"\*\*\[([^\]]+)\]\([^)]+\)\*\*: (.+)", listing))
     sentence = lambda t: (t[:1].upper() + t[1:]) if t else t      # "what you need…" → "What you need…"
@@ -906,19 +990,46 @@ def main():
             '<h1>How Hostwatch works. <span class="quiet">Every feature, setting and rule.</span></h1>'
             "<p>Built from the same reference that lives in the repository, so it's always current. New here? Start with "
             f'<a href="{chapters[0]["page"]}">{chapters[0]["title"]}</a>, then read on in order.</p></div>')
+    docs_url = f"{SITE}docs/"
+    docs_desc = ("How Hostwatch works: every feature, setting and rule of the intrusion detection app for macOS, "
+                 "from installing to stories, the firewall, AI and Time Travel.")
+    faq_node = {"@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": plain(convert(a)[0])}} for q, a in faq_pairs]}
+    nodes = [{"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url, "description": docs_desc,
+              "inLanguage": "en", "about": APP, "dateModified": last_changed(SRC),
+              "hasPart": [{"@type": "TechArticle", "headline": ch["title"], "url": docs_url + ch["page"]} for ch in chapters]},
+             crumbs(("Hostwatch", SITE), ("Docs", docs_url))]
+    if faq_pairs:
+        nodes.append(faq_node)
+    faq_block = f'<section class="chapter faq">{faq_html}</section>' if faq_html else ""
     (OUT_DIR / "index.html").write_text(PAGE.format(
         **common, title="Hostwatch docs: every feature, setting and rule", edit_url=f"{REPO}/blob/main/docs/reference.md",
-        page="index.html", toc=menu(chapters, None), hero=hero,
-        body=f'<section class="chapter intro">{intro_html}<div class="cards">{cards}</div></section>'))
+        page="index.html", toc=menu(chapters, None), hero=hero, url=docs_url, description=html.escape(docs_desc),
+        markdown=f"{SITE}reference.md", jsonld=ld(*nodes),
+        body=f'<section class="chapter intro">{intro_html}<div class="cards">{cards}</div></section>{faq_block}'))
+    sitemap = [(SITE, last_changed(ROOT / "docs" / "index.html"), "1.0"), (docs_url, last_changed(SRC), "0.9")]
 
     # One page per chapter.
     for n, ch in enumerate(chapters):
         prev = (chapters[n - 1]["page"], chapters[n - 1]["title"]) if n > 0 else ("index.html", "Docs overview")
         nxt = (chapters[n + 1]["page"], chapters[n + 1]["title"]) if n + 1 < len(chapters) else None
         hero = f'<div class="hero slim"><div class="label"><span>Docs · Chapter {n + 1:02d}</span></div></div>'
+        url, changed = docs_url + ch["page"], last_changed(CHAPTERS / ch["file"])
+        blurb = sentence(blurbs.get(ch["title"], "")).rstrip(".")
+        desc = f"{ch['title']} in the Hostwatch docs: {blurb[:1].lower() + blurb[1:]}. Intrusion detection for macOS."
+        title = f'{ch["title"]} · Hostwatch docs'
+        nodes = [{"@type": "TechArticle", "headline": ch["title"], "name": title, "description": desc, "url": url,
+                  "inLanguage": "en", "dateModified": changed, "author": AUTHOR, "about": APP,
+                  "isPartOf": {"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url}},
+                 crumbs(("Hostwatch", SITE), ("Docs", docs_url), (ch["title"], url))]
         (OUT_DIR / ch["page"]).write_text(PAGE.format(
-            **common, title=f'{ch["title"]} · Hostwatch docs', edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
-            page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, body=chapter_section(ch["body"], prev, nxt)))
+            **common, title=title, edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
+            page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, url=url, description=html.escape(desc),
+            markdown=f'{SITE}reference/{ch["file"]}', jsonld=ld(*nodes),
+            body=re.sub(r"<h2( id=\"[^\"]+\">.*?)</h2>", r"<h1\1</h1>", chapter_section(ch["body"], prev, nxt), count=1, flags=re.S)))
+        sitemap.append((url, changed, "0.8"))
+    write_sitemap(sitemap)
+    write_llms(chapters, blurbs, intro_md, faq_pairs)
     print(f"wrote docs/docs/index.html and {len(chapters)} chapter pages ({len(index)} sections in search)")
 
 

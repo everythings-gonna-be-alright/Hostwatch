@@ -1,0 +1,36 @@
+# Hostwatch
+
+> Hostwatch is a host intrusion detection system (HIDS) for macOS. It watches processes, files and network connections through Apple's Endpoint Security, learns what is normal on your Mac, flags what isn't and joins related events into stories, so an attack chain reads as one alert. Free for everyone, at home and at work. Everything stays on your Mac.
+
+- Website: https://hostwatch.tech/
+- Download: https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest
+- Source code: https://github.com/everythings-gonna-be-alright/Hostwatch
+- Requirements: macOS 26 or later, Apple silicon and Intel. Signed and notarized by Apple.
+- Licence: PolyForm Shield 1.0.0. Free to use, change, fork and share, personally or in a company. Only a competing server or cloud product needs a licence.
+- Contact: contact@hostwatch.tech (security reports: security@hostwatch.tech)
+
+## Docs
+
+- [Getting started](https://hostwatch.tech/docs/getting-started.html): what you need, installing, the collector and the first hour. (Markdown: https://hostwatch.tech/reference/01-getting-started.md)
+- [Everyday use](https://hostwatch.tech/docs/everyday-use.html): the HUD, the window, Running Now, resource use and Time Travel. (Markdown: https://hostwatch.tech/reference/02-everyday-use.md)
+- [Features](https://hostwatch.tech/docs/features.html): what Hostwatch does for you, in six groups: patterns, stories, network, stepping in, threats and AI. (Markdown: https://hostwatch.tech/reference/03-features.md)
+- [Settings](https://hostwatch.tech/docs/settings.html): every setting, pane by pane, with its default, plus exclusions and the activity history. (Markdown: https://hostwatch.tech/reference/04-settings.md)
+- [Advanced and command line](https://hostwatch.tech/docs/advanced-and-command-line.html): command-line flags, how the collector works, and updates. (Markdown: https://hostwatch.tech/reference/05-advanced-and-command-line.md)
+- [Privacy, security and limits](https://hostwatch.tech/docs/privacy-security-and-limits.html): what is stored and sent, how Hostwatch protects itself, reset, troubleshooting, limits. (Markdown: https://hostwatch.tech/reference/06-privacy-security-and-limits.md)
+- [For developers](https://hostwatch.tech/docs/for-developers.html): building, testing, demo mode and how it is put together. (Markdown: https://hostwatch.tech/reference/07-for-developers.md)
+
+## Questions and answers
+
+- **What is Hostwatch?** Hostwatch is a host intrusion detection system (HIDS) for macOS. It watches processes, files and network connections through Apple's Endpoint Security, learns what is normal on your Mac and flags what isn't. Related events are joined into stories, so an attack chain reads as one alert, not a thousand.
+- **Is Hostwatch free?** Yes. It is free for everyone, at home and at work, under the PolyForm Shield License 1.0.0. The source code is public. A paid edition will come only for companies: a fleet server and a hosted cloud.
+- **Does Hostwatch send my data anywhere?** No. What it learns stays on your Mac, encrypted on disk. Only three things leave it: what you choose to send to an AI, a daily anonymous update check and the daily threat-list downloads. The last two can be turned off.
+- **Which Macs does it run on?** macOS 26 or later, on Apple silicon and Intel. The app is signed and notarized by Apple. Setup takes about two minutes: Full Disk Access and your administrator password once.
+- **Is Hostwatch an antivirus?** Not exactly. An antivirus looks for known malware files. Hostwatch watches behaviour: what runs, what it touches and where it connects. It also checks public threat lists, so known malware is caught too, and new behaviour that no signature knows yet is flagged.
+- **Can Hostwatch block connections?** Yes. Its firewall, built on macOS's own packet filter, can ask you before a program connects somewhere new, or block it. It reads only which server a program asks for and never decrypts traffic.
+- **Does Hostwatch work with AI?** Yes, if you want it to. Apple's on-device model or Claude can explain events and suggest rules. An MCP server lets Claude Code investigate your history, read-only and only with your permission. A Claude Code guard checks Claude Code's commands before they run.
+
+## Optional
+
+- [Full reference as one file](https://hostwatch.tech/llms-full.txt)
+- [Changelog](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md)
+- [Architecture](https://hostwatch.tech/ARCHITECTURE.md)

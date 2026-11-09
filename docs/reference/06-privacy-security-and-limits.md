@@ -29,12 +29,12 @@ key lives*: another process running as you, an AI agent included, can't fetch it
 
 - **Keychain** (today): the data key is a login-keychain item whose access list names only Hostwatch's code. Any
   other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
-- **Secure Enclave** (when the build can use it): the data key is wrapped by a key that never leaves the Enclave;
-  the wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
+- **Secure Enclave** (when the build can use it): the data key is wrapped by a key that never leaves the Enclave.
+  The wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
   signed code, and the keychain item goes. Enclave keys need an entitlement that only a provisioned build carries, so
-  released builds use the keychain until that is in place; the code moves the key over by itself when it can.
-- **What it looks like:** a sealed file starts with `HWV1`; a sealed line with `HWV1:`. Files from earlier versions
-  are plain and still read; they're rewritten sealed the next time they're saved (history blocks when their file
+  released builds use the keychain until that is in place. The code moves the key over by itself when it can.
+- **What it looks like:** a sealed file starts with `HWV1`, a sealed line with `HWV1:`. Files from earlier versions
+  are plain and still read. They're rewritten sealed the next time they're saved (history blocks when their file
   is finished or scrubbed).
 - **Reading it yourself:** `zcat` and `zgrep` no longer work on the history files. Use
   `Hostwatch --export-history [file or folder]`, which prints plain JSON lines through the key, and pipe it to `jq`.
@@ -81,7 +81,7 @@ Unix socket is a local file-like connection point that only processes on this Ma
     exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
 - **A service with no client does nothing.** When the app isn't connected for 15 seconds, the background service
-  stops `eslogger` and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits; the
+  stops `eslogger` and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits. The
   next connection starts them again. It also notices when an update replaced the app and restarts itself as the
   new version.
 - **The app checks too:** it connects only when the socket is a socket owned by you, mode 0600, not a link, and in a

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hostwatch: intrusion detection for macOS, free for everyone</title>
-<meta name="description" content="Hostwatch is intrusion detection for macOS, free for everyone. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.">
+<meta name="description" content="Free intrusion detection for macOS. Hostwatch learns what's normal on your Mac, flags what isn't, tells the story of an attack and can stop unknown connections.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://hostwatch.tech/">
 <meta name="theme-color" content="#08090a">
@@ -27,31 +27,85 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Hostwatch",
-  "applicationCategory": "SecurityApplication",
-  "operatingSystem": "macOS 26 or later",
-  "softwareVersion": "0.14.0",
-  "description": "Hostwatch is intrusion detection for macOS, free for everyone. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.",
-  "url": "https://hostwatch.tech/",
-  "downloadUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
-  "installUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
-  "codeRepository": "https://github.com/everythings-gonna-be-alright/Hostwatch",
-  "license": "https://polyformproject.org/licenses/shield/1.0.0/",
-  "isAccessibleForFree": true,
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "image": "https://hostwatch.tech/images/site/og.jpg",
-  "screenshot": "https://hostwatch.tech/images/site/events.png",
-  "author": {
-    "@type": "Person",
-    "name": "everythings-gonna-be-alright",
-    "url": "https://github.com/everythings-gonna-be-alright"
-  },
-  "keywords": "macOS intrusion detection, HIDS, Mac security, endpoint security, firewall, infostealer, malware detection, Claude Code"
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://hostwatch.tech/#website",
+      "name": "Hostwatch",
+      "url": "https://hostwatch.tech/",
+      "inLanguage": "en",
+      "description": "Hostwatch is intrusion detection for macOS, free for everyone. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.",
+      "publisher": {
+        "@type": "Person",
+        "name": "everythings-gonna-be-alright",
+        "url": "https://github.com/everythings-gonna-be-alright"
+      },
+      "about": {
+        "@id": "https://hostwatch.tech/#app"
+      }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://hostwatch.tech/#page",
+      "url": "https://hostwatch.tech/",
+      "name": "Hostwatch: intrusion detection for macOS, free for everyone",
+      "isPartOf": {
+        "@id": "https://hostwatch.tech/#website"
+      },
+      "mainEntity": {
+        "@id": "https://hostwatch.tech/#app"
+      },
+      "inLanguage": "en",
+      "primaryImageOfPage": "https://hostwatch.tech/images/site/og.jpg"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Hostwatch",
+      "applicationCategory": "SecurityApplication",
+      "operatingSystem": "macOS 26 or later",
+      "softwareVersion": "0.14.0",
+      "description": "Hostwatch is intrusion detection for macOS, free for everyone. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.",
+      "url": "https://hostwatch.tech/",
+      "downloadUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
+      "installUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
+      "codeRepository": "https://github.com/everythings-gonna-be-alright/Hostwatch",
+      "license": "https://polyformproject.org/licenses/shield/1.0.0/",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "image": "https://hostwatch.tech/images/site/og.jpg",
+      "screenshot": "https://hostwatch.tech/images/site/events.png",
+      "author": {
+        "@type": "Person",
+        "name": "everythings-gonna-be-alright",
+        "url": "https://github.com/everythings-gonna-be-alright"
+      },
+      "keywords": "macOS intrusion detection, HIDS, Mac security, endpoint security, firewall, infostealer, malware detection, Claude Code",
+      "@id": "https://hostwatch.tech/#app",
+      "applicationSubCategory": "Host intrusion detection (HIDS)",
+      "softwareRequirements": "macOS 26 or later, Apple silicon or Intel",
+      "releaseNotes": "https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md",
+      "sameAs": [
+        "https://github.com/everythings-gonna-be-alright/Hostwatch"
+      ],
+      "featureList": [
+        "Learns what is normal on your Mac and flags what is not",
+        "Stories: related suspicious events joined into one attack chain",
+        "Live HUD overlay with the newest activity",
+        "Firewall on macOS packet filter: Watch, Ask and Strict modes",
+        "Known threats: daily public threat lists matched on your Mac",
+        "Watch Closely: what one program did in a minute",
+        "Running Now: every running process with CPU, memory and uptime",
+        "Time Travel through recorded activity",
+        "Ask AI with Apple on-device model or Claude",
+        "Claude Code guard and a read-only MCP server",
+        "Everything stays on your Mac, encrypted at rest"
+      ]
+    }
+  ]
 }
 </script>
 <link rel="icon" href="images/site/mark.svg" type="image/svg+xml">

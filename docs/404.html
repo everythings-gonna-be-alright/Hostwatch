@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found · Hostwatch</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#08090a">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/images/site/mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #08090a; --line-strong: rgba(255,255,255,0.14); --text: #f7f8f8; --muted: #8a8f98; --dim: #7c818a;
+          --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+          --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; --r-control: 10px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+         font: 400 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; padding: 24px; }
+  main { max-width: 560px; text-align: center; }
+  .code { font: 500 13px var(--mono); color: var(--dim); }
+  h1 { font-weight: 500; font-size: clamp(36px, 6vw, 56px); line-height: 1.05; letter-spacing: -0.03em; margin: 14px 0 16px; }
+  h1 .quiet { color: var(--muted); }
+  p { color: var(--muted); margin: 0 0 28px; }
+  .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  a.btn { display: inline-flex; align-items: center; height: 44px; padding: 0 20px; border-radius: var(--r-control);
+          font-size: 15px; font-weight: 500; text-decoration: none; }
+  a.light { background: var(--text); color: #08090a; }
+  a.ghost { color: var(--muted); border: 1px solid var(--line-strong); }
+  a.ghost:hover { color: var(--text); }
+  a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="code">404</div>
+  <h1>Nothing here. <span class="quiet">Hostwatch didn't flag it either.</span></h1>
+  <p>The page may have moved when the docs were split into chapters.</p>
+  <div class="actions">
+    <a class="btn light" href="/">Hostwatch home</a>
+    <a class="btn ghost" href="/docs/">Read the docs</a>
+  </div>
+</main>
+</body>
+</html>
