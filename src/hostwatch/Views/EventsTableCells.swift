@@ -71,6 +71,7 @@ final class EventCellView: NSTableCellView {
         }
         label.lineBreakMode = .byTruncatingTail
         label.usesSingleLineMode = true
+        label.maximumNumberOfLines = 1
         label.cell?.truncatesLastVisibleLine = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         stack.addArrangedSubview(label)
@@ -104,7 +105,12 @@ final class EventCellView: NSTableCellView {
             }
         }
         label.isHidden = text == nil
-        label.stringValue = text ?? ""
+        // One line per row: a multi-line command (a shell script) drew shifted up and clipped, so its line breaks
+        // show as ⏎ (the tooltip keeps the whole text).
+        label.stringValue = (text ?? "").contains(where: \.isNewline)
+            ? (text ?? "").split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }.joined(separator: " ⏎ ")
+            : text ?? ""
         label.textColor = color
         label.font = font
         label.lineBreakMode = truncation
