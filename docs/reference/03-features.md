@@ -387,7 +387,7 @@ what one session did, not just what `zsh` or `git` did in general.
   row per session with its events under it, the rest under *No AI session*. A session row is a band across the
   list, the way `claude --resume` lists sessions: the maker's mark, the topic, then *ProcessHUD · main · 12 min ·
   5 conn*, and on the right *Only this session* (the list keeps only that tree, *All sessions* takes it off),
-  *Patterns*, the worst status among its events and their count. Groups start folded. Right-click a band for the
+  *Patterns*, the worst status among its events and their count. Groups open when shown (one you fold stays folded while the window is open). Right-click a band for the
   same actions and the Claude session id.
 - **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's logomark for Claude Code,
   OpenAI's knot for Codex, Google's four-colour G for Gemini CLI, a cube for the Cursor agent. It appears on session
