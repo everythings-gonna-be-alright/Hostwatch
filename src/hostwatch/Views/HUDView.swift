@@ -23,6 +23,8 @@ struct HUDActions {
     var openStory: (Story) -> Void = { _ in }
     /// Events ▸ Show Launch Chain: who started this process, all the way up.
     var showLaunchChain: (ActivityEvent) -> Void = { _ in }
+    /// The launch chain as data, for the Events details panel.
+    var launchChain: (ActivityEvent) -> LaunchChainReport? = { _ in nil }
 }
 
 // MARK: - Overlay

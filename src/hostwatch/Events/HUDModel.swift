@@ -90,6 +90,8 @@ final class HUDModel: ObservableObject {
     /// Optional "hold suspicious processes" (set by the app; off unless you turn it on).
     var hold: ProcessHold?
     weak var protection: ProtectionMonitor?
+    /// Events ▸ details panel under the list (double-click opens it, it follows the selection).
+    @Published var eventInfo = false
     /// Endpoint Security: the collector's questions, its state and what it stopped on its own.
     var onGuardAsk: (([String: Any]) -> Void)?
     var onGuardStatus: ((String, String) -> Void)?

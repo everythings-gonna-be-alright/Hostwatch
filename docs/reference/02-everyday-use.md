@@ -52,6 +52,13 @@ off. The menu offers:
 - **Exclude ▸** *Hide process*, *Hide spawns of*, *Hide host*, *Hide domain \*.x*, or *Edit Exclusions…*
 - **Copy Detail**, **Copy Process Path**, **Reveal in Finder**.
 
+**Details panel.** Double-click an event to open its details under the list, as in Running Now: the facts (kind,
+time to the microsecond, pid, parent, who signed it, who decided its pattern, its risk), what it is about (the
+command line, the destination with its network signals, or the file and how it was opened), its pattern, and who
+started it as a short launch-chain trail. Buttons: *Ask AI…*, *Launch Chain…*, *Watch Closely…*, *Reveal in Finder*
+and *Mark*. The panel follows the selection, so the arrow keys walk through events. Escape or × closes it. In a
+history search, a double-click still opens that moment.
+
 **Events toolbar.** It holds the tab bar, Time Travel, Pause, **HUD** and search, in the same places on every tab.
 The row under it starts with one filter per event kind (launches, connections, files: click one to hide that kind,
 its tooltip has the count since launch), then Show and Group. Clear Events (⌘K) is in

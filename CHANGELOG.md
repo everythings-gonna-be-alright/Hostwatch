@@ -16,6 +16,9 @@
   a protected file, as soon as Hostwatch sees it, and pauses one it should ask about until you answer on a glass
   panel. A few milliseconds late, and a read can't be undone, but the program goes no further. Only your own
   programs, never the system UI, terminals or Hostwatch, and a paused program goes on if you don't answer.
+- **Event details in a panel, not a new window.** Double-click an event: its facts, command line or destination,
+  pattern and who started it open under the list, as in Running Now, and follow the selection. Ask AI, Launch Chain,
+  Watch Closely, Reveal in Finder and Mark are buttons there.
 - **A clearer Protection overview.** The state at a glance (a coloured shield, one sentence, the pause), a card per
   area with all four modes in view, what the chosen one does and today's numbers, a caution for Strict on launches,
   and links to the groups and to what to review.
