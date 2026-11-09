@@ -40,7 +40,7 @@ import Testing
     @Test func promptCarriesTheFactsAndMasksSecrets() {
         let e = entry(kind: .net, process: "/usr/bin/curl", pattern: "TCP internet:443", risk: .normal,
                       target: "https://api.example.com/x?token=s3cr3t", host: "api.example.com")
-        let p = AppleOnDeviceModel.prompt(for: e, signer: nil, trusted: false)
+        let p = TriagePrompt.pattern(e, context: nil)
         #expect(p.contains("Program: curl"))
         #expect(p.contains("connected to TCP internet:443 (host api.example.com)"))
         #expect(p.contains("Local risk heuristic: normal"))
@@ -52,8 +52,7 @@ import Testing
     func realModelNeverCallsADropperConfidentlySafe() async throws {
         let e = entry(kind: .file, process: "/private/tmp/x/updater", pattern: "w ~/Library/LaunchAgents/*.plist  [persistence]",
                       risk: .high, target: "\(home)/Library/LaunchAgents/com.update.helper.plist")
-        var unsigned = CodeIdentity(); unsigned.quarantined = true
-        let verdict = try await AppleOnDeviceModel().triage(AppleOnDeviceModel.prompt(for: e, signer: unsigned, trusted: false))
+        let verdict = try await AppleOnDeviceModel().triage(TriagePrompt.pattern(e, context: nil))
         #expect(!(verdict.verdict == .safe && verdict.confidence == .high))
     }
 

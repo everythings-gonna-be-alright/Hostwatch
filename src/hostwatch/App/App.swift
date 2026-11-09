@@ -182,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         setUpFirewall()
         setUpProtection()
+        classifier.context = { [weak self] entry in self?.triageContext(for: entry) }
         // A pattern an open story points at is kept while the story is open, even a one-off.
         signatures.inUse = { [weak self] in
             Set((self?.stories.stories ?? []).filter { !$0.dismissed }.flatMap(\.steps).map(\.event.signatureKey))
