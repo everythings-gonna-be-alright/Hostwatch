@@ -118,3 +118,46 @@ import Testing
         #expect(!ids.contains("ssh") && ids.contains("keychain"))
     }
 }
+
+/// Folders and files you protect yourself.
+@MainActor @Suite struct ProtectionCustomPlaces {
+    let folder = CustomPlace(path: "/Users/me/Projects/secret", isFolder: true)
+
+    @Test func insideTheFolderStrangersAreAsked() {
+        let d = ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secret/plan.md", actor: "/Applications/Slack.app/Contents/MacOS/Slack",
+                                              status: .unclassified, places: [folder])
+        #expect(d?.verdict == .ask && d?.group == folder.groupID)
+        #expect(ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secretive/x", actor: "/tmp/x",
+                                              status: .unclassified, places: [folder]) == nil)
+    }
+
+    @Test func macOSAndYourDecisionsPass() {
+        #expect(ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secret/a", actor: "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder",
+                                              status: .unclassified, places: [folder])?.verdict == .allow)
+        #expect(ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secret/a", actor: "/usr/bin/curl",
+                                              status: .unclassified, places: [folder])?.verdict == .ask)
+        #expect(ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secret/a", actor: "/tmp/x",
+                                              status: .safe, places: [folder])?.verdict == .allow)
+        var off = folder; off.on = false
+        #expect(ProtectionPolicy.decideCustom(path: "/Users/me/Projects/secret/a", actor: "/tmp/x",
+                                              status: .unclassified, places: [off]) == nil)
+    }
+
+    @Test func aSingleFileAndThePrivateAlias() {
+        let file = CustomPlace(path: "/private/etc/hosts", isFolder: false)
+        #expect(file.covers("/etc/hosts") && file.covers("/private/etc/hosts") && !file.covers("/etc/hosts.bak"))
+    }
+
+    @Test func addingAndRemovingPlaces() {
+        let suite = "custom-\(UUID().uuidString)"
+        let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
+                                  fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(suite))
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
+        m.addPlaces([dir, dir])
+        #expect(m.customPlaces.count == 1 && m.customPlaces[0].isFolder)
+        let ids = (m.collectorConfig(home: "/Users/me")["groups"] as? [[String: Any]])?.compactMap { $0["id"] as? String } ?? []
+        #expect(ids.contains(m.customPlaces[0].groupID))
+        m.removePlace(m.customPlaces[0].id)
+        #expect(m.customPlaces.isEmpty)
+    }
+}

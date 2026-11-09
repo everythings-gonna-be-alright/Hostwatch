@@ -57,7 +57,9 @@ extension AppDelegate {
         protectionPanel = nil
         guard let ask = protection.prompts.first else { return }
         let chain = launchChainReport(for: ask.event)
-        let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, waiting: protection.prompts.count) { [weak self] choice in
+        let place = ask.group.flatMap { protection.placeTitle(group: $0) }
+        let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, place: place,
+                                                            waiting: protection.prompts.count) { [weak self] choice in
             self?.protection.respond(ask.id, choice)
         } expired: { [weak self] in
             self?.protection.expire(ask.id)

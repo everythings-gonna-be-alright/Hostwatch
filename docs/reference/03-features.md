@@ -285,7 +285,7 @@ everything you've already decided.
 
 Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted. That is
 also the order of authority: you come first. The Rules tab has a sidebar with two groups. *Patterns* holds three
-pages: Needs You, Rules and Decisions. *Protection* holds Overview, Protected Files and Found (see Launch and file
+pages: Needs You, Rules and Decisions. *Protection* holds Overview, Protected Files and Folders, and Found (see Launch and file
 protection). Only Needs You and Found carry a badge, because only they wait for you. The tab's own badge counts what
 waits in Needs You.
 
@@ -738,7 +738,7 @@ When something looks wrong, pause it, or watch it closely to see what it does.
 
 #### Launch and file protection (Rules ▸ Protection)
 
-Three pages in the Rules sidebar: *Overview* has the modes and the pause, *Protected Files* the cards, *Found*
+Three pages in the Rules sidebar: *Overview* has the modes and the pause, *Protected Files and Folders* the cards and your own places, *Found*
 what the rehearsal found.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
@@ -752,6 +752,9 @@ curl and other programs that run whatever they're told are judged by what they r
 - **Protected files:** cards for SSH keys, developer credentials (cloud, Kubernetes, registries, GitHub, GPG),
   keychains, browser passwords and cookies, Messages and Mail, privacy settings and accounts, and autostart locations
   (writes only). The programs expected there pass. For everyone else a card asks, or blocks. A card can be off.
+- **Your folders and files:** *Add Folder or File…* protects any folder (and everything inside it) or a single file.
+  Only macOS's own programs (Finder, Spotlight, backups) pass without asking. Each has its own switch, Ask or Block,
+  and a remove button. Allow a program there by marking its pattern Safe.
 - **What protection found:** each launch or file access that would be stopped or asked about, folded by pattern.
   *Allow* marks the pattern Safe, *Block* marks it Dangerous, and it leaves the list. Deciding it anywhere else does
   the same.
