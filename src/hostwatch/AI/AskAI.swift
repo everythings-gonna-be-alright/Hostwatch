@@ -29,7 +29,8 @@ enum LocalCommand {
 // MARK: - Evidence gathering
 
 enum EvidenceGatherer {
-    static func gather(for event: ActivityEvent, related: [ActivityEvent]) -> String {
+    /// `lineage`: the launch chain rebuilt from recorded launches (the app builds it, it needs the history).
+    static func gather(for event: ActivityEvent, related: [ActivityEvent], lineage: String = "") -> String {
         var out: [String] = []
         func section(_ title: String, _ body: String) {
             let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -63,7 +64,12 @@ enum EvidenceGatherer {
         let pidText = String(event.pid)
         let psLine = LocalCommand.run("/bin/ps", ["-o", "pid=,ppid=,user=,lstart=,command=", "-p", pidText])
         section("Process (ps)", psLine.isEmpty ? "process \(event.pid) is no longer running" : psLine)
-        section("Parent chain", parentChain(from: event.ppid))
+        if !lineage.isEmpty {
+            // Recorded, so it reaches past parents that have exited (ps stops at the first one).
+            section("Launch chain (recorded, nearest parent first)", lineage)
+        } else {
+            section("Parent chain", parentChain(from: event.ppid))
+        }
 
         var executable = event.proc
         if executable.isEmpty, !psLine.isEmpty {
@@ -191,6 +197,7 @@ final class AIAnalysis: ObservableObject {
     private var related: [ActivityEvent]
     /// Extra evidence placed before the per-event evidence (e.g. a correlated story).
     private let preface: String
+    private let lineage: String
 
     static let systemPrompt = """
     You are a macOS security analyst helping a user triage one event from a local activity \
@@ -240,9 +247,11 @@ final class AIAnalysis: ObservableObject {
     /// Other recent activity from the same process (newest first), for the window.
     var relatedEvents: [ActivityEvent] { related }
 
-    init(event: ActivityEvent, related: [ActivityEvent], preface: String = "", instructions: String = AIAnalysis.systemPrompt) {
+    init(event: ActivityEvent, related: [ActivityEvent], preface: String = "", lineage: String = "",
+         instructions: String = AIAnalysis.systemPrompt) {
         self.event = event
         self.related = related
+        self.lineage = lineage
         self.preface = preface
         self.instructions = instructions
         self.evidenceSource = nil
@@ -253,6 +262,7 @@ final class AIAnalysis: ObservableObject {
     init(subject: ActivityEvent, instructions: String, evidence: @escaping @Sendable () -> String) {
         self.event = subject
         self.related = []
+        self.lineage = ""
         self.preface = ""
         self.instructions = instructions
         self.evidenceSource = evidence
@@ -261,7 +271,7 @@ final class AIAnalysis: ObservableObject {
 
     func gather() {
         state = .gathering
-        let event = self.event, related = self.related, preface = self.preface
+        let event = self.event, related = self.related, preface = self.preface, lineage = self.lineage
         if let source = evidenceSource {
             DispatchQueue.global(qos: .userInitiated).async {
                 let text = EvidenceGatherer.redactSecrets(source())
@@ -271,7 +281,7 @@ final class AIAnalysis: ObservableObject {
         }
         DispatchQueue.global(qos: .userInitiated).async {
             let facts = EventFacts.gather(for: event)
-            let evidence = EvidenceGatherer.gather(for: event, related: related)
+            let evidence = EvidenceGatherer.gather(for: event, related: related, lineage: lineage)
             let text = preface.isEmpty ? evidence
                 : EvidenceGatherer.redactSecrets(preface) + "\n\n## Latest step in detail\n" + evidence
             DispatchQueue.main.async {

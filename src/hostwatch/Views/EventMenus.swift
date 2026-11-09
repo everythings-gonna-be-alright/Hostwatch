@@ -38,6 +38,7 @@ extension ActivityWindowView {
         }
         menu.addItem(ClosureMenuItem("Ask AI: Is This Dangerous?…") { actions.askAI(event) })
         menu.addItem(ClosureMenuItem("Watch \(event.name) Closely…") { actions.watch(event) })
+        menu.addItem(ClosureMenuItem("Show Launch Chain…") { actions.showLaunchChain(event) })
         menu.addItem(.separator())
         menu.addLabel("Pattern: \(event.signatureProcess) → \(event.signaturePattern)")
         for status in SignatureStatus.allCases {
