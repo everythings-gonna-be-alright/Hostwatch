@@ -280,12 +280,14 @@ struct ActivityWindowView: View {
             // Filters, not a scoreboard: the running totals said nothing you'd act on and squeezed the title.
             ForEach(EventKind.allCases, id: \.self) { kind in
                 let on = model.visibleKinds.contains(kind)
-                Toggle(isOn: Binding(get: { on }, set: { _ in model.toggle(kind) })) {
+                // A plain icon, coloured when shown and faded when hidden: a toggle's "on" disc made all three
+                // look pressed at once.
+                Button { model.toggle(kind) } label: {
                     Label(kind.title, systemImage: kind.symbol)
                         .labelStyle(.iconOnly)
                         .foregroundStyle(on ? kind.color : .secondary)
+                        .opacity(on ? 1 : 0.4)
                 }
-                .toggleStyle(.button)
                 .help("\(kind.title): \(model.counts[kind, default: 0].formatted()) since launch. "
                       + (on ? "Click to hide them." : "Hidden, click to show them."))
             }
