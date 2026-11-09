@@ -108,13 +108,19 @@ struct FirewallFacts: Codable, Equatable {
 
 enum FirewallPolicy {
     /// The firewall's rule for one connection, given its pattern's current status.
-    static func decide(_ f: FirewallFacts, status: SignatureStatus, hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
+    /// `blockedDomain`: the domain you blocked for this program (Network ▸ Block for an App), nil if none. It wins over
+    /// the pattern's status: an ordinary app has one pattern for the whole web (`TCP internet:443`).
+    static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil,
+                       hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
         let bucket = SignatureBuilder.hostBucket(f.ip)
         if SignatureBuilder.localBuckets.contains(bucket) {
             return FirewallDecision(verdict: .allow, reason: "local network")
         }
         if !hostwatch.isEmpty, f.program == hostwatch {
             return FirewallDecision(verdict: .allow, reason: "Hostwatch itself")
+        }
+        if let blockedDomain {
+            return FirewallDecision(verdict: .block, reason: "you blocked \(blockedDomain) for this app")
         }
         if !f.knownBad.isEmpty {
             return FirewallDecision(verdict: .block, reason: "known malware address (\(f.knownBad))")
@@ -212,10 +218,15 @@ final class FirewallMonitor: ObservableObject {
         if let data = Vault.shared.read(fileURL), let saved = try? Self.decoder.decode(Saved.self, from: data) {
             entries = saved.entries
             allowedCount = saved.allowed
+            domainBlocks = Set(saved.domainBlocks ?? [])
         }
     }
 
-    private struct Saved: Codable { var entries: [String: FirewallEntry]; var allowed: Int }
+    private struct Saved: Codable {
+        var entries: [String: FirewallEntry]
+        var allowed: Int
+        var domainBlocks: [String]? = nil        // "program name|domain" (older files have none)
+    }
 
     /// nil for anything but a connection with a known destination (an inferred "?:?" can't be judged: the firewall
     /// always knows where a connection goes).
@@ -230,7 +241,7 @@ final class FirewallMonitor: ObservableObject {
     @discardableResult
     func observe(_ e: ActivityEvent, status: SignatureStatus, now: Date = Date()) -> FirewallDecision? {
         guard mode != .off, let f = Self.facts(e) else { return nil }
-        let decision = FirewallPolicy.decide(f, status: status)
+        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f))
         guard decision.verdict != .allow else { allowedCount += 1; return decision }
         let id = [f.program, f.proto, f.host.isEmpty ? f.ip : f.host, f.port].joined(separator: "|")
         if var old = entries[id] {
@@ -247,12 +258,49 @@ final class FirewallMonitor: ObservableObject {
     /// Entries with today's verdict (a pattern you've allowed since drops out), most serious and newest first.
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
         entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
-            .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey))) }
+            .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
 
     func clear() { entries = [:]; allowedCount = 0; blockedCount = 0; scheduleSave() }
+
+    // MARK: Domains you blocked for one app
+
+    /// "program name|domain", the program named as the Network tab names it, the domain as it groups hosts
+    /// (`api.example.com` counts under `example.com`).
+    @Published private(set) var domainBlocks: Set<String> = []
+
+    nonisolated static func domainBlockKey(program: String, domain: String) -> String {
+        displayProcessName(program) + "|" + domain.lowercased()
+    }
+
+    /// The domain this connection goes to, as you'd have blocked it; nil without a name (an address alone).
+    nonisolated static func domain(of f: FirewallFacts) -> String? {
+        f.host.isEmpty ? nil : DomainRegistry.registrable(f.host) ?? f.host.lowercased()
+    }
+
+    /// The domain you blocked for this connection's program, if this connection goes there.
+    func blockedDomain(_ f: FirewallFacts) -> String? {
+        guard !domainBlocks.isEmpty, let domain = Self.domain(of: f),
+              domainBlocks.contains(Self.domainBlockKey(program: f.program, domain: domain)) else { return nil }
+        return domain
+    }
+
+    func isBlocked(domain: String, program: String) -> Bool {
+        domainBlocks.contains(Self.domainBlockKey(program: program, domain: domain))
+    }
+
+    /// Blocks (or allows again) one domain for one program. New connections are judged by it at once; one already
+    /// open finishes, and one the collector let through in the last five minutes may pass until that answer expires.
+    func setBlocked(_ blocked: Bool, domain: String, program: String) {
+        let key = Self.domainBlockKey(program: program, domain: domain)
+        guard blocked != domainBlocks.contains(key) else { return }
+        if blocked { domainBlocks.insert(key) } else { domainBlocks.remove(key) }
+        revision += 1
+        dirty = true
+        save()                                   // a decision of yours: kept at once, not on the slow schedule
+    }
 
     /// Your Allow or Block, given in a firewall question, the Network tab or this list (not in Patterns).
     static func isFirewallDecision(_ note: String?) -> Bool {
@@ -300,7 +348,7 @@ final class FirewallMonitor: ObservableObject {
         var e = event
         e.knownBad = knownBad(e)
         guard let f = Self.facts(e) else { answer?(key, true, 60); return }
-        let d = FirewallPolicy.decide(f, status: status(e))
+        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f))
         switch d.verdict {
         case .allow:
             answer?(key, true, 300)
@@ -370,7 +418,8 @@ final class FirewallMonitor: ObservableObject {
     }
 
     func save() {
-        guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount)) else { return }
+        guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount,
+                                                                 domainBlocks: domainBlocks.sorted())) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
         chmod(fileURL.path, 0o600)
