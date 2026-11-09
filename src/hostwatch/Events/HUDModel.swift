@@ -44,6 +44,8 @@ final class LiveFeed: ObservableObject {
     @Published var counts: [EventKind: Int] = [:]
     /// How many events were restored from history at launch (0 = none).
     @Published var restoredCount = 0
+    /// Events that arrived live since launch: restored ones still listed are the rest of the list, at most.
+    var arrived = 0
 }
 
 @MainActor
@@ -570,6 +572,7 @@ final class HUDModel: ObservableObject {
             var updated = history
             updated.insert(contentsOf: uiBuffer.reversed(), at: 0)
             if updated.count > historyLimit { updated.removeLast(updated.count - historyLimit) }
+            live.arrived += uiBuffer.count
             live.history = updated
             uiBuffer.removeAll(keepingCapacity: true)
         }
