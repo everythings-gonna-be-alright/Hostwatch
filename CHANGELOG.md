@@ -9,6 +9,9 @@
   heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
   holding its place for hours. Names and words read in the system font, as in Activity Monitor (Events, Patterns,
   Network). Times, pids, paths, patterns and hosts stay monospaced.
+- **Tab badges mean "this needs you".** *Rules* counts what waits for your decision, *Network* only connections
+  waiting for your answer (no longer every new domain), and *Stories* only dangerous stories, in red. New domains and
+  open stories show in the window's subtitle on their own tab.
 
 - **Show Launch Chain opens a window** instead of a text box: a plain sentence on where the process came from, then
   the chain from launchd down to it with icons, pids and command lines you can select. The step that decided the

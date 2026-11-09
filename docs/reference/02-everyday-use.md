@@ -93,7 +93,9 @@ Quitting also stops the collector the app started.
 The activity window has five tabs: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5. Network covers
 domains and the firewall.
 
-- **Badges:** each tab shows its icon and its count as a badge. When the window is narrow, only the icons show.
+- **Badges:** a tab badges only what needs you. *Rules* counts what waits for your decision, *Network* the
+  connections waiting for your answer, and *Stories* the dangerous stories, in red. New domains and open stories
+  show in the window's subtitle on their own tab. When the window is narrow, only the icons show.
 - **Event-kind counters:** these appear on Events only.
 - **macOS flaw banner:** when exploited macOS flaws aren't fixed yet, a slim banner at the top says so. It offers
   *Details*, *Software Update* and ✕. Closing it with ✕ hides it until another flaw is listed.

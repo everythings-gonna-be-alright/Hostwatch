@@ -255,18 +255,19 @@ struct ActivityWindowView: View {
 
     /// The order here is the ⌘1–⌘5 order (the View menu matches).
     private var windowTabs: [WindowTabBar.Tab] {
+        // A badge means "this needs you", as on Apple's own tabs and icons: what waits for your answer (accent) and
+        // dangerous stories (red). New domains and ordinary stories are information, so they stay in the subtitle.
         let waiting = rules.proposals.count + (baseline.report?.review.count ?? 0)
-        let dangerous = stories.stories.contains { !$0.dismissed && $0.severity == .dangerous }
+        let dangerous = stories.stories.filter { !$0.dismissed && $0.severity == .dangerous }.count
         return [
             .init(id: 0, title: "Events", symbol: "list.bullet.rectangle"),
             .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up"),
             .init(id: 4, title: "Rules", symbol: "checklist",
                   badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .accentColor),
             .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
-                  badge: stories.activeCount > 0 ? "\(stories.activeCount)" : nil, badgeTint: dangerous ? .red : .orange),
+                  badge: dangerous > 0 ? "\(dangerous)" : nil, badgeTint: .red),
             .init(id: 3, title: "Network", symbol: "network.badge.shield.half.filled",
-                  badge: !firewall.prompts.isEmpty ? "\(firewall.prompts.count)" : domains.newCount > 0 ? "\(domains.newCount)" : nil,
-                  badgeTint: !firewall.prompts.isEmpty ? .orange : .purple),
+                  badge: firewall.prompts.isEmpty ? nil : "\(firewall.prompts.count)", badgeTint: .accentColor),
         ]
     }
 
