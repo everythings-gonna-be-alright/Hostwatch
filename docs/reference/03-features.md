@@ -1006,6 +1006,29 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
 
 Earlier versions' two toggles are migrated to the matching engine.
 
+**What the AI sees for each pattern.** The local model and Claude get the same facts and the same instructions:
+
+- what happened (a launch, a file access or a connection) and the pattern
+- each program involved, who signed it and where it lives (part of macOS, Homebrew, inside an app, a download or
+  temp folder, a hidden folder)
+- who started it: the launch chain as a trail from its origin, the origin in words, the AI coding session if any,
+  and a launch's command line. Only when that example's own launch is still in the record: a reused pid would tell a
+  wrong story, so otherwise it says *not recorded*
+- warning signs Hostwatch checked itself: a tool that runs whatever it's told (sh, curl, osascript…), an app
+  starting one, a program in a temp, download or hidden folder, removing the quarantine flag, piping a download into
+  a shell, reading saved passwords, Messages or the keychain, a password dialog, a screenshot, an autostart write, a
+  bare IP address
+- its history: how often, over how long, and whether regularly
+- the local risk heuristic
+
+The instructions say that developer tools in your projects are ordinary even unsigned, that an Apple signature on
+a shell or curl says nothing about the command, and that the reason must name the deciding fact. Machine text is kept
+on one line, so a crafted path can't forge a fact, and secrets are masked.
+
+**A warning sign outranks the local model.** When Hostwatch found a warning sign, a local model's Safe is never
+taken: the pattern goes to Claude, or stays New for you. Small models trust an Apple signature on curl or a shell too
+easily, and the benchmark showed it.
+
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,
 left for you, or failed). The local model answers one pattern at a time, Claude a batch at once. *Show* on the

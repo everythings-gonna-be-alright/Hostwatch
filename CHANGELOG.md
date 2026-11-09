@@ -4,6 +4,14 @@
 
 ### New
 
+- **Better triage evidence.** The AI now sees who started a pattern's example (the launch chain, its origin, the AI
+  session and the command line), both programs' signers and where they live, and how long the pattern has been seen.
+  The instructions are calibrated for developer tools and Homebrew, refuse to trust an Apple signature on a shell, and
+  ask for the deciding fact. Claude and the local model share one prompt now, and Claude no longer waits for a
+  `codesign` run per program.
+- **Warning signs outrank the local model.** Hostwatch spells out what it checked for certain (a run-anything tool,
+  an app starting a shell, a temp-folder program, quarantine removal, password or keychain reads…), and when it
+  found one a local model's Safe is never taken: the pattern goes to Claude or stays for you.
 - **Watch Classify with AI work.** A live list shows the pattern being asked about right now and every pattern of
   the run with its verdict and reason as it lands, or why it was left for you. It reopens from the progress bar, and
   after a run from the list button next to *Classify with AI*.

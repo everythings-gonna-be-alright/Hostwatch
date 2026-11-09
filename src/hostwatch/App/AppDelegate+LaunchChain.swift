@@ -14,14 +14,16 @@ extension AppDelegate {
         var own: ActivityEvent?             // a connection's or file's process: its own launch, for its command line
         for e in model.history where e.kind == .exec && (e.ts == 0 || e.ts <= at + 1) {
             if e.pid == event.pid, e.id != event.id, e.ts <= at {
-                if event.kind != .exec, own == nil { own = e; continue }
+                // A file or network event's process, or a launch known only by its pid: its own launch record.
+                if event.kind != .exec || event.ppid == 0, own == nil { own = e; continue }
                 // The same pid ran something else first (sh exec'ing bash): shown, but not a parent.
                 earlier.append(LaunchStep(pid: e.pid, ppid: e.ppid, path: e.target, args: e.args, source: .launch))
                 continue
             }
             if launches[e.pid] == nil { launches[e.pid] = e }
         }
-        let snapshot = ProcessHistory(directory: history.directory).snapshot(at: Date(timeIntervalSince1970: at))
+        let snapshot = ProcessHistory(directory: history.directory).snapshot(at: Date(timeIntervalSince1970: at),
+                                                                            cache: Self.processDayCache)
         let listed = Dictionary((snapshot?.processes ?? []).map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
         let chain = LaunchChain.build(from: event.ppid > 0 ? event.ppid : own?.ppid ?? 0) { pid in
             if let e = launches[pid] { return LaunchStep(pid: pid, ppid: e.ppid, path: e.target, args: e.args, source: .launch) }
@@ -36,6 +38,25 @@ extension AppDelegate {
         let process = LaunchStep(pid: event.pid, ppid: event.ppid, path: path, args: args, source: .launch)
         return LaunchChainReport(process: process, steps: chain.steps, broken: chain.broken, session: session,
                                  earlier: Array(earlier.prefix(3)))
+    }
+
+    /// Today's process list, read once for a batch of lookups (a triage batch asks for 40 chains at once).
+    static let processDayCache = ProcessDayCache()
+
+    /// Triage context for a pattern: who started its example, only when that example's own launch is still in the
+    /// recorded events (same pid, same program). Otherwise nil: a reused pid would tell a wrong story.
+    func triageContext(for entry: SignatureEntry) -> TriageContext? {
+        let program = entry.kind == .exec ? entry.exampleTarget : entry.exampleProc
+        guard entry.examplePid > 0,
+              let launch = model.history.first(where: { $0.kind == .exec && $0.pid == entry.examplePid && $0.target == program })
+        else { return nil }
+        let report = launchChainReport(for: launch)
+        guard !report.steps.isEmpty else { return nil }
+        let names = (report.steps.reversed().map { CodingAgent.of($0.path)?.title ?? $0.name } + [report.process.name])
+        let trail = names.count > 5 ? ([names[0], "…"] + names.suffix(3)).joined(separator: " › ") : names.joined(separator: " › ")
+        let session = model.sessions.session(forPid: entry.examplePid)?.name
+        return TriageContext(trail: trail, origin: report.summary, session: session,
+                             command: entry.kind == .exec ? launch.args : "")
     }
 
     /// Events ▸ right-click ▸ Show Launch Chain: its own small window, one per request.
