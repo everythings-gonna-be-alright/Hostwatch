@@ -8,8 +8,12 @@ builds, agents and updaters. The toolbar has no room for another control.
 connections: your pattern decision first, then risk, then macOS's own programs (never the ones that run whatever they
 are told). Protected files are cards built on the sensitive labels patterns already carry. Each area has the
 firewall's modes. Watch runs the policy on the live eslogger feed and records what would be stopped or asked about,
-so you decide those patterns before anything is enforced. Ask and Strict stay unavailable until the collector reports
-a working Endpoint Security client. The page is a Rules segment, the state is in the window subtitle.
+so you decide those patterns before anything is enforced. Until Endpoint Security, Ask and Strict use a reactive engine
+(`ReactiveEnforcer`) on the same feed: a blocked program is stopped (SIGKILL) and a question pauses it (SIGSTOP) as soon
+as its event arrives, with Hold's rules (your own processes only, never the system UI, terminals or Hostwatch, a
+watchdog that resumes a paused process, no answer means it goes on). It is a few milliseconds late and can't prevent a
+file from being read, only stop the program that read it. The page is in the Rules sidebar, the state in the window
+subtitle.
 
 **Consequences.** Rehearsal works today and costs one policy call per event. The app already speaks the collector
 protocol for held launches and opens (`guard_ask`, `guard_answer`, `guard_status`, `guard_block`) and has the

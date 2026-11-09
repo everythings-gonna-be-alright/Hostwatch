@@ -33,9 +33,15 @@ struct ProtectionPromptView: View {
                 Spacer(minLength: 8)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
-                    Label("Blocks in \(left) s", systemImage: "timer")
+                    // Paused by Hostwatch: it goes on without an answer, as Hold does. Held by Endpoint Security: blocked.
+                    Label(ask.reactive ? "Continues in \(left) s" : "Blocks in \(left) s", systemImage: "timer")
                         .font(.callout.monospacedDigit()).foregroundStyle(.orange)
                 }
+            }
+            if ask.reactive {
+                Text(ask.area == .launches ? "It started and is paused until you answer."
+                     : "It opened the file and is paused until you answer. Block stops it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             LaunchChainStrip(report: chain)
             if ask.area == .files {

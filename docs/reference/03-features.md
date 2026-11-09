@@ -747,8 +747,15 @@ curl and other programs that run whatever they're told are judged by what they r
 
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
-- **Stopping for real needs Endpoint Security.** Ask and Strict are unavailable until Apple approves Hostwatch's
-  Endpoint Security access and the collector can use it. The page says which.
+- **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a
+  launch or a protected file's open reaches it, a few milliseconds after it happened. What's blocked is stopped.
+  A question pauses the program, and a glass panel asks: *Block* stops it, *Allow Once* lets it go on, *Always
+  Allow* also marks its pattern Safe. Without an answer in 30 seconds it goes on. Only your own programs are acted on,
+  never root's, the system UI, terminals or Hostwatch, and at most five are paused at once. A file that was opened
+  may already have been read: the program is stopped, the read can't be undone. Endpoint Security, once approved,
+  will stop things before they happen.
+- **Careful with Strict for launches.** It stops every launch nobody decided yet, builds included. Watch first:
+  its counts on the Overview page show what Ask and Strict would do.
 - **Protected files:** cards for SSH keys, developer credentials (cloud, Kubernetes, registries, GitHub, GPG),
   keychains, browser passwords and cookies, Messages and Mail, privacy settings and accounts, and autostart locations
   (writes only). The programs expected there pass. For everyone else a card asks, or blocks. A card can be off.

@@ -162,6 +162,7 @@ extension AppDelegate {
     /// the collector we started before the app exits.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         hold.releaseAll()                 // never leave a process frozen behind
+        protection.releaseAll()
         history.stop()
         signatures.save(sync: true)
         stories.save()

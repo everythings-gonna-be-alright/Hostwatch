@@ -12,6 +12,10 @@
 - **Questions say who started the program, on Liquid Glass.** A firewall question (and Claude Code's and
   Protection's) is a glass card now, like macOS's own alerts. It shows the launch chain as a short trail, for example
   *Claude Code › zsh › python3.12*, with the program's command line, so you see the script python runs and who ran it.
+- **Ask and Strict work now, before Endpoint Security.** Protection stops a blocked launch, or a program that opens
+  a protected file, as soon as Hostwatch sees it, and pauses one it should ask about until you answer on a glass
+  panel. A few milliseconds late, and a read can't be undone, but the program goes no further. Only your own
+  programs, never the system UI, terminals or Hostwatch, and a paused program goes on if you don't answer.
 - **Protect your own folders and files.** Rules ▸ Protection ▸ *Protected Files and Folders* has *Add Folder or
   File…*: a project, a documents folder or one file. Only macOS's own programs pass without asking, anyone else is
   asked about or blocked, and the rehearsal shows who reads them.
