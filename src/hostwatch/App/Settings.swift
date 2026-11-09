@@ -503,7 +503,7 @@ private struct AIPane: View {
                     ForEach(AIEngine.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
-                LabeledContent("On-device model") {
+                LabeledContent("Local model") {
                     Label(status.label, systemImage: status.isReady ? "checkmark.circle.fill" : "exclamationmark.circle")
                         .foregroundStyle(status.isReady ? .green : .orange)
                 }
@@ -513,6 +513,7 @@ private struct AIPane: View {
             } footer: {
                 Footnote(classifier.engine.help)
             }
+            AIModelSettings()
             Section {
                 Toggle("Suggest for new patterns automatically", isOn: $classifier.autoClassify)
                 Toggle("Accept AI suggestions without asking", isOn: Binding(

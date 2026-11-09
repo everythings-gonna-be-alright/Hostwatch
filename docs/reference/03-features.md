@@ -989,9 +989,20 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
 
 | Engine | AI suggestions for patterns | Ask AI (event or story) |
 |--------|------------------------------|-------------------------|
-| **Apple On-Device (private)** | on-device only, what it can't settle stays New | on-device model |
+| **Local Model** | the local model only, what it can't settle stays New | the local model |
 | **Claude** | Claude only | Claude |
-| **On-Device First, Claude for the Rest** (default) | steps 1 and 2 below | Claude |
+| **Local Model First, Claude for the Rest** (default) | steps 1 and 2 below | Claude |
+
+**Which models.** The *local model* is Apple's on-device model or a custom server:
+
+- **Apple On-Device:** *General* (the default) or *Content Tagging*, Apple's model tuned for classifying text.
+- **Custom Server (OpenAI-compatible):** any server with the OpenAI chat API, such as Ollama, LM Studio, llama.cpp,
+  vLLM or a cloud endpoint. Enter its address and model (*Load Models* lists them) and an API key if it needs one. The
+  key is stored encrypted. *Test* runs one real triage. A server on this Mac keeps everything on it. A server elsewhere
+  receives the pattern facts and Ask AI evidence, secrets masked, and Settings says where they go.
+- **Claude model:** Claude Code's default, Opus, Sonnet or Haiku, for every Claude call.
+
+`Hostwatch --triage-benchmark` compares local models on your own decisions (see Advanced and command line).
 
 Earlier versions' two toggles are migrated to the matching engine.
 

@@ -326,7 +326,7 @@ final class RuleBook: ObservableObject {
         process.executableURL = URL(fileURLWithPath: claude)
         process.currentDirectoryURL = AppPaths.support
         process.arguments = ["-p", "--output-format", "json", "--no-session-persistence", "--setting-sources", "",
-                             "--strict-mcp-config", "--tools", "", "--system-prompt", Self.systemPrompt]
+                             "--strict-mcp-config", "--tools", "", "--system-prompt", Self.systemPrompt] + ClaudeModelChoice.arguments
         process.environment = ClaudeLocator.environment
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin
@@ -399,7 +399,7 @@ func runRuleSuggestionDryRun() -> Never {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: claude)
     p.arguments = ["-p", "--output-format", "json", "--no-session-persistence", "--setting-sources", "",
-                   "--strict-mcp-config", "--tools", "", "--system-prompt", RuleBook.systemPrompt]
+                   "--strict-mcp-config", "--tools", "", "--system-prompt", RuleBook.systemPrompt] + ClaudeModelChoice.arguments
     p.environment = ClaudeLocator.environment
     let input = Pipe(), output = Pipe()
     p.standardInput = input
