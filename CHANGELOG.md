@@ -4,6 +4,12 @@
 
 ### New
 
+- **A quieter window.** The toolbar's event kinds are plain on and off filters now, their running totals moved to
+  the tooltip, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The
+  heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
+  holding its place for hours. Process names read in the system font, as in Activity Monitor. Times, pids and paths
+  stay monospaced.
+
 - **Show Launch Chain opens a window** instead of a text box: a plain sentence on where the process came from, then
   the chain from launchd down to it with icons, pids and command lines you can select. The step that decided the
   origin is marked, and each step says how Hostwatch knows it. *Copy* still gives the text.

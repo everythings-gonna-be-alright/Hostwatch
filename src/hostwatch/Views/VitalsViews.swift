@@ -47,6 +47,11 @@ struct VitalBadgeView: View {
 /// Collapsed or expanded, shared by live and Time Travel.
 final class HeavyStripState: ObservableObject {
     @Published var collapsed = false
+    /// Heavy pids already shown: the card says it once, then Running Now's flame carries it, so a process heavy
+    /// for hours doesn't hold 50 points above the list. A pid that calms down and turns heavy again shows again.
+    @Published var folded: Set<Int> = []
+
+    func fold(_ pids: Set<Int>, current: Set<Int>) { folded = folded.intersection(current).union(pids) }
 }
 
 /// Above the events: processes started while watching that run heavy, live or at the playhead. A tinted
@@ -57,6 +62,7 @@ struct HeavyStrip: View {
     let onlyThese: Bool
     let toggleOnlyThese: () -> Void
     let actions: HUDActions
+    var fold: (() -> Void)? = nil
 
     /// What is heavy, in words: "Hostwatch is using a lot of CPU and memory", "3 processes are using a lot of CPU".
     /// "using a lot of CPU and memory" (at 14:02 in Time Travel).
@@ -113,6 +119,14 @@ struct HeavyStrip: View {
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
                 .help(onlyThese ? "Show all events again" : "Show only these processes' events")
+                if let fold {
+                    Button(action: fold) {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                            .frame(width: 16, height: 16).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Hide. Running Now keeps showing it with a flame.")
+                }
             }
             .help(context.live ? "Started while Hostwatch was watching, and still running" : "")
             if single == nil, !state.collapsed {

@@ -277,17 +277,17 @@ struct ActivityWindowView: View {
         }
         ToolbarItemGroup(placement: .principal) {
           if model.windowTab == 0 && !runningNow {
+            // Filters, not a scoreboard: the running totals said nothing you'd act on and squeezed the title.
             ForEach(EventKind.allCases, id: \.self) { kind in
                 let on = model.visibleKinds.contains(kind)
-                Button { model.toggle(kind) } label: {
-                    Label { Text("\(model.counts[kind, default: 0])").monospacedDigit() } icon: {
-                        Image(systemName: kind.symbol)
-                    }
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(on ? kind.color : .secondary)
-                    .opacity(on ? 1 : 0.45)
+                Toggle(isOn: Binding(get: { on }, set: { _ in model.toggle(kind) })) {
+                    Label(kind.title, systemImage: kind.symbol)
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(on ? kind.color : .secondary)
                 }
-                .help(on ? "Hide \(kind.title.lowercased())" : "Show \(kind.title.lowercased())")
+                .toggleStyle(.button)
+                .help("\(kind.title): \(model.counts[kind, default: 0].formatted()) since launch. "
+                      + (on ? "Click to hide them." : "Hidden, click to show them."))
             }
           }
         }
@@ -304,15 +304,10 @@ struct ActivityWindowView: View {
             }
             .help(model.paused ? "Resume the live stream" : "Pause the live stream")
             .disabled(traveling || runningNow)
-            Button { model.clear() } label: { Label("Clear", systemImage: "trash") }
-                .help("Clear the event list")
-                .disabled(traveling || runningNow)
             Toggle(isOn: $model.overlayEnabled) {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")
             }
             .help("Show or hide the HUD overlay (⌃⌥⌘H)")
-            Button(action: actions.openSettings) { Label("Settings", systemImage: "gearshape") }
-                .help("Settings (⌘,)")
         }
     }
 
@@ -351,9 +346,12 @@ struct ActivityWindowView: View {
 
     private var filterBar: some View {
         HStack(spacing: 12) {
+            let heavyCount = heavy.entries.count
             Picker("View", selection: $running.showing) {
                 Label("Events", systemImage: "list.bullet").tag(false)
-                Label("Running Now", systemImage: "cpu").tag(true)
+                // Where the heavy card folds to: a flame and the count while something runs heavy.
+                Label(heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
+                      systemImage: heavyCount > 0 ? "flame.fill" : "cpu").tag(true)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -407,10 +405,20 @@ struct ActivityWindowView: View {
 
     @ViewBuilder private var heavySection: some View {
         let context = heavy
-        if !context.entries.isEmpty {
+        let current = Set(context.entries.map(\.pid))
+        let fresh = current.subtracting(heavyStrip.folded)
+        // Live, the card shows a newly heavy process once and folds after 20 s (or ×) into Running Now's flame.
+        // Time Travel and Show Only These keep it: there you came for it.
+        if !context.entries.isEmpty, !context.live || model.onlyPids != nil || !fresh.isEmpty {
             HeavyStrip(context: context, state: heavyStrip, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
                 model.onlyPids = model.onlyPids == nil ? context.pids : nil
-            }, actions: actions)
+            }, actions: actions, fold: context.live && model.onlyPids == nil ? { heavyStrip.fold(current, current: current) } : nil)
+            .task(id: fresh) {
+                guard context.live, !fresh.isEmpty else { return }
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled, model.onlyPids == nil else { return }
+                withAnimation(.snappy(duration: 0.25)) { heavyStrip.fold(current, current: current) }
+            }
         } else if model.onlyPids != nil {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle").foregroundStyle(.secondary)

@@ -52,8 +52,10 @@ off. The menu offers:
 - **Exclude ▸** *Hide process*, *Hide spawns of*, *Hide host*, *Hide domain \*.x*, or *Edit Exclusions…*
 - **Copy Detail**, **Copy Process Path**, **Reveal in Finder**.
 
-**Events toolbar.** It holds the tab bar, the event-kind counters (click one to hide that kind), Time Travel, Pause,
-**Clear**, **HUD**, **Settings** and search.
+**Events toolbar.** It holds the tab bar, one filter per event kind (launches, connections, files: click one to hide
+that kind, its tooltip has the count since launch), Time Travel, Pause, **HUD** and search. Clear Events (⌘K) is in
+the Activity menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
+patterns stay monospaced.
 
 ### HUD
 
@@ -197,6 +199,9 @@ already running when Hostwatch started aren't followed. Otherwise Xcode and brow
 - **Banner actions:** ✦ asks AI. ⋯ has Show in Finder and Copy Path. **Only These** filters Events to them.
 - **Collapsing:** the chevron collapses the banner to one line with the busiest names. So it never hides that
   something is there.
+- **Shown once:** live, the banner appears when a process turns heavy, then folds away after 20 seconds (or with ×).
+  The *Running Now* switch keeps a flame and the count while anything runs heavy. A process that calms down and
+  turns heavy again shows again. In Time Travel and with Only These on, the banner stays.
 
 **Time Travel uses the same design.** The heavy list is recorded with each 5-second metrics sample, usually 0–3
 entries. At the playhead the banner reads *Running heavy at 14:32:05*. The launch rows carry the same badges as they
