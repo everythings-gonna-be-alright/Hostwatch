@@ -160,7 +160,7 @@ struct PatternsView: View {
                     }
                     .background(RowBand(content: item.isGroup ? AnyView(band(item)) : nil))
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 100, ideal: 112, max: 160)
                 TableColumn("Kind", value: \.kind) { item in
@@ -171,7 +171,7 @@ struct PatternsView: View {
                         KindTile(kind: item.entry.kind)
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 24, ideal: 56, max: 64)
                 TableColumn("Process", value: \.processName) { item in
@@ -202,14 +202,14 @@ struct PatternsView: View {
                             .help(RuleText.does(kind: item.entry.kind, pattern: item.pattern))
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12, design: .monospaced))          // the pattern is data: monospaced, its neighbours are words
                 }
                 .width(min: 160, ideal: 360)
                 TableColumn("Decided By", value: \.decidedBy) { item in
                     Group {
                     if !item.isGroup { DeciderLabel(text: item.decidedBy) }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Signer", value: \.signer) { item in
@@ -228,21 +228,21 @@ struct PatternsView: View {
                         + (SigningCache.shared.isTrusted($0) ? " · trusted" : "") } ?? "not inspected yet")
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Reason", value: \.reason) { item in
                     Group {
                     if !item.isGroup { Text(item.reason).foregroundStyle(.secondary).help(item.reason) }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 60, ideal: 140)
                 TableColumn("Count", value: \.count) { item in
                     Group {
                     if !item.isGroup { Text("\(item.count)×").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing) }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 50, ideal: 70, max: 100)
                 TableColumn("First Seen", value: \.firstSeen) { item in
@@ -252,7 +252,7 @@ struct PatternsView: View {
                             .foregroundStyle(.secondary).help(item.firstSeen.formatted())
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 70, ideal: 90, max: 130)
                 TableColumn("Last Seen", value: \.lastSeen) { item in
@@ -262,7 +262,7 @@ struct PatternsView: View {
                             .foregroundStyle(.secondary).help(item.lastSeen.formatted())
                     }
                     }
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                 }
                 .width(min: 70, ideal: 90, max: 130)
             } rows: {

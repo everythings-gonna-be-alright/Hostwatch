@@ -368,7 +368,7 @@ struct NetworkView: View {
             TableColumn("") { row in actions(row) }
                 .width(min: 110, ideal: 130, max: 160)
         }
-        .font(.system(size: 12, design: .monospaced))
+        .font(.system(size: 12))                        // words and program names in SF Pro, hosts monospaced below
         .contextMenu(forSelectionType: String.self) { ids in
             menu(ids, rows: rows)
         } primaryAction: { ids in
@@ -382,13 +382,13 @@ struct NetworkView: View {
         if let e = row.entry, row.isConnection {
             HStack(spacing: 6) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: e.facts.program)).resizable().frame(width: 14, height: 14)
-                Text(row.destination).fontWeight(.medium)
-                Text(row.detail).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Text(row.destination).fontWeight(.medium).font(.system(size: 12, design: .monospaced))
+                Text(row.detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             .help("\(e.facts.program)\n\(row.detail)")
         } else {
             HStack(spacing: 6) {
-                Text(row.destination).fontWeight(.semibold)
+                Text(row.destination).fontWeight(.semibold).font(.system(size: 12, design: .monospaced))
                     .help(row.record?.hosts.joined(separator: "\n") ?? row.destination)
                 if let name = sessionTag(row.destination) {
                     Tag(text: "via \(name)", color: .accentColor, faint: true)
