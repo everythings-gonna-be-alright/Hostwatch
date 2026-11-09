@@ -68,6 +68,7 @@ struct EventsTable: NSViewRepresentable {
             outline.addTableColumn(column)
         }
         outline.outlineTableColumn = outline.tableColumns.first
+        outline.headerView = LegendHeaderView(frame: NSRect(x: 0, y: 0, width: 0, height: 28))
         outline.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle   // Detail takes what's left
         outline.dataSource = context.coordinator
         outline.delegate = context.coordinator
@@ -390,6 +391,55 @@ struct EventsTable: NSViewRepresentable {
                 onReachEnd()
             }
         }
+    }
+}
+
+/// The column legend drawn like SwiftUI's on the Patterns tab: on the table's own ground, bold titles, dim
+/// separators between columns only (none before the first), the sort chevron at the sorted column's right.
+/// Sorting by click and resizing by drag stay NSTableHeaderView's.
+final class LegendHeaderView: NSTableHeaderView {
+    private static let font = NSFont.systemFont(ofSize: 11, weight: .bold)
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let table = tableView else { return }
+        table.backgroundColor.setFill()
+        dirtyRect.fill()
+        let sorted = table.sortDescriptors.first
+        for (i, column) in table.tableColumns.enumerated() {
+            let rect = headerRect(ofColumn: i)
+            guard rect.intersects(dirtyRect) else { continue }
+            if i > 0 {
+                NSColor.separatorColor.setFill()
+                NSRect(x: rect.minX, y: rect.minY + 6, width: 1, height: rect.height - 12).fill()
+            }
+            let title = NSAttributedString(string: column.title, attributes: [.font: Self.font, .foregroundColor: NSColor.labelColor])
+            let size = title.size()
+            let left = rect.minX + (i == 0 ? 17 : 10)
+            var right = rect.maxX - 8
+            if let sorted, sorted.key == column.sortDescriptorPrototype?.key,
+               let chevron = NSImage(systemSymbolName: sorted.ascending ? "chevron.up" : "chevron.down", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold)) {
+                let tinted = chevron.tinted(.secondaryLabelColor)
+                let c = tinted.size
+                tinted.draw(in: NSRect(x: rect.maxX - 8 - c.width, y: rect.midY - c.height / 2, width: c.width, height: c.height))
+                right -= c.width + 6
+            }
+            let box = NSRect(x: left, y: rect.midY - size.height / 2, width: max(0, right - left), height: size.height)
+            title.draw(with: box, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        }
+    }
+}
+
+private extension NSImage {
+    /// A template symbol drawn in one colour.
+    func tinted(_ color: NSColor) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            self.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        return image
     }
 }
 
