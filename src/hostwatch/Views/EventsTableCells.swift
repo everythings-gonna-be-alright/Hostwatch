@@ -43,6 +43,7 @@ final class BadgeImages {
     func fileMode(_ mode: String) -> NSImage { image("mode:\(mode)") { FileModeIcon(mode: mode) } }
     func proto(_ proto: String) -> NSImage { image("proto:\(proto)") { ProtocolTag(proto: proto) } }
     func agent(_ agent: CodingAgent, size: CGFloat) -> NSImage { image("agent:\(agent):\(size)") { AgentBadge(agent: agent, size: size) } }
+    func kindTile(_ kind: EventKind) -> NSImage { image("kindtile:\(kind.rawValue)") { KindTile(kind: kind) } }
     func capsule(count: Int, noun: String) -> NSImage { image("count:\(count):\(noun)") { CountCapsule(count: count, noun: noun) } }
     func plainMark() -> NSImage {
         image("plainmark") { RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary).frame(width: 16, height: 16) }

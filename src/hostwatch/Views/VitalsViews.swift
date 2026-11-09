@@ -58,57 +58,149 @@ struct HeavyStrip: View {
     let toggleOnlyThese: () -> Void
     let actions: HUDActions
 
+    /// What is heavy, in words: "Hostwatch is using a lot of CPU and memory", "3 processes are using a lot of CPU".
+    /// "using a lot of CPU and memory" (at 14:02 in Time Travel).
+    private func doing(_ heavy: [HeavyProcess]) -> String {
+        let cpu = heavy.contains(where: \.cpuHeavy), mem = heavy.contains(where: \.memHeavy)
+        let what = cpu && mem ? "CPU and memory" : cpu ? "CPU" : "memory"
+        return "using a lot of \(what)" + (context.live ? "" : " at \(context.at.formatted(date: .omitted, time: .shortened))")
+    }
+
+    private func title(_ heavy: [HeavyProcess]) -> String { "\(heavy.count) processes are " + doing(heavy) }
+
     var body: some View {
         let heavy = context.entries.sorted { $0.cpu > $1.cpu }
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 16))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(context.live ? "Still running heavy" : "Running heavy at \(context.at.formatted(date: .omitted, time: .standard))")
-                        .font(.headline)
-                    Text("\(heavy.count) process\(heavy.count == 1 ? "" : "es") started while Hostwatch was watching")
-                        .font(.subheadline).foregroundStyle(.secondary)
+        let single = heavy.count == 1 ? heavy.first : nil
+        VStack(alignment: .leading, spacing: 8) {
+            // One line: for a single process everything it needs, for several the summary (rows when opened).
+            HStack(spacing: 8) {
+                if single == nil {
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { state.collapsed.toggle() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(state.collapsed ? 0 : 90))
+                            .frame(width: 14, height: 14)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(state.collapsed ? "Show the processes" : "Hide the processes")
                 }
-                if state.collapsed {
-                    // One line: the busiest names, so collapsing never hides that something is there.
-                    Text(heavy.prefix(3).map { "\($0.name) \($0.cpuHeavy ? "\(Int($0.cpu))%" : ProcessVitals.memory($0.mem))" }
-                        .joined(separator: "  ·  "))
-                        .font(.callout.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                Image(systemName: "flame.fill").foregroundStyle(.orange).symbolRenderingMode(.hierarchical)
+                if let h = single {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: h.path)).resizable().frame(width: 16, height: 16)
+                    Text(h.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    if h.untrusted { UntrustedTag() }
+                    Text("is " + doing(heavy)).font(.system(size: 12)).lineLimit(1)
+                    Text("·").foregroundStyle(.tertiary)
+                    HeavyMetrics(h: h, context: context)
+                } else {
+                    Text(title(heavy)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    if state.collapsed {
+                        Text(heavy.prefix(3).map(\.name).joined(separator: ", ") + (heavy.count > 3 ? "…" : ""))
+                            .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 12)
+                if let h = single { HeavyActions(h: h, context: context, actions: actions) }
                 Toggle(isOn: Binding(get: { onlyThese }, set: { _ in toggleOnlyThese() })) {
-                    Label("Only These", systemImage: "line.3.horizontal.decrease")
+                    Label(onlyThese ? "Show All Events" : "Show Only These", systemImage: "line.3.horizontal.decrease")
                 }
                 .toggleStyle(.button)
                 .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
                 .help(onlyThese ? "Show all events again" : "Show only these processes' events")
-                Button {
-                    withAnimation(.snappy) { state.collapsed.toggle() }
-                } label: {
-                    Image(systemName: "chevron.down").rotationEffect(.degrees(state.collapsed ? -90 : 0))
-                }
-                .buttonStyle(.glass)
-                .help(state.collapsed ? "Show details" : "Collapse")
             }
-            .controlSize(.small)
-            if !state.collapsed {
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+            .help(context.live ? "Started while Hostwatch was watching, and still running" : "")
+            if single == nil, !state.collapsed {
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
                     ForEach(heavy.prefix(5)) { h in HeavyRow(h: h, context: context, actions: actions) }
                 }
+                .padding(.leading, 22)
                 if heavy.count > 5 {
-                    Text("and \(heavy.count - 5) more").font(.caption).foregroundStyle(.secondary)
+                    Text("and \(heavy.count - 5) more").font(.caption).foregroundStyle(.secondary).padding(.leading, 22)
                 }
             }
         }
-        .padding(14)
-        // Content, not a control: a tinted grouped background (Liquid Glass is for the control layer).
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.orange.opacity(0.07)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 0.5))
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        // Content, not a control: a neutral grouped background, colour only where something is heavy.
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.45)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.separator, lineWidth: 0.5))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+}
+
+private struct UntrustedTag: View {
+    var body: some View {
+        Text("Untrusted").font(.system(size: 10, weight: .semibold)).foregroundStyle(.red)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(Capsule().fill(Color.red.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(Color.red.opacity(0.35), lineWidth: 0.5))
+            .help("Unsigned, ad-hoc, quarantined or from a download or temp folder")
+    }
+}
+
+/// "CPU ▬▬ 96% · Memory 10 GB · for 6 min", the heavy measure in orange.
+private struct HeavyMetrics: View {
+    let h: HeavyProcess
+    let context: HeavyContext
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Text("CPU").foregroundStyle(.secondary)
+                // One full core is a quarter of the bar: 400% fills it.
+                Gauge(value: min(h.cpu, 400), in: 0...400) { EmptyView() }
+                    .gaugeStyle(.accessoryLinearCapacity)
+                    .tint(h.cpuHeavy ? Color.orange : Color.secondary)
+                    .frame(width: 70)
+                Text("\(Int(h.cpu))%").monospacedDigit().foregroundStyle(h.cpuHeavy ? .orange : .primary)
+            }
+            .help("\(Int(h.cpu))% of one CPU core, averaged over 30 seconds (400% fills the bar)")
+            HStack(spacing: 4) {
+                Text("Memory").foregroundStyle(.secondary)
+                Text(ProcessVitals.memory(h.mem)).monospacedDigit().foregroundStyle(h.memHeavy ? .orange : .primary)
+            }
+            if context.running(h) > 0 {
+                Text("for " + ProcessVitals.duration(context.running(h))).monospacedDigit().foregroundStyle(.secondary)
+            }
+        }
+        .font(.system(size: 12))
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+/// Ask AI…, with the other actions on its arrow: one split button instead of a button and a separate ⋯ menu.
+private struct HeavyActions: View {
+    let h: HeavyProcess
+    let context: HeavyContext
+    let actions: HUDActions
+
+    private var event: ActivityEvent { context.events(h.pid) ?? h.launchEvent }
+
+    var body: some View {
+        Menu {
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: h.path)]) }
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(h.path, forType: .string)
+            }
+        } label: {
+            Label("Ask AI…", systemImage: "sparkles")
+        } primaryAction: {
+            actions.askAI(event)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Ask AI whether \(h.name) should be doing this. The arrow has Show in Finder and Copy Path.")
     }
 }
 
@@ -117,54 +209,17 @@ private struct HeavyRow: View {
     let context: HeavyContext
     let actions: HUDActions
 
-    private var event: ActivityEvent { context.events(h.pid) ?? h.launchEvent }
-
     var body: some View {
         GridRow(alignment: .center) {
             HStack(spacing: 8) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: h.path))
-                    .resizable().frame(width: 20, height: 20)
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 6) {
-                        Text(h.name).font(.body.weight(.semibold))
-                        if h.untrusted {
-                            Text("Untrusted").font(.caption2.weight(.semibold)).foregroundStyle(.red)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(Color.red.opacity(0.12)))
-                                .help("Unsigned, ad-hoc, quarantined or from a download/temp folder")
-                        }
-                    }
-                    Text("pid " + String(h.pid) + (h.parent.isEmpty ? "" : " · from " + (h.parent as NSString).lastPathComponent))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Image(nsImage: NSWorkspace.shared.icon(forFile: h.path)).resizable().frame(width: 16, height: 16)
+                Text(h.name).font(.system(size: 12, weight: .semibold))
+                if h.untrusted { UntrustedTag() }
+                Text("pid \(h.pid)" + (h.parent.isEmpty ? "" : " · started by " + (h.parent as NSString).lastPathComponent))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            // One full core is a quarter of the gauge: 400% fills it.
-            Gauge(value: min(h.cpu, 400), in: 0...400) { EmptyView() }
-                .gaugeStyle(.accessoryLinearCapacity)
-                .tint(h.cpuHeavy ? Color.orange : Color.secondary)
-                .frame(width: 90)
-                .help("\(Int(h.cpu))% of one CPU core (400% fills the bar)")
-            Text("\(Int(h.cpu))%").font(.callout.monospacedDigit()).foregroundStyle(h.cpuHeavy ? .primary : .secondary)
-                .gridColumnAlignment(.trailing)
-            Label(ProcessVitals.memory(h.mem), systemImage: "memorychip")
-                .font(.callout.monospacedDigit()).foregroundStyle(h.memHeavy ? .primary : .secondary)
-            Text(context.running(h) > 0 ? ProcessVitals.duration(context.running(h)) : "")
-                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                Button { actions.askAI(event) } label: { Image(systemName: "sparkles") }
-                    .buttonStyle(.borderless)
-                    .help("Ask AI about \(h.name)")
-                Menu {
-                    Button("Ask AI About \(h.name)…") { actions.askAI(event) }
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: h.path)]) }
-                    Button("Copy Path") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(h.path, forType: .string)
-                    }
-                } label: { Image(systemName: "ellipsis.circle") }
-                    .menuStyle(.button).buttonStyle(.borderless).menuIndicator(.hidden).fixedSize()
-            }
-            .gridColumnAlignment(.trailing)
+            HeavyMetrics(h: h, context: context)
+            HeavyActions(h: h, context: context, actions: actions).gridColumnAlignment(.trailing)
         }
     }
 }

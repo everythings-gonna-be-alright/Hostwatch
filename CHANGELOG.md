@@ -21,8 +21,8 @@
   row: the agent's mark, the title and the session's facts, then *Only this session* and *Patterns* links, the worst
   status and the count on the right (on Patterns, *Mark all Safe…* for a session). Events and Patterns share the
   toolbar's *Show* and *Group* controls and the list style of Running Now (alternating rows, bands across the
-  whole row). Groups start
-  folded (your clicks on them are kept while the window is open) and the catch-all group (*No AI session*) is drawn
+  whole row). Groups open
+  when shown in Events, Patterns and Running Now (one you fold stays folded while the window is open) and the catch-all group (*No AI session*) is drawn
   quieter. In Events the Session column is gone: an event of an AI
   agent's process carries the maker's mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in
   the tooltip.
@@ -36,8 +36,16 @@
   `example.com`), wins over a Safe pattern, shows as *Blocked by you* with an **Unblock** button, and needs the
   firewall in Ask or Strict to stop anything.
 
+- **The heavy-process card is one line** for one process: the program, what it uses (CPU, memory, for how
+  long) with the heavy measure in orange, and *Ask AI…* (its arrow has Show in Finder and Copy Path). Several
+  processes fold into one summary line with a disclosure. Neutral background, colour only on what is heavy.
+
+- **New icons for connections and files**: a globe and a document with text. Launches keep their play triangle.
+  Each sits in a small tile of its colour in the lists (the colours stay as they were).
+
 ### Fixes
 
+- The Events list no longer draws a line above its column headers.
 - With Events grouped, a selected event flickered between selected and not as new events arrived: each batch kept
   the selected row number while rows moved down. The selection now follows the event.
 - Running Now's footer said *Memory 40 GB* on an 18 GB Mac: it added up every process's footprint, which counts

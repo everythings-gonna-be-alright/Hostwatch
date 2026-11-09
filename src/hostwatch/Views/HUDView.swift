@@ -484,10 +484,7 @@ struct EventRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: event.kind.symbol)
-                .font(.system(size: 8 * s, weight: .bold))
-                .foregroundStyle(event.kind.color)
-                .frame(width: 11 * s)
+            KindTile(kind: event.kind, size: 12 * s)
                 .overlay(alignment: .leading) {
                     // Status stripe: red/orange for flagged patterns, green for safe.
                     if knownBad != nil || status != .unclassified {

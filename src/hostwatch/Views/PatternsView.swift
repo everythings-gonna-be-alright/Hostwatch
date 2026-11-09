@@ -168,9 +168,7 @@ struct PatternsView: View {
                     if item.isGroup {
                         EmptyView()                          // the header runs over this cell
                     } else {
-                        Image(systemName: item.entry.kind.symbol)
-                            .foregroundStyle(item.entry.kind.color)
-                            .help(item.entry.kind.title)
+                        KindTile(kind: item.entry.kind)
                     }
                     }
                     .font(.system(size: 12, design: .monospaced))

@@ -260,6 +260,7 @@ struct RunningProcessesView: View {
     let actions: HUDActions
     var grouping = EventGrouping.none
     var sessions: [EventItem.SessionHeader] = []
+    @StateObject private var groups = GroupExpansion()
 
     var body: some View {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -299,7 +300,7 @@ struct RunningProcessesView: View {
 
     private func table(_ rows: [RunningRow], _ launchEvent: @escaping (Int, Double) -> ActivityEvent?) -> some View {
         let now = running.updated ?? Date()
-        return Table(rows, children: \.children, selection: $running.selection, sortOrder: $running.sortOrder) {
+        return Table(selection: $running.selection, sortOrder: $running.sortOrder) {
             TableColumn("Process", value: \.sortName) { row in
                 Group {
                 Group {
@@ -407,6 +408,17 @@ struct RunningProcessesView: View {
                 .font(.system(size: 12))
             }
             .width(min: 80, ideal: 140)
+        } rows: {
+            // Groups open when shown, like the other lists; one you fold stays folded while the window lives.
+            ForEach(rows) { row in
+                if let kids = row.children {
+                    DisclosureTableRow(row, isExpanded: groups.isOpen(row.id)) {
+                        ForEach(kids) { TableRow($0) }
+                    }
+                } else {
+                    TableRow(row)
+                }
+            }
         }
         .font(.system(size: 11, weight: .bold))                       // the column legend, as AppKit draws it on Events
         .tableStyle(.inset(alternatesRowBackgrounds: false))           // the zebra is drawn by RowBand, like Events

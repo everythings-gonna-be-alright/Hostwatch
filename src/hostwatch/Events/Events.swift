@@ -14,11 +14,12 @@ enum EventKind: String, CaseIterable, Codable {
         }
     }
 
+    /// A program started, a connection out, a file with content.
     var symbol: String {
         switch self {
         case .exec: return "play.fill"
-        case .net: return "network"
-        case .file: return "doc.fill"
+        case .net: return "globe"
+        case .file: return "doc.text.fill"
         }
     }
 

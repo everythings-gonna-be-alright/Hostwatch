@@ -227,15 +227,15 @@ final class TravelRowsCache: ObservableObject {
     }
 }
 
-/// Which group rows are open. Groups start folded, so a grouping reads as its list of headings; a click on a
-/// disclosure is kept while the window lives.
+/// Which group rows are folded. Groups open when shown (a grouping you chose is there to be read, not unfolded
+/// one by one); a group you fold stays folded while the window lives.
 final class GroupExpansion: ObservableObject {
-    @Published private var open: Set<AnyHashable> = []
+    @Published private var closed: Set<AnyHashable> = []
 
     func isOpen(_ id: some Hashable) -> Binding<Bool> {
         let key = AnyHashable(id)
-        return Binding(get: { self.open.contains(key) },
-                       set: { isOpen in if isOpen { self.open.insert(key) } else { self.open.remove(key) } })
+        return Binding(get: { !self.closed.contains(key) },
+                       set: { open in if open { self.closed.remove(key) } else { self.closed.insert(key) } })
     }
 }
 
@@ -445,6 +445,23 @@ struct GroupBand: View {
 }
 
 /// "2,341 events" (or "1 event"): a group row's count, as a quiet capsule.
+/// An event kind as a small tinted tile (the glyph in its colour on a soft square of it), as macOS draws icons
+/// in Settings and sidebars. Used in the lists; the toolbar counters keep the bare glyph.
+struct KindTile: View {
+    let kind: EventKind
+    var size: CGFloat = 16
+
+    var body: some View {
+        Image(systemName: kind.symbol)
+            .font(.system(size: size * 0.56, weight: .semibold))
+            .foregroundStyle(kind.color)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(kind.color.opacity(0.18)))
+            .help(kind.title)
+            .accessibilityLabel(kind.title)
+    }
+}
+
 struct CountCapsule: View {
     let count: Int
     let noun: String

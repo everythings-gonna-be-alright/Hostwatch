@@ -81,6 +81,7 @@ struct EventsTable: NSViewRepresentable {
         outline.menuProvider = { [weak coordinator = context.coordinator] id in coordinator?.menu(for: id) }
 
         let scroll = NSScrollView()
+        scroll.borderType = .noBorder                   // the bezel drew a line above the header (and left of it)
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
@@ -106,6 +107,9 @@ struct EventsTable: NSViewRepresentable {
         weak var outline: OutlineView?
         var version = -1
         var restoring = false
+        /// Groups you folded: every other group opens when it appears, and stays open through each batch.
+        private var folded: Set<UUID> = []
+        private var expanding = false
         private var withDay: Bool?
         private var order: [UUID] = []                  // top-level ids as shown, for incremental updates
         private var feedWatch: AnyCancellable?
@@ -181,6 +185,27 @@ struct EventsTable: NSViewRepresentable {
             } else {
                 outline.reloadData()
             }
+            openGroups()
+        }
+
+        /// Opens every group you didn't fold (new ones included).
+        private func openGroups() {
+            guard let outline, !children.isEmpty else { return }
+            expanding = true
+            defer { expanding = false }
+            for id in topLevel where children[id as UUID] != nil && !folded.contains(id as UUID) && !outline.isItemExpanded(id) {
+                outline.expandItem(id)
+            }
+        }
+
+        func outlineViewItemDidCollapse(_ notification: Notification) {
+            guard !expanding, let id = notification.userInfo?["NSObject"] as? NSUUID else { return }
+            folded.insert(id as UUID)
+        }
+
+        func outlineViewItemDidExpand(_ notification: Notification) {
+            guard !expanding, let id = notification.userInfo?["NSObject"] as? NSUUID else { return }
+            folded.remove(id as UUID)
         }
 
         /// `new` = some rows, then `old` minus a tail: how many were put in front, and which old positions went.
@@ -285,8 +310,7 @@ struct EventsTable: NSViewRepresentable {
             case "time":
                 cell.set(text: parent.withDay ? e.dayTime : e.shortTime, color: .secondaryLabelColor, font: Self.mono, toolTip: e.time)
             case "kind":
-                var icons = [EventCellView.Icon(image: badges.symbol(e.kind.symbol, size: 10, weight: .bold),
-                                                tint: NSColor(e.kind.color), toolTip: e.kind.title)]
+                var icons = [EventCellView.Icon(image: badges.kindTile(e.kind), toolTip: e.kind.title)]
                 if let agent = row.agent {
                     icons.append(.init(image: badges.agent(agent, size: 11), toolTip: "In the \(agent.short) session: \(row.session)"))
                 }
