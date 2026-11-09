@@ -246,12 +246,16 @@ struct GroupHeader: View {
     let title: String
     var facts = ""
     var agent: CodingAgent?
+    /// A program group's icon (By Process), when there is no agent.
+    var icon: NSImage?
     var dimmed = false
 
     var body: some View {
         HStack(spacing: 8) {
             if let agent {
                 AgentBadge(agent: agent, size: 16)
+            } else if let icon {
+                Image(nsImage: icon).resizable().frame(width: 16, height: 16)
             } else {
                 RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary).frame(width: 16, height: 16)
             }
@@ -263,32 +267,176 @@ struct GroupHeader: View {
     }
 }
 
-/// Tints the whole table row the cell sits in. SwiftUI's Table has no row background of its own, but AppKit's
-/// row view does, so a group row can be a band the width of the table. Every row carries one (group rows with a
-/// colour, the rest with none), because AppKit reuses row views and a tint would otherwise stay behind.
-struct RowTint: NSViewRepresentable {
-    var color: NSColor?
+/// Draws the rows of a SwiftUI Table the way the Events list draws its own: a rounded zebra stripe on every other
+/// row, nothing below the last row, and a group row's band (SwiftUI content laid across the whole row, past the
+/// disclosure triangle, no colour of its own). SwiftUI's Table can't be told any of this, but AppKit's row view is there
+/// behind it. Every row carries one (groups with content, the rest without) because AppKit reuses row views.
+struct RowBand: NSViewRepresentable {
+    var content: AnyView?
 
-    /// The band behind a group row, over either appearance.
-    static let group = NSColor.controlAccentColor.withAlphaComponent(0.13)
+    static let groundID = NSUserInterfaceItemIdentifier("rowbandground")
 
-    func makeNSView(context: Context) -> TintView { TintView() }
-    func updateNSView(_ view: TintView, context: Context) { view.color = color; view.apply() }
+    /// The Events list's ground (AppKit's table background), behind a SwiftUI table that draws none of its own.
+    final class GroundView: NSView {
+        override func draw(_ dirtyRect: NSRect) { NSColor.controlBackgroundColor.setFill(); dirtyRect.fill() }
+    }
 
-    final class TintView: NSView {
-        var color: NSColor?
+    /// The band's outline: inset and rounded the way the inset table style draws its alternating rows.
+    static func shape(in bounds: NSRect) -> NSBezierPath {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 10, dy: 0), xRadius: 5, yRadius: 5)
+    }
+
+    func makeNSView(context: Context) -> BandView { BandView() }
+    func updateNSView(_ view: BandView, context: Context) { view.content = content; view.apply() }
+
+    final class BandView: NSView {
+        var content: AnyView?
+        private var trailing: NSLayoutConstraint?
+        private static let bandID = NSUserInterfaceItemIdentifier("rowband")
+        private static let tintID = NSUserInterfaceItemIdentifier("rowbandtint")
+
+        /// A stripe or a band, drawn (not layered) so it follows the appearance. Which one is decided as it draws:
+        /// when the cell is attached the row has no index yet.
+        final class TintView: NSView {
+            weak var row: NSTableRowView?
+            weak var table: NSTableView?
+            var isBand = false { didSet { needsDisplay = true } }
+
+            override func draw(_ dirtyRect: NSRect) {
+                // SwiftUI re-clears the table's background on every update, which leaves the window's lighter
+                // material under the rows: the Events list's ground is put back as the rows draw.
+                if let scroll = table?.enclosingScrollView, !scroll.subviews.contains(where: { $0.identifier == RowBand.groundID }) {
+                    let ground = GroundView(frame: scroll.bounds)
+                    ground.identifier = RowBand.groundID
+                    ground.autoresizingMask = [.width, .height]
+                    scroll.addSubview(ground, positioned: .below, relativeTo: scroll.contentView)
+                }
+                // Group rows take part in the zebra like any other row: their heading sets them apart.
+                guard let row, let table, table.row(for: row) % 2 == 1 else { return }
+                NSColor.alternatingContentBackgroundColors[1].setFill()
+                RowBand.shape(in: bounds).fill()
+            }
+        }
+
         override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
         override func viewDidMoveToSuperview() { super.viewDidMoveToSuperview(); apply() }
+
         func apply() {
             var v = superview
             while let s = v, !(s is NSTableRowView) { v = s.superview }
             guard let row = v as? NSTableRowView else { return }
-            // A table with alternating row colours ignores `backgroundColor`: the group-row style is drawn
-            // regardless, and is AppKit's own section-heading look.
-            row.isGroupRowStyle = color != nil
-            row.backgroundColor = color ?? .clear
-            row.needsDisplay = true
+            var t: NSView? = row
+            while let s = t, !(s is NSTableView) { t = s.superview }
+            let table = t as? NSTableView
+            // The zebra is ours from here on: AppKit's would also stripe the space below the last row.
+            if table?.usesAlternatingRowBackgroundColors == true { table?.usesAlternatingRowBackgroundColors = false }
+
+            let tint = (row.subviews.first { $0.identifier == Self.tintID } as? TintView) ?? {
+                let view = TintView()
+                view.row = row
+                view.table = table
+                view.identifier = Self.tintID
+                view.translatesAutoresizingMaskIntoConstraints = false
+                row.addSubview(view, positioned: .below, relativeTo: nil)
+                NSLayoutConstraint.activate([
+                    view.leadingAnchor.constraint(equalTo: row.leadingAnchor), view.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+                    view.topAnchor.constraint(equalTo: row.topAnchor), view.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+                ])
+                return view
+            }()
+            let existing = row.subviews.first { $0.identifier == Self.bandID } as? NSHostingView<AnyView>
+            tint.table = table
+            tint.needsDisplay = true
+            // SwiftUI's row view draws a separator line under each row: the Events list has none.
+            for sub in row.subviews where String(describing: type(of: sub)).contains("SeparatorDrawing") { sub.isHidden = true }
+            guard let content else {
+                existing?.removeFromSuperview()
+                tint.isBand = false
+                return
+            }
+            tint.isBand = true
+            let host: NSHostingView<AnyView>
+            if let existing {
+                existing.rootView = content
+                host = existing
+            } else {
+                host = NSHostingView(rootView: content)
+                host.identifier = Self.bandID
+                host.translatesAutoresizingMaskIntoConstraints = false
+                row.addSubview(host)
+                NSLayoutConstraint.activate([
+                    host.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 22),   // past the triangle
+                    host.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                ])
+            }
+            // The right end follows the visible edge (a table wider than its window would carry it off-screen).
+            // The scroll view is there only once the row is placed, so the anchor is checked on every pass.
+            let edge: NSView = row.enclosingScrollView?.contentView ?? row
+            if trailing?.secondItem !== edge {
+                trailing?.isActive = false
+                trailing = host.trailingAnchor.constraint(equalTo: edge.trailingAnchor, constant: -22)
+                trailing?.isActive = true
+            }
+            Self.centreDisclosure(in: row)
         }
+
+        /// SwiftUI puts the disclosure triangle at the top of a row taller than its text: the band is centred.
+        static func centreDisclosure(in row: NSTableRowView) {
+            func visit(_ view: NSView) {
+                for sub in view.subviews {
+                    // SwiftUI's own disclosure control is a small button at the row's left edge.
+                    if let button = sub as? NSButton, button.frame.width <= 24 && button.frame.minX < 40
+                        || String(describing: type(of: sub)).lowercased().contains("disclosure") {
+                        var frame = button.frame
+                        let rowFrame = button.superview!.convert(row.bounds, from: row)
+                        frame.origin.y = rowFrame.midY - frame.height / 2
+                        button.frame = frame
+                    } else {
+                        visit(sub)
+                    }
+                }
+            }
+            visit(row)
+        }
+    }
+}
+
+/// A link in a group's band ("Only this session", "Mark all Safe…").
+struct BandLink {
+    let title: String
+    let action: () -> Void
+}
+
+/// The one band every grouped list draws for a group row (Events, Patterns, Running Now): the heading on the
+/// left, then links, notes, the worst status and the count on the right.
+struct GroupBand: View {
+    var title: String
+    var facts = ""
+    var agent: CodingAgent?
+    var icon: NSImage?
+    var dimmed = false
+    var links: [BandLink] = []
+    var notes: [String] = []
+    var newCount = 0
+    var status: SignatureStatus?
+    var count: Int
+    var noun: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            GroupHeader(title: title, facts: facts, agent: agent, icon: icon, dimmed: dimmed)
+            Spacer(minLength: 12)
+            HStack(spacing: 14) {
+                ForEach(links.indices, id: \.self) { i in
+                    Button(links[i].title, action: links[i].action).buttonStyle(.link).font(.system(size: 11.5))
+                }
+                ForEach(notes, id: \.self) { Text($0).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary) }
+                if newCount > 0 { Text("\(newCount) New").font(.system(size: 11)).foregroundStyle(.orange) }
+                if let status { StatusPill(status: status).help("The most serious status in this group") }
+                CountCapsule(count: count, noun: noun)
+            }
+        }
+        .frame(height: 32)
     }
 }
 

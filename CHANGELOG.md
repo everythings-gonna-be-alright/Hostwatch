@@ -17,8 +17,11 @@
 
 ### New
 
-- **Grouping reads at a glance.** By Process and By AI Session group rows are section headings: a tinted band with
-  the agent's mark, the title and the session's facts, the worst status and the count on the right. Groups start
+- **Grouping reads at a glance.** By Process and By AI Session group rows are section headings across the whole
+  row: the agent's mark, the title and the session's facts, then *Only this session* and *Patterns* links, the worst
+  status and the count on the right (on Patterns, *Mark all Safe…* for a session). Events and Patterns share the
+  toolbar's *Show* and *Group* controls and the list style of Running Now (alternating rows, bands across the
+  whole row). Groups start
   folded (your clicks on them are kept while the window is open) and the catch-all group (*No AI session*) is drawn
   quieter. In Events the Session column is gone: an event of an AI
   agent's process carries the maker's mark (Anthropic, OpenAI, Google, Cursor) next to its kind, with the session in

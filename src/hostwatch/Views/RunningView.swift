@@ -8,8 +8,10 @@ struct RunningRow: Identifiable, Equatable {
     /// A group row (by parent process or by AI session): the processes under it, and the agent's maker.
     var children: [RunningRow]? = nil
     var groupAgent: CodingAgent? = nil
+    /// What the group stands for ("session:7770", "parent:fish"): two sessions may share a title.
+    var groupKey = ""
     var isGroup: Bool { children != nil }
-    var id: String { isGroup ? "g:\(info.name)" : "\(info.pid)-\(info.start)" }
+    var id: String { isGroup ? "g:\(groupKey)" : "\(info.pid)-\(info.start)" }
 
     var pid: Int { info.pid }
     var name: String { info.name }
@@ -47,6 +49,14 @@ struct RunningRow: Identifiable, Equatable {
 
     /// Grouped: one row per parent process (its children under it), or per AI session (its tree under it, the
     /// rest under "No AI session"). A group's numbers are its members' added up.
+    /// The same band as the Events list's, with the group's CPU and memory as its note.
+    static func band(_ row: RunningRow) -> some View {
+        GroupBand(title: row.name, agent: row.groupAgent, dimmed: row.groupAgent == nil && row.name == EventItem.noSessionTitle,
+                  notes: ["CPU \(RunningFormat.cpu(row.info.cpu)) · \(RunningFormat.bytes(row.mem))"],
+                  count: row.children?.count ?? 0, noun: "process")
+            .help(row.info.path)
+    }
+
     static func grouped(_ rows: [RunningRow], by grouping: EventGrouping, sessions: [EventItem.SessionHeader]) -> [RunningRow] {
         switch grouping {
         case .none: return rows
@@ -57,21 +67,21 @@ struct RunningRow: Identifiable, Equatable {
                 if byParent[key] == nil { order.append(key) }
                 byParent[key, default: []].append(r)
             }
-            return order.map { group(byParent[$0]!, title: $0, agent: nil) }
+            return order.map { group(byParent[$0]!, title: $0, agent: nil, key: "parent:" + $0) }
         case .session:
             var rest = rows, out: [RunningRow] = []
             for s in sessions {
                 let mine = rest.filter { s.pids.contains($0.pid) }
                 guard !mine.isEmpty else { continue }
                 rest.removeAll { s.pids.contains($0.pid) }
-                out.append(group(mine, title: s.topic, agent: s.agent))
+                out.append(group(mine, title: s.topic, agent: s.agent, key: "session:\(s.id)"))
             }
-            if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, title: "No AI session", agent: nil)) }
+            if !rest.isEmpty, !sessions.isEmpty { out.append(group(rest, title: EventItem.noSessionTitle, agent: nil, key: "session:0")) }
             return out.isEmpty ? rows : out
         }
     }
 
-    private static func group(_ list: [RunningRow], title: String, agent: CodingAgent?) -> RunningRow {
+    private static func group(_ list: [RunningRow], title: String, agent: CodingAgent?, key: String) -> RunningRow {
         let cpus = list.compactMap(\.info.cpu), writes = list.compactMap(\.info.written), rates = list.compactMap(\.info.writeRate)
         let info = RunningProcessInfo(
             pid: 0, ppid: 0, start: list.map(\.info.start).filter { $0 > 0 }.min() ?? 0, uid: list.map(\.info.uid).min() ?? 0,
@@ -82,6 +92,7 @@ struct RunningRow: Identifiable, Equatable {
         var g = RunningRow(info: info, parentName: "")
         g.children = list
         g.groupAgent = agent
+        g.groupKey = key
         return g
     }
 }
@@ -290,75 +301,115 @@ struct RunningProcessesView: View {
         let now = running.updated ?? Date()
         return Table(rows, children: \.children, selection: $running.selection, sortOrder: $running.sortOrder) {
             TableColumn("Process", value: \.sortName) { row in
-                HStack(spacing: 6) {
-                    if row.isGroup {
-                        if let agent = row.groupAgent { AgentBadge(agent: agent) }
-                        else { Image(systemName: "rectangle.3.group").foregroundStyle(.secondary).frame(width: 16) }
-                    } else {
+                Group {
+                Group {
+                if row.isGroup {
+                    Color.clear.frame(width: 1, height: 30)         // the band carries the whole row, as tall as on Events
+                } else {
+                    HStack(spacing: 6) {
                         Image(nsImage: ProcessIcons.icon(row.info.path)).resizable().frame(width: 16, height: 16)
+                        Text(row.name).fontWeight(grouping == .none ? .semibold : .regular).lineLimit(1)
+                        if launchEvent(row.pid, row.start) != nil {
+                            Image(systemName: "sparkle").font(.system(size: 9)).foregroundStyle(.yellow)
+                                .help("Started while Hostwatch was watching: its launch is in the timeline")
+                        }
                     }
-                    Text(row.name).fontWeight(.semibold).lineLimit(1)
-                    if !row.isGroup, launchEvent(row.pid, row.start) != nil {
-                        Image(systemName: "sparkle").font(.system(size: 9)).foregroundStyle(.yellow)
-                            .help("Started while Hostwatch was watching: its launch is in the timeline")
-                    }
+                    .help(row.info.path)
                 }
-                .help(row.info.path)
+                }
+                .background(RowBand(content: row.isGroup ? AnyView(RunningRow.band(row)) : nil))
+                }
+                .font(.system(size: 12))
             }
             .width(min: 120, ideal: 190)
             TableColumn("PID", value: \.pid) { row in
-                Text(row.isGroup ? "\(row.children!.count)×" : String(row.pid)).foregroundStyle(.secondary).monospacedDigit()
-                    .help(row.isGroup ? "\(row.children!.count) processes in this group" : "")
+                Group {
+                if !row.isGroup { Text(String(row.pid)).foregroundStyle(.secondary).monospacedDigit() }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 40, ideal: 54, max: 70)
             TableColumn("User", value: \.sortUser) { row in
-                Text(row.info.user).foregroundStyle(row.info.uid == 0 ? .orange : .secondary).lineLimit(1)
+                Group {
+                if !row.isGroup { Text(row.info.user).foregroundStyle(row.info.uid == 0 ? .orange : .secondary).lineLimit(1) }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 50, ideal: 80, max: 120)
             TableColumn("% CPU", value: \.cpu) { row in
-                Text(RunningFormat.cpu(row.info.cpu)).monospacedDigit()
-                    .foregroundStyle((row.info.cpu ?? 0) >= 50 ? Color.orange : .primary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Group {
+                if !row.isGroup {
+                    Text(RunningFormat.cpu(row.info.cpu)).monospacedDigit()
+                        .foregroundStyle((row.info.cpu ?? 0) >= 50 ? Color.orange : .primary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 48, ideal: 58, max: 70)
             TableColumn("CPU Time", value: \.cpuTime) { row in
-                Text(RunningFormat.cpuTime(row.cpuTime)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+                Group {
+                if !row.isGroup { Text(RunningFormat.cpuTime(row.cpuTime)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing) }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 60, ideal: 76, max: 96)
             TableColumn("Memory", value: \.mem) { row in
-                Text(RunningFormat.bytes(row.mem)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+                Group {
+                if !row.isGroup { Text(RunningFormat.bytes(row.mem)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing) }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 60, ideal: 76, max: 96)
             TableColumn("Threads", value: \.threads) { row in
-                Text(String(row.threads)).foregroundStyle(.secondary).monospacedDigit()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Group {
+                if !row.isGroup {
+                    Text(String(row.threads)).foregroundStyle(.secondary).monospacedDigit()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 44, ideal: 54, max: 64)
             TableColumn("Writing", value: \.writeRate) { row in
+                Group {
                 let rate = row.info.writeRate
+                if !row.isGroup {
                 Text(rate.map { $0 >= 1 ? Rate.text($0) : "0" } ?? "–").monospacedDigit()
                     .foregroundStyle((rate ?? 0) >= 1_000_000 ? Color.orange : (rate ?? 0) >= 1 ? .primary : .secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .help(row.info.written.map { "Writing to disk now: bytes per second over the last refresh (or the minute "
                         + "around the Time Travel moment). \(RunningFormat.bytes($0)) written since it started." }
                         ?? "Not known for this moment: disk writes are recorded from version 0.10 on")
+                }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 64, ideal: 84, max: 100)
             TableColumn("Running For", value: \.start) { row in
-                Text(row.started.map { RunningFormat.duration(now.timeIntervalSince($0)) } ?? "–")
-                    .foregroundStyle(.secondary).monospacedDigit()
-                    .help(row.started.map { "Started \($0.formatted(date: .abbreviated, time: .standard))" } ?? "")
+                Group {
+                if !row.isGroup {
+                    Text(row.started.map { RunningFormat.duration(now.timeIntervalSince($0)) } ?? "–")
+                        .foregroundStyle(.secondary).monospacedDigit()
+                        .help(row.started.map { "Started \($0.formatted(date: .abbreviated, time: .standard))" } ?? "")
+                }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 70, ideal: 90, max: 110)
             TableColumn("Parent", value: \.sortParent) { row in
+                Group {
                 if !row.isGroup {
                     Text(row.parentName.isEmpty ? String(row.info.ppid) : "\(row.parentName) (\(row.info.ppid))")
                         .foregroundStyle(.secondary).lineLimit(1)
                 }
+                }
+                .font(.system(size: 12))
             }
             .width(min: 80, ideal: 140)
         }
-        .font(.system(size: 12))
+        .font(.system(size: 11, weight: .bold))                       // the column legend, as AppKit draws it on Events
+        .tableStyle(.inset(alternatesRowBackgrounds: false))           // the zebra is drawn by RowBand, like Events
         .contextMenu(forSelectionType: RunningRow.ID.self) { ids in
             if let id = ids.first, let row = running.rows.first(where: { $0.id == id }) { menu(row, launchEvent(row.pid, row.start)) }
             else if let id = ids.first, let group = rows.first(where: { $0.id == id }), group.isGroup {

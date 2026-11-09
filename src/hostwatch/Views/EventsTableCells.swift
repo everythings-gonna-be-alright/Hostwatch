@@ -112,57 +112,34 @@ final class EventCellView: NSTableCellView {
     }
 }
 
-/// A group row: the whole row is one cell (AppKit's group-row style draws the band behind it).
-final class GroupCellView: NSTableCellView {
-    static let identifier = NSUserInterfaceItemIdentifier("group")
-    private let mark = NSImageView()
-    private let title = NSTextField(labelWithString: "")
-    private let facts = NSTextField(labelWithString: "")
-    private let status = NSImageView()
-    private let count = NSImageView()
+/// A group row: the band itself, with the same SwiftUI band the other lists draw, laid across the row past the
+/// disclosure triangle. Group rows are few, so hosting SwiftUI here costs nothing noticeable.
+final class GroupRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("grouprow")
+    private let host = NSHostingView(rootView: AnyView(EmptyView()))
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        let stack = NSStackView(views: [mark, title, facts, NSView(), status, count])
-        stack.orientation = .horizontal
-        stack.spacing = 8
-        stack.alignment = .centerY
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [mark, status, count] {
-            v.imageScaling = .scaleNone
-            v.setContentHuggingPriority(.required, for: .horizontal)
-            v.setContentCompressionResistancePriority(.required, for: .horizontal)
-        }
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.lineBreakMode = .byTruncatingTail
-        title.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        facts.font = .systemFont(ofSize: 12)
-        facts.textColor = .secondaryLabelColor
-        facts.lineBreakMode = .byTruncatingTail
-        facts.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        addSubview(stack)
+        host.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            host.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 22),   // past the triangle
+            host.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -22),
+            host.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
-        textField = title
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func set(_ item: EventItem) {
-        let badges = BadgeImages.shared
-        mark.image = item.agent.map { badges.agent($0, size: 16) } ?? badges.plainMark()
-        title.stringValue = item.groupTitle
-        title.textColor = item.isCatchAll ? .secondaryLabelColor : .labelColor
-        facts.stringValue = item.groupSubtitle
-        facts.isHidden = item.groupSubtitle.isEmpty
-        status.image = badges.statusPill(item.status)
-        status.toolTip = "The most serious status among these events"
-        count.image = badges.capsule(count: item.children?.count ?? 0, noun: "event")
+    func set(_ item: EventItem, links: [BandLink]) {
+        // A program group shows the program's icon (an AI session its maker's mark, the catch-all nothing).
+        let icon = item.agent == nil && !item.isCatchAll ? ProcessIcons.icon(item.event.proc) : nil
+        host.rootView = AnyView(GroupBand(title: item.groupTitle, facts: item.groupSubtitle, agent: item.agent, icon: icon,
+                                          dimmed: item.isCatchAll, links: links, status: item.status,
+                                          count: item.children?.count ?? 0, noun: "event"))
         toolTip = item.groupTitle
     }
+
 }
 
 /// A menu item that runs a closure.

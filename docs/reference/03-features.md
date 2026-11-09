@@ -97,8 +97,9 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
 - **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*, *AI suggests
   Safe* (waiting for you), *Automatic (routine)* or *New*. **Needs You…** opens Rules ▸ Needs You.
 
-**By Process** is on by default. It shows one row per program (by name), with its patterns under it (**By AI
-Session** groups them by the coding-agent session that produced them instead, see [AI sessions](#ai-sessions-what-claude-code-did)). The
+**Group** (*No Groups*, *By Process*, *By AI Session*, the same control as on Events) is *By Process* by default: one
+row per program (by name), with its patterns under it (*By AI Session* groups them by the coding-agent session that
+produced them instead, see [AI sessions](#ai-sessions-what-claude-code-did)). The
 program's row shows:
 
 - the most serious status and risk among its patterns
@@ -383,13 +384,14 @@ A coding agent (Claude Code, the Cursor agent, Codex, Gemini CLI) is one process
 what one session did, not just what `zsh` or `git` did in general.
 
 - **Events ▸ Group:** *No Groups*, *By Process* or *By AI Session*, next to the Show buttons. *By AI Session* gives one
-  row per session with its events under it, the rest under *No AI session*. A session row reads the way
-  `claude --resume` lists sessions: the maker's mark, the topic, then *340 events · ProcessHUD · main · 12 min ·
-  5 conn*. Right-click it for **Show Only This Session** (the list keeps only that tree, and *All Sessions* takes it
-  off), **Show Its Patterns…** and the Claude session id.
-- **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's slanted A for Claude Code,
+  row per session with its events under it, the rest under *No AI session*. A session row is a band across the
+  list, the way `claude --resume` lists sessions: the maker's mark, the topic, then *ProcessHUD · main · 12 min ·
+  5 conn*, and on the right *Only this session* (the list keeps only that tree, *All sessions* takes it off),
+  *Patterns*, the worst status among its events and their count. Groups start folded. Right-click a band for the
+  same actions and the Claude session id.
+- **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's logomark for Claude Code,
   OpenAI's knot for Codex, Google's four-colour G for Gemini CLI, a cube for the Cursor agent. It appears on session
-  rows and in the *Session* column.
+  bands and next to the kind of an agent's event.
 - **The topic:** Claude Code's title for the session (`ai-title`, or a title you set yourself, which wins), else the
   first prompt, else the project folder. It comes from the transcript the guard hook names, so it needs the Claude
   Code guard on, and it's looked up again until found, since Claude titles a session a few turns in. The branch comes
@@ -405,9 +407,10 @@ what one session did, not just what `zsh` or `git` did in general.
 - **Without the guard hook:** Claude Code keeps a session's transcript under `~/.claude/projects/`, in a folder
   named after the working directory, so Hostwatch finds the transcript that started with the session and names it
   from there. A session with no topic yet is named by where and when it started (*Claude in ~, 16:24*).
-- **Patterns ▸ By AI Session:** one row per session with the patterns it produced under it, the rest under *No
-  session*. It replaces *By Process* while it's on.
-- **Everywhere else:** the Events table has a *Session* column, a destination on the Network tab that a session
+- **Patterns ▸ Group ▸ By AI Session:** one band per session with the patterns it produced under it, the rest under
+  *No AI session*. The band offers *Mark all Safe…* (after asking) for everything the session did so far.
+- **Everywhere else:** in the Events table an agent's event carries the maker's mark next to its kind (the session
+  is in the tooltip), a destination on the Network tab that a session
   reached carries a *via Claude · ProcessHUD* tag, and a story that happened inside a session starts with its name. In
   Time Travel, sessions are replayed from the window's recorded process starts, so the grouping and the column work
   for yesterday's session too (named when the saved list knows the pid and start, else by pid).

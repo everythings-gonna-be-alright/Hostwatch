@@ -67,6 +67,24 @@ extension ActivityWindowView {
         }
     }
 
+    /// The links in an AI session's band: the same two actions as its menu, one click away.
+    func groupLinks(_ item: EventItem) -> [BandLink] {
+        guard let session = shownSessions.first(where: { $0.topic == item.groupTitle }) else { return [] }
+        let only = model.onlySession == session.id
+        var links = [BandLink(title: only ? "All sessions" : "Only this session") {
+            model.onlySession = only ? nil : session.id
+            model.onlySessionPids = only ? nil : session.pids
+        }]
+        if !session.keys.isEmpty {
+            links.append(BandLink(title: "Patterns") {
+                signatures.search = ""
+                signatures.scope = .init(title: "Session: \(session.name)", keys: session.keys)
+                model.windowTab = 1
+            })
+        }
+        return links
+    }
+
     static func copyToPasteboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

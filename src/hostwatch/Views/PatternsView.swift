@@ -116,18 +116,39 @@ struct PatternsView: View {
         .onChange(of: filter) { list.request(signatures) { filter } }
     }
 
-    /// Whether the Pattern column wraps (a probe turns it off to measure).
-    nonisolated(unsafe) static var wrapsPatterns = true
+    /// Whether the Pattern column wraps. Off: one line per row like the Events list (the tooltip and the
+    /// inspector have the whole pattern). A probe can turn it on to measure.
+    nonisolated(unsafe) static var wrapsPatterns = false
+
+    /// The same band as the Events list's.
+    private func band(_ item: PatternItem) -> some View {
+        GroupBand(title: displayProcessName(item.entry.process), facts: item.groupFacts, agent: item.agent,
+                  icon: item.agent == nil && item.entry.process != "No AI session"
+                      ? ProcessIcons.icon(SignatureStore.subjectPath(item.entry)) : nil,
+                  dimmed: item.entry.process == "No AI session",
+                  links: item.agent == nil ? [] : [BandLink(title: "Mark all Safe…") { markAllSafe(item) }],
+                  newCount: item.newCount, status: item.status, count: item.children?.count ?? 0, noun: "pattern")
+            .help(item.entry.process)
+    }
+
+    /// A session's whole footprint marked Safe at once, after asking.
+    private func markAllSafe(_ group: PatternItem) {
+        let keys = (group.children ?? []).map(\.id)
+        let alert = NSAlert()
+        alert.messageText = "Mark \(keys.count) patterns Safe?"
+        alert.informativeText = "Everything \(group.entry.process) did so far becomes routine for this Mac. You can mark single patterns back later."
+        alert.addButton(withTitle: "Mark Safe")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { signatures.set(.safe, keys: keys) }
+    }
 
     private func table(_ rows: [PatternItem]) -> some View {
             Table(selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
                 TableColumn("Status", value: \.priority) { item in
                     Group {
+                    Group {
                     if item.isGroup {
-                        // The group's header sits by its disclosure triangle and runs over the empty cells beside it.
-                        GroupHeader(title: displayProcessName(item.entry.process), facts: item.groupFacts, agent: item.agent,
-                                    dimmed: item.entry.process == "No AI session")
-                            .help(item.entry.process)
+                        Color.clear.frame(width: 1, height: 30)        // the band carries the whole row, as tall as on Events
                     } else {
                         HStack(spacing: 4) {
                             StatusPill(status: item.status)
@@ -137,10 +158,13 @@ struct PatternsView: View {
                         }
                     }
                     }
-                    .background(RowTint(color: item.isGroup ? RowTint.group : nil))
+                    .background(RowBand(content: item.isGroup ? AnyView(band(item)) : nil))
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 100, ideal: 112, max: 160)
                 TableColumn("Kind", value: \.kind) { item in
+                    Group {
                     if item.isGroup {
                         EmptyView()                          // the header runs over this cell
                     } else {
@@ -148,9 +172,12 @@ struct PatternsView: View {
                             .foregroundStyle(item.entry.kind.color)
                             .help(item.entry.kind.title)
                     }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 24, ideal: 56, max: 64)
                 TableColumn("Process", value: \.processName) { item in
+                    Group {
                     if item.isGroup {
                         EmptyView()
                     } else {
@@ -159,21 +186,14 @@ struct PatternsView: View {
                         Text(displayProcessName(item.entry.process)).fontWeight(grouped ? .regular : .semibold)
                             .lineLimit(1).truncationMode(.tail).help(item.entry.process)
                     }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 60, ideal: signatures.groupBySession ? 260 : 110)
                 TableColumn("Pattern", value: \.pattern) { item in
+                    Group {
                     if item.isGroup {
-                        HStack(spacing: 8) {
-                            HStack(spacing: 3) {
-                                ForEach(item.kinds.prefix(3), id: \.self) { Image(systemName: $0.symbol).foregroundStyle($0.color) }
-                            }
-                            .help(item.kinds.map(\.title).joined(separator: ", "))
-                            StatusPill(status: item.status).help("The most serious status among these patterns")
-                            if item.newCount > 0 {
-                                Text("\(item.newCount) New").font(.system(size: 11)).foregroundStyle(.orange)
-                            }
-                            CountCapsule(count: item.children?.count ?? 0, noun: "pattern")
-                        }
+                        EmptyView()
                     } else {
                         // Whole, wrapped: a pattern is what you decide on, so it must be readable without
                         // dragging the column wider. The inspector has it selectable, with the rest.
@@ -183,13 +203,19 @@ struct PatternsView: View {
                             .truncationMode(.middle)
                             .help(RuleText.does(kind: item.entry.kind, pattern: item.pattern))
                     }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 160, ideal: 360)
                 TableColumn("Decided By", value: \.decidedBy) { item in
+                    Group {
                     if !item.isGroup { DeciderLabel(text: item.decidedBy) }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 56, ideal: 96, max: 220)
                 TableColumn("Signer", value: \.signer) { item in
+                    Group {
                     let id = SigningCache.shared.cached(SignatureStore.subjectPath(item.entry))
                     if !item.isGroup {
                     HStack(spacing: 4) {
@@ -203,24 +229,42 @@ struct PatternsView: View {
                     .help(id.map { "\($0.label) · Team \($0.teamID ?? "none")"
                         + (SigningCache.shared.isTrusted($0) ? " · trusted" : "") } ?? "not inspected yet")
                     }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Reason", value: \.reason) { item in
+                    Group {
                     if !item.isGroup { Text(item.reason).foregroundStyle(.secondary).help(item.reason) }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 60, ideal: 140)
                 TableColumn("Count", value: \.count) { item in
-                    Text("\(item.count)×").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+                    Group {
+                    if !item.isGroup { Text("\(item.count)×").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing) }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 50, ideal: 70, max: 100)
                 TableColumn("First Seen", value: \.firstSeen) { item in
-                    Text(Self.relative.localizedString(for: item.firstSeen, relativeTo: Date()))
-                        .foregroundStyle(.secondary).help(item.firstSeen.formatted())
+                    Group {
+                    if !item.isGroup {
+                        Text(Self.relative.localizedString(for: item.firstSeen, relativeTo: Date()))
+                            .foregroundStyle(.secondary).help(item.firstSeen.formatted())
+                    }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 70, ideal: 90, max: 130)
                 TableColumn("Last Seen", value: \.lastSeen) { item in
-                    Text(Self.relative.localizedString(for: item.lastSeen, relativeTo: Date()))
-                        .foregroundStyle(.secondary).help(item.lastSeen.formatted())
+                    Group {
+                    if !item.isGroup {
+                        Text(Self.relative.localizedString(for: item.lastSeen, relativeTo: Date()))
+                            .foregroundStyle(.secondary).help(item.lastSeen.formatted())
+                    }
+                    }
+                    .font(.system(size: 12, design: .monospaced))
                 }
                 .width(min: 70, ideal: 90, max: 130)
             } rows: {
@@ -235,7 +279,8 @@ struct PatternsView: View {
                     }
                 }
             }
-            .font(.system(size: 12, design: .monospaced))
+            .font(.system(size: 11, weight: .bold))                       // the column legend, as AppKit draws it on Events
+            .tableStyle(.inset(alternatesRowBackgrounds: false))           // the zebra is drawn by RowBand, like Events
             .overlay {
                 if rows.isEmpty && list.built {
                     ContentUnavailableView {
@@ -294,6 +339,7 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
+                Text("Show").font(.system(size: 11)).foregroundStyle(.secondary)
                 ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important],
                                  allowsMenu: false)
                 let once = list.counts.oneOffs
@@ -305,20 +351,21 @@ struct PatternsView: View {
                 .help("Patterns seen only once, that you didn't decide and aren't risky: hidden unless this is on (search "
                       + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
-            Toggle(isOn: Binding(get: { signatures.groupByProcess && !signatures.groupBySession },
-                                 set: { on in signatures.groupByProcess = on; if on { signatures.groupBySession = false } })) {
-                Label("By Process", systemImage: "rectangle.3.group")
+            Divider().frame(height: 16)
+            Text("Group").font(.system(size: 11)).foregroundStyle(.secondary)
+            // The same control as on Events: flat, one row per program, or one row per AI session.
+            Picker("Group", selection: Binding(
+                get: { signatures.groupBySession ? EventGrouping.session : signatures.groupByProcess ? .process : .none },
+                set: { choice in
+                    signatures.groupBySession = choice == .session
+                    signatures.groupByProcess = choice == .process
+                })) {
+                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
             }
-            .toggleStyle(.button)
+            .pickerStyle(.segmented)
+            .labelsHidden()
             .fixedSize()
-            .help("One row per program, with its patterns under it")
-            Toggle(isOn: Binding(get: { signatures.groupBySession },
-                                 set: { on in signatures.groupBySession = on; if on { signatures.groupByProcess = false } })) {
-                Label("By AI Session", systemImage: "sparkles.rectangle.stack")
-            }
-            .toggleStyle(.button)
-            .fixedSize()
-            .help("One row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI), with the patterns it produced under it, seen-once ones included; the rest under No AI session")
+            .help("Group the patterns: flat, one row per program, or one row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI) with the patterns it produced under it, seen-once ones included; the rest under No AI session")
             Menu("Mark Selected") {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
@@ -342,6 +389,7 @@ struct PatternsView: View {
                 .help(inspector.shown ? "Hide the inspector" : "Show the inspector: the selected pattern in full")
         }
         .controlSize(.small)
+        .buttonBorderShape(.capsule)                    // every toolbar button the shape of the Show and Group controls
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
     }
