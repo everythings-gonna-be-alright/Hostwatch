@@ -325,12 +325,7 @@ struct EventsTable: NSViewRepresentable {
                     icons.append(.init(image: badges.knownBadPill(),
                                        toolTip: "On a threat list: \(bad)\nThe pattern itself is \(row.status.title.lowercased())."))
                 } else {
-                    // Mail's model: a dot for New, nothing for Safe, the pill only for what stands out.
-                    switch row.status {
-                    case .unclassified: icons.append(.init(image: badges.newDot(), toolTip: "New: not decided yet"))
-                    case .safe: break
-                    default: icons.append(.init(image: badges.statusPill(row.status)))
-                    }
+                    icons.append(.init(image: badges.statusPill(row.status)))
                     if case .heavy = parent.badge(e) {
                         icons.append(.init(image: badges.symbol("flame.fill", size: 11), tint: .systemOrange,
                                            toolTip: "Still running and using a lot of CPU or memory"))
