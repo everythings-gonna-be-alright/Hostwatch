@@ -49,4 +49,11 @@ import Testing
                                    extra: "", parent: "/bin/zsh")
         #expect(HUDFold.detail(launch) == "started by zsh")
     }
+
+    @Test func oneProgramStartedOftenSaysByWhom() {
+        let runs = (0..<5).map { _ in
+            ActivityEvent(kind: .exec, time: "", pid: 1, ppid: 1, name: "jq", proc: "/usr/bin/jq", target: "/usr/bin/jq", extra: "", parent: "/bin/bash")
+        }
+        #expect(HUDFold.summary(runs) == "started 5 times by bash")
+    }
 }
