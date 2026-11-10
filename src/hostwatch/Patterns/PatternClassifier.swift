@@ -82,6 +82,11 @@ final class PatternClassifier: ObservableObject {
             && !leftForYou.contains($0.id) }
     }
 
+    /// Patterns among `keys` that "Apply the Verdicts" changes: New ones the AI answers, plus those it already answered.
+    func undecided(in keys: Set<String>) -> Int {
+        keys.compactMap { store.entry($0) }.filter { store.status(forKey: $0.id) == .unclassified && $0.reopened == nil }.count
+    }
+
     /// New patterns among `keys` that Classify with AI would take (all New patterns when nil).
     func classifiable(in keys: Set<String>?) -> [SignatureEntry] {
         guard let keys else { return classifiable }
@@ -93,10 +98,24 @@ final class PatternClassifier: ObservableObject {
     /// `only` (the patterns a list shows, or the ones you selected). Asking for them again retries what an earlier
     /// pass left for you.
     func classifyAll(apply: Bool, only: Set<String>? = nil) {
-        guard bulk == nil, !running else { return }
-        if let only { leftForYou.subtract(only) }
+        guard bulk == nil, !running else {
+            lastMessage = "A classification is already running: wait for it, or cancel it."
+            return
+        }
+        var accepted = 0
+        if let only {
+            leftForYou.subtract(only)
+            // Patterns the AI already answered: applying uses that answer instead of asking again (they used to be
+            // skipped, so applying to a selection of them changed nothing).
+            if apply { accepted = store.acceptSuggestions(keys: Array(only), yours: false) }
+        }
         let todo = classifiable(in: only)
-        guard !todo.isEmpty else { lastMessage = only == nil ? "Nothing to classify." : "Nothing New to classify there."; return }
+        guard !todo.isEmpty else {
+            lastMessage = accepted > 0 ? "Applied \(accepted) earlier AI suggestion\(accepted == 1 ? "" : "s")."
+                : only == nil ? "Nothing to classify." : "Nothing New to classify there."
+            lastMessage += refusedNote(only)
+            return
+        }
         bulk = BulkRun(total: todo.count, apply: apply, only: only)
         live.start(engine: engineText)
         continueAll()
@@ -106,6 +125,23 @@ final class PatternClassifier: ObservableObject {
         bulk = nil
         cancel()
         live.finishOpen(.left("cancelled"))
+    }
+
+    /// Among these patterns, the AI Safes the app won't take (high-risk, shells and interpreters stay your decision).
+    private func refusedNote(_ keys: Set<String>?) -> String {
+        guard let keys else { return "" }
+        let n = keys.compactMap { store.entry($0) }.filter { e in
+            store.status(forKey: e.id) == .unclassified && e.suggestion?.status == .safe && Self.staysYours(e)
+        }.count
+        return n == 0 ? "" : " \(n) AI Safe\(n == 1 ? "" : "s") not applied: high-risk patterns, shells and interpreters stay yours."
+    }
+
+    /// A Safe the app never takes from an AI.
+    nonisolated static func staysYours(_ e: SignatureEntry) -> Bool { e.risk == .high || SignatureBuilder.runsAnyCode(e) }
+
+    /// What the live list says about an answer: a Safe for a pattern that stays yours says so.
+    private func liveReason(_ status: SignatureStatus, _ e: SignatureEntry, _ reason: String) -> String {
+        status == .safe && Self.staysYours(e) ? "stays yours (high-risk, a shell or an interpreter): " + reason : reason
     }
 
     /// The engine and its models in words, for the live list's header.
@@ -134,7 +170,8 @@ final class PatternClassifier: ObservableObject {
             .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
             .prefix(batchSize)
         guard !next.isEmpty else {
-            lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? "; verdicts applied (not to high-risk)." : "; see Rules ▸ Needs You.")
+            lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? ", verdicts applied." : ". See Rules ▸ Needs You.")
+                + (run.apply ? refusedNote(run.attempted) : "")
             bulk = nil
             return
         }
@@ -214,7 +251,7 @@ final class PatternClassifier: ObservableObject {
                 switch TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: claudeOn, warned: warned[entry.id] ?? false) {
                 case .settle(let status, let note):
                     self.store.suggest(status, key: entry.id, source: "on-device", note: note)
-                    self.live.set(entry.id, .done(status, by: "Local", reason: note))
+                    self.live.set(entry.id, .done(status, by: "Local", reason: self.liveReason(status, entry, note)))
                     if status == .safe { settled += 1 } else { flagged += 1 }
                 case .escalate:
                     escalate.append(entry)
@@ -314,7 +351,7 @@ final class PatternClassifier: ObservableObject {
                   let verdict = Verdict(rawValue: word) else { continue }
             let status = SignatureStatus(verdict: verdict)
             store.suggest(status, key: batch[id - 1].id, source: "claude", note: item["reason"] as? String)
-            live.set(batch[id - 1].id, .done(status, by: "Claude", reason: item["reason"] as? String ?? ""))
+            live.set(batch[id - 1].id, .done(status, by: "Claude", reason: liveReason(status, batch[id - 1], item["reason"] as? String ?? "")))
             tally[status, default: 0] += 1
         }
         let summary = SignatureStatus.allCases.compactMap { s in tally[s].map { "\($0) \(s.rawValue)" } }

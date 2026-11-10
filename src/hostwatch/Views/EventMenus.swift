@@ -96,13 +96,13 @@ extension ActivityWindowView {
     /// Classify with AI for exactly these patterns: the verdicts applied, or kept as suggestions. Only New ones count.
     private func addClassifyMenu(_ menu: NSMenu, keys: [String]) {
         let only = Set(keys.filter { !$0.isEmpty })
-        let n = classifier.classifiable(in: only).count
+        let n = classifier.undecided(in: only), unasked = classifier.classifiable(in: only).count
         let busy = classifier.bulk != nil || classifier.running
         let item = NSMenuItem(title: n == 0 ? "Classify with AI (nothing New)" : "Classify \(n) New Pattern\(n == 1 ? "" : "s") with AI",
                               action: nil, keyEquivalent: "")
         let sub = NSMenu()
         sub.addItem(ClosureMenuItem("Apply the Verdicts") { classifier.classifyAll(apply: true, only: only) })
-        sub.addItem(ClosureMenuItem("Keep Them as Suggestions") { classifier.classifyAll(apply: false, only: only) })
+        sub.addItem(ClosureMenuItem("Keep Them as Suggestions", enabled: unasked > 0) { classifier.classifyAll(apply: false, only: only) })
         item.submenu = sub
         item.isEnabled = n > 0 && !busy
         menu.addItem(item)

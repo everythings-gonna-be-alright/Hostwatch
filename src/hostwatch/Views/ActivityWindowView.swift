@@ -376,6 +376,11 @@ struct ActivityWindowView: View {
                 ClassifyAllButton(classifier: classifier, signatures: signatures, shown: {
                     let rows = (traveling ? travelDerived : liveDerived).rows
                     return Set(rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.event.signatureKey).filter { !$0.isEmpty })
+                }, selected: {
+                    // Selected events (inside groups too): their patterns.
+                    let rows = (traveling ? travelDerived : liveDerived).rows
+                    return Set(rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup && model.eventSelection.contains($0.id) }
+                        .map(\.event.signatureKey).filter { !$0.isEmpty })
                 }, active: model.windowTab == 0 && !runningNow)
             }
         }

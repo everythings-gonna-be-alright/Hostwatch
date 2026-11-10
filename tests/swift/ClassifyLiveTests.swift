@@ -49,4 +49,22 @@ import Testing
         #expect(c.classifiable(in: [keys[0]]).map(\.id) == [keys[0]])
         #expect(c.classifiable(in: []).isEmpty)
     }
+
+    @Test func applyingASelectionUsesSuggestionsAlreadyThere() {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("apply-\(UUID().uuidString)"))
+        store.autoAcceptAI = false
+        let events = ["/opt/homebrew/bin/aaa", "/opt/homebrew/bin/bbb"].map {
+            ActivityEvent(kind: .exec, time: "12:00:00", pid: 10, ppid: 9, name: ($0 as NSString).lastPathComponent,
+                          proc: $0, target: $0, extra: "", parent: "/bin/zsh")
+        }
+        for e in events { _ = store.observe(e) }
+        let keys = events.map(\.signatureKey)
+        store.suggest(.suspicious, key: keys[0], source: "claude", note: "odd")
+        store.suggest(.safe, key: keys[1], source: "on-device", note: "ordinary")
+        let c = PatternClassifier(store: store)
+        #expect(c.classifiable(in: Set(keys)).isEmpty && c.undecided(in: Set(keys)) == 2)   // the bug: skipped
+        c.classifyAll(apply: true, only: Set(keys))
+        #expect(store.status(forKey: keys[0]) == .suspicious && store.status(forKey: keys[1]) == .safe)
+        #expect(c.bulk == nil)                                         // nothing left to ask: no AI call
+    }
 }

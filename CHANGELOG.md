@@ -64,6 +64,11 @@
 
 ### Fixes
 
+- **Classify with AI ▸ Apply on a selection could change nothing.** Patterns the AI had already answered were
+  skipped, so a selection of them did nothing, and in Events the menu said *nothing New*. Applying now uses those
+  answers, the toolbar button takes your selection (events or patterns) when there is one, and an AI Safe the app
+  won't take (high-risk, a shell, an interpreter) says *stays yours* instead of silently leaving the status.
+
 - In Events, a status pill followed by a marker (✦ first seen, new domain) slid left and the marker overlapped it.
   The Status column is wider, and a cell too narrow for its content now cuts it at the right edge.
 

@@ -382,7 +382,7 @@ struct PatternsView: View {
             Spacer()
             ClassifyAllButton(classifier: classifier, signatures: signatures, shown: { [list] in
                 Set(list.rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.entry.id))
-            }, active: active)
+            }, selected: { [signatures] in Set(signatures.keys(forSelection: signatures.selection)) }, active: active)
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
@@ -456,10 +456,10 @@ extension PatternsView {
     /// Classify with AI for exactly these patterns, from a right-click.
     @ViewBuilder func classifyMenu(_ keys: [String]) -> some View {
         let only = Set(keys)
-        let n = classifier.classifiable(in: only).count
+        let n = classifier.undecided(in: only), unasked = classifier.classifiable(in: only).count
         Menu(n == 0 ? "Classify with AI (nothing New)" : "Classify \(n) New Pattern\(n == 1 ? "" : "s") with AI") {
             Button("Apply the Verdicts") { classifier.classifyAll(apply: true, only: only) }
-            Button("Keep Them as Suggestions") { classifier.classifyAll(apply: false, only: only) }
+            Button("Keep Them as Suggestions") { classifier.classifyAll(apply: false, only: only) }.disabled(unasked == 0)
         }
         .disabled(n == 0 || classifier.bulk != nil || classifier.running)
     }
