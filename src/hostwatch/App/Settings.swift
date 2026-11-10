@@ -524,9 +524,9 @@ private struct AIPane: View {
             } footer: {
                 Footnote("AI suggests a status for new patterns; you accept it in Rules ▸ Needs You. Every 90 s it "
                          + "looks at up to 40 new patterns (seen for over a minute). Accepting by itself skips "
-                         + "high-risk patterns. No AI marks Safe a high-risk pattern, or what a shell, interpreter or other "
-                         + "run-anything tool launches, connects to or writes: those stay your decision. Their plain "
-                         + "reads of an exact folder in your own projects are the exception.")
+                         + "high-risk patterns. By itself, no AI marks Safe a high-risk pattern, or what a shell, interpreter or "
+                         + "other run-anything tool launches, connects to or writes (their reads of your own project "
+                         + "folders excepted). Classify with AI ▸ Apply the Verdicts is your decision and applies them.")
             }
             ClaudeGuardSection(claudeGuard: claudeGuard, ui: ui)
             Section {

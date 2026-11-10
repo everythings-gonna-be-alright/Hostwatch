@@ -1056,11 +1056,11 @@ New patterns the list shows: in Patterns, its filter, search and scope. In Event
 (or selected), with their filters, kinds and search. Right-click rows, a selection or a group row for the same:
 *Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Suggest Only, I’ll Decide*. Applying also applies what an
 AI already suggested for them, without asking again. Asking for patterns again retries those an earlier pass left for
-you. An AI's Safe is never applied to a high-risk pattern, or to what a tool that can run or change other programs
-(shells, interpreters, curl, codesign…) launches, connects to, writes, touches in a sensitive place or reads outside
-your projects. Its plain read of an exact folder in your own projects (codesign reading a build folder) is applied.
-A refused Safe stays a suggestion with its reason: Patterns shows *AI suggests Safe · yours: …*, and the live list
-has a *Mark Safe* button. Accepting it yourself, there or in Rules ▸ Needs You, applies it.
+you. *Apply the Verdicts* is your decision: every AI answer of that run is applied, including a Safe for a high-risk
+pattern or for a tool that can run or change other programs (shells, interpreters, curl, codesign…). Those are
+recorded as yours, with a note naming the AI. Without that click (automatic suggestions, or *Suggest Only*), such a
+Safe is never applied by itself, except a plain read of an exact folder in your own projects: it stays a suggestion
+with its reason (*AI suggests Safe · yours: …*), and the live list has a *Mark Safe* button.
 
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,

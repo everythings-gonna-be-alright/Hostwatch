@@ -107,13 +107,13 @@ final class PatternClassifier: ObservableObject {
             leftForYou.subtract(only)
             // Patterns the AI already answered: applying uses that answer instead of asking again (they used to be
             // skipped, so applying to a selection of them changed nothing).
-            if apply { accepted = store.acceptSuggestions(keys: Array(only), yours: false) }
+            // Apply the Verdicts is your decision: every AI answer applies, Safes for run-anything tools included.
+            if apply { accepted = store.acceptSuggestions(keys: Array(only), yours: true) }
         }
         let todo = classifiable(in: only)
         guard !todo.isEmpty else {
             lastMessage = accepted > 0 ? "Applied \(accepted) earlier AI suggestion\(accepted == 1 ? "" : "s")."
                 : only == nil ? "Nothing to classify." : "Nothing New to classify there."
-            lastMessage += refusedNote(only)
             return
         }
         bulk = BulkRun(total: todo.count, apply: apply, only: only)
@@ -127,15 +127,6 @@ final class PatternClassifier: ObservableObject {
         live.finishOpen(.left("cancelled"))
     }
 
-    /// Among these patterns, the AI Safes the app won't take (high-risk, shells and interpreters stay your decision).
-    private func refusedNote(_ keys: Set<String>?) -> String {
-        guard let keys else { return "" }
-        let n = keys.compactMap { store.entry($0) }.filter { e in
-            store.status(forKey: e.id) == .unclassified && e.suggestion?.status == .safe && Self.staysYours(e)
-        }.count
-        return n == 0 ? "" : " \(n) AI Safe\(n == 1 ? "" : "s") left for you to confirm: run-anything tools and high-risk patterns are yours to decide."
-    }
-
     /// A Safe the app never takes from an AI.
     nonisolated static func staysYours(_ e: SignatureEntry) -> Bool { SignatureBuilder.aiSafeRefusal(e) != nil }
 
@@ -146,8 +137,10 @@ final class PatternClassifier: ObservableObject {
 
     /// The live list's state for an answer: a Safe the app won't take is yours to decide, with why.
     private func liveState(_ status: SignatureStatus, _ e: SignatureEntry, by: String, _ reason: String) -> ClassifyLive.Step.State {
-        status == .safe && Self.staysYours(e) ? .yours(status, by: by, reason: reason, why: Self.yoursBecause(e))
-            : .done(status, by: by, reason: reason)
+        guard status == .safe, Self.staysYours(e) else { return .done(status, by: by, reason: reason) }
+        // Apply the Verdicts: applied as your decision. Otherwise (suggest only, or automatic) it waits for you.
+        if bulk?.apply == true { return .done(status, by: by, reason: reason + " · applied as your decision") }
+        return .yours(status, by: by, reason: reason, why: Self.yoursBecause(e))
     }
 
     /// Your decision from the live list (a pattern the AI may not decide): applied as yours.
@@ -171,7 +164,8 @@ final class PatternClassifier: ObservableObject {
 
     private func continueAll() {
         guard var run = bulk, !running else { return }
-        if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch, yours: false) }
+        // You chose Apply the Verdicts: the AI's answers are applied as your decision (ADR 0013).
+        if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch, yours: true) }
         // Claude unavailable or failing: stop rather than fail every remaining batch.
         if ["failed", "Cannot start", "not found", "Could not parse", "Cancelled"].contains(where: lastMessage.contains) {
             bulk = nil
@@ -183,7 +177,6 @@ final class PatternClassifier: ObservableObject {
             .prefix(batchSize)
         guard !next.isEmpty else {
             lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? ", verdicts applied." : ". See Rules ▸ Needs You.")
-                + (run.apply ? refusedNote(run.attempted) : "")
             bulk = nil
             return
         }

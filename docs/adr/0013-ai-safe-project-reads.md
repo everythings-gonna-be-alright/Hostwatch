@@ -12,5 +12,12 @@ Library, Downloads or a hidden top-level folder), and patterns that cover a whol
 exact folder in your projects. A refused Safe is kept as a suggestion with its reason, shown in Patterns ("AI suggests
 Safe · yours: …") and in the live list with a Mark Safe button. Accepting it by hand is your decision and applies.
 
+**Update: Apply the Verdicts is your decision.** Clicking one Mark Safe per refused pattern after choosing Apply the
+Verdicts was not what the user wanted: the click on Apply is the decision. An explicit run with Apply applies every AI
+answer, refused Safes included, recorded with source "you" and a note naming the AI and why it would normally be
+yours, so precedence and the launch-time clean-up keep it. What runs without that click doesn't: automatic
+classification and "accept AI suggestions without asking" still never apply a refused Safe, and a warning sign still
+stops a local model's Safe (it goes to Claude or stays New).
+
 **Consequences.** Broad trust stays refused (no Safe rule for a shell, 0003), and the launch-time reset of AI Safes
 on run-anything tools skips only these reads. `--triage-benchmark` counts the app's rules: false Safe must not rise.

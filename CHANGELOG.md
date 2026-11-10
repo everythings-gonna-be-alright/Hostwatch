@@ -12,6 +12,9 @@
 - **Warning signs outrank the local model.** Hostwatch spells out what it checked for certain (a run-anything tool,
   an app starting a shell, a temp-folder program, quarantine removal, password or keychain reads…), and when it
   found one a local model's Safe is never taken: the pattern goes to Claude or stays for you.
+- **Apply the Verdicts applies them all.** Choosing *Apply the Verdicts* is your decision: every AI answer of that
+  run is applied, Safes for shells, curl or codesign included, recorded as yours. Only automatic classification
+  still leaves those for you.
 - **Apply covers a tool's reads of your projects.** An AI's Safe now applies when a shell, curl or codesign only
   reads an exact folder in your own projects, like codesign reading a build folder. What such tools launch, connect
   to or write, and high-risk patterns, stay yours, and Patterns says why: *AI suggests Safe · yours: …*.
