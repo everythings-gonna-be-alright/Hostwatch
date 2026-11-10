@@ -17,6 +17,8 @@ final class PatternClassifier: ObservableObject {
         var apply: Bool                 // apply the verdicts (never Safe for high risk or interpreters), or keep suggestions
         var attempted: Set<String> = []
         var batch: [String] = []
+        /// Only these patterns (what the list shows, or what you selected); nil for every New pattern.
+        var only: Set<String>? = nil
     }
     @Published private(set) var bulk: BulkRun?
     @Published private(set) var lastMessage = ""
@@ -80,12 +82,22 @@ final class PatternClassifier: ObservableObject {
             && !leftForYou.contains($0.id) }
     }
 
-    /// Classifies every New pattern, `batchSize` at a time (high-risk first, then most recent).
-    func classifyAll(apply: Bool) {
+    /// New patterns among `keys` that Classify with AI would take (all New patterns when nil).
+    func classifiable(in keys: Set<String>?) -> [SignatureEntry] {
+        guard let keys else { return classifiable }
+        return store.allEntries.filter { keys.contains($0.id) && store.status(forKey: $0.id) == .unclassified
+            && $0.suggestion == nil && $0.reopened == nil }
+    }
+
+    /// Classifies New patterns, `batchSize` at a time (high-risk first, then most recent): every one, or only
+    /// `only` (the patterns a list shows, or the ones you selected). Asking for them again retries what an earlier
+    /// pass left for you.
+    func classifyAll(apply: Bool, only: Set<String>? = nil) {
         guard bulk == nil, !running else { return }
-        let todo = classifiable
-        guard !todo.isEmpty else { lastMessage = "Nothing to classify."; return }
-        bulk = BulkRun(total: todo.count, apply: apply)
+        if let only { leftForYou.subtract(only) }
+        let todo = classifiable(in: only)
+        guard !todo.isEmpty else { lastMessage = only == nil ? "Nothing to classify." : "Nothing New to classify there."; return }
+        bulk = BulkRun(total: todo.count, apply: apply, only: only)
         live.start(engine: engineText)
         continueAll()
     }
@@ -118,7 +130,7 @@ final class PatternClassifier: ObservableObject {
             return
         }
         run.done = min(run.total, run.attempted.count)
-        let next = classifiable.filter { !run.attempted.contains($0.id) }
+        let next = classifiable(in: run.only).filter { !run.attempted.contains($0.id) }
             .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
             .prefix(batchSize)
         guard !next.isEmpty else {

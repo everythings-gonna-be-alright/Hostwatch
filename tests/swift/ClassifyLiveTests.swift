@@ -31,3 +31,22 @@ import Testing
         #expect(live.steps.first { $0.id == "b" }?.state == .done(.suspicious, by: "Claude", reason: ""))
     }
 }
+
+/// Classify with AI on what the list shows or what you selected: only the New patterns among them.
+@MainActor @Suite struct ClassifyScope {
+    @Test func onlyNewPatternsAmongTheGivenOnes() {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("scope-\(UUID().uuidString)"))
+        func launch(_ target: String) -> ActivityEvent {
+            ActivityEvent(kind: .exec, time: "12:00:00", pid: 10, ppid: 9, name: (target as NSString).lastPathComponent,
+                          proc: target, target: target, extra: "", parent: "/bin/zsh")
+        }
+        let events = ["/opt/homebrew/bin/aaa", "/opt/homebrew/bin/bbb", "/opt/homebrew/bin/ccc"].map(launch)
+        for e in events { _ = store.observe(e) }
+        let keys = events.map(\.signatureKey)
+        store.set(.safe, keys: [keys[1]])                              // decided: not classified again
+        let c = PatternClassifier(store: store)
+        #expect(Set(c.classifiable(in: Set(keys)).map(\.id)) == [keys[0], keys[2]])
+        #expect(c.classifiable(in: [keys[0]]).map(\.id) == [keys[0]])
+        #expect(c.classifiable(in: []).isEmpty)
+    }
+}

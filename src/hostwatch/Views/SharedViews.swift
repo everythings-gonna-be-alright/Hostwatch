@@ -119,6 +119,10 @@ struct KnownBadTag: View {
 struct ClassifyAllButton: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var signatures: SignatureStore
+    /// The patterns the list shows (its filter and search): Classify with AI takes only those.
+    var shown: (() -> Set<String>)? = nil
+    /// The tab is in front: only then does the live list open by itself (hidden tabs stay alive).
+    var active = true
     @StateObject private var ui = ClassifyAllState()
 
     var body: some View {
@@ -148,15 +152,25 @@ struct ClassifyAllButton: View {
         .popover(isPresented: $ui.live, arrowEdge: .bottom) {
             ClassifyLiveView(live: classifier.live, classifier: classifier)
         }
+        // A run started (here or from a right-click menu): you see it work.
+        .onChange(of: classifier.bulk != nil) { _, started in
+            if started, active, !ui.show { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ui.live = classifier.bulk != nil } }
+        }
     }
 
     private var confirm: some View {
         let _ = signatures.revision
-        let count = classifier.classifiable.count
+        let scope = shown?()
+        let count = classifier.classifiable(in: scope).count
         let batches = (count + classifier.batchSize - 1) / classifier.batchSize
         let engine = classifier.engine
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s") with AI").font(.headline)
+            Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s")\(scope == nil ? "" : " in this list") with AI")
+                .font(.headline)
+            if scope != nil {
+                Text("Only New patterns the list shows now, with its filter and search. Right-click patterns to classify just those.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             Label(engine.title, systemImage: engine == .onDevice ? "lock.laptopcomputer" : "sparkles")
                 .font(.callout)
             Text(engine == .onDevice ? "Free and private: nothing leaves this Mac. What it can't settle stays New."
@@ -178,7 +192,7 @@ struct ClassifyAllButton: View {
                 Button("Cancel") { ui.show = false }.keyboardShortcut(.cancelAction)
                 Button("Classify") {
                     ui.show = false
-                    classifier.classifyAll(apply: ui.apply)
+                    classifier.classifyAll(apply: ui.apply, only: scope)
                     // You asked to see it: the live list opens once the confirmation has closed.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ui.live = classifier.bulk != nil }
                 }
