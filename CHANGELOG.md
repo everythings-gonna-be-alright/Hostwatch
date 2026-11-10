@@ -1,122 +1,68 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 – Protection, and the AI you choose
 
-### New
+### New: Protection (Rules ▸ Protection)
 
-- **A HUD you can read at a glance.** What needs a look comes first (flagged or stopped events, heavy processes), then
-  the stream in words with repeats folded (*read 12 files in Shortcuts.app*) and colour only on New and flagged rows,
-  relative times, and one quiet resources line with units at the bottom. The header says *Hostwatch · Live* with
-  Pause and Open buttons (the window, not full screen), instead of running totals.
+- **Launch and file protection.** Hostwatch decides launches, and programs reaching protected files, the way the
+  firewall decides connections: your pattern decisions first, then risk, then macOS's own programs. Each area, and
+  the firewall now beside them, has four modes. *Watch*, the default, stops nothing and shows what would be stopped:
+  Events marks it, and *Found* lists it to Allow or Block before anything is enforced. *Ask* and *Strict* act now,
+  before Apple's Endpoint Security approval: a blocked program is stopped and a question pauses it on a glass panel,
+  a few milliseconds after it starts or opens the file. Only your own programs, never the system UI, terminals or
+  Hostwatch, and a paused program goes on if you don't answer.
+- **Protected files and folders.** Seven groups (SSH keys, developer credentials, keychains, browser passwords and
+  cookies, Messages and Mail, privacy settings and accounts, autostart locations), plus your own folders and files
+  with *Add Folder or File…*. Expected programs pass, everyone else is asked about or blocked.
+- **An Overview you read at a glance.** A coloured shield and one sentence for the state, a card per area (Launches,
+  Files, Network) with its four modes, what the chosen one does, today's numbers and a 24-hour chart, and a pause.
+- **The firewall lives here now.** Its settings left Settings for a *Network Firewall* page built like the rest:
+  the mode, the relay's status, numbers, what waits for you, what it found with Allow and Block, and **Your rules**,
+  the full list of what you blocked, allowed despite a threat list, or asked to be asked about again, each with
+  Unblock or Remove. *Clear List* became *Forget Seen Connections…*, in a menu, and never touches a rule.
+- **A sidebar for Rules.** *Patterns* (Needs You, Rules, Decisions) and *Protection* (Overview, Protected Files and
+  Folders, Network Firewall, Found), with badges only where something waits for you.
 
-- **Better triage evidence.** The AI now sees who started a pattern's example (the launch chain, its origin, the AI
-  session and the command line), both programs' signers and where they live, and how long the pattern has been seen.
-  The instructions are calibrated for developer tools and Homebrew, refuse to trust an Apple signature on a shell, and
-  ask for the deciding fact. Claude and the local model share one prompt now, and Claude no longer waits for a
-  `codesign` run per program.
-- **Warning signs outrank the local model.** Hostwatch spells out what it checked for certain (a run-anything tool,
-  an app starting a shell, a temp-folder program, quarantine removal, password or keychain reads…), and when it
-  found one a local model's Safe is never taken: the pattern goes to Claude or stays for you.
-- **Apply the Verdicts applies them all.** Choosing *Apply the Verdicts* is your decision: every AI answer of that
-  run is applied, Safes for shells, curl or codesign included, recorded as yours. Only automatic classification
-  still leaves those for you.
-- **Apply covers a tool's reads of your projects.** An AI's Safe now applies when a shell, curl or codesign only
-  reads an exact folder in your own projects, like codesign reading a build folder. What such tools launch, connect
-  to or write, and high-risk patterns, stay yours, and Patterns says why: *AI suggests Safe · yours: …*.
-- **Reopened patterns can be classified too.** When you ask (the button or a right-click), patterns sent back to you
-  because something changed are included, and the AI is told why. Automatic classification still leaves them to you.
-- **Nothing selected means everything shown, and you see it.** With no selection, *Classify with AI* selects every
-  row the list shows and classifies those.
-- **Classify what you see, or what you pick.** *Classify with AI* takes only the New patterns the list shows (its
-  filter and search), and a right-click on rows, a selection or a group classifies exactly those, applied or as
-  suggestions. The live list opens whenever a run starts.
-- **Watch Classify with AI work.** A live list shows the pattern being asked about right now and every pattern of
-  the run with its verdict and reason as it lands, or why it was left for you. It reopens from the progress bar, and
-  after a run from the list button next to *Classify with AI*.
-- **Choose your models.** Settings ▸ AI picks the local model: Apple's on-device model (*General* or *Content
-  Tagging*) or any OpenAI-compatible server, such as Ollama or LM Studio on this Mac, or a cloud endpoint, with a *Test*
-  button and the key stored encrypted. It also picks the Claude model: Claude Code's default, Opus, Sonnet or Haiku.
-- **`Hostwatch --triage-benchmark`** compares local models and Claude (`claude:haiku`, `claude:sonnet`, `claude:opus`) on your own decisions and on attack-shaped patterns:
-  how often each would wrongly settle something as Safe, how many ordinary patterns it settles, and how fast.
+### New: AI and classification
 
-- **Launch and file protection, in rehearsal.** Rules ▸ Protection shows what Hostwatch would stop: launches, and
-  programs that aren't expected reading your SSH keys, developer credentials, keychains, browser passwords and other
-  protected places. It decides as the firewall does, your pattern decisions first. Watch is on by default and stops
-  nothing: Events marks what would be stopped, and the page lists it to Allow or Block before anything is enforced.
-  Stopping for real (Ask, Strict) needs Apple's Endpoint Security approval, which is pending.
-- **Questions say who started the program, on Liquid Glass.** A firewall question (and Claude Code's and
-  Protection's) is a glass card now, like macOS's own alerts. It shows the launch chain as a short trail, for example
-  *Claude Code › zsh › python3.12*, with the program's command line, so you see the script python runs and who ran it.
-- **Ask and Strict work now, before Endpoint Security.** Protection stops a blocked launch, or a program that opens
-  a protected file, as soon as Hostwatch sees it, and pauses one it should ask about until you answer on a glass
-  panel. A few milliseconds late, and a read can't be undone, but the program goes no further. Only your own
-  programs, never the system UI, terminals or Hostwatch, and a paused program goes on if you don't answer.
-- **Event details in a panel, not a new window.** Double-click an event: its facts, command line or destination,
-  pattern and who started it open under the list, as in Running Now, and follow the selection. Ask AI, Launch Chain,
-  Watch Closely, Reveal in Finder and Mark are buttons there.
-- **One place for every firewall rule.** The Network Firewall page lists *Your rules*: blocked domains and blocked
-  connection patterns, exceptions to a threat list, and destinations asked about again, each with Unblock or Remove.
-  *Clear List* became *Forget Seen Connections…* in a ⋯ menu, with a confirmation that it never touches a rule.
-- **Charts on the Protection overview.** Each area shows its last 24 hours, hour by hour: stopped or would-stop in
-  red, asked or would-ask in grey (red beside orange failed the colour-vision check), with a legend and the hour's
-  numbers on hover.
-- **A clearer Protection overview.** The state at a glance (a coloured shield, one sentence, the pause), a card per
-  area with all four modes in view, what the chosen one does and today's numbers, a caution for Strict on launches,
-  and links to the groups and to what to review.
-- **Protect your own folders and files.** Rules ▸ Protection ▸ *Protected Files and Folders* has *Add Folder or
-  File…*: a project, a documents folder or one file. Only macOS's own programs pass without asking, anyone else is
-  asked about or blocked, and the rehearsal shows who reads them.
-- **The Rules tab has a sidebar.** *Patterns* (Needs You, Rules, Decisions) and *Protection* (Overview, Protected
-  Files, Found) are two groups of pages, as in System Settings, instead of one row of segments. Badges only on Needs
-  You and Found.
+- **Choose your models.** Settings ▸ AI picks the local model, Apple's on-device model (*General* or *Content
+  Tagging*) or any OpenAI-compatible server (Ollama or LM Studio on this Mac, or a cloud endpoint, with a *Test* and
+  the key stored encrypted), and the Claude model (Claude Code's default, Opus, Sonnet or Haiku).
+- **Better triage.** The AI sees who started a pattern's example (the launch chain and command line), where each
+  program lives and who signed it, its history, and warning signs Hostwatch checked itself. When there's a warning
+  sign, a local model's Safe is never taken. Measured with the new `Hostwatch --triage-benchmark`: Apple's model
+  settles 50% of ordinary patterns (was 15%), and no model settles an attack-shaped pattern Safe once Hostwatch's own
+  rules apply.
+- **Classify what you see or pick.** *Classify with AI* takes the rows you selected or, with nothing selected, every
+  row the list shows (and selects them). Right-click rows, a selection or a group for the same. Reopened patterns are
+  included when you ask, and the AI is told why they came back.
+- **Watch it work.** A live list shows the pattern being asked about and every answer as it lands.
+- **Apply the Verdicts applies them.** Your click on Apply is the decision: every answer of that run is applied,
+  recorded as yours, Safes for shells, curl or codesign included. Without that click, an AI's Safe applies to such a
+  tool only for its reads of your own project folders, and Patterns says why the rest wait for you.
 
-- **A quieter window.** The event kinds are plain on and off filters in the Show row now, their running totals in
-  the tooltip, so Time Travel, Pause and HUD sit in the same place on every tab, and Clear and Settings left the toolbar for their menus (⌘K, ⌘,), so the title has room. The
-  heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
-  holding its place for hours. Names and words read in the system font, as in Activity Monitor (Events, Patterns,
-  Network). Times, pids, paths, patterns and hosts stay monospaced.
-- **The firewall lives with protection.** Its settings moved from Settings to Rules ▸ Protection: a Network card on
-  the Overview with the four modes, beside Launches and Files, and a *Network Firewall* page with the relay's status
-  and counts. Every link that opened Settings ▸ Firewall goes there. The page is built like the other
-  Protection pages: the mode and what it does, large numbers, what waits for you, what it found with Allow and Block.
-  Found lists connections with launches and files.
-- **The menu bar menu lost its counters.** Stories, Patterns and Network open their tabs without numbers: counts of
-  patterns and domains weren't tasks.
-- **Tab badges mean "this needs you".** *Rules* counts what waits for your decision, *Network* only connections
-  waiting for your answer (no longer every new domain), and *Stories* only dangerous stories, in red. New domains and
-  open stories show in the window's subtitle on their own tab.
+### New: the window and the HUD
 
-- **Show Launch Chain opens a window** instead of a text box: a plain sentence on where the process came from, then
-  the chain from launchd down to it with icons, pids and command lines you can select. The step that decided the
-  origin is marked, and each step says how Hostwatch knows it. *Copy* still gives the text.
+- **The HUD reads at a glance.** What needs a look first, then the stream in words with repeats folded (*read 12
+  files in Shortcuts.app*), colour only on New and flagged rows, relative times, one quiet resources line, and Pause
+  and Open in the header. Drag it from anywhere.
+- **Questions say who started the program,** on Liquid Glass cards: the launch chain as a short trail and the
+  program's command line.
+- **Event details in a panel** under the list, as in Running Now, instead of a new window.
+- **Show Launch Chain opens a window:** where the process came from in a sentence, then the chain from launchd down,
+  with icons, pids and command lines.
+- **A quieter window.** Kind filters without running totals, Clear and Settings in their menus, the heavy-process
+  banner folds into Running Now, names in the system font, tab badges and the menu bar only for what needs you.
 
 ### Fixes
 
-- **The HUD sometimes wouldn't move.** Only its header dragged it, and a tooltip on the title took the clicks there.
-  Any spot that isn't a row or a button moves it now. Its Pause and Open glyphs are a little smaller.
-
-- **Allow on some connections did nothing**, for example Hostwatch's own connections to chatgpt.com. Their pattern
-  was never recorded (Hostwatch leaves its own activity out of patterns), so there was nothing to mark Safe. Allow and
-  Block now record the pattern from the firewall's own record first.
-
-- **A threat-list block said "Blocked by you", and Allow did nothing.** raw.githubusercontent.com is on ThreatFox
-  (shared hosts get listed for one bad file), and a threat list outranks your decisions, so Allow couldn't change it
-  while the label blamed you. It now says *On a threat list* with the list's reason, and *Allow Anyway…* (in Network
-  and Protection) asks once, explaining the risk, then lets that program reach that domain. *Undo Allow Anyway* in
-  Network takes it back.
-
-- **Protection ▸ Allow on a destination you blocked for an app changed nothing.** The domain block outranks the
-  pattern, so marking it Safe left it blocked. Allow now lifts that block too, and says so in its tooltip.
-- **The window's tabs no longer shrink to "R…".** Their titles always show in full.
-
-- **Classify with AI ▸ Apply on a selection could change nothing.** Patterns the AI had already answered were
-  skipped, so a selection of them did nothing, and in Events the menu said *nothing New*. Applying now uses those
-  answers, the toolbar button takes your selection (events or patterns) when there is one, and an AI Safe the app
-  won't take (high-risk, or a tool like a shell, curl or codesign that can run or change other programs) says
-  why in the live list, with a *Mark Safe* button for your one-click decision.
-
-- In Events, a status pill followed by a marker (✦ first seen, new domain) slid left and the marker overlapped it.
-  The Status column is wider, and a cell too narrow for its content now cuts it at the right edge.
+- **A threat-list block said "Blocked by you", and Allow did nothing.** It now says *On a threat list* with the
+  reason, and *Allow Anyway…* asks once, then lets that program reach that domain (undo in Network or Your rules).
+- **Allow did nothing** on a destination you blocked for an app (the block now lifts too), and on Hostwatch's own
+  connections (their pattern is now recorded first).
+- **Apply the Verdicts on a selection changed nothing** when the AI had already answered those patterns.
+- **The HUD sometimes wouldn't move.**
+- **The tabs shrank to "R…",** and in Events a status marker overlapped the status pill.
 
 ## 0.14.0 – Who started it, and a lighter Events list
 
