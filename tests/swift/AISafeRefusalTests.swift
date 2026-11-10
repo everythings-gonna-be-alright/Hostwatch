@@ -35,7 +35,9 @@ import Testing
 
     @Test func aRefusedSafeIsKeptAsASuggestionWithWhyAndYouCanAcceptIt() {
         let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("refuse-\(UUID().uuidString)"))
+        let previous = store.autoAcceptAI                 // a saved preference: put it back for the other tests
         store.autoAcceptAI = true
+        defer { store.autoAcceptAI = previous }
         let e = ActivityEvent(kind: .file, time: "12:00:00", pid: 10, ppid: 9, name: "codesign", proc: "/usr/bin/codesign",
                               target: NSHomeDirectory() + "/Downloads/Tool.app/Contents/MacOS/Tool", extra: "w", parent: "/bin/zsh")
         _ = store.observe(e)

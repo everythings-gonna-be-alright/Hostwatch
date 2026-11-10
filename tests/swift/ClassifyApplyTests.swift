@@ -27,4 +27,21 @@ struct AlwaysSafe: LocalTriageModel {
         #expect(keys.allSatisfy { store.status(forKey: $0) == .safe })
         #expect(c.lastMessage.hasPrefix("Classified 3 patterns, verdicts applied"))
     }
+
+    @Test func applyTheVerdictsAppliesASafeForARunAnythingToolAsYourDecision() {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("yoursapply-\(UUID().uuidString)"))
+        let previous = store.autoAcceptAI                 // a saved preference: put it back for the other tests
+        store.autoAcceptAI = true
+        defer { store.autoAcceptAI = previous }
+        let e = ActivityEvent(kind: .file, time: "12:00:00", pid: 10, ppid: 9, name: "codesign", proc: "/usr/bin/codesign",
+                              target: NSHomeDirectory() + "/Downloads/Tool.app/Contents/MacOS/Tool", extra: "w", parent: "/bin/zsh")
+        _ = store.observe(e)
+        store.suggest(.safe, key: e.signatureKey, source: "claude", note: "re-signing a tool you downloaded")
+        #expect(store.status(forKey: e.signatureKey) == .unclassified)       // never by itself
+        let c = PatternClassifier(store: store, localModel: AlwaysSafe())
+        c.classifyAll(apply: true, only: [e.signatureKey])
+        #expect(store.status(forKey: e.signatureKey) == .safe)               // your Apply decides it
+        #expect(store.entry(e.signatureKey)?.source == "you")
+        #expect(store.entry(e.signatureKey)?.note?.contains("normally yours") == true)
+    }
 }

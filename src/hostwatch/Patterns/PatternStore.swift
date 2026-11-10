@@ -298,7 +298,13 @@ final class SignatureStore: ObservableObject {
             // Accepting by hand is your decision, so it may take a Safe no AI could apply by itself.
             guard status(forKey: key) == .unclassified, let e = entries[resolve(key)], yours || e.reopened == nil, let s = e.suggestion,
                   yours || !(s.status == .safe && SignatureBuilder.aiSafeRefusal(e) != nil) else { continue }
-            set(s.status, keys: [key], source: s.source, note: s.note)
+            // A Safe no AI may give by itself, applied because you asked: recorded as yours, so precedence and the
+            // launch-time clean-up of AI Safes on run-anything tools treat it as your decision (ADR 0013).
+            if s.status == .safe, let why = SignatureBuilder.aiSafeRefusal(e) {
+                set(.safe, keys: [key], source: "you", note: "Applied from AI (\(s.source)): \(s.note ?? "") · normally yours: \(why)")
+            } else {
+                set(s.status, keys: [key], source: s.source, note: s.note)
+            }
             n += 1
         }
         return n
