@@ -123,6 +123,8 @@ struct ClassifyAllButton: View {
     var shown: (() -> Set<String>)? = nil
     /// The selected rows' patterns: when you selected some, Classify with AI takes those instead of the whole list.
     var selected: (() -> Set<String>)? = nil
+    /// Nothing selected: selects every row the list shows, so the screen shows what is being classified.
+    var selectShown: (() -> Void)? = nil
     /// The tab is in front: only then does the live list open by itself (hidden tabs stay alive).
     var active = true
     @StateObject private var ui = ClassifyAllState()
@@ -172,7 +174,7 @@ struct ClassifyAllButton: View {
             Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s")\(scope == nil ? "" : " " + place) with AI")
                 .font(.headline)
             if scope != nil {
-                Text(picked.isEmpty ? "Only New patterns the list shows now, with its filter and search. Select rows to classify just those."
+                Text(picked.isEmpty ? "Everything the list shows now, with its filter and search: those rows get selected. Select rows first to classify just those."
                      : "Only the New patterns of the rows you selected. Clear the selection to take the whole list.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -197,6 +199,7 @@ struct ClassifyAllButton: View {
                 Button("Cancel") { ui.show = false }.keyboardShortcut(.cancelAction)
                 Button("Classify") {
                     ui.show = false
+                    if picked.isEmpty { selectShown?() }
                     classifier.classifyAll(apply: ui.apply, only: scope)
                     // You asked to see it: the live list opens once the confirmation has closed.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { ui.live = classifier.bulk != nil }

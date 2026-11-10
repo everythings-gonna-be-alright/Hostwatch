@@ -381,6 +381,9 @@ struct ActivityWindowView: View {
                     let rows = (traveling ? travelDerived : liveDerived).rows
                     return Set(rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup && model.eventSelection.contains($0.id) }
                         .map(\.event.signatureKey).filter { !$0.isEmpty })
+                }, selectShown: {
+                    let rows = (traveling ? travelDerived : liveDerived).rows
+                    model.eventSelection = Set(rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.id))
                 }, active: model.windowTab == 0 && !runningNow)
             }
         }
