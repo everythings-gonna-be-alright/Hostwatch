@@ -68,7 +68,7 @@ final class PatternClassifier: ObservableObject {
 
     /// The local model's instructions, with the batch and the answer format: one prompt, so Claude and the local
     /// model judge on the same facts.
-    static var systemPrompt: String {
+    nonisolated static var systemPrompt: String {
         TriagePrompt.instructions + "\n"
             + "You get a numbered list of patterns observed on one Mac, each with its facts. Classify each one: "
             + "SAFE, SUSPICIOUS, DANGEROUS, or UNKNOWN when the facts aren't enough.\n"

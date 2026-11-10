@@ -21,7 +21,7 @@
 - **Choose your models.** Settings ▸ AI picks the local model: Apple's on-device model (*General* or *Content
   Tagging*) or any OpenAI-compatible server, such as Ollama or LM Studio on this Mac, or a cloud endpoint, with a *Test*
   button and the key stored encrypted. It also picks the Claude model: Claude Code's default, Opus, Sonnet or Haiku.
-- **`Hostwatch --triage-benchmark`** compares local models on your own decisions and on attack-shaped patterns:
+- **`Hostwatch --triage-benchmark`** compares local models and Claude (`claude:haiku`, `claude:sonnet`, `claude:opus`) on your own decisions and on attack-shaped patterns:
   how often each would wrongly settle something as Safe, how many ordinary patterns it settles, and how fast.
 
 - **Launch and file protection, in rehearsal.** Rules ▸ Protection shows what Hostwatch would stop: launches, and
