@@ -1029,6 +1029,12 @@ on one line, so a crafted path can't forge a fact, and secrets are masked.
 taken: the pattern goes to Claude, or stays New for you. Small models trust an Apple signature on curl or a shell too
 easily, and the benchmark showed it.
 
+**Which patterns.** *Classify with AI* in the toolbar takes only the New patterns the list shows: in Patterns, its
+filter, search and scope; in Events, the patterns of the events shown, with their filters, kinds and search. To pick
+exactly which, select patterns or events and right-click: *Classify N New Patterns with AI* ▸ *Apply the Verdicts* or
+*Keep Them as Suggestions*. It works on a group row too. Asking for patterns again retries those an earlier pass left
+for you.
+
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,
 left for you, or failed). The local model answers one pattern at a time, Claude a batch at once. *Show* on the

@@ -12,6 +12,9 @@
 - **Warning signs outrank the local model.** Hostwatch spells out what it checked for certain (a run-anything tool,
   an app starting a shell, a temp-folder program, quarantine removal, password or keychain reads…), and when it
   found one a local model's Safe is never taken: the pattern goes to Claude or stays for you.
+- **Classify what you see, or what you pick.** *Classify with AI* takes only the New patterns the list shows (its
+  filter and search), and a right-click on rows, a selection or a group classifies exactly those, applied or as
+  suggestions. The live list opens whenever a run starts.
 - **Watch Classify with AI work.** A live list shows the pattern being asked about right now and every pattern of
   the run with its verdict and reason as it lands, or why it was left for you. It reopens from the progress bar, and
   after a run from the list button next to *Classify with AI*.

@@ -88,6 +88,8 @@ struct PatternsView: View {
     @Binding var filter: SignatureFilter
     /// Owned by the window, so the rows survive a tab switch (rebuilding 8,000 rows on every switch froze it ~1 s).
     @ObservedObject var list: PatternListModel
+    /// Patterns is the tab in front (the live Classify list opens only there).
+    var active = true
     @StateObject private var combine = CombineState()
     @StateObject private var inspector = InspectorState()
     @StateObject private var groups = GroupExpansion()
@@ -378,7 +380,9 @@ struct PatternsView: View {
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
             Spacer()
-            ClassifyAllButton(classifier: classifier, signatures: signatures)
+            ClassifyAllButton(classifier: classifier, signatures: signatures, shown: { [list] in
+                Set(list.rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.entry.id))
+            }, active: active)
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
@@ -417,6 +421,7 @@ struct PatternsView: View {
         // Act on the whole selection when right-clicking inside it.
         let keys = signatures.selection.contains(entry.id) ? signatures.keys(forSelection: signatures.selection) : [entry.id]
         Button("Ask AI About This Pattern…") { actions.askAI(entry.exampleEvent) }
+        classifyMenu(keys)
         Divider()
         if keys.count > 1 {
             Button("Combine \(keys.count) Patterns into One…") { combine.start(keys, signatures) }
@@ -448,6 +453,17 @@ struct PatternsView: View {
 }
 
 extension PatternsView {
+    /// Classify with AI for exactly these patterns, from a right-click.
+    @ViewBuilder func classifyMenu(_ keys: [String]) -> some View {
+        let only = Set(keys)
+        let n = classifier.classifiable(in: only).count
+        Menu(n == 0 ? "Classify with AI (nothing New)" : "Classify \(n) New Pattern\(n == 1 ? "" : "s") with AI") {
+            Button("Apply the Verdicts") { classifier.classifyAll(apply: true, only: only) }
+            Button("Keep Them as Suggestions") { classifier.classifyAll(apply: false, only: only) }
+        }
+        .disabled(n == 0 || classifier.bulk != nil || classifier.running)
+    }
+
     /// Right-click on a program's row (grouped): acts on all its listed patterns.
     @ViewBuilder
     func groupMenu(_ ids: Set<String>) -> some View {
@@ -457,6 +473,7 @@ extension PatternsView {
         ForEach(SignatureStatus.allCases, id: \.self) { status in
             Button("Mark All \(keys.count) Patterns \(status.title)") { signatures.set(status, keys: keys) }
         }
+        classifyMenu(keys)
         Divider()
         if names.count == 1, let name = names.first {
             Button("Show Only \(name)") { signatures.search = name }

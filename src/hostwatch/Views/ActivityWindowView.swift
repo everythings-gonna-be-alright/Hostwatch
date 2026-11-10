@@ -197,7 +197,7 @@ struct ActivityWindowView: View {
                     eventsList
                 }
             case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
-                                 filter: $model.signatureFilter, list: patternList)
+                                 filter: $model.signatureFilter, list: patternList, active: model.windowTab == 1)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
@@ -372,7 +372,11 @@ struct ActivityWindowView: View {
                         .buttonStyle(.link).font(.system(size: 11))
                 }
                 Spacer(minLength: 0)
-                ClassifyAllButton(classifier: classifier, signatures: signatures)
+                // The patterns of the events the list shows: its filters, search and kinds decide.
+                ClassifyAllButton(classifier: classifier, signatures: signatures, shown: {
+                    let rows = (traveling ? travelDerived : liveDerived).rows
+                    return Set(rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.event.signatureKey).filter { !$0.isEmpty })
+                }, active: model.windowTab == 0 && !runningNow)
             }
         }
         .controlSize(.small)
