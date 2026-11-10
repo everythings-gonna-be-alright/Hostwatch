@@ -166,6 +166,14 @@ struct FirewallEntry: Codable, Identifiable, Equatable {
     var lastSeen: Date
 
     var destination: String { facts.host.isEmpty ? facts.ip : facts.host }
+
+    /// The connection as an event: its pattern, for one the pattern store never recorded (Hostwatch's own
+    /// connections are left out of patterns, so Allow had nothing to mark).
+    var event: ActivityEvent {
+        let ip = facts.ip.contains(":") ? "[\(facts.ip)]" : facts.ip
+        return ActivityEvent(kind: .net, time: "", pid: 0, ppid: 0, name: name, proc: facts.program, target: "\(ip):\(facts.port)",
+                             extra: facts.proto, parent: "", host: facts.host, hostSource: facts.host.isEmpty ? "" : "dns")
+    }
 }
 
 @MainActor
@@ -337,6 +345,14 @@ final class FirewallMonitor: ObservableObject {
         askAgain.subtract(done)
         dirty = true
         save()
+    }
+
+    /// Your Allow or Block on connections: their patterns marked, recording first any pattern the store never saw.
+    func mark(_ status: SignatureStatus, keys: [String], in store: SignatureStore, note: String?) {
+        for key in keys where store.entry(key) == nil {
+            if let e = entries.values.first(where: { $0.facts.patternKey == key }) { _ = store.observe(e.event) }
+        }
+        store.set(status, keys: keys, note: note)
     }
 
     func isBlocked(domain: String, program: String) -> Bool {

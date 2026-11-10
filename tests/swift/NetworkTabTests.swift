@@ -147,3 +147,23 @@ import Testing
         #expect(fw.list(status: status).isEmpty)
     }
 }
+
+/// Allow on a connection whose pattern the store never recorded (Hostwatch's own, say): the pattern is made, then marked.
+@MainActor @Suite struct FirewallAllowUnrecorded {
+    @Test func allowRecordsThePatternThenMarksIt() {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-unrec-\(UUID().uuidString)")
+        let store = SignatureStore(directory: dir)
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-unrec"), fileURL: dir.appendingPathComponent("fw.json"))
+        fw.answer = { _, _, _ in }
+        fw.mode = .watch
+        let e = net("/opt/old/Hostwatch.app/Contents/MacOS/Hostwatch", pid: 9, to: "104.18.32.47:443", host: "chatgpt.com")
+        _ = fw.observe(e, status: .unclassified)                       // the store never sees it
+        let status = { (key: String) in store.status(forKey: key) }
+        guard let (entry, _) = fw.list(status: status).first else { Issue.record("not listed"); return }
+        #expect(store.entry(entry.facts.patternKey) == nil)
+        #expect(entry.event.signatureKey == entry.facts.patternKey)    // the same pattern the live event had
+        fw.mark(.safe, keys: [entry.facts.patternKey], in: store, note: "allowed in Network")
+        #expect(store.status(forKey: entry.facts.patternKey) == .safe && fw.list(status: status).isEmpty)
+    }
+}
