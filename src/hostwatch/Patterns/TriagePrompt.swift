@@ -70,6 +70,9 @@ enum TriagePrompt {
         } else {
             lines.append("Started by: not recorded")
         }
+        if let why = e.reopened.map(line) {
+            lines.append("Reopened: decided before, sent back because \(why). Judge it again with that in mind.")
+        }
         let signs = warningSigns(e, context: context)
         lines.append("Warning signs: " + (signs.isEmpty ? "none found" : signs.joined(separator: "; ")))
         lines.append("History: " + history(e, now: now))
@@ -114,6 +117,7 @@ enum TriagePrompt {
                 && e.exampleHost == nil, "connects to a bare IP address with no name"),
         ]
         out += checks.filter(\.0).map(\.1)
+        if let why = e.reopened { out.append("reopened because \(why)") }
         if let label = ProtectionPolicy.label(of: e.pattern) {
             out.append(label == "persistence" ? "writes an autostart place" : "touches \(label)")
         }

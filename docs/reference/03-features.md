@@ -1055,7 +1055,9 @@ easily, and the benchmark showed it.
 row the list shows, and selects them so you see what is being classified: in Patterns, its filter, search and scope. In Events, the patterns of the events shown
 (or selected), with their filters, kinds and search. Right-click rows, a selection or a group row for the same:
 *Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Suggest Only, I’ll Decide*. Applying also applies what an
-AI already suggested for them, without asking again. Asking for patterns again retries those an earlier pass left for
+AI already suggested for them, without asking again. Reopened patterns (decided before, sent back because something
+changed) are included when you ask: the AI is told why they were reopened, which also counts as a warning sign, so a
+small local model can't settle one Safe. Automatic classification leaves them to you. Asking for patterns again retries those an earlier pass left for
 you. *Apply the Verdicts* is your decision: every AI answer of that run is applied, including a Safe for a high-risk
 pattern or for a tool that can run or change other programs (shells, interpreters, curl, codesign…). Those are
 recorded as yours, with a note naming the AI. Without that click (automatic suggestions, or *Suggest Only*), such a

@@ -44,4 +44,21 @@ struct AlwaysSafe: LocalTriageModel {
         #expect(store.entry(e.signatureKey)?.source == "you")
         #expect(store.entry(e.signatureKey)?.note?.contains("normally yours") == true)
     }
+
+    @Test func reopenedPatternsAreClassifiedWhenYouAskAndTheAIIsToldWhy() {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("reopen-\(UUID().uuidString)"))
+        let e = ActivityEvent(kind: .exec, time: "12:00:00", pid: 10, ppid: 9, name: "aaa", proc: NSHomeDirectory() + "/go/bin/aaa",
+                              target: NSHomeDirectory() + "/go/bin/aaa", extra: "", parent: "/bin/bash")
+        _ = store.observe(e)
+        let key = e.signatureKey
+        store.set(.safe, keys: [key])
+        #expect(store.reopen(keys: [key], reason: "part of a story: download then run") == 1)
+        let c = PatternClassifier(store: store, localModel: AlwaysSafe())
+        #expect(!c.classifiable.contains { $0.id == key })                    // automatic runs leave it to you
+        #expect(c.classifiable(in: [key]).map(\.id) == [key] && c.undecided(in: [key]) == 1)   // asked: included
+        let entry = store.entry(key)!
+        let prompt = TriagePrompt.pattern(entry, context: nil)
+        #expect(prompt.contains("Reopened: decided before, sent back because part of a story: download then run"))
+        #expect(TriagePrompt.warningSigns(entry, context: nil).contains { $0.hasPrefix("reopened because") })
+    }
 }
