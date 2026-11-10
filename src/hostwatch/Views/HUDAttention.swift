@@ -95,3 +95,21 @@ struct HUDResourceLine: View {
         }
     }
 }
+
+/// The HUD header's buttons: a small capsule with one glyph, identical for every action.
+struct HUDIconButton: View {
+    let symbol: String
+    let s: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9.5 * s, weight: .bold))
+                .frame(width: 22 * s, height: 17 * s)
+                .background(Capsule().fill(Color.white.opacity(0.14)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}

@@ -54,6 +54,9 @@
 - **Event details in a panel, not a new window.** Double-click an event: its facts, command line or destination,
   pattern and who started it open under the list, as in Running Now, and follow the selection. Ask AI, Launch Chain,
   Watch Closely, Reveal in Finder and Mark are buttons there.
+- **Charts on the Protection overview.** Each area shows its last 24 hours, hour by hour: stopped or would-stop in
+  red, asked or would-ask in grey (red beside orange failed the colour-vision check), with a legend and the hour's
+  numbers on hover.
 - **A clearer Protection overview.** The state at a glance (a coloured shield, one sentence, the pause), a card per
   area with all four modes in view, what the chosen one does and today's numbers, a caution for Strict on launches,
   and links to the groups and to what to review.

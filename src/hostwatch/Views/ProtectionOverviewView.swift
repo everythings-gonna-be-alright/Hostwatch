@@ -173,6 +173,9 @@ private struct AreaCard: View {
                            tint: protection.count(area, .block) > 0 ? .red : .primary)
                     number(protection.count(area, .ask), mode == .watch ? "would ask today" : "asked today", tint: .primary)
                 }
+                ProtectionChart(points: ProtectionChart.points(protection.last24(area)),
+                                stopLabel: mode.enforces ? "stopped" : "would stop",
+                                askLabel: mode == .watch ? "would ask" : "asked")
             }
             if findings > 0 {
                 Button { go(.protectionFound) } label: {
@@ -232,6 +235,9 @@ private struct FirewallCard: View {
                     figure(enforcing ? firewall.blockedCount : block, enforcing ? "blocked" : "would block", red: true)
                     figure(ask, enforcing ? "asked about" : "would ask", red: false)
                 }
+                // New destinations by the hour they were first seen.
+                ProtectionChart(points: ProtectionChart.points(connections),
+                                stopLabel: enforcing ? "blocks" : "would block", askLabel: enforcing ? "asks" : "would ask")
             }
             if !firewall.prompts.isEmpty {
                 Label("\(firewall.prompts.count) waiting for your answer", systemImage: "hourglass").foregroundStyle(.orange)

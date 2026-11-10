@@ -88,6 +88,15 @@ final class ProtectionMonitor: ObservableObject {
     /// When rehearsal started: "Watching for 3 days".
     private(set) var since: Date
     private(set) var today: [ProtectionArea: [ProtectionVerdict: Int]] = [:]
+    /// Hour by hour, the last two days: what was stopped (or would be) and asked about, for the Overview's charts.
+    struct HourCount: Codable, Equatable, Sendable {
+        var hour: Int                                   // hours since 1970
+        var area: ProtectionArea
+        var block = 0
+        var ask = 0
+    }
+    private(set) var hourly: [HourCount] = []
+    private let hourlyURL: URL
     private var todayKey = ""
     private var nextLocalAsk = 0
 
@@ -116,6 +125,8 @@ final class ProtectionMonitor: ObservableObject {
          fileURL: URL = AppPaths.support.appendingPathComponent("protection-findings.json")) {
         self.defaults = defaults
         self.fileURL = fileURL
+        hourlyURL = fileURL.deletingLastPathComponent().appendingPathComponent(
+            fileURL.deletingPathExtension().lastPathComponent + "-hourly.json")
         // Watch by default: it stops nothing, and it is how you learn what Ask would do before turning it on.
         launchMode = defaults.string(forKey: Keys.launch).flatMap(ProtectionMode.init) ?? .watch
         fileMode = defaults.string(forKey: Keys.file).flatMap(ProtectionMode.init) ?? .watch
@@ -126,6 +137,9 @@ final class ProtectionMonitor: ObservableObject {
         defaults.set(started, forKey: Keys.since)
         if let data = Vault.shared.read(fileURL), let saved = try? Self.decoder.decode([ProtectionFinding].self, from: data) {
             findings = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+        if let data = Vault.shared.read(hourlyURL), let saved = try? JSONDecoder().decode([HourCount].self, from: data) {
+            hourly = saved
         }
     }
 
@@ -227,6 +241,13 @@ final class ProtectionMonitor: ObservableObject {
         let day = now.formatted(.iso8601.year().month().day())
         if day != todayKey { todayKey = day; today = [:] }
         today[area, default: [:]][verdict, default: 0] += 1
+        let hour = Int(now.timeIntervalSince1970 / 3600)
+        if let i = hourly.lastIndex(where: { $0.hour == hour && $0.area == area }) {
+            if verdict == .block { hourly[i].block += 1 } else { hourly[i].ask += 1 }
+        } else {
+            hourly.append(HourCount(hour: hour, area: area, block: verdict == .block ? 1 : 0, ask: verdict == .block ? 0 : 1))
+            hourly.removeAll { $0.hour < hour - 48 }
+        }
         let id = "\(area.rawValue)|\(e.signatureKey)"
         if var f = findings[id] {
             f.count += 1
@@ -308,6 +329,15 @@ final class ProtectionMonitor: ObservableObject {
         guard dirty, let data = try? Self.encoder.encode(Array(findings.values)) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
+        if let hours = try? JSONEncoder().encode(hourly) { try? Vault.shared.write(hours, to: hourlyURL) }
+    }
+
+    /// The last 24 hours for one area, oldest first, an entry per hour (empty hours count zero).
+    func last24(_ area: ProtectionArea, now: Date = Date()) -> [HourCount] {
+        let current = Int(now.timeIntervalSince1970 / 3600)
+        return (current - 23...current).map { h in
+            hourly.first { $0.hour == h && $0.area == area } ?? HourCount(hour: h, area: area)
+        }
     }
 
     private func changed() {
