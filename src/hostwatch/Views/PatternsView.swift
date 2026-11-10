@@ -382,7 +382,10 @@ struct PatternsView: View {
             Spacer()
             ClassifyAllButton(classifier: classifier, signatures: signatures, shown: { [list] in
                 Set(list.rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.entry.id))
-            }, selected: { [signatures] in Set(signatures.keys(forSelection: signatures.selection)) }, active: active)
+            }, selected: { [signatures] in Set(signatures.keys(forSelection: signatures.selection)) },
+            selectShown: { [list, signatures] in
+                signatures.selection = Set(list.rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.id))
+            }, active: active)
             Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
                 .buttonStyle(.glass)
                 .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
