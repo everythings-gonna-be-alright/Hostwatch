@@ -171,6 +171,7 @@ struct NetworkFindingRow: View {
 
     private var verdictText: String {
         let enforcing = mode == .ask || mode == .strict
+        if decision.reason.hasPrefix("known malware") { return "On a threat list" }
         if decision.verdict == .block || mode == .strict { return enforcing ? "Blocks" : "Would block" }
         return enforcing ? "Asks" : "Would ask"
     }
@@ -191,12 +192,20 @@ struct NetworkFindingRow: View {
                 Text(decision.reason).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Allow") {
-                // A domain you blocked for this app outranks the pattern: Safe alone changed nothing.
-                if let domain = blockedDomain { firewall?.setBlocked(false, domain: domain, program: entry.facts.program) }
-                mark(.safe)
+            if !entry.facts.knownBad.isEmpty, firewall != nil {
+                // A threat list outranks the pattern: only a confirmed exception lets it through.
+                Button("Allow Anyway…") {
+                    if ThreatException.confirm(entry) { firewall?.setThreatException(true, entry.facts) }
+                }
+                .help("On a threat list: \(entry.facts.knownBad)")
+            } else {
+                Button("Allow") {
+                    // A domain you blocked for this app outranks the pattern: Safe alone changed nothing.
+                    if let domain = blockedDomain { firewall?.setBlocked(false, domain: domain, program: entry.facts.program) }
+                    mark(.safe)
+                }
+                .help(blockedDomain.map { "Unblocks \($0) for \(entry.name) and marks the pattern Safe" } ?? "Marks the pattern Safe")
             }
-            .help(blockedDomain.map { "Unblocks \($0) for \(entry.name) and marks the pattern Safe" } ?? "Marks the pattern Safe")
             Button("Block") { mark(.dangerous) }
         }
         .controlSize(.small)

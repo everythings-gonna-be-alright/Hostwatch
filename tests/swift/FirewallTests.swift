@@ -150,3 +150,31 @@ import Testing
         #expect(fw.fallback == nil)
     }
 }
+
+/// A threat list outranks your decisions, except where you confirmed an exception for that program and destination.
+@MainActor @Suite struct FirewallThreatExceptions {
+    let app = "/Applications/Google Chrome.app/Contents/Frameworks/Helper"
+    func facts(_ program: String, host: String = "raw.githubusercontent.com") -> FirewallFacts {
+        FirewallFacts(program: program, proto: "TCP", ip: "185.199.108.133", port: "443", host: host, risk: .normal,
+                      riskReason: "", knownBad: "ThreatFox: WarmCookie payload", patternKey: "net|\(program)|TCP internet:443")
+    }
+
+    @Test func theListWinsUntilYouMakeAnException() {
+        let hw = "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
+        let listed = FirewallPolicy.decide(facts(app), status: .safe, hostwatch: hw)
+        #expect(listed.verdict == .block && listed.reason.hasPrefix("known malware"))
+        #expect(FirewallPolicy.decide(facts(app), status: .safe, threatException: true, hostwatch: hw).verdict == .allow)
+    }
+
+    @Test func anExceptionIsForThatProgramAndDomainAndIsKept() {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-threat-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("fw.json")
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-threat"), fileURL: url)
+        fw.setThreatException(true, facts(app))
+        #expect(fw.threatAllowed(facts(app)) && fw.threatAllowed(facts(app, host: "objects.githubusercontent.com")))
+        #expect(!fw.threatAllowed(facts("/usr/bin/curl")))                    // other programs stay blocked
+        #expect(FirewallMonitor(defaults: scratchDefaults("hw-threat2"), fileURL: url).threatAllowed(facts(app)))
+    }
+}

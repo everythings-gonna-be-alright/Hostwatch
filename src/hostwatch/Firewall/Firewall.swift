@@ -112,8 +112,10 @@ enum FirewallPolicy {
     /// the pattern's status: an ordinary app has one pattern for the whole web (`TCP internet:443`).
     /// `askAgain`: you forgot your decision for this destination (Network ▸ Forget): it is asked about again
     /// until you decide, even where the pattern on its own would pass (a trusted app's routine web pattern).
+    /// `threatException`: you allowed this program to reach this destination despite a threat list (a shared host
+    /// such as raw.githubusercontent.com is listed for one bad file among millions). Only your explicit click sets it.
     static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil, askAgain: Bool = false,
-                       hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
+                       threatException: Bool = false, hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
         let bucket = SignatureBuilder.hostBucket(f.ip)
         if SignatureBuilder.localBuckets.contains(bucket) {
             return FirewallDecision(verdict: .allow, reason: "local network")
@@ -124,7 +126,7 @@ enum FirewallPolicy {
         if let blockedDomain {
             return FirewallDecision(verdict: .block, reason: "you blocked \(blockedDomain) for this app")
         }
-        if !f.knownBad.isEmpty {
+        if !f.knownBad.isEmpty, !threatException {
             return FirewallDecision(verdict: .block, reason: "known malware address (\(f.knownBad))")
         }
         // Before any status: a rule, the AI or a routine risk must not answer for you here. Your next decision
@@ -227,6 +229,7 @@ final class FirewallMonitor: ObservableObject {
             allowedCount = saved.allowed
             domainBlocks = Set(saved.domainBlocks ?? [])
             askAgain = Set(saved.askAgain ?? [])
+            threatExceptions = Set(saved.threatExceptions ?? [])
         }
     }
 
@@ -235,6 +238,7 @@ final class FirewallMonitor: ObservableObject {
         var allowed: Int
         var domainBlocks: [String]? = nil        // "program name|domain" (older files have none)
         var askAgain: [String]? = nil
+        var threatExceptions: [String]? = nil     // "program name|domain" you allowed despite a threat list
     }
 
     /// nil for anything but a connection with a known destination (an inferred "?:?" can't be judged: the firewall
@@ -250,7 +254,7 @@ final class FirewallMonitor: ObservableObject {
     @discardableResult
     func observe(_ e: ActivityEvent, status: SignatureStatus, now: Date = Date()) -> FirewallDecision? {
         guard mode != .off, let f = Self.facts(e) else { return nil }
-        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f))
+        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f))
         guard decision.verdict != .allow else { allowedCount += 1; return decision }
         let id = [f.program, f.proto, f.host.isEmpty ? f.ip : f.host, f.port].joined(separator: "|")
         if var old = entries[id] {
@@ -268,7 +272,7 @@ final class FirewallMonitor: ObservableObject {
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
         entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
             .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts),
-                                              askAgain: asksAgain($0.facts))) }
+                                              askAgain: asksAgain($0.facts), threatException: threatAllowed($0.facts))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
@@ -307,6 +311,23 @@ final class FirewallMonitor: ObservableObject {
     }
 
     func asksAgain(_ f: FirewallFacts) -> Bool { !askAgain.isEmpty && askAgain.contains(Self.askKey(f)) }
+
+    // MARK: Allowed despite a threat list
+
+    /// "program name|domain" (or the address): you allowed it although a threat list names the destination.
+    @Published private(set) var threatExceptions: Set<String> = []
+
+    func threatAllowed(_ f: FirewallFacts) -> Bool { !threatExceptions.isEmpty && threatExceptions.contains(Self.askKey(f)) }
+
+    /// Your explicit "Allow Anyway" (or its undo): kept at once, like a domain block.
+    func setThreatException(_ allowed: Bool, _ f: FirewallFacts) {
+        let key = Self.askKey(f)
+        guard allowed != threatExceptions.contains(key) else { return }
+        if allowed { threatExceptions.insert(key) } else { threatExceptions.remove(key) }
+        revision += 1
+        dirty = true
+        save()
+    }
 
     /// You decided again (Allow or Block, here or in a prompt): those destinations follow the pattern again.
     func decided(patternKeys: [String]) {
@@ -389,7 +410,7 @@ final class FirewallMonitor: ObservableObject {
         var e = event
         e.knownBad = knownBad(e)
         guard let f = Self.facts(e) else { answer?(key, true, 60); return }
-        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f))
+        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f))
         switch d.verdict {
         case .allow:
             answer?(key, true, 300)
@@ -462,7 +483,8 @@ final class FirewallMonitor: ObservableObject {
     func save() {
         guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount,
                                                                  domainBlocks: domainBlocks.sorted(),
-                                                                 askAgain: askAgain.sorted())) else { return }
+                                                                 askAgain: askAgain.sorted(),
+                                                                 threatExceptions: threatExceptions.sorted())) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
         chmod(fileURL.path, 0o600)

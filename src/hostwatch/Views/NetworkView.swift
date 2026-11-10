@@ -8,7 +8,7 @@ import SwiftUI
 
 /// What the firewall does with a destination or connection; the order is the sort order (most urgent last).
 enum NetworkFirewall: Int, Comparable {
-    case off, passes, undecided, waiting, blocks, blockedByYou
+    case off, passes, undecided, waiting, blocks, blockedByYou, threatList
     static func < (a: NetworkFirewall, b: NetworkFirewall) -> Bool { a.rawValue < b.rawValue }
 
     func title(_ mode: FirewallMode) -> String {
@@ -19,6 +19,7 @@ enum NetworkFirewall: Int, Comparable {
         case .waiting: return "Waiting for you"
         case .blocks: return mode == .watch ? "Would block" : "Blocks"
         case .blockedByYou: return "Blocked by you"
+        case .threatList: return "On a threat list"
         }
     }
 
@@ -27,7 +28,7 @@ enum NetworkFirewall: Int, Comparable {
         case .off: return .secondary
         case .passes: return .green
         case .undecided, .waiting: return .orange
-        case .blocks, .blockedByYou: return .red
+        case .blocks, .blockedByYou, .threatList: return .red
         }
     }
 
@@ -86,7 +87,10 @@ struct NetworkRow: Identifiable {
         func connection(_ e: FirewallEntry, _ d: FirewallDecision?) -> NetworkRow {
             var state = NetworkFirewall.passes
             if let d {
-                state = d.verdict == .block ? (byYou(e) ? .blockedByYou : .blocks) : d.verdict == .ask ? .undecided : .passes
+                // The reason decides the label: a threat list isn't you (it borrowed "by you" when you had ever decided
+                // the pattern, and then no Allow could change it).
+                state = d.verdict == .block ? (d.reason.hasPrefix("known malware") ? .threatList : byYou(e) ? .blockedByYou : .blocks)
+                    : d.verdict == .ask ? .undecided : .passes
             }
             if waiting.contains(e.facts.patternKey), state != .blockedByYou { state = .waiting }
             let base = e.name.isEmpty || e.name == "?" ? (e.facts.program as NSString).lastPathComponent : e.name
@@ -211,7 +215,8 @@ struct NetworkView: View {
         let now = Date()
         return NetworkRow.build(records: Array(domains.records.values), isNew: { domains.isNew($0, now: now) },
                                 entries: firewall.list(status: { signatures.status(forKey: $0) }),
-                                byYou: { firewall.blockedDomain($0.facts) != nil || signatures.entry($0.facts.patternKey)?.source == "you" },
+                                byYou: { firewall.blockedDomain($0.facts) != nil
+                                    || signatures.entry($0.facts.patternKey)?.source == "you" && signatures.status(forKey: $0.facts.patternKey) != .safe },
                                 waiting: Set(firewall.prompts.map(\.patternKey)), firewallOn: firewall.mode != .off)
     }
 
@@ -399,7 +404,20 @@ struct NetworkView: View {
     }
 
     @ViewBuilder private func actions(_ row: NetworkRow) -> some View {
-        if row.isConnection, let e = row.entry, let domain = firewall.blockedDomain(e.facts) {
+        if row.isConnection, let e = row.entry, !e.facts.knownBad.isEmpty {
+            // A threat list outranks your decisions: only an explicit, confirmed exception lets it through.
+            if firewall.threatAllowed(e.facts) {
+                Button("Undo Allow Anyway") { firewall.setThreatException(false, e.facts) }
+                    .help("Block it again because of the threat list")
+                    .controlSize(.small).font(.system(size: 11))
+            } else {
+                Button("Allow Anyway…") {
+                    if ThreatException.confirm(e) { firewall.setThreatException(true, e.facts) }
+                }
+                .help("On a threat list: \(e.facts.knownBad)")
+                .controlSize(.small).font(.system(size: 11))
+            }
+        } else if row.isConnection, let e = row.entry, let domain = firewall.blockedDomain(e.facts) {
             Button("Unblock") { firewall.setBlocked(false, domain: domain, program: e.facts.program) }
                 .help("Let \(row.destination) reach \(domain) again")
                 .controlSize(.small)
