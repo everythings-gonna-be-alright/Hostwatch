@@ -147,7 +147,7 @@ Full Disk Access stays granted.
 |--------------|------------|
 | **Nothing appears / "Collector off"** | Start it from the menu bar icon. Check *Help ▸ Collector Log*. |
 | **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). Ad-hoc builds need the grant redone after every rebuild. |
-| **The firewall turned itself to Watch** | Its web check through the relay failed twice. The status line in Settings ▸ Firewall says why. |
+| **The firewall turned itself to Watch** | Its web check through the relay failed twice. The status line in Rules ▸ Protection ▸ Network Firewall says why. |
 
 ### Known limitations
 

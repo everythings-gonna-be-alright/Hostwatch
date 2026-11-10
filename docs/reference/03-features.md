@@ -635,7 +635,7 @@ judged by the path rules like your own builds, and you decide their patterns.
 
 Choose how strict to be: only watch, ask you about each new connection, or allow only what you've approved.
 
-Pick a mode in *Settings ▸ Firewall*: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
+Pick a mode in *Rules ▸ Protection*, on the Overview's Network card or the *Network Firewall* page: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
 **Network** tab (⌘5), next to the domains (see below).
 
 - **Watch:** judges every connection and lists what wouldn't simply pass. Watch blocks nothing.

@@ -413,7 +413,13 @@ extension AppDelegate {
 
     func openSettings(_ pane: SettingsPane?) { settings.show(pane) }
 
-    @objc func openFirewallPane() { openSettings(.firewall) }
+    /// The firewall's settings live in Rules ▸ Protection ▸ Network Firewall, with launch and file protection.
+    @objc func openFirewallPane() {
+        rulesTab.segment = .firewall
+        rulesTab.chosen = true
+        model.windowTab = 4
+        openActivityWindow(fullScreen: false)
+    }
 
     @objc func showHeld() {
         refreshHeldPanel()

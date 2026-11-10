@@ -71,7 +71,8 @@ click-through, so your clicks pass through it to the apps underneath.
 
 From top to bottom:
 
-- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with a Pause button while the HUD takes clicks. The counts per kind are in the name's tooltip.
+- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with Pause and Open Hostwatch (the window, not full
+  screen) buttons while the HUD takes clicks. The counts per kind are in the name's tooltip.
 - **Needs a look:** only when something does. Flagged, threat-listed or stopped events of the last ten minutes, with
   why, and processes running heavy.
 - **The stream:** one row per event, in words: *x.plist in ~/Library/Preferences*, *started by zsh*, or the

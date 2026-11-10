@@ -18,6 +18,7 @@ struct ProtectionSidebarRows: View {
 /// anything is stopped. source: docs/adr/0011-protection.md
 struct ProtectionView: View {
     @ObservedObject var protection: ProtectionMonitor
+    var firewall: FirewallMonitor? = nil
     /// Which page of Rules ▸ Protection: Overview, Protected Files and Folders, or Found.
     let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
@@ -36,7 +37,7 @@ struct ProtectionView: View {
             switch page {
             case .protectedFiles: files
             case .protectionFound: findings
-            default: ProtectionOverview(protection: protection, go: go)
+            default: ProtectionOverview(protection: protection, firewall: firewall, go: go)
             }
         }
     }

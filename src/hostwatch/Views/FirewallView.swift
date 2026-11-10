@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Settings ▸ Firewall: the mode, the relay, what it would do (the connections themselves are in the Network tab).
+/// Rules ▸ Protection ▸ Network Firewall: the mode, the relay, what it would do (the connections themselves are in the Network tab).
 struct FirewallPane: View {
     @ObservedObject var firewall: FirewallMonitor
     @ObservedObject var signatures: SignatureStore

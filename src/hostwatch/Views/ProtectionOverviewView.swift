@@ -6,6 +6,7 @@ import SwiftUI
 /// Settings pane: one decision per card, the explanation next to the control it explains.
 struct ProtectionOverview: View {
     @ObservedObject var protection: ProtectionMonitor
+    var firewall: FirewallMonitor? = nil
     let go: (RulesSegment) -> Void
 
     var body: some View {
@@ -14,6 +15,7 @@ struct ProtectionOverview: View {
             header
             HStack(alignment: .top, spacing: 14) {
                 ForEach(ProtectionArea.allCases, id: \.self) { area in AreaCard(protection: protection, area: area, go: go) }
+                if let firewall { FirewallCard(firewall: firewall, go: go) }
             }
             .fixedSize(horizontal: false, vertical: true)         // both cards as tall as the taller one
             details
@@ -27,8 +29,9 @@ struct ProtectionOverview: View {
     private var state: State {
         if protection.paused { return .paused }
         let modes = ProtectionArea.allCases.map(protection.mode)
-        if modes.contains(where: \.enforces) { return .protecting }
-        return modes.contains(where: { $0 != .off }) ? .rehearsing : .off
+        let net = firewall?.mode ?? .off
+        if modes.contains(where: \.enforces) || net == .ask || net == .strict { return .protecting }
+        return modes.contains(where: { $0 != .off }) || net == .watch ? .rehearsing : .off
     }
 
     private var tint: Color {
@@ -188,5 +191,53 @@ private struct AreaCard: View {
             Text(n.formatted()).font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit().foregroundStyle(tint)
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Network: the firewall's four modes, in the same card as Launches and Files, with what the chosen one does.
+private struct FirewallCard: View {
+    @ObservedObject var firewall: FirewallMonitor
+    let go: (RulesSegment) -> Void
+
+    private var explanation: String {
+        switch firewall.mode {
+        case .off: "Connections aren't judged."
+        case .watch: "Nothing is blocked. Connections that would be are listed in Network."
+        case .ask: "Blocks what you blocked. A new connection waits for your answer."
+        case .strict: "Only what's allowed connects."
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                KindTile(kind: .net)
+                Text("Network").font(.headline)
+            }
+            Picker("Network", selection: $firewall.mode) {
+                ForEach(FirewallMode.allCases, id: \.self) { Text($0.short).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Text(explanation).font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 34, alignment: .topLeading)
+            if firewall.mode == .ask || firewall.mode == .strict {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(firewall.blockedCount.formatted())
+                        .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(firewall.blockedCount > 0 ? Color.red : Color.primary)
+                    Text("blocked since Hostwatch started").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Button { go(.firewall) } label: {
+                Text("Firewall settings and status").font(.callout)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.link)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.quaternary.opacity(0.4)))
     }
 }

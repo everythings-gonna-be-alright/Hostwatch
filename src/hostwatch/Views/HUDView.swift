@@ -4,6 +4,8 @@ import SwiftUI
 /// Actions the views can trigger; implemented by AppDelegate.
 struct HUDActions {
     var openFullScreen: () -> Void
+    /// The activity window as an ordinary window (the HUD's open button), never full screen.
+    var openWindow: () -> Void = {}
     var openExclusions: () -> Void
     var toggleCollector: () -> Void
     var quit: () -> Void
@@ -228,6 +230,8 @@ struct HUDView: View {
             if !model.overlayClickThrough {
                 Button { model.paused.toggle() } label: { Image(systemName: model.paused ? "play.fill" : "pause.fill") }
                     .help(model.paused ? "Resume the live stream" : "Pause the live stream")
+                Button(action: actions.openWindow) { Image(systemName: "arrow.up.forward.app") }
+                    .help("Open the Hostwatch window")
             }
         }
         .buttonStyle(.plain)

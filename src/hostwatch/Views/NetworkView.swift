@@ -4,7 +4,7 @@ import SwiftUI
 // The Network tab: one timeline of where this Mac connects. Each row is a destination (a domain, or an address
 // without a name) with what the domain inventory knows (new, known, on a threat list) and what the firewall does
 // with it; open a row for the programs that connected there, with Block and Allow. Connections the firewall holds
-// for your answer are on top. The firewall's mode and settings are in Settings ▸ Firewall.
+// for your answer are on top. The firewall's mode and settings are in Rules ▸ Protection ▸ Network Firewall.
 
 /// What the firewall does with a destination or connection; the order is the sort order (most urgent last).
 enum NetworkFirewall: Int, Comparable {
@@ -157,7 +157,7 @@ struct NetworkView: View {
     var sessionTag: (String) -> String? = { _ in nil }
     /// Opens the domain's details window (risk score, programs, Ask AI).
     var openDetails: (String) -> Void = { _ in }
-    /// Settings ▸ Firewall.
+    /// Rules ▸ Protection ▸ Network Firewall.
     var openFirewallSettings: () -> Void = {}
     /// On a threat list: the reason, else nil.
     var knownBad: (String) -> String? = { _ in nil }
@@ -248,7 +248,7 @@ struct NetworkView: View {
                 ? "Hostwatch is still learning which domains this Mac normally talks to. Domains seen now become the baseline."
                 : "A domain is new when no program on this Mac has contacted it before. Connections to it are badged NEW DOMAIN and count in Stories."
         case .attention:
-            return firewall.mode == .off ? "Turn it on in Settings ▸ Firewall: Watch shows what it would block, without blocking anything."
+            return firewall.mode == .off ? "Turn it on in Rules ▸ Protection ▸ Network Firewall: Watch shows what it would block, without blocking anything."
                 : "Every connection seen in the last 7 days passes: the local network, macOS, Safe patterns and trusted developers."
         }
     }

@@ -54,14 +54,11 @@ This pane decides how Hostwatch reacts to suspicious and unusual activity.
   **ThreatFox and MalwareBazaar** key, with Add Key… / Replace Key… / Remove Key.
 - *Watch for exploited macOS vulnerabilities* is on by default.
 
-### Settings: Firewall
+### Firewall settings
 
-This pane sets the firewall mode and shows what it did recently. See [Firewall](03-features.md#firewall).
-
-- **Mode:** Off, Watch, Ask or Strict.
-- **Status:** a status line for the relay.
-- **Counters for the last 7 days:** Blocked, Would block, Would ask about, Would pass.
-- **Buttons:** **Clear List** and **Show in Network…**.
+They moved to *Rules ▸ Protection*, next to launch and file protection: the Overview has a Network card with the four
+modes, and the *Network Firewall* page has the mode, the relay's status, the counts for the last 7 days, *Clear List*
+and *Show in Network…*. See [Firewall](03-features.md#firewall).
 
 ### Settings: AI
 

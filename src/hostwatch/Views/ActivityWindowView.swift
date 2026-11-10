@@ -204,7 +204,7 @@ struct ActivityWindowView: View {
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
             default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
-                               protection: model.protection,
+                               protection: model.protection, firewall: firewall,
                                showPatterns: { app in
                                    signatures.scope = nil
                                    signatures.search = app
@@ -214,7 +214,8 @@ struct ActivityWindowView: View {
                                    signatures.search = ""
                                    signatures.scope = .init(title: title, keys: Set(keys))
                                    model.windowTab = 1
-                               })
+                               },
+                               showNetwork: { model.windowTab = 3 })
             }
     }
 

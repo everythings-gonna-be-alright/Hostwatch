@@ -4,7 +4,7 @@ import SwiftUI
 /// signatures) or an AI suggestion you accepted. *Needs You* is what's still New, *Rules* is what decides
 /// automatically, *Decided* shows who decided what (AI apart from you).
 /// The Rules tab's pages: what you decide about patterns, and what protection does with those decisions.
-enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound }
+enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall }
 
 final class RulesTabState: ObservableObject {
     @Published var segment: RulesSegment = .needsYou
@@ -19,10 +19,14 @@ struct RulesView: View {
     @ObservedObject var tab: RulesTabState
     /// Launch and file protection (its own segment: the toolbar has no room, and these are rules too).
     var protection: ProtectionMonitor? = nil
+    /// The network firewall's settings: protection for connections, next to launches and files.
+    var firewall: FirewallMonitor? = nil
     /// Opens Patterns filtered to an app.
     var showPatterns: (String) -> Void = { _ in }
     /// Opens Patterns showing exactly these patterns.
     var showKeys: (String, [String]) -> Void = { _, _ in }
+    /// Opens the Network tab (the firewall's connections).
+    var showNetwork: () -> Void = {}
 
     private var review: [BaselineReport.Group] { baseline.report?.review ?? [] }
     private var waiting: Int { review.count + book.proposals.count }
@@ -51,6 +55,9 @@ struct RulesView: View {
             if let protection {
                 Section("Protection") {
                     ProtectionSidebarRows(protection: protection)
+                    if firewall != nil {
+                        Label("Network Firewall", systemImage: "network.badge.shield.half.filled").tag(RulesSegment.firewall)
+                    }
                 }
             }
         }
@@ -66,9 +73,16 @@ struct RulesView: View {
                     case .needsYou: needsYou
                     case .rules: baselineSection; learnedSection
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
+                    case .firewall:
+                        if let firewall {
+                            // The same settings Settings had, here with the rest of protection.
+                            FirewallPane(firewall: firewall, signatures: signatures, showNetwork: showNetwork)
+                                .frame(maxWidth: 680, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
-                            ProtectionView(protection: protection, page: tab.segment, mark: { keys, status in
+                            ProtectionView(protection: protection, firewall: firewall, page: tab.segment, mark: { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                             }, go: { tab.segment = $0; tab.chosen = true })
