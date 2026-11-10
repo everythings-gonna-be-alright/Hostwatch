@@ -108,7 +108,7 @@ import Testing
         state.filter = .all
         state.selection = ["d:example.com"]
         try write(NetworkView(domains: domains, firewall: fw, signatures: store, state: state, search: ""), "network", 1100, 460)
-        try write(FirewallPane(firewall: fw, signatures: store).frame(width: 560), "settings-firewall", 560, 520)
+        try write(NetworkFirewallPage(firewall: fw, signatures: store, showNetwork: {}).padding(16), "protection-firewall", 820, 760)
     }
 
     func write<V: View>(_ view: V, _ name: String, _ w: CGFloat, _ h: CGFloat) throws {

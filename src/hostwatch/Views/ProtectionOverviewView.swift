@@ -7,6 +7,7 @@ import SwiftUI
 struct ProtectionOverview: View {
     @ObservedObject var protection: ProtectionMonitor
     var firewall: FirewallMonitor? = nil
+    var connections: () -> [(FirewallEntry, FirewallDecision)] = { [] }
     let go: (RulesSegment) -> Void
 
     var body: some View {
@@ -15,7 +16,7 @@ struct ProtectionOverview: View {
             header
             HStack(alignment: .top, spacing: 14) {
                 ForEach(ProtectionArea.allCases, id: \.self) { area in AreaCard(protection: protection, area: area, go: go) }
-                if let firewall { FirewallCard(firewall: firewall, go: go) }
+                if let firewall { FirewallCard(firewall: firewall, connections: connections(), go: go) }
             }
             .fixedSize(horizontal: false, vertical: true)         // both cards as tall as the taller one
             details
@@ -197,6 +198,7 @@ private struct AreaCard: View {
 /// Network: the firewall's four modes, in the same card as Launches and Files, with what the chosen one does.
 private struct FirewallCard: View {
     @ObservedObject var firewall: FirewallMonitor
+    let connections: [(FirewallEntry, FirewallDecision)]
     let go: (RulesSegment) -> Void
 
     private var explanation: String {
@@ -222,16 +224,21 @@ private struct FirewallCard: View {
             Text(explanation).font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(minHeight: 34, alignment: .topLeading)
-            if firewall.mode == .ask || firewall.mode == .strict {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(firewall.blockedCount.formatted())
-                        .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(firewall.blockedCount > 0 ? Color.red : Color.primary)
-                    Text("blocked since Hostwatch started").font(.caption).foregroundStyle(.secondary)
+            if firewall.mode != .off {
+                // The same two numbers as Launches and Files: what it stops (or would), what it asks (or would).
+                let block = connections.filter { $0.1.verdict == .block }.count, ask = connections.count - block
+                let enforcing = firewall.mode == .ask || firewall.mode == .strict
+                HStack(spacing: 24) {
+                    figure(enforcing ? firewall.blockedCount : block, enforcing ? "blocked" : "would block", red: true)
+                    figure(ask, enforcing ? "asked about" : "would ask", red: false)
                 }
             }
+            if !firewall.prompts.isEmpty {
+                Label("\(firewall.prompts.count) waiting for your answer", systemImage: "hourglass").foregroundStyle(.orange)
+                    .font(.callout)
+            }
             Button { go(.firewall) } label: {
-                Text("Firewall settings and status").font(.callout)
+                Text("Network Firewall").font(.callout)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold))
             }
             .buttonStyle(.link)
@@ -239,5 +246,13 @@ private struct FirewallCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.quaternary.opacity(0.4)))
+    }
+
+    private func figure(_ n: Int, _ label: String, red: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(n.formatted()).font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(red && n > 0 ? Color.red : Color.primary)
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
     }
 }

@@ -738,10 +738,16 @@ When something looks wrong, pause it, or watch it closely to see what it does.
 
 #### Launch and file protection (Rules ▸ Protection)
 
-Three pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
+Four pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
 while rehearsing, green while protecting, orange while paused), a card per area with its four modes, what the chosen
 one does and today's numbers, and the pause, *Protected Files and Folders* the cards and your own places, *Found*
 what the rehearsal found.
+
+The firewall is the third area, beside Launches and Files: the Overview's *Network* card has its four modes and the
+same two numbers (what it blocks or would, what it asks about or would), and the *Network Firewall* page has the
+mode with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge
+counts them), what it found with *Allow* and *Block*, and how it decides. *Found* lists connections too, under
+launches and files, and its badge counts all three.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,

@@ -56,9 +56,9 @@ This pane decides how Hostwatch reacts to suspicious and unusual activity.
 
 ### Firewall settings
 
-They moved to *Rules ▸ Protection*, next to launch and file protection: the Overview has a Network card with the four
-modes, and the *Network Firewall* page has the mode, the relay's status, the counts for the last 7 days, *Clear List*
-and *Show in Network…*. See [Firewall](03-features.md#firewall).
+They moved to *Rules ▸ Protection*, next to launch and file protection. See
+[Launch and file protection](03-features.md#launch-and-file-protection-rules--protection) and
+[Firewall](03-features.md#firewall).
 
 ### Settings: AI
 
