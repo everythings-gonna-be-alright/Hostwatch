@@ -184,7 +184,7 @@ struct ClassifyAllButton: View {
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Picker("", selection: $ui.apply) {
                 Text("Apply the verdicts").tag(true)
-                Text("Keep them as suggestions").tag(false)
+                Text("Suggest only, I’ll decide in Rules ▸ Needs You").tag(false)
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()

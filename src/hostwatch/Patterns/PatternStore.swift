@@ -278,8 +278,9 @@ final class SignatureStore: ObservableObject {
     func suggest(_ status: SignatureStatus, key: String, source: String, note: String?) {
         let key = resolve(key)
         guard status != .unclassified, self.status(forKey: key) == .unclassified, var e = entries[key] else { return }
-        if status == .safe, e.risk == .high || SignatureBuilder.runsAnyCode(e) { return }
-        if autoAcceptAI, e.risk != .high, e.reopened == nil {
+        // A Safe no AI may give is kept as a suggestion, never applied by itself: you see it and why, and decide.
+        let refused = status == .safe && SignatureBuilder.aiSafeRefusal(e) != nil
+        if autoAcceptAI, !refused, e.risk != .high, e.reopened == nil {
             set(status, keys: [key], source: source, note: note)
             return
         }
@@ -294,8 +295,9 @@ final class SignatureStore: ObservableObject {
         var n = 0
         for key in keys {
             // Automatic runs (`yours: false`) leave reopened patterns to you.
+            // Accepting by hand is your decision, so it may take a Safe no AI could apply by itself.
             guard status(forKey: key) == .unclassified, let e = entries[resolve(key)], yours || e.reopened == nil, let s = e.suggestion,
-                  !(s.status == .safe && (e.risk == .high || SignatureBuilder.runsAnyCode(e))) else { continue }
+                  yours || !(s.status == .safe && SignatureBuilder.aiSafeRefusal(e) != nil) else { continue }
             set(s.status, keys: [key], source: s.source, note: s.note)
             n += 1
         }
@@ -311,7 +313,10 @@ final class SignatureStore: ObservableObject {
     nonisolated static func decidedBy(_ e: SignatureEntry, status: SignatureStatus) -> String {
         if status == .unclassified {
             if e.reopened != nil { return "Reopened" }
-            if let s = e.suggestion { return "AI suggests \(s.status.title)" }
+            if let s = e.suggestion {
+                if s.status == .safe, let why = SignatureBuilder.aiSafeRefusal(e) { return "AI suggests Safe · yours: \(why)" }
+                return "AI suggests \(s.status.title)"
+            }
             return "New"
         }
         if e.status == .unclassified { return "You (whole process)" }
@@ -638,7 +643,7 @@ final class SignatureStore: ObservableObject {
             processRules[key] = nil; changed = true
         }
         for (key, e) in entries where e.status == .safe && ["claude", "on-device", "baseline"].contains(e.source ?? "")
-            && SignatureBuilder.runsAnyCode(e) {
+            && SignatureBuilder.runsAnyCode(e) && SignatureBuilder.aiSafeRefusal(e) != nil {
             var e = e; e.status = .unclassified; e.source = nil; e.note = nil
             entries[key] = e; changed = true
         }

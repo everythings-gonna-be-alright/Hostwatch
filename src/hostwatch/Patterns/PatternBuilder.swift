@@ -201,6 +201,39 @@ enum SignatureBuilder {
     /// script it's given, so trusting it broadly would trust a virus's script too.
     static func runsAnyCode(_ e: SignatureEntry) -> Bool { isLolbin(SignatureStore.subjectPath(e)) }
 
+    /// Why no AI may mark this pattern Safe, in words; nil when one may. High-risk patterns, and what a run-anything
+    /// tool (shell, interpreter, curl, codesign…) launches or connects to, stay yours. Its plain reads of an exact
+    /// folder in your own projects (codesign reading a build folder) don't: running code isn't reading a file.
+    /// source: docs/adr/0013-ai-safe-project-reads.md
+    static func aiSafeRefusal(_ e: SignatureEntry) -> String? {
+        if e.risk == .high { return "it's a high-risk pattern" }
+        guard runsAnyCode(e) else { return nil }
+        let name = (SignatureStore.subjectPath(e) as NSString).lastPathComponent
+        switch e.kind {
+        case .exec: return "\(name) runs whatever it is told, and what it launches is yours to decide"
+        case .net: return "\(name) can fetch and run anything, and its connections are yours to decide"
+        case .file:
+            let parts = e.pattern.split(separator: " ", maxSplits: 1).map(String.init)
+            let mode = parts.first ?? "", path = parts.count > 1 ? parts[1] : ""
+            if e.pattern.hasSuffix("]") { return "\(name) touching a sensitive place is yours to decide" }
+            if mode.contains("w") { return "\(name) writing files is yours to decide" }
+            if !isProjectPlace(path) { return "\(name) reading outside your own project folders is yours to decide" }
+            if isTooWide(filePattern: e.pattern) { return "the pattern covers a whole area" }
+            return nil
+        }
+    }
+
+    /// An exact folder in your own projects: in your home, below a named folder and project (two literal components,
+    /// "~/Documents/ProcessHUD/…"), not in Library, Downloads or a hidden top-level folder.
+    static func isProjectPlace(_ path: String) -> Bool {
+        guard path.hasPrefix("~/") else { return false }
+        let parts = path.dropFirst(2).split(separator: "/").map(String.init)
+        guard parts.count >= 3 else { return false }
+        let top = parts[0]
+        if top.hasPrefix(".") || ["Library", "Downloads", "Desktop", "Public", "Applications"].contains(top) { return false }
+        return parts.prefix(2).allSatisfy { !$0.contains("*") && !$0.contains("#") && !$0.contains("?") }
+    }
+
     /// Programs that carry the network traffic of containers or virtual machines: on macOS the connection is theirs,
     /// whatever program inside the VM made it. Their connections are judged per destination and never pass on the
     /// gateway's trusted signature (Docker Inc. signs the backend, not what runs in your containers).

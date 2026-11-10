@@ -1054,11 +1054,13 @@ easily, and the benchmark showed it.
 **Which patterns.** *Classify with AI* in the toolbar takes the rows you selected, or, with nothing selected, the
 New patterns the list shows: in Patterns, its filter, search and scope. In Events, the patterns of the events shown
 (or selected), with their filters, kinds and search. Right-click rows, a selection or a group row for the same:
-*Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Keep Them as Suggestions*. Applying also applies what an
+*Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Suggest Only, I’ll Decide*. Applying also applies what an
 AI already suggested for them, without asking again. Asking for patterns again retries those an earlier pass left for
-you. An AI's Safe for a high-risk pattern or a tool that can run or change other programs (shells, interpreters, curl,
-codesign…) is never applied: the live list shows the AI's answer, says why it's yours to decide, and has a
-*Mark Safe* button for your one-click decision.
+you. An AI's Safe is never applied to a high-risk pattern, or to what a tool that can run or change other programs
+(shells, interpreters, curl, codesign…) launches, connects to, writes, touches in a sensitive place or reads outside
+your projects. Its plain read of an exact folder in your own projects (codesign reading a build folder) is applied.
+A refused Safe stays a suggestion with its reason: Patterns shows *AI suggests Safe · yours: …*, and the live list
+has a *Mark Safe* button. Accepting it yourself, there or in Rules ▸ Needs You, applies it.
 
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,
