@@ -108,9 +108,10 @@ struct HUDView: View {
             }
         }
         .padding(10 * s)
-        // Anywhere that isn't a button or a row moves the HUD (only the header did, and a tooltip on its title took the
-        // clicks there): the header, the attention section, empty space, the resources line.
-        .background(model.overlayClickThrough ? nil : WindowDragArea())
+        // Dragging anywhere moves the HUD. A SwiftUI gesture, because SwiftUI's text and shapes take the clicks before an
+        // AppKit drag view behind them (it only ever fired on empty pixels). Clicks and double-clicks still reach
+        // buttons and rows: the drag starts only once the mouse has moved a few points.
+        .modifier(HUDWindowDrag(enabled: !model.overlayClickThrough))
         .frame(width: model.overlayWidth, alignment: .leading)
         // Interactive: fill the panel so the box shows its real size while resizing.
         .frame(maxHeight: model.overlayClickThrough ? nil : .infinity, alignment: .top)
@@ -325,32 +326,6 @@ struct HUDBackgroundTile: View {
     }
 }
 
-/// Drag handle that moves its window. Native `performDrag` works for borderless,
-/// non-activating panels where SwiftUI content would otherwise swallow the mouse-down.
-struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ view: DragView, context: Context) {}
-
-    final class DragView: NSView {
-        override var mouseDownCanMoveWindow: Bool { false }   // we drag explicitly
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(NSTrackingArea(rect: bounds, options: [.cursorUpdate, .activeAlways, .inVisibleRect],
-                                           owner: self))
-        }
-
-        override func cursorUpdate(with event: NSEvent) { NSCursor.openHand.set() }
-
-        override func mouseDown(with event: NSEvent) {
-            NSCursor.closedHand.set()
-            window?.performDrag(with: event)   // runs until mouse-up; frame autosave keeps the spot
-            NSCursor.openHand.set()
-        }
-    }
-}
 
 /// Resize handle. An NSView rather than a SwiftUI gesture: it refuses to move the window
 /// (the panel is movable by background) and reads the mouse in screen coordinates, which stay

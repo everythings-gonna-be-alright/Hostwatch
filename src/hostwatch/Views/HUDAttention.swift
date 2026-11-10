@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The HUD's top: what needs a look, only when something does. Flagged, threat-listed or stopped events of the last
@@ -112,5 +113,47 @@ struct HUDIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Moves the HUD's window by dragging anywhere in it: the window's origin follows the mouse from where the drag began.
+struct HUDWindowDrag: ViewModifier {
+    let enabled: Bool
+    @StateObject private var drag = DragState()
+
+    final class DragState: ObservableObject {
+        weak var window: NSWindow?
+        var startMouse: NSPoint?
+        var startOrigin: NSPoint = .zero
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowFinder { drag.window = $0 })
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 3, coordinateSpace: .global)
+                    .onChanged { _ in
+                        guard enabled, let window = drag.window else { return }
+                        let mouse = NSEvent.mouseLocation           // screen coordinates: steady while the window moves
+                        if drag.startMouse == nil { drag.startMouse = mouse; drag.startOrigin = window.frame.origin }
+                        guard let start = drag.startMouse else { return }
+                        window.setFrameOrigin(NSPoint(x: drag.startOrigin.x + mouse.x - start.x,
+                                                      y: drag.startOrigin.y + mouse.y - start.y))
+                    }
+                    .onEnded { _ in drag.startMouse = nil }
+            )
+    }
+}
+
+/// Hands over the NSWindow a SwiftUI view is in.
+private struct WindowFinder: NSViewRepresentable {
+    let found: (NSWindow?) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in found(view?.window) }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { [weak view] in found(view?.window) }
     }
 }
