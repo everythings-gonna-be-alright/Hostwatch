@@ -4,6 +4,11 @@
 
 ### New
 
+- **A HUD you can read at a glance.** What needs a look comes first (flagged or stopped events, heavy processes), then
+  the stream in words with repeats folded (*read 12 files in Shortcuts.app*) and colour only on New and flagged rows,
+  relative times, and one quiet resources line with units at the bottom. The header says *Hostwatch · Live* with
+  Pause and Open buttons instead of running totals.
+
 - **Better triage evidence.** The AI now sees who started a pattern's example (the launch chain, its origin, the AI
   session and the command line), both programs' signers and where they live, and how long the pattern has been seen.
   The instructions are calibrated for developer tools and Homebrew, refuse to trust an Apple signature on a shell, and

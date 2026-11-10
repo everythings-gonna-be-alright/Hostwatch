@@ -70,13 +70,20 @@ patterns stay monospaced.
 The HUD is a compact overlay that shows your Mac's activity as it happens, on top of other windows. It can be
 click-through, so your clicks pass through it to the apps underneath.
 
-It shows one line per event:
+From top to bottom:
 
-| Icon | Kind | Shows |
-|------|------|-------|
-| ▶ cyan | new process (`exec`) | name, `pid ← ppid`, time |
-| 🌐 green | new connection | name, `TCP/UDP remote:port`, time |
-| 📄 orange | newly opened file | name, `r/w/rw path`, time |
+- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with Pause and Open Hostwatch buttons while the HUD
+  takes clicks. The counts per kind are in the name's tooltip.
+- **Needs a look:** only when something does. Flagged, threat-listed or stopped events of the last ten minutes, with
+  why, and processes running heavy.
+- **The stream:** one row per event, in words: *x.plist in ~/Library/Preferences*, *started by zsh*, or the
+  destination of a connection, with how long ago (*now*, *12s*, *4m*). The same program doing the same kind of thing
+  within a few seconds folds into one row with a count: *read 12 files in Shortcuts.app*. Anything with a badge keeps
+  its own row.
+- **Colour only for exceptions:** New and Suspicious rows have an orange bar and a coloured icon, dangerous,
+  threat-listed or stopped ones red. Safe rows have no bar and a grey icon, so the exceptions stand out.
+- **Resources:** one quiet line at the bottom, *CPU 15% · Memory 74% · Net 613 KB/s ↓*, coloured only when the CPU
+  is busy or memory is under pressure.
 
 The kind toggles only **hide** rows from view. Collecting, patterns, stories and history always get every kind.
 
