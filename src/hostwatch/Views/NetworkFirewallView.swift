@@ -16,6 +16,7 @@ struct NetworkFirewallPage: View {
             modeCard
             numbers(found)
             if !firewall.prompts.isEmpty { waiting }
+            FirewallRulesSection(firewall: firewall, signatures: signatures)
             findings(found)
             howItDecides
         }
@@ -113,8 +114,20 @@ struct NetworkFirewallPage: View {
                 Text("What the firewall found").font(.headline)
                 Spacer()
                 Button("Show All in Network…", action: showNetwork).buttonStyle(.link)
-                Button("Clear List") { firewall.clear() }.disabled(firewall.entries.isEmpty)
-                    .help("Forget the connections seen so far: your Allow and Block decisions stay")
+                // Out of the way, and said plainly: it forgets what was seen, never a rule (those are listed above).
+                Menu {
+                    Button("Forget Seen Connections…") {
+                        let alert = NSAlert()
+                        alert.messageText = "Forget the connections seen so far?"
+                        alert.informativeText = "The list and its counts start again. Your rules stay as they are: blocks, "
+                            + "exceptions and every Allow or Block you made."
+                        alert.addButton(withTitle: "Forget")
+                        alert.addButton(withTitle: "Cancel")
+                        if alert.runModal() == .alertFirstButtonReturn { firewall.clear() }
+                    }
+                    .disabled(firewall.entries.isEmpty)
+                } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton).fixedSize()
             }
             if found.isEmpty {
                 Text(firewall.mode == .off ? "Turn on Watch to see what would be blocked or asked about."
@@ -210,5 +223,87 @@ struct NetworkFindingRow: View {
         }
         .controlSize(.small)
         .padding(.vertical, 4)
+    }
+}
+
+/// Your rules, always in view: what you blocked, what you allowed despite a threat list, and what you asked to be
+/// asked about again. Independent of the seen-connections list, so forgetting that never hides a rule.
+struct FirewallRulesSection: View {
+    @ObservedObject var firewall: FirewallMonitor
+    @ObservedObject var signatures: SignatureStore
+
+    /// Connection patterns marked Suspicious or Dangerous: blocked whatever the domain.
+    private var blockedPatterns: [SignatureEntry] {
+        signatures.allEntries.filter { $0.kind == .net && [.suspicious, .dangerous].contains(signatures.status(forKey: $0.id)) }
+            .sorted { $0.lastSeen > $1.lastSeen }
+    }
+
+    var body: some View {
+        let _ = signatures.revision
+        let rules = firewall.rules
+        let blocks = rules.filter { $0.kind == .domainBlock }, patterns = blockedPatterns
+        let exceptions = rules.filter { $0.kind == .threatException }, again = rules.filter { $0.kind == .askAgain }
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Your rules").font(.headline)
+            if blocks.isEmpty && patterns.isEmpty && exceptions.isEmpty && again.isEmpty {
+                Text("None yet. Block a domain for an app in Network, or Block a connection here, and it's listed here.")
+                    .foregroundStyle(.secondary)
+            }
+            if !blocks.isEmpty || !patterns.isEmpty {
+                group("Blocked", symbol: "nosign", tint: .red) {
+                    ForEach(blocks) { r in
+                        line(program: r.program, what: r.destination, detail: "every connection to this domain") {
+                            Button("Unblock") { firewall.remove(r) }
+                        }
+                    }
+                    ForEach(patterns) { e in
+                        line(program: displayProcessName(e.process), what: e.pattern,
+                             detail: "marked \(signatures.status(forKey: e.id).title) · \(signatures.decidedBy(e.id))") {
+                            Button("Unblock") { signatures.set(.unclassified, keys: [e.id]) }
+                                .help("Back to New: the firewall asks about it again")
+                        }
+                    }
+                }
+            }
+            if !exceptions.isEmpty {
+                group("Allowed despite a threat list", symbol: "exclamationmark.shield", tint: .orange) {
+                    ForEach(exceptions) { r in
+                        line(program: r.program, what: r.destination, detail: "you chose Allow Anyway") {
+                            Button("Remove") { firewall.remove(r) }.help("Blocked again because of the threat list")
+                        }
+                    }
+                }
+            }
+            if !again.isEmpty {
+                group("Asked about again", symbol: "questionmark.circle", tint: .secondary) {
+                    ForEach(again) { r in
+                        line(program: r.program, what: r.destination, detail: "you forgot your decision here") {
+                            Button("Remove") { firewall.remove(r) }.help("Its pattern decides again")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func group<Content: View>(_ title: String, symbol: String, tint: Color, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold)).foregroundStyle(tint)
+            content()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.35)))
+    }
+
+    private func line<Action: View>(program: String, what: String, detail: String, @ViewBuilder action: () -> Action) -> some View {
+        HStack(spacing: 8) {
+            Text(program).fontWeight(.semibold).lineLimit(1)
+            Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
+            Text(what).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Spacer()
+            action().controlSize(.small)
+        }
     }
 }

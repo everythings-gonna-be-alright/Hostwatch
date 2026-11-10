@@ -54,6 +54,9 @@
 - **Event details in a panel, not a new window.** Double-click an event: its facts, command line or destination,
   pattern and who started it open under the list, as in Running Now, and follow the selection. Ask AI, Launch Chain,
   Watch Closely, Reveal in Finder and Mark are buttons there.
+- **One place for every firewall rule.** The Network Firewall page lists *Your rules*: blocked domains and blocked
+  connection patterns, exceptions to a threat list, and destinations asked about again, each with Unblock or Remove.
+  *Clear List* became *Forget Seen Connections…* in a ⋯ menu, with a confirmation that it never touches a rule.
 - **Charts on the Protection overview.** Each area shows its last 24 hours, hour by hour: stopped or would-stop in
   red, asked or would-ask in grey (red beside orange failed the colour-vision check), with a legend and the hour's
   numbers on hover.
