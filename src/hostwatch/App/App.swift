@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     lazy var actions = HUDActions(
         openFullScreen: { [weak self] in self?.openActivityWindow(fullScreen: true) },
+        openWindow: { [weak self] in self?.openActivityWindow(fullScreen: false) },
         openExclusions: { [weak self] in self?.openSettings(.exclusions) },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         quit: { NSApp.terminate(nil) },
