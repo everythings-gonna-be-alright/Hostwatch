@@ -121,6 +121,8 @@ struct ClassifyAllButton: View {
     @ObservedObject var signatures: SignatureStore
     /// The patterns the list shows (its filter and search): Classify with AI takes only those.
     var shown: (() -> Set<String>)? = nil
+    /// The selected rows' patterns: when you selected some, Classify with AI takes those instead of the whole list.
+    var selected: (() -> Set<String>)? = nil
     /// The tab is in front: only then does the live list open by itself (hidden tabs stay alive).
     var active = true
     @StateObject private var ui = ClassifyAllState()
@@ -160,15 +162,18 @@ struct ClassifyAllButton: View {
 
     private var confirm: some View {
         let _ = signatures.revision
-        let scope = shown?()
-        let count = classifier.classifiable(in: scope).count
+        let picked = selected?() ?? []
+        let scope = picked.isEmpty ? shown?() : picked
+        let count = scope.map { classifier.undecided(in: $0) } ?? classifier.classifiable.count
+        let place = picked.isEmpty ? "in this list" : "you selected"
         let batches = (count + classifier.batchSize - 1) / classifier.batchSize
         let engine = classifier.engine
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s")\(scope == nil ? "" : " in this list") with AI")
+            Text("Classify \(count.formatted()) new pattern\(count == 1 ? "" : "s")\(scope == nil ? "" : " " + place) with AI")
                 .font(.headline)
             if scope != nil {
-                Text("Only New patterns the list shows now, with its filter and search. Right-click patterns to classify just those.")
+                Text(picked.isEmpty ? "Only New patterns the list shows now, with its filter and search. Select rows to classify just those."
+                     : "Only the New patterns of the rows you selected. Clear the selection to take the whole list.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Label(engine.title, systemImage: engine == .onDevice ? "lock.laptopcomputer" : "sparkles")
