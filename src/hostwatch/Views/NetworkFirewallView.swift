@@ -125,8 +125,8 @@ struct NetworkFirewallPage: View {
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(found.prefix(Self.limit), id: \.0.id) { entry, decision in
                     NetworkFindingRow(entry: entry, decision: decision, mode: firewall.mode, firewall: firewall) { status in
-                        signatures.set(status, keys: [entry.facts.patternKey],
-                                       note: status == .safe ? "allowed in Protection" : "blocked in Protection")
+                        firewall.mark(status, keys: [entry.facts.patternKey], in: signatures,
+                                      note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                     }
                 }
                 if found.count > Self.limit {

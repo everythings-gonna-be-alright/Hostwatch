@@ -84,6 +84,10 @@ struct RulesView: View {
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
                             ProtectionView(protection: protection, firewall: firewall, connections: connections,
+                                           markConnection: { [firewall, signatures] entry, status in
+                                               firewall?.mark(status, keys: [entry.facts.patternKey], in: signatures,
+                                                              note: status == .safe ? "allowed in Protection" : "blocked in Protection")
+                                           },
                                            page: tab.segment, mark: { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")

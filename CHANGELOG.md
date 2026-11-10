@@ -89,6 +89,10 @@
 
 ### Fixes
 
+- **Allow on some connections did nothing**, for example Hostwatch's own connections to chatgpt.com. Their pattern
+  was never recorded (Hostwatch leaves its own activity out of patterns), so there was nothing to mark Safe. Allow and
+  Block now record the pattern from the firewall's own record first.
+
 - **A threat-list block said "Blocked by you", and Allow did nothing.** raw.githubusercontent.com is on ThreatFox
   (shared hosts get listed for one bad file), and a threat list outranks your decisions, so Allow couldn't change it
   while the label blamed you. It now says *On a threat list* with the list's reason, and *Allow Anyway…* (in Network

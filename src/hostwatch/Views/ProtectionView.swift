@@ -37,6 +37,8 @@ struct ProtectionView: View {
     var firewall: FirewallMonitor? = nil
     /// The firewall's findings, shown in Found with launches and files.
     var connections: () -> [(FirewallEntry, FirewallDecision)] = { [] }
+    /// A connection's Allow or Block: through the firewall, which records a pattern the store never saw.
+    var markConnection: ((FirewallEntry, SignatureStatus) -> Void)? = nil
     /// Which page of Rules ▸ Protection: Overview, Protected Files and Folders, or Found.
     let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
@@ -176,7 +178,7 @@ struct ProtectionView: View {
                     Text("Connections").font(.subheadline.weight(.semibold)).padding(.top, 8)
                     ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
                         NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
-                            mark([entry.facts.patternKey], status)
+                            markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
                         }
                     }
                     if network.count > Self.limit {

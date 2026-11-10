@@ -446,7 +446,7 @@ struct NetworkView: View {
             firewall.resolve(p.id, allow: allow)
             return
         }
-        signatures.set(allow ? .safe : .suspicious, keys: keys, note: allow ? "allowed in Network" : "blocked in Network")
+        firewall.mark(allow ? .safe : .suspicious, keys: keys, in: signatures, note: allow ? "allowed in Network" : "blocked in Network")
     }
 
     @ViewBuilder private func menu(_ ids: Set<String>, rows: [NetworkRow]) -> some View {
