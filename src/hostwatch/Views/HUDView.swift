@@ -45,10 +45,14 @@ struct HUDView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6 * s) {
             header
-            if model.overlayShowResources, let sample = metrics.latest {
-                HUDResources(sample: sample, history: Array(metrics.recent.suffix(60)), s: s)
-            }
             Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
+            // What needs a look first, only when something does.
+            HUDAttention(flagged: attention, heavy: vitals.liveContext.entries, s: s) { e in
+                if !e.protectionReason.isEmpty { return e.protectionReason }
+                if let bad = intel.flag(for: e) { return bad }
+                let parent = (e.parent as NSString).lastPathComponent
+                return signatures.status(for: e).title + (parent.isEmpty ? "" : " · from \(parent)")
+            }
             let banners = Array(stories.recent().prefix(2))
             ForEach(banners) { story in
                 StoryBanner(story: story, s: s)
@@ -92,6 +96,12 @@ struct HUDView: View {
                             }
                     }
                 }
+            }
+            // One quiet line at the bottom, coloured only when something is abnormal.
+            if model.overlayShowResources, let sample = metrics.latest {
+                Spacer(minLength: 0)
+                Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
+                HUDResourceLine(sample: sample, s: s)
             }
         }
         .padding(10 * s)
@@ -178,44 +188,52 @@ struct HUDView: View {
     }
 
     /// "● LIVE" capsule: green live, yellow paused, orange off.
-    private var liveBadge: some View {
-        let color: Color = model.paused ? .yellow : model.connected ? .green : .orange
-        return HStack(spacing: 4 * s) {
-            Circle().fill(color).frame(width: 5 * s, height: 5 * s)
-                .shadow(color: color.opacity(0.9), radius: 3 * s)
-            Text(model.paused ? "PAUSED" : model.connected ? "LIVE" : "OFF")
-                .font(.system(size: 9 * s, weight: .bold, design: .rounded))
-                .tracking(0.6)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 6 * s)
-        .padding(.vertical, 2.5 * s)
-        .background(Capsule().fill(color.opacity(0.22)))
-    }
-
     private var header: some View {
         headerContent
             // The whole header bar moves the HUD (when interactive); buttons still get their clicks.
             .background(model.overlayClickThrough ? nil : WindowDragArea())
     }
 
-    private var headerContent: some View {
-        HStack(spacing: 8 * s) {
-            Text("Activity")
-                .font(.system(size: 12 * s, weight: .semibold, design: .rounded))
-            Spacer(minLength: 4)
-            ForEach(EventKind.allCases, id: \.self) { kind in
-                HStack(spacing: 3) {
-                    Image(systemName: kind.symbol).font(.system(size: 8.5 * s, weight: .bold))
-                    Text("\(model.counts[kind, default: 0])")
-                        .contentTransition(.numericText())
-                }
-                .font(.system(size: 10.5 * s, weight: .semibold, design: .rounded).monospacedDigit())
-                .foregroundStyle(kind.color.opacity(model.visibleKinds.contains(kind) ? 1 : 0.4))
+    /// Flagged, threat-listed or stopped events of the last ten minutes: the HUD's attention section.
+    private var attention: [ActivityEvent] {
+        var out: [ActivityEvent] = []
+        for e in model.history.prefix(2_000) {
+            if HUDTime.ago(e) .hasSuffix("h") { break }
+            let status = signatures.status(for: e)
+            if e.protection != .none || intel.flag(for: e) != nil || status == .suspicious || status == .dangerous {
+                if !out.contains(where: { $0.signatureKey == e.signatureKey }) { out.append(e) }
             }
-            liveBadge
-
+            if out.count == 2 { break }
         }
+        return out.filter { e in
+            let ago = HUDTime.ago(e)
+            return ago == "now" || ago.hasSuffix("s") || (ago.hasSuffix("m") && (Int(ago.dropLast()) ?? 99) < 10)
+        }
+    }
+
+    private var stateWord: String { model.paused ? "Paused" : model.connected ? "Live" : "Collector off" }
+
+    private var headerContent: some View {
+        HStack(spacing: 6 * s) {
+            // The name and the state: the running totals said nothing at a glance (they're in the tooltip).
+            HStack(spacing: 5 * s) {
+                Circle().fill(model.paused ? Color.yellow : model.connected ? Color.green : Color.orange)
+                    .frame(width: 6 * s, height: 6 * s)
+                Text("Hostwatch").font(.system(size: 12 * s, weight: .semibold))
+                Text("· \(stateWord)").font(.system(size: 12 * s)).foregroundStyle(HUDInk.secondary)
+            }
+            .help(EventKind.allCases.map { "\($0.title): \(model.counts[$0, default: 0].formatted())" }.joined(separator: "\n"))
+            Spacer(minLength: 4)
+            if !model.overlayClickThrough {
+                Button { model.paused.toggle() } label: { Image(systemName: model.paused ? "play.fill" : "pause.fill") }
+                    .help(model.paused ? "Resume the live stream" : "Pause the live stream")
+                Button(action: actions.openFullScreen) { Image(systemName: "arrow.up.forward.app") }
+                    .help("Open Hostwatch")
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11 * s, weight: .semibold))
+        .foregroundStyle(HUDInk.primary)
     }
 }
 
@@ -415,64 +433,6 @@ struct ResizeGrip: NSViewRepresentable {
 /// Height of one HUD row at a given text scale (shared with the panel sizing).
 func rowHeight(_ s: CGFloat) -> CGFloat { (16 * s).rounded(.up) }
 
-/// HUD text hierarchy on the dark-tinted panel: primary / secondary / tertiary (timestamps).
-/// Sized against the glass tint floor so body text stays near Apple's 4.5:1 over bright wallpapers.
-/// One compact line of resource use for the HUD: CPU and memory with tiny sparklines, network and
-/// disk throughput. Sparklines, then disk, give way first when the HUD is narrow.
-struct HUDResources: View {
-    let sample: MetricSample
-    let history: [MetricSample]
-    let s: CGFloat
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            line(sparklines: true, disk: true)
-            line(sparklines: false, disk: true)
-            line(sparklines: false, disk: false)
-        }
-        .font(.system(size: 10 * s, weight: .semibold, design: .rounded).monospacedDigit())
-        .foregroundStyle(HUDInk.secondary)
-        .lineLimit(1)
-        .help("CPU · memory (orange or red under memory pressure) · network download/upload · disk read/write")
-    }
-
-    private func line(sparklines: Bool, disk: Bool) -> some View {
-        HStack(spacing: 7 * s) {
-            gauge("CPU", "\(Int(sample.cpu.rounded()))%", history.map { $0.cpu / 100 }, .blue, sparklines)
-            gauge("MEM", "\(Int((sample.mem * 100).rounded()))%", history.map(\.mem), sample.pressureColor, sparklines,
-                  valueColor: sample.pressure >= 2 ? sample.pressureColor : nil)
-            Text("↓\(Self.short(sample.netIn)) ↑\(Self.short(sample.netOut))")
-                .foregroundStyle(EventKind.net.color.opacity(0.95))
-            if disk, let r = sample.diskRead, let w = sample.diskWrite {
-                Text("R\(Self.short(r)) W\(Self.short(w))")
-                    .foregroundStyle(EventKind.file.color.opacity(0.95))
-            }
-        }
-        .fixedSize()
-    }
-
-    private func gauge(_ label: String, _ value: String, _ series: [Double], _ color: Color, _ spark: Bool,
-                       valueColor: Color? = nil) -> some View {
-        HStack(spacing: 3 * s) {
-            Text(label).foregroundStyle(HUDInk.tertiary)
-            Text(value).foregroundStyle(valueColor ?? HUDInk.primary)
-            if spark, series.count > 1 { Sparkline(values: series, color: color, width: 18 * s, height: 9 * s) }
-        }
-    }
-
-    /// Bytes per second, as short as possible: 0, 820, 12K, 1.2M, 3G.
-    static func short(_ bytesPerSecond: Double) -> String {
-        let v = max(0, bytesPerSecond)
-        switch v {
-        case ..<1000: return "\(Int(v))"
-        case ..<10_000: return String(format: "%.1fK", v / 1000)
-        case ..<1_000_000: return "\(Int(v / 1000))K"
-        case ..<10_000_000: return String(format: "%.1fM", v / 1_000_000)
-        case ..<1_000_000_000: return "\(Int(v / 1_000_000))M"
-        default: return String(format: "%.1fG", v / 1_000_000_000)
-        }
-    }
-}
 
 enum HUDInk {
     static let primary = Color.white.opacity(0.95)
@@ -575,9 +535,11 @@ struct EventRow: View {
                     .background(Capsule().fill(Color.white.opacity(0.1)))
                     .help("\(count) events folded into this row")
             }
-            Text(event.clockTime)
-                .font(.system(size: 9.5 * s, design: .monospaced).monospacedDigit())
+            Text(HUDTime.ago(event))
+                .font(.system(size: 9.5 * s).monospacedDigit())
                 .foregroundStyle(HUDInk.tertiary)
+                .frame(minWidth: 22 * s, alignment: .trailing)
+                .help(event.time)
         }
         .frame(height: rowHeight(s))
     }

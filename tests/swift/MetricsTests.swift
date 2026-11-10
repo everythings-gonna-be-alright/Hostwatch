@@ -75,9 +75,8 @@ import Testing
     }
 
     @Test func hudRatesAreShort() {
-        #expect(HUDResources.short(0) == "0" && HUDResources.short(820) == "820")
-        #expect(HUDResources.short(1_240) == "1.2K" && HUDResources.short(40_300) == "40K")
-        #expect(HUDResources.short(1_240_000) == "1.2M" && HUDResources.short(556_000_000) == "556M")
-        #expect(HUDResources.short(3_100_000_000) == "3.1G" && HUDResources.short(-5) == "0")
+        #expect(HUDResourceLine.rate(0) == "0 B/s" && HUDResourceLine.rate(820) == "820 B/s")
+        #expect(HUDResourceLine.rate(613_000) == "613 KB/s" && HUDResourceLine.rate(1_240_000) == "1.2 MB/s")
+        #expect(HUDResourceLine.rate(3_100_000_000) == "3.1 GB/s" && HUDResourceLine.rate(-5) == "0 B/s")
     }
 }
