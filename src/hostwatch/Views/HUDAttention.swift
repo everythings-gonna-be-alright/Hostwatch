@@ -106,9 +106,9 @@ struct HUDIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 10.5 * s, weight: .semibold))
+                .font(.system(size: 8.5 * s, weight: .semibold))
                 .foregroundStyle(HUDInk.secondary)
-                .frame(width: 20 * s, height: 17 * s)
+                .frame(width: 16 * s, height: 14 * s)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

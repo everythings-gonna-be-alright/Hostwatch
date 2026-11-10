@@ -108,6 +108,9 @@ struct HUDView: View {
             }
         }
         .padding(10 * s)
+        // Anywhere that isn't a button or a row moves the HUD (only the header did, and a tooltip on its title took the
+        // clicks there): the header, the attention section, empty space, the resources line.
+        .background(model.overlayClickThrough ? nil : WindowDragArea())
         .frame(width: model.overlayWidth, alignment: .leading)
         // Interactive: fill the panel so the box shows its real size while resizing.
         .frame(maxHeight: model.overlayClickThrough ? nil : .infinity, alignment: .top)
@@ -191,11 +194,7 @@ struct HUDView: View {
     }
 
     /// "● LIVE" capsule: green live, yellow paused, orange off.
-    private var header: some View {
-        headerContent
-            // The whole header bar moves the HUD (when interactive); buttons still get their clicks.
-            .background(model.overlayClickThrough ? nil : WindowDragArea())
-    }
+    private var header: some View { headerContent }
 
     /// Flagged, threat-listed or stopped events of the last ten minutes: the HUD's attention section.
     private var attention: [ActivityEvent] {
@@ -225,7 +224,6 @@ struct HUDView: View {
                 Text("Hostwatch").font(.system(size: 12 * s, weight: .semibold))
                 Text("· \(stateWord)").font(.system(size: 12 * s)).foregroundStyle(HUDInk.secondary)
             }
-            .help(EventKind.allCases.map { "\($0.title): \(model.counts[$0, default: 0].formatted())" }.joined(separator: "\n"))
             Spacer(minLength: 4)
             if !model.overlayClickThrough {
                 // One style for both: the same capsule, glyph size and weight.
