@@ -92,6 +92,9 @@
 
 ### Fixes
 
+- **The HUD sometimes wouldn't move.** Only its header dragged it, and a tooltip on the title took the clicks there.
+  Any spot that isn't a row or a button moves it now. Its Pause and Open glyphs are a little smaller.
+
 - **Allow on some connections did nothing**, for example Hostwatch's own connections to chatgpt.com. Their pattern
   was never recorded (Hostwatch leaves its own activity out of patterns), so there was nothing to mark Safe. Allow and
   Block now record the pattern from the firewall's own record first.
