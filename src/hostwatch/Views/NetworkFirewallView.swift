@@ -124,7 +124,7 @@ struct NetworkFirewallPage: View {
                 Text("Allow marks the program's pattern for that destination Safe. Block marks it Dangerous.")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(found.prefix(Self.limit), id: \.0.id) { entry, decision in
-                    NetworkFindingRow(entry: entry, decision: decision, mode: firewall.mode) { status in
+                    NetworkFindingRow(entry: entry, decision: decision, mode: firewall.mode, firewall: firewall) { status in
                         signatures.set(status, keys: [entry.facts.patternKey],
                                        note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                     }
@@ -159,7 +159,11 @@ struct NetworkFindingRow: View {
     let entry: FirewallEntry
     let decision: FirewallDecision
     let mode: FirewallMode
+    /// The firewall, for a domain you blocked for this app: Allow lifts that block too (it wins over the pattern).
+    var firewall: FirewallMonitor? = nil
     let mark: (SignatureStatus) -> Void
+
+    private var blockedDomain: String? { firewall?.blockedDomain(entry.facts) }
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; f.dateTimeStyle = .named; return f
@@ -187,7 +191,12 @@ struct NetworkFindingRow: View {
                 Text(decision.reason).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Allow") { mark(.safe) }
+            Button("Allow") {
+                // A domain you blocked for this app outranks the pattern: Safe alone changed nothing.
+                if let domain = blockedDomain { firewall?.setBlocked(false, domain: domain, program: entry.facts.program) }
+                mark(.safe)
+            }
+            .help(blockedDomain.map { "Unblocks \($0) for \(entry.name) and marks the pattern Safe" } ?? "Marks the pattern Safe")
             Button("Block") { mark(.dangerous) }
         }
         .controlSize(.small)

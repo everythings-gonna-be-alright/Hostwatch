@@ -124,3 +124,26 @@ import Testing
             .appendingPathComponent("\(name).png"))
     }
 }
+
+/// Protection's Allow on a destination you blocked for an app: the block goes too, or nothing would change.
+@MainActor @Suite struct FirewallAllowLiftsDomainBlock {
+    @Test func allowingABlockedDomainRemovesTheBlock() {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-allow-\(UUID().uuidString)")
+        let store = SignatureStore(directory: dir)
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-allow"), fileURL: dir.appendingPathComponent("fw.json"))
+        fw.answer = { _, _, _ in }
+        fw.mode = .watch
+        let e = net("/opt/tools/bin/syncd", pid: 9, to: "185.199.108.133:443", host: "raw.githubusercontent.com")
+        _ = store.observe(e)                                  // the app's store knows the pattern, as in the app
+        _ = fw.observe(e, status: .unclassified)
+        fw.setBlocked(true, domain: "githubusercontent.com", program: "/opt/tools/bin/syncd")
+        let status = { (key: String) in store.status(forKey: key) }
+        guard let (entry, decision) = fw.list(status: status).first else { Issue.record("not listed"); return }
+        #expect(decision.verdict == .block && fw.blockedDomain(entry.facts) == "githubusercontent.com")
+        // What the row's Allow does: lift the block, then mark the pattern Safe.
+        if let domain = fw.blockedDomain(entry.facts) { fw.setBlocked(false, domain: domain, program: entry.facts.program) }
+        store.set(.safe, keys: [entry.facts.patternKey])
+        #expect(fw.list(status: status).isEmpty)
+    }
+}

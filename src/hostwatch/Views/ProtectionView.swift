@@ -175,7 +175,7 @@ struct ProtectionView: View {
                 if !network.isEmpty {
                     Text("Connections").font(.subheadline.weight(.semibold)).padding(.top, 8)
                     ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
-                        NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch) { status in
+                        NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
                             mark([entry.facts.patternKey], status)
                         }
                     }

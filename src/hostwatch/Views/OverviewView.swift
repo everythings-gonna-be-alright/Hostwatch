@@ -30,7 +30,11 @@ struct WindowTabBar: View {
                         Image(systemName: tab.symbol)
                             .symbolVariant(selected ? .fill : .none)
                             .font(.system(size: 12, weight: .medium))
-                        if showTitles { Text(tab.title).font(.system(size: 12, weight: selected ? .semibold : .regular)) }
+                        if showTitles {
+                            // Never truncated: the toolbar squeezed "Rules" to "R…" when it ran short of room.
+                            Text(tab.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                                .lineLimit(1).fixedSize()
+                        }
                         if let badge = tab.badge {
                             Text(badge)
                                 .font(.system(size: 10, weight: .semibold).monospacedDigit())
@@ -60,6 +64,7 @@ struct WindowTabBar: View {
             }
         }
         .padding(3)
+        .fixedSize()                                          // the bar takes the width its titles need
     }
 }
 
