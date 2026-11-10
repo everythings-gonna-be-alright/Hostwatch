@@ -83,15 +83,17 @@ final class PatternClassifier: ObservableObject {
     }
 
     /// Patterns among `keys` that "Apply the Verdicts" changes: New ones the AI answers, plus those it already answered.
+    /// Reopened patterns count: you asked for these, so the AI looks at them (told why they were reopened).
     func undecided(in keys: Set<String>) -> Int {
-        keys.compactMap { store.entry($0) }.filter { store.status(forKey: $0.id) == .unclassified && $0.reopened == nil }.count
+        keys.compactMap { store.entry($0) }.filter { store.status(forKey: $0.id) == .unclassified }.count
     }
 
-    /// New patterns among `keys` that Classify with AI would take (all New patterns when nil).
+    /// New patterns among `keys` that Classify with AI would take (all New patterns when nil). Automatic runs (nil)
+    /// leave reopened patterns to you; an explicit scope includes them.
     func classifiable(in keys: Set<String>?) -> [SignatureEntry] {
         guard let keys else { return classifiable }
         return store.allEntries.filter { keys.contains($0.id) && store.status(forKey: $0.id) == .unclassified
-            && $0.suggestion == nil && $0.reopened == nil }
+            && $0.suggestion == nil }
     }
 
     /// Classifies New patterns, `batchSize` at a time (high-risk first, then most recent): every one, or only

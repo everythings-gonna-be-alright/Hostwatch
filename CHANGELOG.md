@@ -18,6 +18,8 @@
 - **Apply covers a tool's reads of your projects.** An AI's Safe now applies when a shell, curl or codesign only
   reads an exact folder in your own projects, like codesign reading a build folder. What such tools launch, connect
   to or write, and high-risk patterns, stay yours, and Patterns says why: *AI suggests Safe · yours: …*.
+- **Reopened patterns can be classified too.** When you ask (the button or a right-click), patterns sent back to you
+  because something changed are included, and the AI is told why. Automatic classification still leaves them to you.
 - **Nothing selected means everything shown, and you see it.** With no selection, *Classify with AI* selects every
   row the list shows and classifies those.
 - **Classify what you see, or what you pick.** *Classify with AI* takes only the New patterns the list shows (its
