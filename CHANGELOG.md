@@ -69,6 +69,8 @@
   heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
   holding its place for hours. Names and words read in the system font, as in Activity Monitor (Events, Patterns,
   Network). Times, pids, paths, patterns and hosts stay monospaced.
+- **The menu bar menu lost its counters.** Stories, Patterns and Network open their tabs without numbers: counts of
+  patterns and domains weren't tasks.
 - **Tab badges mean "this needs you".** *Rules* counts what waits for your decision, *Network* only connections
   waiting for your answer (no longer every new domain), and *Stories* only dangerous stories, in red. New domains and
   open stories show in the window's subtitle on their own tab.

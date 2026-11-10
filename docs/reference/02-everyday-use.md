@@ -20,8 +20,7 @@ glance and quick actions.
 - **Actions:**
   - **Start Collector…** (shown when the collector is off)
   - **Open Hostwatch** (⌘O)
-  - **Stories**, **Patterns** and **Network**, each with a badge. The Network badge shows waiting firewall questions,
-    or else new domains.
+  - **Stories**, **Patterns** and **Network**, which open those tabs (no counters: the tabs badge what needs you).
   - Pause Live Stream
   - **Show HUD** (⌃⌥⌘H). This shortcut works from any app.
   - Hold Suspicious Processes

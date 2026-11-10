@@ -77,17 +77,12 @@ extension AppDelegate {
         menu.addItem(.separator())
 
         menu.addItem(item("Open Hostwatch", #selector(openWindowed), key: "o", symbol: "macwindow"))
-        let storiesItem = item("Stories", #selector(openStories), symbol: "point.3.connected.trianglepath.dotted")
-        if stories.activeCount > 0 { storiesItem.badge = NSMenuItemBadge(count: stories.activeCount) }
-        menu.addItem(storiesItem)
-        let patterns = item("Patterns", #selector(openPatterns), symbol: "square.stack.3d.up")
-        let unreviewed = signatures.count(.unclassified)
-        if unreviewed > 0 { patterns.badge = NSMenuItemBadge(count: unreviewed) }
-        menu.addItem(patterns)
+        // Doors into the window, without counters: 1,068 New patterns or 161 new domains aren't tasks (the tabs show
+        // what needs you).
+        menu.addItem(item("Stories", #selector(openStories), symbol: "point.3.connected.trianglepath.dotted"))
+        menu.addItem(item("Patterns", #selector(openPatterns), symbol: "square.stack.3d.up"))
         let domainsItem = item("Network", #selector(openDomains), symbol: "network.badge.shield.half.filled")
         domainsItem.toolTip = "Firewall and domains"
-        let waiting = firewall.prompts.count
-        if waiting + domains.newCount > 0 { domainsItem.badge = NSMenuItemBadge(count: waiting > 0 ? waiting : domains.newCount) }
         menu.addItem(domainsItem)
         menu.addItem(.separator())
 
