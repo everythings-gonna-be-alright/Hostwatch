@@ -287,13 +287,20 @@ final class HUDModel: ObservableObject {
         return out
     }
 
-    var overlayEvents: [ActivityEvent] {
-        var out: [ActivityEvent] = []
+    var overlayEvents: [ActivityEvent] { overlayItems(rows: overlayRows).map(\.event) }
+
+    /// The overlay's rows, repeats folded (HUDFold): enough recent events are read to fill `rows` folded rows.
+    func overlayItems(rows: Int, flag: (ActivityEvent) -> Bool = { _ in false }) -> [HUDFold.Item] {
+        var recent: [ActivityEvent] = []
         for e in history where visibleKinds.contains(e.kind) && passesSignatureFilter(e) {
-            out.append(e)
-            if out.count == overlayRows { break }
+            recent.append(e)
+            if recent.count == rows * 12 { break }
         }
-        return out
+        return HUDFold.fold(recent, limit: rows) { e in
+            let marked = flag(e) || e.isFirst || !e.newDomain.isEmpty || !e.beacon.isEmpty || e.rawIP
+                || !e.knownBad.isEmpty || e.protection != .none
+            return marked ? nil : "\(e.kind.rawValue)|\(e.proc)|\(statusAndReviewed(e).status.rawValue)"
+        }
     }
 
     var searchResults: [ActivityEvent] { filtered(history) }
