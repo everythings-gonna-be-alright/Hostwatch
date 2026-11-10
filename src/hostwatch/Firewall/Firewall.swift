@@ -355,6 +355,37 @@ final class FirewallMonitor: ObservableObject {
         store.set(status, keys: keys, note: note)
     }
 
+    // MARK: Your rules, listed
+
+    /// One of your firewall rules, from its "program name|domain" key.
+    struct Rule: Identifiable, Equatable {
+        enum Kind: String { case domainBlock, threatException, askAgain }
+        let kind: Kind
+        let key: String
+        var id: String { kind.rawValue + "|" + key }
+        var program: String { String(key.split(separator: "|", maxSplits: 1).first ?? "") }
+        var destination: String { String(key.split(separator: "|", maxSplits: 1).dropFirst().first ?? "") }
+    }
+
+    /// Every rule of yours that isn't a pattern decision, whatever the seen-connections list holds.
+    var rules: [Rule] {
+        domainBlocks.sorted().map { Rule(kind: .domainBlock, key: $0) }
+            + threatExceptions.sorted().map { Rule(kind: .threatException, key: $0) }
+            + askAgain.sorted().map { Rule(kind: .askAgain, key: $0) }
+    }
+
+    /// Removes one of your rules (Unblock, or undo an exception or a Forget).
+    func remove(_ rule: Rule) {
+        switch rule.kind {
+        case .domainBlock: domainBlocks.remove(rule.key)
+        case .threatException: threatExceptions.remove(rule.key)
+        case .askAgain: askAgain.remove(rule.key)
+        }
+        revision += 1
+        dirty = true
+        save()
+    }
+
     func isBlocked(domain: String, program: String) -> Bool {
         domainBlocks.contains(Self.domainBlockKey(program: program, domain: domain))
     }

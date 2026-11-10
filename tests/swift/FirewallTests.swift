@@ -178,3 +178,23 @@ import Testing
         #expect(FirewallMonitor(defaults: scratchDefaults("hw-threat2"), fileURL: url).threatAllowed(facts(app)))
     }
 }
+
+/// Your firewall rules, listed whatever the seen-connections list holds: forgetting that never hides a rule.
+@MainActor @Suite struct FirewallRulesList {
+    @Test func everyRuleIsListedAndRemovableAndSurvivesForgetting() {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-rules-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fw = FirewallMonitor(defaults: scratchDefaults("hw-rules"), fileURL: dir.appendingPathComponent("fw.json"))
+        let app = "/Applications/Tool.app/Contents/MacOS/Tool"
+        fw.setBlocked(true, domain: "example.com", program: app)
+        fw.setThreatException(true, FirewallFacts(program: app, proto: "TCP", ip: "1.2.3.4", port: "443", host: "raw.githubusercontent.com",
+                                                  risk: .normal, riskReason: "", knownBad: "x", patternKey: "k"))
+        #expect(Set(fw.rules.map(\.kind)) == [.domainBlock, .threatException])
+        #expect(fw.rules.first { $0.kind == .domainBlock }.map { ($0.program, $0.destination) }! == ("Tool", "example.com"))
+        fw.clear()                                                        // Forget Seen Connections
+        #expect(fw.rules.count == 2)
+        fw.remove(fw.rules.first { $0.kind == .domainBlock }!)
+        #expect(!fw.isBlocked(domain: "example.com", program: app) && fw.rules.count == 1)
+    }
+}
