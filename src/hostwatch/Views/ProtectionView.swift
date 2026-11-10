@@ -4,13 +4,29 @@ import SwiftUI
 /// The Protection rows of the Rules sidebar: Found carries a badge while something would be stopped.
 struct ProtectionSidebarRows: View {
     @ObservedObject var protection: ProtectionMonitor
+    var firewall: FirewallMonitor? = nil
+    /// Destinations the firewall would block (or blocks): Found counts them with launches and files.
+    var networkStops: () -> Int = { 0 }
 
     var body: some View {
         let _ = protection.revision
-        let stops = protection.findings.values.filter { $0.verdict == .block }.count
+        let stops = protection.findings.values.filter { $0.verdict == .block }.count + networkStops()
         Label("Overview", systemImage: "shield.lefthalf.filled").tag(RulesSegment.protectionOverview)
         Label("Protected Files and Folders", systemImage: "lock.doc").tag(RulesSegment.protectedFiles)
+        if let firewall {
+            FirewallSidebarRow(firewall: firewall)
+        }
         Label("Found", systemImage: "exclamationmark.shield").badge(stops).tag(RulesSegment.protectionFound)
+    }
+}
+
+/// The firewall's row: a badge for connections waiting for your answer (they need you now).
+private struct FirewallSidebarRow: View {
+    @ObservedObject var firewall: FirewallMonitor
+
+    var body: some View {
+        Label("Network Firewall", systemImage: "network.badge.shield.half.filled")
+            .badge(firewall.prompts.count).tag(RulesSegment.firewall)
     }
 }
 
@@ -19,6 +35,8 @@ struct ProtectionSidebarRows: View {
 struct ProtectionView: View {
     @ObservedObject var protection: ProtectionMonitor
     var firewall: FirewallMonitor? = nil
+    /// The firewall's findings, shown in Found with launches and files.
+    var connections: () -> [(FirewallEntry, FirewallDecision)] = { [] }
     /// Which page of Rules ▸ Protection: Overview, Protected Files and Folders, or Found.
     let page: RulesSegment
     /// Marks patterns: Allow (Safe) or Block (Dangerous), as everywhere else.
@@ -37,7 +55,7 @@ struct ProtectionView: View {
             switch page {
             case .protectedFiles: files
             case .protectionFound: findings
-            default: ProtectionOverview(protection: protection, firewall: firewall, go: go)
+            default: ProtectionOverview(protection: protection, firewall: firewall, connections: connections, go: go)
             }
         }
     }
@@ -137,17 +155,34 @@ struct ProtectionView: View {
         let all = protection.findings.values.sorted {
             ($0.verdict == .block ? 0 : 1, -$0.count) < ($1.verdict == .block ? 0 : 1, -$1.count)
         }
+        let network = connections()
         return VStack(alignment: .leading, spacing: 8) {
             Text("What protection found").font(.headline)
-            if all.isEmpty {
+            if all.isEmpty && network.isEmpty {
                 Text("Nothing yet. What would be stopped or asked about appears here, so you can decide first.")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Allow marks the pattern Safe. Block marks it Dangerous. Either way it leaves this list.")
                     .font(.caption).foregroundStyle(.secondary)
-                ForEach(all.prefix(Self.limit)) { f in finding(f) }
-                if all.count > Self.limit {
-                    Text("and \(all.count - Self.limit) more").font(.caption).foregroundStyle(.tertiary)
+                if !all.isEmpty {
+                    Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
+                    ForEach(all.prefix(Self.limit)) { f in finding(f) }
+                    if all.count > Self.limit {
+                        Text("and \(all.count - Self.limit) more").font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+                // Connections: the firewall's findings, decided the same way.
+                if !network.isEmpty {
+                    Text("Connections").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
+                        NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch) { status in
+                            mark([entry.facts.patternKey], status)
+                        }
+                    }
+                    if network.count > Self.limit {
+                        Text("and \(network.count - Self.limit) more on the Network Firewall page").font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
         }

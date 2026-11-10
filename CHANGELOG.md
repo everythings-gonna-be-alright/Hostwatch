@@ -71,7 +71,9 @@
   Network). Times, pids, paths, patterns and hosts stay monospaced.
 - **The firewall lives with protection.** Its settings moved from Settings to Rules ▸ Protection: a Network card on
   the Overview with the four modes, beside Launches and Files, and a *Network Firewall* page with the relay's status
-  and counts. Every link that opened Settings ▸ Firewall goes there.
+  and counts. Every link that opened Settings ▸ Firewall goes there. The page is built like the other
+  Protection pages: the mode and what it does, large numbers, what waits for you, what it found with Allow and Block.
+  Found lists connections with launches and files.
 - **The menu bar menu lost its counters.** Stories, Patterns and Network open their tabs without numbers: counts of
   patterns and domains weren't tasks.
 - **Tab badges mean "this needs you".** *Rules* counts what waits for your decision, *Network* only connections

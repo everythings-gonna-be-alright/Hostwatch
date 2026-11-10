@@ -29,6 +29,11 @@ struct RulesView: View {
     var showNetwork: () -> Void = {}
 
     private var review: [BaselineReport.Group] { baseline.report?.review ?? [] }
+
+    /// What the firewall would block or ask about (or does): part of Protection's Found and Overview.
+    private var connections: () -> [(FirewallEntry, FirewallDecision)] {
+        { [firewall, signatures] in firewall?.list(status: { signatures.status(forKey: $0) }) ?? [] }
+    }
     private var waiting: Int { review.count + book.proposals.count }
 
     var body: some View {
@@ -54,10 +59,9 @@ struct RulesView: View {
             }
             if let protection {
                 Section("Protection") {
-                    ProtectionSidebarRows(protection: protection)
-                    if firewall != nil {
-                        Label("Network Firewall", systemImage: "network.badge.shield.half.filled").tag(RulesSegment.firewall)
-                    }
+                    ProtectionSidebarRows(protection: protection, firewall: firewall, networkStops: {
+                        connections().filter { $0.1.verdict == .block }.count
+                    })
                 }
             }
         }
@@ -75,14 +79,12 @@ struct RulesView: View {
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
                     case .firewall:
                         if let firewall {
-                            // The same settings Settings had, here with the rest of protection.
-                            FirewallPane(firewall: firewall, signatures: signatures, showNetwork: showNetwork)
-                                .frame(maxWidth: 680, alignment: .leading)
-                                .fixedSize(horizontal: false, vertical: true)
+                            NetworkFirewallPage(firewall: firewall, signatures: signatures, showNetwork: showNetwork)
                         }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
-                            ProtectionView(protection: protection, firewall: firewall, page: tab.segment, mark: { keys, status in
+                            ProtectionView(protection: protection, firewall: firewall, connections: connections,
+                                           page: tab.segment, mark: { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                             }, go: { tab.segment = $0; tab.chosen = true })
