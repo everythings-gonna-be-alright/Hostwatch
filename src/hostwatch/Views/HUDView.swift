@@ -102,6 +102,7 @@ struct HUDView: View {
                 Spacer(minLength: 0)
                 Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
                 HUDResourceLine(sample: sample, s: s)
+                    .padding(.leading, model.overlayClickThrough ? 0 : 14 * s)    // clear of the resize grip
             }
         }
         .padding(10 * s)

@@ -66,8 +66,12 @@ enum HUDFold {
             let unique = Set(events.map(\.target)).count
             return "\(verb) \(unique) file\(unique == 1 ? "" : "s")" + place(events.map(\.target)).map { " in \($0)" }.orEmpty
         case .exec:
+            // The row is the program itself: how often it started, and by whom ("started 5 times by bash").
             let names = unique(events.map { ($0.target as NSString).lastPathComponent })
-            return "started \(n) program\(n == 1 ? "" : "s"): " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? "…" : "")
+            let parents = unique(events.map { ($0.parent as NSString).lastPathComponent }.filter { !$0.isEmpty })
+            let by = parents.isEmpty ? "" : " by " + parents.prefix(2).joined(separator: ", ") + (parents.count > 2 ? "…" : "")
+            if names.count == 1 { return "started \(n) times" + by }
+            return "started \(n) programs: " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? "…" : "")
         case .net:
             let hosts = unique(events.map { $0.host.isEmpty ? ($0.remoteHost ?? "?") : $0.host })
             return "\(n) connection\(n == 1 ? "" : "s"): " + hosts.prefix(2).joined(separator: ", ") + (hosts.count > 2 ? "…" : "")
