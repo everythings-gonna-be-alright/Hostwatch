@@ -71,9 +71,13 @@ struct HUDView: View {
             } else {
                 VStack(alignment: .leading, spacing: 1) {
                     // Each banner takes about two rows of room.
-                    ForEach(Array(model.overlayEvents.prefix(max(0, model.overlayRows - 2 * min(2, stories.recent().count))))) { event in
+                    // Each banner takes about two rows of room. Repeats fold into one row (HUDFold).
+                    let rows = max(0, model.overlayRows - 2 * min(2, stories.recent().count))
+                    ForEach(model.overlayItems(rows: rows, flag: { vitals.badge(for: $0) != nil || intel.flag(for: $0) != nil })) { item in
+                        let event = item.event
                         EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event),
-                                 knownBad: intel.flag(for: event))
+                                 knownBad: intel.flag(for: event), count: item.count,
+                                 summary: item.folded ? HUDFold.summary(item.events) : nil)
                             .contentShape(Rectangle())
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
@@ -485,28 +489,52 @@ struct EventRow: View {
     var vital: ProcessVitals.Badge? = nil
     /// On a threat list.
     var knownBad: String? = nil
+    /// A folded row: how many events, and what they did in words ("read 12 files in Shortcuts.app").
+    var count = 1
+    var summary: String? = nil
+
+    /// Something to look at: flagged, on a threat list, or stopped (or would be) by protection.
+    private var flagged: Bool {
+        knownBad != nil || status == .suspicious || status == .dangerous || event.protection != .none
+    }
+
+    /// Ordinary, decided Safe, nothing to point out: it steps back, so an exception stands out (most rows are these).
+    private var quiet: Bool {
+        status == .safe && !flagged && vital == nil && !event.isFirst && event.newDomain.isEmpty && event.beacon.isEmpty && !event.rawIP
+    }
+
+    /// Colour only for exceptions: red for dangerous, threat-listed or stopped, orange for New and Suspicious.
+    private var stripe: Color? {
+        if knownBad != nil || status == .dangerous || event.protection != .none { return .red }
+        if status == .suspicious || status == .unclassified { return .orange }
+        return nil
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             KindTile(kind: event.kind, size: 12 * s)
+                .saturation(stripe == nil ? 0 : 1)              // a tinted icon only where there's a bar
+                .opacity(stripe == nil ? 0.5 : 1)
                 .overlay(alignment: .leading) {
-                    // Status stripe: red/orange for flagged patterns, green for safe.
-                    if knownBad != nil || status != .unclassified {
-                        Rectangle().fill(knownBad != nil ? Color.red : Color(nsColor: status.nsColor))
+                    // A stripe only for what needs a look: a green one on every Safe row said nothing.
+                    if let stripe {
+                        Rectangle().fill(stripe)
                             .frame(width: 2 * s, height: rowHeight(s) - 2)
                             .offset(x: -5 * s)
                     }
                 }
+            // The name has the most room: it's what you recognise.
             Text(event.name)
-                .font(.system(size: 11 * s, weight: .semibold, design: .monospaced))
-                .foregroundStyle(HUDInk.primary)
+                .font(.system(size: 11.5 * s, weight: flagged ? .bold : quiet ? .regular : .semibold))
+                .foregroundStyle(flagged ? (stripe ?? HUDInk.primary) : quiet ? HUDInk.secondary : HUDInk.primary)
                 .lineLimit(1)
-                .frame(maxWidth: 104 * s, alignment: .leading)
-            Text(event.detail)
-                .font(.system(size: 10.5 * s, design: .monospaced))
-                .foregroundStyle(HUDInk.secondary)
+                .layoutPriority(1)
+            Text(summary ?? HUDFold.detail(event))
+                .font(event.kind == .net && summary == nil ? .system(size: 10.5 * s, design: .monospaced) : .system(size: 11 * s))
+                .foregroundStyle(quiet ? HUDInk.tertiary : HUDInk.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .help(event.target)
             Spacer(minLength: 2)
             if let knownBad {
                 Text("KNOWN BAD")
@@ -538,6 +566,14 @@ struct EventRow: View {
                     .font(.system(size: 8 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(.yellow)
                     .help("First time this pattern was ever seen")
+            }
+            if count > 1 {
+                Text("\(count)×")
+                    .font(.system(size: 9.5 * s, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(HUDInk.secondary)
+                    .padding(.horizontal, 5 * s)
+                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                    .help("\(count) events folded into this row")
             }
             Text(event.clockTime)
                 .font(.system(size: 9.5 * s, design: .monospaced).monospacedDigit())
