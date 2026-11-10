@@ -20,8 +20,7 @@ glance and quick actions.
 - **Actions:**
   - **Start Collector…** (shown when the collector is off)
   - **Open Hostwatch** (⌘O)
-  - **Stories**, **Patterns** and **Network**, each with a badge. The Network badge shows waiting firewall questions,
-    or else new domains.
+  - **Stories**, **Patterns** and **Network**, which open those tabs (no counters: the tabs badge what needs you).
   - Pause Live Stream
   - **Show HUD** (⌃⌥⌘H). This shortcut works from any app.
   - Hold Suspicious Processes
@@ -72,8 +71,7 @@ click-through, so your clicks pass through it to the apps underneath.
 
 From top to bottom:
 
-- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with a button that opens the Hostwatch window while
-  the HUD takes clicks. The counts per kind are in the name's tooltip.
+- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with a Pause button while the HUD takes clicks. The counts per kind are in the name's tooltip.
 - **Needs a look:** only when something does. Flagged, threat-listed or stopped events of the last ten minutes, with
   why, and processes running heavy.
 - **The stream:** one row per event, in words: *x.plist in ~/Library/Preferences*, *started by zsh*, or the
