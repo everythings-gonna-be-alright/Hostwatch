@@ -137,13 +137,11 @@ final class PatternClassifier: ObservableObject {
     }
 
     /// A Safe the app never takes from an AI.
-    nonisolated static func staysYours(_ e: SignatureEntry) -> Bool { e.risk == .high || SignatureBuilder.runsAnyCode(e) }
+    nonisolated static func staysYours(_ e: SignatureEntry) -> Bool { SignatureBuilder.aiSafeRefusal(e) != nil }
 
     /// Why an AI's Safe isn't applied to this pattern, in its own terms.
     nonisolated static func yoursBecause(_ e: SignatureEntry) -> String {
-        let name = (SignatureStore.subjectPath(e) as NSString).lastPathComponent
-        if SignatureBuilder.runsAnyCode(e) { return "\(name) can run or change other programs, so only you can mark it Safe" }
-        return "a high-risk pattern, so only you can mark it Safe"
+        (SignatureBuilder.aiSafeRefusal(e) ?? "it's yours to decide") + ", so only you can mark it Safe"
     }
 
     /// The live list's state for an answer: a Safe the app won't take is yours to decide, with why.

@@ -41,7 +41,9 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
   `dropInterpreterTrust()` deletes wide patterns at launch unless you or a rule decided them. A new pattern form
   that is wide by text but specific by meaning needs an explicit exemption there.
 - **Interpreters, shells and LOLBins are never trusted broadly** (`isLolbin`, `runsAnyCode`): their patterns name the
-  script, the exact folder or the destination, and a Safe rule for them is refused. Keep it that way.
+  script, the exact folder or the destination, and a Safe rule for them is refused. Keep it that way. An AI may mark
+  Safe only their plain reads of an exact folder in your own projects (`aiSafeRefusal`, ADR 0013), never what they
+  launch, connect to or write.
 - **Precedence:** you > your rules > Claude / on-device > automatic. `source` on a `SignatureEntry` records who
   decided; code that changes a status must respect it (`ruleOverridable`, `mayRegroup`, tidy).
 - **Risk only goes up by itself.** `raise` reopens a Safe decision when a binary is swapped or quarantined; nothing

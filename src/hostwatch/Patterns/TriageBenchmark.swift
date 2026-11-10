@@ -13,6 +13,7 @@ struct BenchCase: Sendable {
     var prompt: String
     var label: String
     var warned = false                   // Hostwatch found a warning sign: the router never takes a local Safe
+    var appRefuses = false               // no AI's Safe is taken for it (aiSafeRefusal): high-risk, what shells launch…
 }
 
 private struct BenchAnswer: Sendable {
@@ -56,7 +57,8 @@ func runTriageBenchmark() -> Never {
         // No app here, so no recorded launches: the benchmark measures the prompt and the model, not the context.
         BenchCase(key: e.id, truth: e.status, risk: e.risk, prompt: TriagePrompt.pattern(e, context: nil),
                   label: "\(displayProcessName(e.process)) → \(e.pattern)",
-                  warned: !TriagePrompt.warningSigns(e, context: nil).isEmpty)
+                  warned: !TriagePrompt.warningSigns(e, context: nil).isEmpty,
+                  appRefuses: SignatureBuilder.aiSafeRefusal(e) != nil)
     } + red
     let sources = Dictionary(grouping: saved.entries, by: { "\($0.source ?? "none")/\($0.status.rawValue)" }).mapValues(\.count)
     print("decisions by who and what: " + sources.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
@@ -109,7 +111,7 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
         times.append(a.seconds)
         // What the router would do with it: only a confident Safe on a pattern that isn't high-risk is settled.
         let modelSettles = v == .safe && a.confidence == .high && c.risk != .high
-        let settles = modelSettles && !(local && c.warned)
+        let settles = modelSettles && !(local && c.warned) && !c.appRefuses
         if modelSettles, c.truth != .safe { modelFalseSafe += 1 }
         let saysFlag = v == .suspicious || v == .dangerous
         if v == .unknown { unsure += 1 }
@@ -130,7 +132,7 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
     func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "–" : "\(Int((Double(a) / Double(b) * 100).rounded()))%" }
     let summary = """
     \(model)
-      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)\(local ? "   (the model alone: \(modelFalseSafe), warning signs stop the rest)" : "")
+      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)   (the model alone: \(modelFalseSafe), Hostwatch's rules stop the rest)
       your Safe ones it would settle:       \(settledSafe) of \(nSafe) (\(pct(settledSafe, nSafe)))
       agrees Safe:                          \(pct(safeAgreed, nSafe))   flags your flagged ones: \(pct(flaggedCaught, nFlag))
       unsure: \(unsure)   errors or refusals: \(errors)
@@ -256,7 +258,8 @@ enum BenchRedTeam {
         let context = TriageContext(trail: trail, origin: origin, session: nil, command: command)
         return BenchCase(key: e.id, truth: .dangerous, risk: .normal, prompt: TriagePrompt.pattern(e, context: context),
                          label: "[attack] \((process as NSString).lastPathComponent) → \(String((pattern ?? target).prefix(90)))",
-                         warned: !TriagePrompt.warningSigns(e, context: context).isEmpty)
+                         warned: !TriagePrompt.warningSigns(e, context: context).isEmpty,
+                         appRefuses: SignatureBuilder.aiSafeRefusal(e) != nil)
     }
 
     static let home = AppPaths.userHome

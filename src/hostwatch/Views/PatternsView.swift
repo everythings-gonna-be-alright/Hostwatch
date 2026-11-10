@@ -459,7 +459,7 @@ extension PatternsView {
         let n = classifier.undecided(in: only), unasked = classifier.classifiable(in: only).count
         Menu(n == 0 ? "Classify with AI (nothing New)" : "Classify \(n) New Pattern\(n == 1 ? "" : "s") with AI") {
             Button("Apply the Verdicts") { classifier.classifyAll(apply: true, only: only) }
-            Button("Keep Them as Suggestions") { classifier.classifyAll(apply: false, only: only) }.disabled(unasked == 0)
+            Button("Suggest Only, I’ll Decide") { classifier.classifyAll(apply: false, only: only) }.disabled(unasked == 0)
         }
         .disabled(n == 0 || classifier.bulk != nil || classifier.running)
     }

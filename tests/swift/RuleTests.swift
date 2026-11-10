@@ -188,7 +188,9 @@ import Testing
         let python = seen(net("/opt/homebrew/bin/python3.12", pid: 4102, to: "5.6.7.8:443"))
         for key in [shell, python] {
             for source in ["claude", "on-device"] { store.suggest(.safe, key: key, source: source, note: "looks routine") }
-            #expect(store.entry(key)?.suggestion == nil && store.status(forKey: key) == .unclassified)
+            // Kept as a suggestion with its reason (ADR 0013), never applied by itself.
+            #expect(store.entry(key)?.suggestion?.status == .safe && store.status(forKey: key) == .unclassified)
+            #expect(store.acceptSuggestions(keys: [key], yours: false) == 0)
         }
         store.suggest(.suspicious, key: python, source: "claude", note: nil)          // other verdicts are fine
         #expect(store.entry(python)?.suggestion?.status == .suspicious)

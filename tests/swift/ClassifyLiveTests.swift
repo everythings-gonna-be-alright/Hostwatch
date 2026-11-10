@@ -70,12 +70,18 @@ import Testing
 
     @Test func codesignIsYoursToDecideAndOneClickDoesIt() {
         let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("yours-\(UUID().uuidString)"))
+        // Reading a build folder in a project: an AI's Safe may apply (ADR 0013).
+        let read = ActivityEvent(kind: .file, time: "12:00:00", pid: 10, ppid: 9, name: "codesign", proc: "/usr/bin/codesign",
+                                 target: NSHomeDirectory() + "/Documents/Proj/.build/out/Products/Debug/App", extra: "r", parent: "/usr/bin/swift-package")
+        _ = store.observe(read)
+        #expect(!PatternClassifier.staysYours(store.entry(read.signatureKey)!))
+        // Writing into Downloads: yours, with the reason.
         let e = ActivityEvent(kind: .file, time: "12:00:00", pid: 10, ppid: 9, name: "codesign", proc: "/usr/bin/codesign",
-                              target: NSHomeDirectory() + "/Documents/Proj/.build/out/Products/Debug/App", extra: "r", parent: "/usr/bin/swift-package")
+                              target: NSHomeDirectory() + "/Downloads/Tool.app/Contents/MacOS/Tool", extra: "w", parent: "/bin/zsh")
         _ = store.observe(e)
         let entry = store.entry(e.signatureKey)!
         #expect(PatternClassifier.staysYours(entry))
-        #expect(PatternClassifier.yoursBecause(entry).hasPrefix("codesign can run or change other programs"))
+        #expect(PatternClassifier.yoursBecause(entry).hasSuffix("so only you can mark it Safe"))
         let c = PatternClassifier(store: store)
         c.live.add([entry], as: .asking("Claude"))
         c.decide(entry.id, .safe)

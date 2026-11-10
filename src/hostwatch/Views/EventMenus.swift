@@ -102,7 +102,7 @@ extension ActivityWindowView {
                               action: nil, keyEquivalent: "")
         let sub = NSMenu()
         sub.addItem(ClosureMenuItem("Apply the Verdicts") { classifier.classifyAll(apply: true, only: only) })
-        sub.addItem(ClosureMenuItem("Keep Them as Suggestions", enabled: unasked > 0) { classifier.classifyAll(apply: false, only: only) })
+        sub.addItem(ClosureMenuItem("Suggest Only, I’ll Decide", enabled: unasked > 0) { classifier.classifyAll(apply: false, only: only) })
         item.submenu = sub
         item.isEnabled = n > 0 && !busy
         menu.addItem(item)

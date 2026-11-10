@@ -17,3 +17,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0010](0010-appkit-event-list.md) | The Events list is an AppKit outline view with reused cells (SwiftUI's Table cost a core under a busy agent) |
 | [0011](0011-protection.md) | Launch and file protection: rehearse on the event feed, enforce with Endpoint Security later |
 | [0012](0012-triage-warning-signs.md) | One triage prompt with checked warning signs, and a warning sign outranks a local model's Safe |
+| [0013](0013-ai-safe-project-reads.md) | An AI may mark Safe a run-anything tool's plain read of an exact project folder |
