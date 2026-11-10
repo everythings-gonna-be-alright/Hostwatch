@@ -86,6 +86,10 @@
 
 ### Fixes
 
+- **Protection ▸ Allow on a destination you blocked for an app changed nothing.** The domain block outranks the
+  pattern, so marking it Safe left it blocked. Allow now lifts that block too, and says so in its tooltip.
+- **The window's tabs no longer shrink to "R…".** Their titles always show in full.
+
 - **Classify with AI ▸ Apply on a selection could change nothing.** Patterns the AI had already answered were
   skipped, so a selection of them did nothing, and in Events the menu said *nothing New*. Applying now uses those
   answers, the toolbar button takes your selection (events or patterns) when there is one, and an AI Safe the app
