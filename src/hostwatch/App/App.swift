@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     lazy var actions = HUDActions(
         openFullScreen: { [weak self] in self?.openActivityWindow(fullScreen: true) },
+        openWindow: { [weak self] in self?.openActivityWindow(fullScreen: false) },
         openExclusions: { [weak self] in self?.openSettings(.exclusions) },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         quit: { NSApp.terminate(nil) },
@@ -77,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
         openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
-        openFirewallSettings: { [weak self] in self?.openSettings(.firewall) },
+        openFirewallSettings: { [weak self] in self?.openFirewallPane() },
         watch: { [weak self] event in self?.openWatch(for: event) },
         showSpawn: { [weak self] pid, start in self?.showSpawn(pid: pid, start: start) },
         openStory: { [weak self] story in self?.openStoryDetails(story) },

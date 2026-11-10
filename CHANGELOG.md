@@ -7,7 +7,7 @@
 - **A HUD you can read at a glance.** What needs a look comes first (flagged or stopped events, heavy processes), then
   the stream in words with repeats folded (*read 12 files in Shortcuts.app*) and colour only on New and flagged rows,
   relative times, and one quiet resources line with units at the bottom. The header says *Hostwatch · Live* with
-  a Pause button, instead of running totals.
+  Pause and Open buttons (the window, not full screen), instead of running totals.
 
 - **Better triage evidence.** The AI now sees who started a pattern's example (the launch chain, its origin, the AI
   session and the command line), both programs' signers and where they live, and how long the pattern has been seen.
@@ -69,6 +69,9 @@
   heavy-process banner says it once and folds after 20 seconds into a flame and count on *Running Now*, instead of
   holding its place for hours. Names and words read in the system font, as in Activity Monitor (Events, Patterns,
   Network). Times, pids, paths, patterns and hosts stay monospaced.
+- **The firewall lives with protection.** Its settings moved from Settings to Rules ▸ Protection: a Network card on
+  the Overview with the four modes, beside Launches and Files, and a *Network Firewall* page with the relay's status
+  and counts. Every link that opened Settings ▸ Firewall goes there.
 - **The menu bar menu lost its counters.** Stories, Patterns and Network open their tabs without numbers: counts of
   patterns and domains weren't tasks.
 - **Tab badges mean "this needs you".** *Rules* counts what waits for your decision, *Network* only connections
