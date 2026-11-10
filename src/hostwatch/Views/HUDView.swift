@@ -228,9 +228,10 @@ struct HUDView: View {
             .help(EventKind.allCases.map { "\($0.title): \(model.counts[$0, default: 0].formatted())" }.joined(separator: "\n"))
             Spacer(minLength: 4)
             if !model.overlayClickThrough {
-                Button { model.paused.toggle() } label: { Image(systemName: model.paused ? "play.fill" : "pause.fill") }
+                // One style for both: the same capsule, glyph size and weight.
+                HUDIconButton(symbol: model.paused ? "play.fill" : "pause.fill", s: s) { model.paused.toggle() }
                     .help(model.paused ? "Resume the live stream" : "Pause the live stream")
-                Button(action: actions.openWindow) { Image(systemName: "arrow.up.forward.app") }
+                HUDIconButton(symbol: "arrow.up.right", s: s, action: actions.openWindow)
                     .help("Open the Hostwatch window")
             }
         }

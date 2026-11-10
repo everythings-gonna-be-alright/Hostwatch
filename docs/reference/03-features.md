@@ -743,6 +743,10 @@ while rehearsing, green while protecting, orange while paused), a card per area 
 one does and today's numbers, and the pause, *Protected Files and Folders* the cards and your own places, *Found*
 what the rehearsal found.
 
+Each area's card has a chart of the last 24 hours, hour by hour: what was stopped (or would be) in red, what was
+asked about (or would be) in grey. Hover over an hour for its numbers. The firewall's chart counts new destinations
+by the hour they were first seen.
+
 The firewall is the third area, beside Launches and Files: the Overview's *Network* card has its four modes and the
 same two numbers (what it blocks or would, what it asks about or would), and the *Network Firewall* page has the
 mode with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge

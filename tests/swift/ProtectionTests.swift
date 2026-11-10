@@ -229,3 +229,20 @@ import Testing
         #expect(s.sent.map(\.1) == [SIGSTOP, SIGCONT] && m.prompts.isEmpty)
     }
 }
+
+/// The Overview's charts: hour by hour, the last 24 hours, every hour present.
+@MainActor @Suite struct ProtectionHourly {
+    @Test func countsLandInTheirHour() {
+        let suite = "hourly-\(UUID().uuidString)"
+        let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
+                                  fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(suite))
+        var stop = ActivityEvent(kind: .exec, time: "1", pid: 1, ppid: 1, name: "d", proc: "/tmp/d", target: "/tmp/d", extra: "", parent: "/bin/zsh")
+        m.consider(&stop, status: .dangerous)
+        var ask = ActivityEvent(kind: .exec, time: "1", pid: 1, ppid: 1, name: "curl", proc: "/usr/bin/curl", target: "/usr/bin/curl", extra: "", parent: "/bin/zsh")
+        m.consider(&ask, status: .unclassified)
+        let day = m.last24(.launches)
+        #expect(day.count == 24 && day.last?.block == 1 && day.last?.ask == 1)
+        #expect(day.dropLast().allSatisfy { $0.block == 0 && $0.ask == 0 })
+        #expect(m.last24(.files).allSatisfy { $0.block == 0 && $0.ask == 0 })
+    }
+}
