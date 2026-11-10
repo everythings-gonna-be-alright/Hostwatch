@@ -133,15 +133,29 @@ final class PatternClassifier: ObservableObject {
         let n = keys.compactMap { store.entry($0) }.filter { e in
             store.status(forKey: e.id) == .unclassified && e.suggestion?.status == .safe && Self.staysYours(e)
         }.count
-        return n == 0 ? "" : " \(n) AI Safe\(n == 1 ? "" : "s") not applied: high-risk patterns, shells and interpreters stay yours."
+        return n == 0 ? "" : " \(n) AI Safe\(n == 1 ? "" : "s") left for you to confirm: run-anything tools and high-risk patterns are yours to decide."
     }
 
     /// A Safe the app never takes from an AI.
     nonisolated static func staysYours(_ e: SignatureEntry) -> Bool { e.risk == .high || SignatureBuilder.runsAnyCode(e) }
 
-    /// What the live list says about an answer: a Safe for a pattern that stays yours says so.
-    private func liveReason(_ status: SignatureStatus, _ e: SignatureEntry, _ reason: String) -> String {
-        status == .safe && Self.staysYours(e) ? "stays yours (high-risk, a shell or an interpreter): " + reason : reason
+    /// Why an AI's Safe isn't applied to this pattern, in its own terms.
+    nonisolated static func yoursBecause(_ e: SignatureEntry) -> String {
+        let name = (SignatureStore.subjectPath(e) as NSString).lastPathComponent
+        if SignatureBuilder.runsAnyCode(e) { return "\(name) can run or change other programs, so only you can mark it Safe" }
+        return "a high-risk pattern, so only you can mark it Safe"
+    }
+
+    /// The live list's state for an answer: a Safe the app won't take is yours to decide, with why.
+    private func liveState(_ status: SignatureStatus, _ e: SignatureEntry, by: String, _ reason: String) -> ClassifyLive.Step.State {
+        status == .safe && Self.staysYours(e) ? .yours(status, by: by, reason: reason, why: Self.yoursBecause(e))
+            : .done(status, by: by, reason: reason)
+    }
+
+    /// Your decision from the live list (a pattern the AI may not decide): applied as yours.
+    func decide(_ key: String, _ status: SignatureStatus) {
+        store.set(status, keys: [key], note: "decided in Classify with AI")
+        live.set(key, .done(status, by: "You", reason: ""))
     }
 
     /// The engine and its models in words, for the live list's header.
@@ -251,7 +265,7 @@ final class PatternClassifier: ObservableObject {
                 switch TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: claudeOn, warned: warned[entry.id] ?? false) {
                 case .settle(let status, let note):
                     self.store.suggest(status, key: entry.id, source: "on-device", note: note)
-                    self.live.set(entry.id, .done(status, by: "Local", reason: self.liveReason(status, entry, note)))
+                    self.live.set(entry.id, self.liveState(status, entry, by: "Local", note))
                     if status == .safe { settled += 1 } else { flagged += 1 }
                 case .escalate:
                     escalate.append(entry)
@@ -351,7 +365,7 @@ final class PatternClassifier: ObservableObject {
                   let verdict = Verdict(rawValue: word) else { continue }
             let status = SignatureStatus(verdict: verdict)
             store.suggest(status, key: batch[id - 1].id, source: "claude", note: item["reason"] as? String)
-            live.set(batch[id - 1].id, .done(status, by: "Claude", reason: liveReason(status, batch[id - 1], item["reason"] as? String ?? "")))
+            live.set(batch[id - 1].id, liveState(status, batch[id - 1], by: "Claude", item["reason"] as? String ?? ""))
             tally[status, default: 0] += 1
         }
         let summary = SignatureStatus.allCases.compactMap { s in tally[s].map { "\($0) \(s.rawValue)" } }

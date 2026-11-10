@@ -67,4 +67,19 @@ import Testing
         #expect(store.status(forKey: keys[0]) == .suspicious && store.status(forKey: keys[1]) == .safe)
         #expect(c.bulk == nil)                                         // nothing left to ask: no AI call
     }
+
+    @Test func codesignIsYoursToDecideAndOneClickDoesIt() {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("yours-\(UUID().uuidString)"))
+        let e = ActivityEvent(kind: .file, time: "12:00:00", pid: 10, ppid: 9, name: "codesign", proc: "/usr/bin/codesign",
+                              target: NSHomeDirectory() + "/Documents/Proj/.build/out/Products/Debug/App", extra: "r", parent: "/usr/bin/swift-package")
+        _ = store.observe(e)
+        let entry = store.entry(e.signatureKey)!
+        #expect(PatternClassifier.staysYours(entry))
+        #expect(PatternClassifier.yoursBecause(entry).hasPrefix("codesign can run or change other programs"))
+        let c = PatternClassifier(store: store)
+        c.live.add([entry], as: .asking("Claude"))
+        c.decide(entry.id, .safe)
+        #expect(store.status(forKey: entry.id) == .safe && store.entry(entry.id)?.source == "you")
+        #expect(c.live.steps.first?.state == .done(.safe, by: "You", reason: ""))
+    }
 }

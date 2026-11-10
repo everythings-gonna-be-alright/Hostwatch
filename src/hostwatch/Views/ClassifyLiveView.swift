@@ -41,7 +41,7 @@ struct ClassifyLiveView: View {
 
     private var header: some View {
         let settled = live.count { if case .done = $0 { return true } else { return false } }
-        let left = live.count { if case .left = $0 { return true } else { return false } }
+        let left = live.count { switch $0 { case .left, .yours: return true; default: return false } }
         let open = live.count { switch $0 { case .waiting, .asking: return true; default: return false } }
         return VStack(alignment: .leading, spacing: 3) {
             HStack {
@@ -76,7 +76,14 @@ struct ClassifyLiveView: View {
                 }
             }
             Spacer(minLength: 8)
-            badge(step.state)
+            if case .yours(let status, _, _, _) = step.state {
+                // The AI may not decide it, you can, in one click: its answer, or keep it New.
+                Button("Mark \(status.title)") { classifier.decide(step.id, status) }
+                    .buttonStyle(.glassProminent).controlSize(.small)
+                    .help("Your decision: the pattern is marked \(status.title.lowercased()) as yours")
+            } else {
+                badge(step.state)
+            }
         }
         .padding(.vertical, 6)
     }
@@ -87,6 +94,7 @@ struct ClassifyLiveView: View {
         case .asking(let who): "Asking \(who)…"
         case .done(_, let by, let reason): reason.isEmpty ? "by \(by)" : "\(by): \(reason)"
         case .left(let why): why
+        case .yours(_, let by, let reason, let why): "\(by) says: \(reason). It stays New: \(why)."
         case .failed(let why): why
         }
     }
@@ -97,6 +105,7 @@ struct ClassifyLiveView: View {
         case .asking: ProgressView().controlSize(.mini)
         case .done(let status, _, _): StatusPill(status: status)
         case .left: Label("For you", systemImage: "person.fill.questionmark").font(.caption).foregroundStyle(.secondary)
+        case .yours: EmptyView()
         case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         }
     }

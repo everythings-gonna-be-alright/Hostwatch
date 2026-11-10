@@ -1056,8 +1056,9 @@ New patterns the list shows: in Patterns, its filter, search and scope. In Event
 (or selected), with their filters, kinds and search. Right-click rows, a selection or a group row for the same:
 *Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Keep Them as Suggestions*. Applying also applies what an
 AI already suggested for them, without asking again. Asking for patterns again retries those an earlier pass left for
-you. An AI's Safe for a high-risk pattern, a shell or an interpreter is never applied: the live list and the summary
-say *stays yours*.
+you. An AI's Safe for a high-risk pattern or a tool that can run or change other programs (shells, interpreters, curl,
+codesign…) is never applied: the live list shows the AI's answer, says why it's yours to decide, and has a
+*Mark Safe* button for your one-click decision.
 
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,

@@ -10,6 +10,9 @@ final class ClassifyLive: ObservableObject {
             case asking(String)                        // who is being asked now
             case done(SignatureStatus, by: String, reason: String)
             case left(String)                          // stays New for you, with why
+            /// The AI answered, but this pattern is yours to decide (a run-anything tool, or high-risk): its answer
+            /// and the reason, with a one-click decision in the list.
+            case yours(SignatureStatus, by: String, reason: String, why: String)
             case failed(String)
         }
         let id: String                                 // the pattern key
