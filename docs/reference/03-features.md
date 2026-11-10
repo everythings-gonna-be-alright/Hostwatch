@@ -543,6 +543,11 @@ destinations, newest first. Each row is a domain, or an address without a name.
 Open a row to see the programs that connected, with **Block** / **Allow**. These mark the pattern, as in Patterns. On a
 blocked destination you get **Allow Instead**, and **Show Program in Finder** takes you to the program.
 
+**On a threat list.** A destination a threat list names is blocked whatever you decided, and says *On a threat list*
+with the list's reason. Shared hosts (GitHub's raw files, cloud storage) are sometimes listed for one bad file:
+*Allow Anyway…* asks once, explains the risk, and then lets that one program reach that domain. *Undo Allow Anyway*
+takes it back.
+
 Right-click a row to **Mark Known** or mark as not known, to Block or Allow, to copy, or to **Forget** the domain.
 
 **Block one domain for one app.** Block and Allow decide the connection's pattern, and an ordinary app has one

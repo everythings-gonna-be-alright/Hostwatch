@@ -89,6 +89,12 @@
 
 ### Fixes
 
+- **A threat-list block said "Blocked by you", and Allow did nothing.** raw.githubusercontent.com is on ThreatFox
+  (shared hosts get listed for one bad file), and a threat list outranks your decisions, so Allow couldn't change it
+  while the label blamed you. It now says *On a threat list* with the list's reason, and *Allow Anyway…* (in Network
+  and Protection) asks once, explaining the risk, then lets that program reach that domain. *Undo Allow Anyway* in
+  Network takes it back.
+
 - **Protection ▸ Allow on a destination you blocked for an app changed nothing.** The domain block outranks the
   pattern, so marking it Safe left it blocked. Allow now lifts that block too, and says so in its tooltip.
 - **The window's tabs no longer shrink to "R…".** Their titles always show in full.

@@ -317,3 +317,20 @@ struct FirewallFallbackBanner: View {
         return base + (why.isEmpty ? "its web check through the relay failed twice, so nothing is blocked now." : why)
     }
 }
+
+/// "Allow anyway" for a destination on a threat list: always asked, with what the list says and why shared hosts
+/// get listed. The answer is your exception for that program and destination (undo it in Network).
+@MainActor enum ThreatException {
+    static func confirm(_ e: FirewallEntry) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Let \(e.name) reach \(e.destination) anyway?"
+        alert.informativeText = "\(e.destination) is on a threat list: \(e.facts.knownBad).\n\n"
+            + "Shared hosts such as GitHub's raw files or cloud storage are often listed because of one bad file among "
+            + "millions. Allow it only if you trust what \(e.name) fetches there. Other programs stay blocked, and you can "
+            + "undo this in the Network tab."
+        alert.addButton(withTitle: "Allow Anyway")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+}
