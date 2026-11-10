@@ -68,13 +68,19 @@ func runTriageBenchmark() -> Never {
     Task.detached {
         for model in models {
             var answers: [BenchAnswer] = []
-            for (i, c) in cases.enumerated() {
-                let a = model == "apple" ? await askApple(c.prompt) : await askOllama(model, c.prompt)
-                answers.append(a)
-                FileHandle.standardError.write(Data("\r\(model): \(i + 1)/\(cases.count)   ".utf8))
+            let claude = model == "claude" || model.hasPrefix("claude:")
+            if claude {
+                // As the app asks Claude: every pattern in one batch, the shared prompt, its Safe taken as given.
+                answers = askClaudeBatch(model == "claude" ? nil : String(model.dropFirst(7)), cases)
+            } else {
+                for (i, c) in cases.enumerated() {
+                    let a = model == "apple" ? await askApple(c.prompt) : await askOllama(model, c.prompt)
+                    answers.append(a)
+                    FileHandle.standardError.write(Data("\r\(model): \(i + 1)/\(cases.count)   ".utf8))
+                }
+                FileHandle.standardError.write(Data("\n".utf8))
             }
-            FileHandle.standardError.write(Data("\n".utf8))
-            let (summary, lines) = score(model, cases, answers)
+            let (summary, lines) = score(model, cases, answers, local: !claude)
             print(summary)
             details += "## \(model)\n" + lines + "\n"
         }
@@ -87,7 +93,9 @@ func runTriageBenchmark() -> Never {
     exit(0)
 }
 
-private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswer]) -> (String, String) {
+/// - local: a local model, whose Safe the router drops when Hostwatch found a warning sign. Claude's Safe is taken as
+///   given (the app's guardrails for high-risk patterns and shells apply to both and aren't counted here).
+private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswer], local: Bool) -> (String, String) {
     var modelFalseSafe = 0
     var falseSafe = 0, settledSafe = 0, flaggedCaught = 0, safeAgreed = 0, unsure = 0, errors = 0
     var times: [Double] = []
@@ -101,7 +109,7 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
         times.append(a.seconds)
         // What the router would do with it: only a confident Safe on a pattern that isn't high-risk is settled.
         let modelSettles = v == .safe && a.confidence == .high && c.risk != .high
-        let settles = modelSettles && !c.warned
+        let settles = modelSettles && !(local && c.warned)
         if modelSettles, c.truth != .safe { modelFalseSafe += 1 }
         let saysFlag = v == .suspicious || v == .dangerous
         if v == .unknown { unsure += 1 }
@@ -122,13 +130,57 @@ private func score(_ model: String, _ cases: [BenchCase], _ answers: [BenchAnswe
     func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "–" : "\(Int((Double(a) / Double(b) * 100).rounded()))%" }
     let summary = """
     \(model)
-      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)   (the model alone: \(modelFalseSafe), warning signs stop the rest)
+      false Safe (settled one you flagged): \(falseSafe) of \(nFlag)\(local ? "   (the model alone: \(modelFalseSafe), warning signs stop the rest)" : "")
       your Safe ones it would settle:       \(settledSafe) of \(nSafe) (\(pct(settledSafe, nSafe)))
       agrees Safe:                          \(pct(safeAgreed, nSafe))   flags your flagged ones: \(pct(flaggedCaught, nFlag))
       unsure: \(unsure)   errors or refusals: \(errors)
       time per pattern: \(String(format: "%.2f", avg)) s average, \(String(format: "%.2f", p90)) s at the 90th percentile
     """
     return (summary, lines)
+}
+
+/// One Claude Code call for the whole sample, in a fixed shuffled order (Safe ones and attacks mixed, as in real
+/// batches). Each pattern's time is the call's time shared out.
+private func askClaudeBatch(_ alias: String?, _ cases: [BenchCase]) -> [BenchAnswer] {
+    guard let claude = ClaudeLocator.path else { return cases.map { _ in BenchAnswer(error: "Claude Code CLI not found") } }
+    var order = Array(cases.indices)
+    var rng = SeededGenerator(seed: 7)
+    order.shuffle(using: &rng)
+    let prompt = (["Classify these \(cases.count) patterns:"] + order.enumerated().map { "\($0.offset + 1).\n" + cases[$0.element].prompt })
+        .joined(separator: "\n\n")
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: claude)
+    p.arguments = ["-p", "--output-format", "json", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config",
+                   "--tools", "", "--system-prompt", PatternClassifier.systemPrompt] + (alias.map { ["--model", $0] } ?? [])
+    p.environment = ClaudeLocator.environment
+    let input = Pipe(), output = Pipe()
+    p.standardInput = input
+    p.standardOutput = output
+    p.standardError = FileHandle.nullDevice
+    let start = Date()
+    do { try p.run() } catch { return cases.map { _ in BenchAnswer(error: "\(error)") } }
+    input.fileHandleForWriting.write(Data(Secrets.mask(prompt).utf8))
+    try? input.fileHandleForWriting.close()
+    let out = output.fileHandleForReading.readDataToEndOfFile()
+    p.waitUntilExit()
+    let each = Date().timeIntervalSince(start) / Double(max(cases.count, 1))
+    guard let obj = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any], let text = obj["result"] as? String,
+          let open = text.firstIndex(of: "["), let close = text.lastIndex(of: "]"),
+          let items = (try? JSONSerialization.jsonObject(with: Data(text[open...close].utf8))) as? [[String: Any]]
+    else {
+        try? out.write(to: URL(fileURLWithPath: NSTemporaryDirectory() + "triage-benchmark-claude-raw.json"))
+        return cases.map { _ in BenchAnswer(seconds: each, error: "Claude's answer couldn't be read") }
+    }
+    if let cost = obj["total_cost_usd"] as? Double { print(String(format: "  (Claude call: $%.3f)", cost)) }
+    var answers = cases.map { _ in BenchAnswer(seconds: each, error: "no answer for it") }
+    for item in items {
+        guard let n = (item["id"] as? NSNumber)?.intValue, n >= 1, n <= order.count,
+              let word = (item["verdict"] as? String)?.uppercased() else { continue }
+        // Claude answers without a confidence: its verdict is applied as it stands, so it counts as confident.
+        answers[order[n - 1]] = BenchAnswer(verdict: Verdict(rawValue: word) ?? .unknown, confidence: .high,
+                                            reason: item["reason"] as? String ?? "", seconds: each)
+    }
+    return answers
 }
 
 private func askApple(_ prompt: String) async -> BenchAnswer {

@@ -1004,6 +1004,28 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
 
 `Hostwatch --triage-benchmark` compares local models on your own decisions (see Advanced and command line).
 
+**How the models compare.** Measured in November 2026 on an M3 Pro, with the current prompt: 20 patterns the user
+had marked Safe and 20 attack-shaped ones. *Settled* is how many ordinary patterns the AI would decide by itself.
+*Attacks settled Safe* is the mistake that matters.
+
+| Model | Ordinary patterns settled | Attacks settled Safe | Time per pattern | Leaves the Mac |
+|---|---|---|---|---|
+| Apple on-device (General) | 50% | 1 of 20 | 1.4 s | no |
+| Gemma 4 E4B via Ollama | 60% | 0 of 20 | 18 s | no |
+| Claude Haiku | 90% | 0 of 20 | 0.6 s (one batch) | yes, secrets masked |
+| Claude Sonnet | 85% | 0 of 20 | 0.4 s (one batch) | yes, secrets masked |
+| Claude Opus | 75% | 0 of 20 | 0.9 s (one batch) | yes, secrets masked |
+
+Sonnet and Opus answer *unknown* more often for the attacks, which leaves them for you rather than settling them.
+Cisco's Foundation-Sec-8B (Instruct and Reasoning) was measured with an earlier prompt: it settled 45 to 55% but
+called 5 to 6 of the 20 attacks Safe, more than any other model. Every small model trusted an Apple signature on
+curl or a shell, which is why a warning sign outranks a local model (ADR 0012). The app's own guardrails stop the
+rest: no AI's Safe is taken for a high-risk pattern, a shell or an interpreter.
+
+**Which to choose.** Apple's model for free, private and fast. Gemma 4 through Ollama for better local answers if
+the wait doesn't matter. Claude Haiku settles the most and costs the least of the Claude models: a batch of 40
+patterns costs a few cents.
+
 Earlier versions' two toggles are migrated to the matching engine.
 
 **What the AI sees for each pattern.** The local model and Claude get the same facts and the same instructions:
