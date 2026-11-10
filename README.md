@@ -57,6 +57,15 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.15.0**
+- **🛡️ Protection** – launches and protected files (SSH keys, credentials, keychains, your own folders) decided like
+  the firewall: Watch shows what would be stopped, Ask and Strict stop or pause it now. The firewall moved in beside.
+- **🤖 The AI you choose** – Apple's on-device model, any OpenAI-compatible server such as Ollama, or the Claude model
+  you pick, with better evidence: who started it, where it lives, and warning signs a local model can't overrule.
+- **👀 Classify what you see** – the shown rows or your selection, with a live list of every answer as it lands.
+- **🪟 A calmer HUD and window** – exceptions first, repeats folded, glass questions that name who started a program.
+- **🚫 Fixes** – a threat-list block no longer says "Blocked by you", and Allow works on every connection.
+
 **0.14.0**
 - **🧬 Who really started it** – *Show Launch Chain* rebuilds a process's parents up to launchd from what was
   recorded, so it works after they've exited, and names the origin: terminal, app, AI session. Ask AI gets it too.
@@ -66,13 +75,6 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 - **🗂️ One list style** for Events, Patterns and Running Now, with a *Parent* column, hundredths of a second, and
   group rows that read as headings.
 - **🛡️ Fixes** – Forget no longer lets a blocked destination through, and marking several events Safe marks them all.
-
-**0.13.0**
-- **🔑 No password at launch** – the collector is a background service: registered once, approved once, started by
-  macOS at boot from then on. Only Hostwatch's own signed code may talk to it, and it idles when the app is closed.
-- **🔒 Encrypted at rest** – patterns, stories, history and logs are sealed with a key only Hostwatch's own code can
-  use, so no other program running as you (an AI agent included) can read your activity.
-- **🪪 New identity** `tech.hostwatch.app` – settings carry over, and Full Disk Access is granted once more.
 
 
 Earlier versions: see the [changelog](CHANGELOG.md).
