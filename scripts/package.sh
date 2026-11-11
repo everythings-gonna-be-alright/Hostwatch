@@ -54,7 +54,9 @@ if codesign -dvv Hostwatch.app 2>&1 | grep "Authority=Developer ID Application" 
   if [ -n "$RESUME" ]; then
     ID="$RESUME"
   else
-    ID="$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --output-format json | plutil -extract id raw -)"
+    # A failed upload (no saved credentials, no network) leaves no zip behind either.
+    ID="$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --output-format json | plutil -extract id raw -)" \
+      || { rm -f "$ZIP"; echo "Not sent to Apple, nothing packaged." >&2; exit 1; }
     echo "Submitted to Apple: $ID"
   fi
   notarize "$ID"
