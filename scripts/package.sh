@@ -6,6 +6,11 @@ cd "$(dirname "$0")/.."
 
 VERSION="$(tr -d '[:space:]' < VERSION)"
 PROFILE="${NOTARY_PROFILE:-hostwatch-notary}"
+# The credentials can live in a keychain file of their own (NOTARY_KEYCHAIN, or this one when it exists), so a
+# missing profile is a file you can see, not an item gone from the shared keychain.
+KEYCHAIN="${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/hostwatch-notary.keychain-db}"
+AUTH=(--keychain-profile "$PROFILE")
+[ -f "$KEYCHAIN" ] && AUTH+=(--keychain "$KEYCHAIN")
 ZIP="Hostwatch-$VERSION-macOS-universal.zip"
 
 # `--resume <submission id>`: a run whose wait broke (network, a closed shell) picks up the submission Apple already
@@ -19,15 +24,15 @@ if [ "${1:-}" = "--resume" ]; then RESUME="${2:?usage: package.sh --resume <subm
 notarize() {
   local id="$1" status=""
   for attempt in 1 2 3 4 5 6; do
-    xcrun notarytool wait "$id" --keychain-profile "$PROFILE" || true
-    status="$(xcrun notarytool info "$id" --keychain-profile "$PROFILE" --output-format json | plutil -extract status raw -)" || status=""
+    xcrun notarytool wait "$id" "${AUTH[@]}" || true
+    status="$(xcrun notarytool info "$id" "${AUTH[@]}" --output-format json | plutil -extract status raw -)" || status=""
     [ -n "$status" ] && [ "$status" != "In Progress" ] && break
     echo "No answer from Apple yet (attempt $attempt), asking again in a minute..."
     sleep 60
   done
   if [ "$status" != "Accepted" ]; then
     echo "Notarization: $status (submission $id)" >&2
-    xcrun notarytool log "$id" --keychain-profile "$PROFILE" >&2 || true
+    xcrun notarytool log "$id" "${AUTH[@]}" >&2 || true
     rm -f "$ZIP" "$ZIP.sha256"
     [ "$status" = "In Progress" ] && echo "Still with Apple. Later: ./scripts/package.sh --resume $id" >&2
     exit 1
@@ -47,7 +52,7 @@ cd dist
 }
 
 # Notarization (Developer ID builds): Apple checks the app, then the ticket is stapled to it so Gatekeeper opens it
-# without asking, even offline. Credentials: `xcrun notarytool store-credentials hostwatch-notary` (NOTARY_PROFILE).
+# without asking, even offline. Credentials: `xcrun notarytool store-credentials hostwatch-notary --keychain <file>`.
 # (not `grep -q`: it closes the pipe early, codesign dies of SIGPIPE, and under pipefail the test fails even when signed)
 if codesign -dvv Hostwatch.app 2>&1 | grep "Authority=Developer ID Application" >/dev/null; then
   codesign --verify --deep --strict --verbose=2 Hostwatch.app
@@ -55,7 +60,7 @@ if codesign -dvv Hostwatch.app 2>&1 | grep "Authority=Developer ID Application" 
     ID="$RESUME"
   else
     # A failed upload (no saved credentials, no network) leaves no zip behind either.
-    ID="$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --output-format json | plutil -extract id raw -)" \
+    ID="$(xcrun notarytool submit "$ZIP" "${AUTH[@]}" --output-format json | plutil -extract id raw -)" \
       || { rm -f "$ZIP"; echo "Not sent to Apple, nothing packaged." >&2; exit 1; }
     echo "Submitted to Apple: $ID"
   fi
