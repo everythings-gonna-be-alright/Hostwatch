@@ -1,20 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### New
-
-- **A clearer Protection overview.** When protection is off, one button starts watching everywhere, which stops
-  nothing. Each area's card ends with how many it found, an Off card says what turning it on would show, and the
-  other pages are a short list. How the modes act is behind the Help button.
-
-### Fixes
-
-- The overview said "stopped" for what was only watched. It now says what was stopped and what only would have been.
-- The window's subtitle said "Rehearsing" while the firewall was on Ask. It now matches the overview.
-- "Watching since" no longer shows while protection is off.
-- The Rules sidebar no longer cuts off "Protected Files and Folders".
-
 ## 0.15.0 – Protection, and the AI you choose
 
 ### New: Protection (Rules ▸ Protection)
@@ -29,8 +14,10 @@
 - **Protected files and folders.** Seven groups (SSH keys, developer credentials, keychains, browser passwords and
   cookies, Messages and Mail, privacy settings and accounts, autostart locations), plus your own folders and files
   with *Add Folder or File…*. Expected programs pass, everyone else is asked about or blocked.
-- **An Overview you read at a glance.** A coloured shield and one sentence for the state, a card per area (Launches,
-  Files, Network) with its four modes, what the chosen one does, today's numbers and a 24-hour chart, and a pause.
+- **An Overview you read at a glance.** A coloured shield and one sentence for the state, with its next step:
+  *Start Watching* when all is off (it stops nothing), then a pause. A card per area (Launches, Files, Network) with
+  its four modes, what the chosen one does, today's numbers, a 24-hour chart and how many it found, and what was
+  actually stopped kept apart from what only would have been. How the modes act is behind the Help button.
 - **The firewall lives here now.** Its settings left Settings for a *Network Firewall* page built like the rest:
   the mode, the relay's status, numbers, what waits for you, what it found with Allow and Block, and **Your rules**,
   the full list of what you blocked, allowed despite a threat list, or asked to be asked about again, each with
