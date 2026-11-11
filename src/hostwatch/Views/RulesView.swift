@@ -66,7 +66,7 @@ struct RulesView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(width: 210)
+        .frame(width: 236)          // "Protected Files and Folders" whole, with its icon
     }
 
     private var detail: some View {

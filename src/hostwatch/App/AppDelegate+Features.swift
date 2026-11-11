@@ -53,6 +53,10 @@ extension AppDelegate {
                                         proc: "/usr/local/bin/node", target: "104.16.24.35:443", extra: "TCP", parent: "/bin/zsh",
                                         host: "registry.npmjs.org", hostSource: "dns")
                 firewall.handleAsk(key: "demo", event: ask)
+            case "protection":
+                rulesTab.segment = .protectionOverview
+                rulesTab.chosen = true
+                model.windowTab = 4
             case "watch":
                 if let e = cleanerLaunch {
                     openWatch(for: e)

@@ -165,12 +165,9 @@ final class ProtectionMonitor: ObservableObject {
     /// The program an event is about: what was launched, or what opened the file.
     static func subject(_ e: ActivityEvent) -> String { e.kind == .exec ? e.target : e.proc }
 
-    /// What the window's subtitle says: nil when everything is off.
-    var stateWord: String? {
-        if paused { return "Protection paused" }
-        let modes = ProtectionArea.allCases.map(mode)
-        if modes.contains(where: \.enforces) { return "Protecting" }
-        return modes.contains(where: { $0 != .off }) ? "Rehearsing" : nil
+    /// Protection as a whole. The firewall is passed in: it counts too (Network on Ask is protecting).
+    func state(network: FirewallMode) -> ProtectionState {
+        ProtectionState(paused: paused, modes: ProtectionArea.allCases.map(mode), network: network)
     }
 
     func enforcerStatus(_ state: String, _ detail: String) {

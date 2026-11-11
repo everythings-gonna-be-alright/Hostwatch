@@ -108,7 +108,7 @@ import Testing
         m.launchMode = .watch
         m.pause(minutes: 15)
         m.consider(&e, status: .dangerous)
-        #expect(e.protection == .none && m.stateWord == "Protection paused")
+        #expect(e.protection == .none && m.state(network: .off).word == "Protection paused")
     }
 
     @Test func theCollectorGetsOnlyCardsThatAreOn() {
@@ -244,5 +244,28 @@ import Testing
         #expect(day.count == 24 && day.last?.block == 1 && day.last?.ask == 1)
         #expect(day.dropLast().allSatisfy { $0.block == 0 && $0.ask == 0 })
         #expect(m.last24(.files).allSatisfy { $0.block == 0 && $0.ask == 0 })
+    }
+}
+
+/// The overview's header and the window's subtitle: one state, and the firewall counts.
+@Suite struct ProtectionStates {
+    @Test func everythingOffIsOff() {
+        #expect(ProtectionState(paused: false, modes: [.off, .off], network: .off) == .off)
+        #expect(ProtectionState.off.word == nil)
+    }
+
+    @Test func watchingAnywhereIsRehearsal() {
+        #expect(ProtectionState(paused: false, modes: [.watch, .off], network: .off) == .rehearsing)
+        #expect(ProtectionState(paused: false, modes: [.off, .off], network: .watch) == .rehearsing)
+    }
+
+    @Test func networkOnAskIsProtectingEvenWhenLaunchesOnlyWatch() {
+        let s = ProtectionState(paused: false, modes: [.watch, .watch], network: .ask)
+        #expect(s == .protecting && s.word == "Protecting")
+        #expect(ProtectionState(paused: false, modes: [.strict, .off], network: .off) == .protecting)
+    }
+
+    @Test func pauseWinsOverEverything() {
+        #expect(ProtectionState(paused: true, modes: [.strict, .ask], network: .strict) == .paused)
     }
 }

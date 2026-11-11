@@ -744,9 +744,12 @@ When something looks wrong, pause it, or watch it closely to see what it does.
 #### Launch and file protection (Rules ▸ Protection)
 
 Four pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
-while rehearsing, green while protecting, orange while paused), a card per area with its four modes, what the chosen
-one does and today's numbers, and the pause, *Protected Files and Folders* the cards and your own places, *Found*
-what the rehearsal found.
+while rehearsing, green while protecting, orange while paused) with its one next step (**Start Watching** turns on
+Watch everywhere when all is off, then **Pause for 15 Minutes** or **Resume**), a card per area with its four modes,
+what the chosen one does, today's numbers and how many it found, and links to the other pages. *Found* there shows
+both numbers the sidebar uses: what would be stopped, and everything to review. The Help button explains the modes
+and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
+included. *Protected Files and Folders* has the cards and your own places, *Found* what the rehearsal found.
 
 Each area's card has a chart of the last 24 hours, hour by hour: what was stopped (or would be) in red, what was
 asked about (or would be) in grey. Hover over an hour for its numbers. The firewall's chart counts new destinations
