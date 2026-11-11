@@ -198,3 +198,27 @@ enum ProtectionPolicy {
         return label == SignatureBuilder.ordinaryFiles ? nil : label
     }
 }
+
+/// Protection as a whole, from the modes alone: the overview's header and the window's subtitle say the same.
+enum ProtectionState: Equatable {
+    case off, rehearsing, protecting, paused
+
+    init(paused: Bool, modes: [ProtectionMode], network: FirewallMode) {
+        if paused { self = .paused }
+        else if modes.contains(where: \.enforces) || network == .ask || network == .strict { self = .protecting }
+        else if modes.contains(where: { $0 != .off }) || network == .watch { self = .rehearsing }
+        else { self = .off }
+    }
+}
+
+extension ProtectionState {
+    /// What the window's subtitle says: nil when everything is off.
+    var word: String? {
+        switch self {
+        case .off: nil
+        case .rehearsing: "Rehearsing"
+        case .protecting: "Protecting"
+        case .paused: "Protection paused"
+        }
+    }
+}

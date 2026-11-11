@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **A clearer Protection overview.** When protection is off, one button starts watching everywhere, which stops
+  nothing. Each area's card ends with how many it found, an Off card says what turning it on would show, and the
+  other pages are a short list. How the modes act is behind the Help button.
+
+### Fixes
+
+- The overview said "stopped" for what was only watched. It now says what was stopped and what only would have been.
+- The window's subtitle said "Rehearsing" while the firewall was on Ask. It now matches the overview.
+- "Watching since" no longer shows while protection is off.
+- The Rules sidebar no longer cuts off "Protected Files and Folders".
+
 ## 0.15.0 – Protection, and the AI you choose
 
 ### New: Protection (Rules ▸ Protection)

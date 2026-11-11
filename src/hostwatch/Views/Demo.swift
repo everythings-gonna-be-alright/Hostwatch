@@ -13,7 +13,7 @@ enum Demo {
     static let epoch = Date()
     static let flag = "--demo"
     static let home = "/Users/alex"
-    static let scenes = ["hud", "events", "live", "running", "patterns", "stories", "network", "firewall", "watch"]
+    static let scenes = ["hud", "events", "live", "running", "patterns", "stories", "network", "firewall", "protection", "watch"]
 
     static func configure(_ args: [String]) {
         guard let i = args.firstIndex(of: flag) else { return }

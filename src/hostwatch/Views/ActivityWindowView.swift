@@ -243,7 +243,7 @@ struct ActivityWindowView: View {
     private var subtitle: String {
         // Protection's state costs no toolbar room: "Live · Rehearsing", "Live · Protection paused".
         let state = (model.paused ? "Paused" : model.connected ? "Live" : "Collector off")
-            + (model.protection?.stateWord.map { " · \($0)" } ?? "")
+            + (model.protection?.state(network: firewall.mode).word.map { " · \($0)" } ?? "")
         if traveling {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
