@@ -31,10 +31,10 @@ notarize() {
     sleep 60
   done
   if [ "$status" != "Accepted" ]; then
-    echo "Notarization: $status (submission $id)" >&2
+    echo "Notarization: ${status:-no answer, Apple could not be asked (offline, or the keychain locked)} (submission $id)" >&2
     xcrun notarytool log "$id" "${AUTH[@]}" >&2 || true
     rm -f "$ZIP" "$ZIP.sha256"
-    [ "$status" = "In Progress" ] && echo "Still with Apple. Later: ./scripts/package.sh --resume $id" >&2
+    [ "$status" = "In Progress" ] || [ -z "$status" ] && echo "Still with Apple. Later: ./scripts/package.sh --resume $id" >&2
     exit 1
   fi
 }
