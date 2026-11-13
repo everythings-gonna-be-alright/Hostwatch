@@ -53,6 +53,10 @@ struct ProtectionChart: View {
                 AxisMarks(values: .stride(by: .day)) { _ in
                     AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true).foregroundStyle(Color.secondary)
                 }
+            case .month:
+                AxisMarks(values: .stride(by: .day, count: 7)) { _ in       // a label a week, the bars stay daily
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day(), centered: true).foregroundStyle(Color.secondary)
+                }
             }
         }
         .chartYAxis {
@@ -76,9 +80,13 @@ struct ProtectionChart: View {
         buckets.min { abs($0.start.timeIntervalSince(date)) < abs($1.start.timeIntervalSince(date)) }
     }
 
-    /// "3 PM" or "Tuesday": how a bucket is named in the readout and to VoiceOver.
+    /// "3 PM", "Tuesday 10" or "Nov 10": how a bucket is named in the readout and to VoiceOver.
     static func label(_ start: Date, _ range: ProtectionTimeline.Range) -> String {
-        range == .day ? start.formatted(.dateTime.hour()) : start.formatted(.dateTime.weekday(.wide).day())
+        switch range {
+        case .day: start.formatted(.dateTime.hour())
+        case .week: start.formatted(.dateTime.weekday(.wide).day())
+        case .month: start.formatted(.dateTime.month(.abbreviated).day())
+        }
     }
 
     /// The bucket's numbers in text ink: the colours beside them say which is which.

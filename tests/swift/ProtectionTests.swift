@@ -283,6 +283,9 @@ import Testing
         let week = ProtectionTimeline.empty(.week, now: now, calendar: calendar)
         #expect(week.count == 7 && week.last!.start == calendar.startOfDay(for: now))
         #expect(calendar.dateComponents([.day], from: week.first!.start, to: week.last!.start).day == 6)
+        let month = ProtectionTimeline.empty(.month, now: now, calendar: calendar)
+        #expect(month.count == 30 && month.last!.start == calendar.startOfDay(for: now))
+        #expect(ProtectionTimeline.Range.month.phrase == "the last 30 days")
     }
 
     @Test func countsLandInTheirBucketAndOldOnesAreLeftOut() {
@@ -290,13 +293,16 @@ import Testing
         let hourly = [
             ProtectionMonitor.HourCount(hour: hour, area: .launches, block: 2, ask: 1),
             ProtectionMonitor.HourCount(hour: hour - 30, area: .launches, block: 1, ask: 0),      // yesterday: week only
-            ProtectionMonitor.HourCount(hour: hour - 10 * 24, area: .launches, block: 9, ask: 9),  // too old for both
+            ProtectionMonitor.HourCount(hour: hour - 10 * 24, area: .launches, block: 9, ask: 9),  // too old for day and week
             ProtectionMonitor.HourCount(hour: hour, area: .files, block: 5, ask: 5),               // another area
         ]
         let day = ProtectionTimeline.buckets(hourly, area: .launches, range: .day, now: now, calendar: calendar)
         #expect(day.reduce(0) { $0 + $1.block } == 2 && day.reduce(0) { $0 + $1.ask } == 1)
         let week = ProtectionTimeline.buckets(hourly, area: .launches, range: .week, now: now, calendar: calendar)
         #expect(week.reduce(0) { $0 + $1.block } == 3)
+        // ten days ago: only the month sees it
+        let month = ProtectionTimeline.buckets(hourly, area: .launches, range: .month, now: now, calendar: calendar)
+        #expect(month.reduce(0) { $0 + $1.block } == 12)
     }
 
     @Test func networkBucketsByFirstSeenAndTheScaleIsShared() {

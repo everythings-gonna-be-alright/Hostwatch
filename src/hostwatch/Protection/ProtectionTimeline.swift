@@ -1,16 +1,24 @@
 import Foundation
 
-/// The Overview's charts as data: the last 24 hours by hour, or the last 7 days by day, every bucket present (an
+/// The Overview's charts as data: the last 24 hours by hour, or the last 7 or 30 days by day, every bucket present (an
 /// empty hour is a zero bar, not a gap). Pure, so the cards' numbers and their charts can't disagree: both are sums
 /// of the same buckets.
 enum ProtectionTimeline {
     enum Range: String, CaseIterable, Sendable {
-        case day, week
+        case day, week, month
 
-        var title: String { self == .day ? "24 Hours" : "7 Days" }
+        var title: String {
+            switch self {
+            case .day: "24 Hours"
+            case .week: "7 Days"
+            case .month: "30 Days"
+            }
+        }
         /// "in the last 24 hours": what the cards' numbers cover, said once above them.
-        var phrase: String { self == .day ? "the last 24 hours" : "the last 7 days" }
+        var phrase: String { "the last " + title.lowercased() }
         var unit: Calendar.Component { self == .day ? .hour : .day }
+        /// How many days a day-by-day range shows.
+        var days: Int { self == .month ? 30 : 7 }
     }
 
     struct Bucket: Identifiable, Equatable, Sendable {
@@ -21,19 +29,19 @@ enum ProtectionTimeline {
         var total: Int { block + ask }
     }
 
-    /// How long hourly counts are kept: the week view plus the day it starts in.
-    static let keepHours = 8 * 24
+    /// How long hourly counts are kept: the month view plus the day it starts in.
+    static let keepHours = 31 * 24
 
-    /// The empty buckets for a range, oldest first: 24 whole hours ending with the current one, or 7 calendar days
-    /// ending today (your time zone, so "Tue" is your Tuesday).
+    /// The empty buckets for a range, oldest first: 24 whole hours ending with the current one, or 7 or 30 calendar
+    /// days ending today (your time zone, so "Tue" is your Tuesday).
     static func empty(_ range: Range, now: Date, calendar: Calendar = .current) -> [Bucket] {
         switch range {
         case .day:
             let current = Int(now.timeIntervalSince1970 / 3600)
             return (current - 23...current).map { Bucket(start: Date(timeIntervalSince1970: Double($0) * 3600)) }
-        case .week:
+        case .week, .month:
             let today = calendar.startOfDay(for: now)
-            return (0..<7).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: today) }.map { Bucket(start: $0) }
+            return (0..<range.days).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: today) }.map { Bucket(start: $0) }
         }
     }
 
@@ -43,7 +51,7 @@ enum ProtectionTimeline {
         let start: Date
         switch range {
         case .day: start = Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 3600).rounded(.down) * 3600)
-        case .week: start = calendar.startOfDay(for: date)
+        case .week, .month: start = calendar.startOfDay(for: date)
         }
         guard let i = buckets.firstIndex(where: { $0.start == start }) else { return }
         buckets[i].block += block
