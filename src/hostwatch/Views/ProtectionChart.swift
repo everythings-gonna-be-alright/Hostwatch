@@ -13,6 +13,8 @@ struct ProtectionChart: View {
     let askLabel: String
     /// The top of the shared scale.
     let yMax: Int
+    /// The plot's height: the Overview gives a tall window's spare height to its charts.
+    var height: CGFloat = 120
     @StateObject private var hover = ChartHover()
 
     static let stop = Color(nsColor: .systemRed)
@@ -71,7 +73,7 @@ struct ProtectionChart: View {
                 Text("Nothing in \(range.phrase)").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .frame(height: 120)
+        .frame(height: height)
         .accessibilityChartDescriptor(ProtectionChartDescriptor(buckets: buckets, range: range, stopLabel: stopLabel,
                                                                 askLabel: askLabel, yMax: yMax))
     }

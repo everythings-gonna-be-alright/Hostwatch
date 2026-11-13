@@ -21,7 +21,9 @@ extension AppDelegate {
             return true
         }
         if let frame = NSScreen.main?.visibleFrame, let window = activityWindow {
-            window.setFrame(NSRect(x: frame.midX - 640, y: frame.midY - 390, width: 1280, height: 780), display: true)
+            // 1280 × 780 for the website's screenshots. HOSTWATCH_DEMO_SIZE=full fills the screen, to check large windows.
+            let full = ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_SIZE"] == "full"
+            window.setFrame(full ? frame : NSRect(x: frame.midX - 640, y: frame.midY - 390, width: 1280, height: 780), display: true)
         }
         model.overlayEnabled = Demo.scene == "hud"
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in

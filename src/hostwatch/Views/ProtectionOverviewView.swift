@@ -12,6 +12,9 @@ struct ProtectionOverview: View {
     @StateObject private var help = ExpandState()
     /// The charts' range, one for every card (a per-viewer convenience, kept between launches).
     @AppStorage("protectionChartRange") private var rangeRaw = ProtectionTimeline.Range.day.rawValue
+    /// The visible height of the page: a tall window gives the extra height to the charts, not to empty space.
+    @Environment(\.viewportHeight) private var viewport
+    @StateObject private var layout = OverviewLayout()
 
     static let readableWidth: CGFloat = 1100
 
@@ -27,7 +30,7 @@ struct ProtectionOverview: View {
         let network = firewall.map { $0.mode == .off ? [] : ProtectionTimeline.buckets(
             firstSeen: found.map { ($0.0.firstSeen, blocked: $0.1.verdict == .block) }, range: range) } ?? []
         let yMax = ProtectionTimeline.sharedMax(Array(series.values) + [network])
-        return VStack(alignment: .leading, spacing: 20) {
+        return GlassEffectContainer(spacing: 20) { VStack(alignment: .leading, spacing: 20) {
             header
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -42,10 +45,12 @@ struct ProtectionOverview: View {
                 }
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(ProtectionArea.allCases, id: \.self) { area in
-                        AreaCard(protection: protection, area: area, buckets: series[area] ?? [], range: range, yMax: yMax, go: go)
+                        AreaCard(protection: protection, area: area, buckets: series[area] ?? [], range: range, yMax: yMax,
+                                 chartHeight: layout.chartHeight, go: go)
                     }
                     if let firewall {
-                        FirewallCard(firewall: firewall, buckets: network, range: range, yMax: yMax, go: go)
+                        FirewallCard(firewall: firewall, buckets: network, range: range, yMax: yMax,
+                                     chartHeight: layout.chartHeight, go: go)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)     // every card as tall as the tallest
@@ -53,6 +58,19 @@ struct ProtectionOverview: View {
             next(found)
         }
         .frame(maxWidth: Self.readableWidth, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { layout.content = $0; fit() }
+        .onChange(of: viewport) { fit() }
+        }
+    }
+
+    /// The charts take what the window has left over: the page without its charts is the measured height minus the
+    /// charts, so the fit settles in one step. Never shorter than the 120 pt a small window gets, never taller
+    /// than 300 pt, past which a bar chart of a few dozen numbers only gets emptier.
+    private func fit() {
+        guard viewport > 0, layout.content > 0 else { return }
+        let rest = layout.content - layout.chartHeight
+        let want = min(300, max(120, (viewport - rest).rounded(.down)))
+        if abs(want - layout.chartHeight) >= 1 { layout.chartHeight = want }
     }
 
     // MARK: State
@@ -118,8 +136,7 @@ struct ProtectionOverview: View {
         }
         .controlSize(.large)
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(tint.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(tint.opacity(0.22), lineWidth: 0.5))
+        .glassEffect(.regular.tint(tint.opacity(state == .off ? 0 : 0.16)), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 
@@ -172,7 +189,7 @@ struct ProtectionOverview: View {
                     go(.protectionFound)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.35)))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             if state != .off {
                 Text("Watching since \(protection.since.formatted(date: .abbreviated, time: .omitted))")
                     .font(.caption).foregroundStyle(.tertiary).padding(.leading, 4)
@@ -255,6 +272,7 @@ private struct AreaCard: View {
     let buckets: [ProtectionTimeline.Bucket]
     let range: ProtectionTimeline.Range
     let yMax: Int
+    let chartHeight: CGFloat
     let go: (RulesSegment) -> Void
 
     private var mode: ProtectionMode { protection.mode(area) }
@@ -300,7 +318,7 @@ private struct AreaCard: View {
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax)
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax, height: chartHeight)
             }
             Spacer(minLength: 0)
             CardFooter(title: "Found", count: findings) { go(.protectionFound) }
@@ -316,6 +334,7 @@ private struct FirewallCard: View {
     let buckets: [ProtectionTimeline.Bucket]
     let range: ProtectionTimeline.Range
     let yMax: Int
+    let chartHeight: CGFloat
     let go: (RulesSegment) -> Void
 
     private var explanation: String {
@@ -352,7 +371,7 @@ private struct FirewallCard: View {
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax)
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax, height: chartHeight)
             }
             if !firewall.prompts.isEmpty {
                 Label("\(firewall.prompts.count) waiting for your answer", systemImage: "hourglass").foregroundStyle(.orange)
@@ -381,12 +400,30 @@ private struct OverviewFigure: View {
     }
 }
 
-/// The cards' shared surface.
+/// The cards' shared surface: Liquid Glass, as macOS draws widgets.
 private struct OverviewCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.quaternary.opacity(0.4)))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// The charts' height for the window's size (no @State macro with the command line tools).
+final class OverviewLayout: ObservableObject {
+    @Published var chartHeight: CGFloat = 120
+    var content: CGFloat = 0
+}
+
+/// The height of the scroll view a page sits in, for pages that fill a tall window rather than leave it empty.
+struct ViewportHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var viewportHeight: CGFloat {
+        get { self[ViewportHeightKey.self] }
+        set { self[ViewportHeightKey.self] = newValue }
     }
 }

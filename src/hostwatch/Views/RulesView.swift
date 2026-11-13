@@ -27,6 +27,8 @@ struct RulesView: View {
     var showKeys: (String, [String]) -> Void = { _, _ in }
     /// Opens the Network tab (the firewall's connections).
     var showNetwork: () -> Void = {}
+    /// The detail's visible height, for pages that fill a tall window (the Protection overview).
+    @StateObject private var viewport = ViewportState()
 
     private var review: [BaselineReport.Group] { baseline.report?.review ?? [] }
 
@@ -99,6 +101,8 @@ struct RulesView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport.height = $0 - 32 }   // less the page's padding
+            .environment(\.viewportHeight, viewport.height)
             Divider()
             HStack {
                 Text(footer).lineLimit(1)
@@ -800,4 +804,9 @@ private struct RuleProgressCard: View {
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.accentColor.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor.opacity(0.25)))
     }
+}
+
+/// The Rules detail's visible height (no @State macro with the command line tools).
+final class ViewportState: ObservableObject {
+    @Published var height: CGFloat = 0
 }
