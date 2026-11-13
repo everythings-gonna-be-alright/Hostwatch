@@ -18,6 +18,7 @@
 - [Advanced and command line](https://hostwatch.tech/docs/advanced-and-command-line.html): command-line flags, how the collector works, and updates. (Markdown: https://hostwatch.tech/reference/05-advanced-and-command-line.md)
 - [Privacy, security and limits](https://hostwatch.tech/docs/privacy-security-and-limits.html): what is stored and sent, how Hostwatch protects itself, reset, troubleshooting, limits. (Markdown: https://hostwatch.tech/reference/06-privacy-security-and-limits.md)
 - [For developers](https://hostwatch.tech/docs/for-developers.html): building, testing, demo mode and how it is put together. (Markdown: https://hostwatch.tech/reference/07-for-developers.md)
+- [Threat model and attack coverage](https://hostwatch.tech/docs/threat-model.html): what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees. (Markdown: https://hostwatch.tech/reference/08-threat-model.md)
 
 ## Questions and answers
 

@@ -48,6 +48,10 @@ key lives*: another process running as you, an AI agent included, can't fetch it
 Part of Hostwatch runs as root, and it sees command lines that can contain passwords. These notes explain how it keeps
 that power and that data from being misused.
 
+For what Hostwatch defends against, its known weaknesses and its coverage of attack techniques, see
+[Threat model and attack coverage](08-threat-model.md). To report a vulnerability, see
+[SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).
+
 **Who runs with which rights**
 
 - **The HUD:** runs as the logged-in user. Only the collector is elevated.

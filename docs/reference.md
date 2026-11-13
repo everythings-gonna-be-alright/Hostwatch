@@ -24,6 +24,7 @@ A paid edition will be only for companies. It will offer two things:
 5. **[Advanced and command line](reference/05-advanced-and-command-line.md)**: command-line flags, how the collector works, and updates.
 6. **[Privacy, security and limits](reference/06-privacy-security-and-limits.md)**: what is stored and sent, how Hostwatch protects itself, reset, troubleshooting, limits.
 7. **[For developers](reference/07-for-developers.md)**: building, testing, demo mode and how it is put together.
+8. **[Threat model and attack coverage](reference/08-threat-model.md)**: what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees.
 
 ## Questions and answers
 

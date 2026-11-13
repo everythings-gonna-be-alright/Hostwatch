@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **A security policy and a threat model.** `SECURITY.md` says how to report a vulnerability privately, what is in
+  scope and how quickly you'll hear back. A new docs chapter, *Threat model and attack coverage*, says what Hostwatch
+  defends against and what it doesn't, how it protects itself, its known weaknesses, and which MITRE ATT&CK
+  techniques it alerts on, can stop, only records, or misses.
+
 ## 0.15.0 – Protection, and the AI you choose
 
 ### New: Protection (Rules ▸ Protection)
