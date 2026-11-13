@@ -9,6 +9,10 @@
   defends against and what it doesn't, how it protects itself, its known weaknesses, and which MITRE ATT&CK
   techniques it alerts on, can stop, only records, or misses.
 
+- **Clearer Protection charts.** Choose *24 Hours* or *7 Days* for all cards at once. Each card's numbers now add up
+  what its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers
+  an Audio Graph. The Network card counts the same new destinations in its numbers and its chart.
+
 ### Fixes
 
 - **Fewer false "known malware" alerts.** ThreatFox lists single malicious files on GitHub, Telegram, Discord, Steam,
