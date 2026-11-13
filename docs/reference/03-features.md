@@ -751,9 +751,11 @@ both numbers the sidebar uses: what would be stopped, and everything to review. 
 and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
 included. *Protected Files and Folders* has the cards and your own places, *Found* what the rehearsal found.
 
-Each area's card has a chart of the last 24 hours, hour by hour: what was stopped (or would be) in red, what was
-asked about (or would be) in grey. Hover over an hour for its numbers. The firewall's chart counts new destinations
-by the hour they were first seen.
+Each area's card has a chart: what was stopped (or would be) in red, what was asked about (or would be) in grey.
+*24 Hours | 7 Days* above the cards switches all of them between the last 24 hours by hour and the last 7 days by
+day, and each card's two numbers are the totals of its chart. The cards share one scale, so bars side by side
+compare honestly. Hover over a bar for its numbers. VoiceOver reads each bar and offers the chart as an Audio Graph.
+The firewall's chart counts new destinations by when they were first seen. Hourly counts are kept for eight days.
 
 The firewall is the third area, beside Launches and Files: the Overview's *Network* card has its four modes and the
 same two numbers (what it blocks or would, what it asks about or would), and the *Network Firewall* page has the

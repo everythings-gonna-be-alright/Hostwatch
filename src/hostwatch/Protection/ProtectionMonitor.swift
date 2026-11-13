@@ -88,7 +88,7 @@ final class ProtectionMonitor: ObservableObject {
     /// When rehearsal started: "Watching for 3 days".
     private(set) var since: Date
     private(set) var today: [ProtectionArea: [ProtectionVerdict: Int]] = [:]
-    /// Hour by hour, the last two days: what was stopped (or would be) and asked about, for the Overview's charts.
+    /// Hour by hour, the last eight days: what was stopped (or would be) and asked about, for the Overview's charts.
     struct HourCount: Codable, Equatable, Sendable {
         var hour: Int                                   // hours since 1970
         var area: ProtectionArea
@@ -243,7 +243,7 @@ final class ProtectionMonitor: ObservableObject {
             if verdict == .block { hourly[i].block += 1 } else { hourly[i].ask += 1 }
         } else {
             hourly.append(HourCount(hour: hour, area: area, block: verdict == .block ? 1 : 0, ask: verdict == .block ? 0 : 1))
-            hourly.removeAll { $0.hour < hour - 48 }
+            hourly.removeAll { $0.hour < hour - ProtectionTimeline.keepHours }
         }
         let id = "\(area.rawValue)|\(e.signatureKey)"
         if var f = findings[id] {
@@ -329,13 +329,6 @@ final class ProtectionMonitor: ObservableObject {
         if let hours = try? JSONEncoder().encode(hourly) { try? Vault.shared.write(hours, to: hourlyURL) }
     }
 
-    /// The last 24 hours for one area, oldest first, an entry per hour (empty hours count zero).
-    func last24(_ area: ProtectionArea, now: Date = Date()) -> [HourCount] {
-        let current = Int(now.timeIntervalSince1970 / 3600)
-        return (current - 23...current).map { h in
-            hourly.first { $0.hour == h && $0.area == area } ?? HourCount(hour: h, area: area)
-        }
-    }
 
     private func changed() {
         if paused || !launchMode.enforces || !fileMode.enforces {

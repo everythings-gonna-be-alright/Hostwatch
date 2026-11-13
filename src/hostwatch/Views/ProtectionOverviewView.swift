@@ -10,19 +10,46 @@ struct ProtectionOverview: View {
     var connections: () -> [(FirewallEntry, FirewallDecision)] = { [] }
     let go: (RulesSegment) -> Void
     @StateObject private var help = ExpandState()
+    /// The charts' range, one for every card (a per-viewer convenience, kept between launches).
+    @AppStorage("protectionChartRange") private var rangeRaw = ProtectionTimeline.Range.day.rawValue
 
     static let readableWidth: CGFloat = 1100
 
     var body: some View {
         let _ = protection.revision
         let found = connections()
-        VStack(alignment: .leading, spacing: 20) {
+        let range = ProtectionTimeline.Range(rawValue: rangeRaw) ?? .day
+        // Every card's buckets first: the cards share one scale, and their numbers are sums of these same buckets.
+        var series: [ProtectionArea: [ProtectionTimeline.Bucket]] = [:]
+        for area in ProtectionArea.allCases where protection.mode(area) != .off {
+            series[area] = ProtectionTimeline.buckets(protection.hourly, area: area, range: range)
+        }
+        let network = firewall.map { $0.mode == .off ? [] : ProtectionTimeline.buckets(
+            firstSeen: found.map { ($0.0.firstSeen, blocked: $0.1.verdict == .block) }, range: range) } ?? []
+        let yMax = ProtectionTimeline.sharedMax(Array(series.values) + [network])
+        return VStack(alignment: .leading, spacing: 20) {
             header
-            HStack(alignment: .top, spacing: 14) {
-                ForEach(ProtectionArea.allCases, id: \.self) { area in AreaCard(protection: protection, area: area, go: go) }
-                if let firewall { FirewallCard(firewall: firewall, connections: found, go: go) }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Activity in \(range.phrase)").font(.headline)
+                    Spacer()
+                    Picker("Range", selection: $rangeRaw) {
+                        ForEach(ProtectionTimeline.Range.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(ProtectionArea.allCases, id: \.self) { area in
+                        AreaCard(protection: protection, area: area, buckets: series[area] ?? [], range: range, yMax: yMax, go: go)
+                    }
+                    if let firewall {
+                        FirewallCard(firewall: firewall, buckets: network, range: range, yMax: yMax, go: go)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)     // every card as tall as the tallest
             }
-            .fixedSize(horizontal: false, vertical: true)         // every card as tall as the tallest
             next(found)
         }
         .frame(maxWidth: Self.readableWidth, alignment: .leading)
@@ -225,6 +252,9 @@ private struct OffHint: View {
 private struct AreaCard: View {
     @ObservedObject var protection: ProtectionMonitor
     let area: ProtectionArea
+    let buckets: [ProtectionTimeline.Bucket]
+    let range: ProtectionTimeline.Range
+    let yMax: Int
     let go: (RulesSegment) -> Void
 
     private var mode: ProtectionMode { protection.mode(area) }
@@ -265,15 +295,12 @@ private struct AreaCard: View {
             if mode == .off {
                 OffHint(text: "Turn on Watch to see, hour by hour, what would be stopped.")
             } else {
+                let stop = mode.enforces ? "stopped" : "would stop", ask = mode == .watch ? "would ask" : "asked"
                 HStack(spacing: 24) {
-                    OverviewFigure(n: protection.count(area, .block), label: mode.enforces ? "stopped today" : "would stop today",
-                                   alarming: true)
-                    OverviewFigure(n: protection.count(area, .ask), label: mode == .watch ? "would ask today" : "asked today",
-                                   alarming: false)
+                    OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
+                    OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                ProtectionChart(points: ProtectionChart.points(protection.last24(area)),
-                                stopLabel: mode.enforces ? "stopped" : "would stop",
-                                askLabel: mode == .watch ? "would ask" : "asked")
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax)
             }
             Spacer(minLength: 0)
             CardFooter(title: "Found", count: findings) { go(.protectionFound) }
@@ -285,7 +312,10 @@ private struct AreaCard: View {
 /// Network: the firewall's four modes, in the same card as Launches and Files, with what the chosen one does.
 private struct FirewallCard: View {
     @ObservedObject var firewall: FirewallMonitor
-    let connections: [(FirewallEntry, FirewallDecision)]
+    /// New destinations by when they were first seen, blocked (or would be) or asked about.
+    let buckets: [ProtectionTimeline.Bucket]
+    let range: ProtectionTimeline.Range
+    let yMax: Int
     let go: (RulesSegment) -> Void
 
     private var explanation: String {
@@ -314,17 +344,15 @@ private struct FirewallCard: View {
             if firewall.mode == .off {
                 OffHint(text: "Turn on Watch to see, hour by hour, what would be blocked.")
             } else {
-                // The same two numbers as Launches and Files: what it stops (or would), what it asks (or would).
-                let block = connections.filter { $0.1.verdict == .block }.count, ask = connections.count - block
+                // The same two numbers as Launches and Files, summed from the chart's own buckets: new destinations
+                // it blocks (or would), and asks about (or would).
                 let enforcing = firewall.mode == .ask || firewall.mode == .strict
+                let stop = enforcing ? "blocked" : "would block", ask = enforcing ? "asked about" : "would ask"
                 HStack(spacing: 24) {
-                    OverviewFigure(n: enforcing ? firewall.blockedCount : block, label: enforcing ? "blocked" : "would block",
-                                   alarming: true)
-                    OverviewFigure(n: ask, label: enforcing ? "asked about" : "would ask", alarming: false)
+                    OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
+                    OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                // New destinations by the hour they were first seen.
-                ProtectionChart(points: ProtectionChart.points(connections),
-                                stopLabel: enforcing ? "blocks" : "would block", askLabel: enforcing ? "asks" : "would ask")
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax)
             }
             if !firewall.prompts.isEmpty {
                 Label("\(firewall.prompts.count) waiting for your answer", systemImage: "hourglass").foregroundStyle(.orange)

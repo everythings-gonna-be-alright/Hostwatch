@@ -240,10 +240,12 @@ import Testing
         m.consider(&stop, status: .dangerous)
         var ask = ActivityEvent(kind: .exec, time: "1", pid: 1, ppid: 1, name: "curl", proc: "/usr/bin/curl", target: "/usr/bin/curl", extra: "", parent: "/bin/zsh")
         m.consider(&ask, status: .unclassified)
-        let day = m.last24(.launches)
+        let day = ProtectionTimeline.buckets(m.hourly, area: .launches, range: .day)
         #expect(day.count == 24 && day.last?.block == 1 && day.last?.ask == 1)
-        #expect(day.dropLast().allSatisfy { $0.block == 0 && $0.ask == 0 })
-        #expect(m.last24(.files).allSatisfy { $0.block == 0 && $0.ask == 0 })
+        #expect(day.dropLast().allSatisfy { $0.total == 0 })
+        #expect(ProtectionTimeline.buckets(m.hourly, area: .files, range: .day).allSatisfy { $0.total == 0 })
+        let week = ProtectionTimeline.buckets(m.hourly, area: .launches, range: .week)
+        #expect(week.count == 7 && week.last?.block == 1 && week.last?.ask == 1)
     }
 }
 
@@ -267,5 +269,44 @@ import Testing
 
     @Test func pauseWinsOverEverything() {
         #expect(ProtectionState(paused: true, modes: [.strict, .ask], network: .strict) == .paused)
+    }
+}
+
+/// The Overview's charts as data: every bucket present, the right bucket for each count, one shared scale.
+@Suite struct ProtectionTimelines {
+    var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Europe/Kyiv")!; return c }
+    let now = Date(timeIntervalSince1970: 1_794_000_000)        // a fixed moment, so day edges are known
+
+    @Test func dayIs24HoursEndingNowWeekIs7DaysEndingToday() {
+        let day = ProtectionTimeline.empty(.day, now: now, calendar: calendar)
+        #expect(day.count == 24 && day.last!.start <= now && now.timeIntervalSince(day.last!.start) < 3600)
+        let week = ProtectionTimeline.empty(.week, now: now, calendar: calendar)
+        #expect(week.count == 7 && week.last!.start == calendar.startOfDay(for: now))
+        #expect(calendar.dateComponents([.day], from: week.first!.start, to: week.last!.start).day == 6)
+    }
+
+    @Test func countsLandInTheirBucketAndOldOnesAreLeftOut() {
+        let hour = Int(now.timeIntervalSince1970 / 3600)
+        let hourly = [
+            ProtectionMonitor.HourCount(hour: hour, area: .launches, block: 2, ask: 1),
+            ProtectionMonitor.HourCount(hour: hour - 30, area: .launches, block: 1, ask: 0),      // yesterday: week only
+            ProtectionMonitor.HourCount(hour: hour - 10 * 24, area: .launches, block: 9, ask: 9),  // too old for both
+            ProtectionMonitor.HourCount(hour: hour, area: .files, block: 5, ask: 5),               // another area
+        ]
+        let day = ProtectionTimeline.buckets(hourly, area: .launches, range: .day, now: now, calendar: calendar)
+        #expect(day.reduce(0) { $0 + $1.block } == 2 && day.reduce(0) { $0 + $1.ask } == 1)
+        let week = ProtectionTimeline.buckets(hourly, area: .launches, range: .week, now: now, calendar: calendar)
+        #expect(week.reduce(0) { $0 + $1.block } == 3)
+    }
+
+    @Test func networkBucketsByFirstSeenAndTheScaleIsShared() {
+        let seen = [(now, blocked: true), (now.addingTimeInterval(-7200), blocked: false), (now.addingTimeInterval(-86_400 * 3), blocked: true)]
+        let day = ProtectionTimeline.buckets(firstSeen: seen, range: .day, now: now, calendar: calendar)
+        #expect(day.reduce(0) { $0 + $1.block } == 1 && day.reduce(0) { $0 + $1.ask } == 1)
+        let week = ProtectionTimeline.buckets(firstSeen: seen, range: .week, now: now, calendar: calendar)
+        #expect(week.reduce(0) { $0 + $1.block } == 2)
+        #expect(ProtectionTimeline.sharedMax([day]) == 1 && ProtectionTimeline.sharedMax([day, week]) == 2)   // the week puts two on one day
+        #expect(ProtectionTimeline.sharedMax([[], []]) == 1)       // never a zero-height scale
+        #expect([3, 6, 7, 11, 23, 140, 1000].map(ProtectionTimeline.tidy) == [3, 10, 10, 20, 25, 200, 1000])
     }
 }
