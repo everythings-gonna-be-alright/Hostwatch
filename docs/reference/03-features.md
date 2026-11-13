@@ -959,6 +959,21 @@ domain.
 - A phishing page on a shared host is still flagged by its full name (`login-apple.github.io`).
 - A list can only raise alerts: it can never make Hostwatch trust anything.
 
+**A malicious file on a shared platform doesn't flag the platform.** ThreatFox mostly lists full addresses: one file on
+GitHub, one Telegram channel or Steam profile that malware reads its real server from. Hostwatch sees which server a
+program connects to, not the file, so matching the whole host would flag everyone who uses GitHub or Telegram.
+
+- Hosts where anyone can publish are never flagged by such an address: GitHub's raw and gist hosts, GitLab,
+  Bitbucket, Telegram, Discord, Steam, X, VK, Reddit, Pastebin, Dropbox, MediaFire, MEGA, Google Drive and Sites,
+  OneDrive, the Internet Archive, SourceForge and link shorteners.
+- A host whose listed addresses belong to three or more malware families in one download is treated the same way:
+  it's shared, whoever runs it.
+- An attacker's own server is still flagged, and so is a customer's own subdomain of a platform
+  (`abc123.workers.dev`). Anonymous file drops such as catbox are kept on purpose: rare on an ordinary Mac, and a
+  real signal.
+- What a program then does there is still judged: a new domain, beaconing or an untrusted program calling out each
+  raise their own story steps.
+
 ### AI when you want it
 
 AI explains and helps decide, only when you ask, on your Mac or with Claude.

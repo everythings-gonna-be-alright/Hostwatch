@@ -37,6 +37,50 @@ import Testing
                 == "macOS Tahoe 27.2.1")
     }
 
+    /// A URL on a platform anyone can publish to names one file or channel, not the host: flagging the host was
+    /// noise (raw.githubusercontent.com, t.me, steamcommunity.com). An attacker's own host still matches.
+    @Test func urlsOnSharedPlatformsDontFlagTheHost() {
+        func url(_ u: String, _ family: String) -> String {
+            #"{"ioc":"\#(u)","ioc_type":"url","threat_type":"botnet_cc","malware_printable":"\#(family)","first_seen":"2026-11-07 10:00:00 UTC"}"#
+        }
+        let tf = ThreatIntel.parseThreatFox(Data(("{\"query_status\":\"ok\",\"data\":[" + [
+            url("https://raw.githubusercontent.com/someone/repo/main/payload.sh", "WARDENStealer"),
+            url("https://t.me/deaddrop123", "Vidar"),
+            url("https://www.dropbox.com/s/abc/setup.dmg", "AMOS"),
+            url("https://steamcommunity.com/profiles/7656119", "Vidar"),
+            // a host nobody listed as a platform, but three families publish there: shared
+            url("https://files.sharedcdn.example/a.zip", "AMOS"), url("https://files.sharedcdn.example/b.zip", "Vidar"),
+            url("https://files.sharedcdn.example/c.zip", "Lumma"),
+            // the attacker's own host, several files of one family: flagged
+            url("https://evil-updates.example/a", "AMOS"), url("https://evil-updates.example/b", "AMOS"),
+            url("https://abc123.workers.dev/x", "ClearFake"),
+        ].joined(separator: ",") + "]}").utf8))
+        for host in ["raw.githubusercontent.com", "t.me", "www.dropbox.com", "steamcommunity.com", "files.sharedcdn.example"] {
+            #expect(tf[host] == nil, "\(host) is shared")
+        }
+        #expect(tf["evil-updates.example"] != nil)
+        #expect(tf["abc123.workers.dev"] != nil)               // a customer's own subdomain of a platform
+        #expect(FeedCheck.sharedHost("www.mediafire.com") && FeedCheck.sharedHost("API.Telegram.org"))
+        #expect(!FeedCheck.sharedHost("evil.t.me.example") && !FeedCheck.sharedHost("files.catbox.moe"))
+    }
+
+    /// Lists cached by earlier versions still hold the platform hosts: they're skipped when the index is built.
+    @Test func cachedPlatformHostsAreSkipped() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-intel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let old: [String: ThreatIntel.Indicator] = [
+            "telegram.me": .init(detail: "Vidar command server", seen: Date(), type: "domain"),
+            "raw.githubusercontent.com": .init(detail: "WARDENStealer indicator", seen: Date(), type: "domain"),
+            "c2.badguys.net": .init(detail: "AsyncRAT command server", seen: Date(), type: "domain"),
+        ]
+        try JSONEncoder().encode(old).write(to: dir.appendingPathComponent("threatfox"))
+        let intel = ThreatIntel(directory: dir, defaults: scratchDefaults("hw-intel-old"))
+        await intel.load()
+        #expect(intel.listedDomain("telegram.me") == nil)
+        #expect(intel.listedDomain("raw.githubusercontent.com") == nil)
+        #expect(intel.listedDomain("c2.badguys.net") != nil)
+    }
+
     @Test func matchesDomainsSubdomainsIPsAndPorts() async throws {
         let intel = try make()
         await intel.load()
