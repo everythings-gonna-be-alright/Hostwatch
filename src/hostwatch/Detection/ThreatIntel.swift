@@ -144,7 +144,9 @@ final class ThreatIntel: ObservableObject {
         if let data = try? Data(contentsOf: directory.appendingPathComponent("state.json")),
            let saved = try? JSONDecoder().decode([String: FeedState].self, from: data) { states = saved }
         if let data = Vault.shared.read(directory.appendingPathComponent("hits.json")),
-           let saved = try? JSONDecoder().decode([ThreatHit].self, from: data) { hits = saved }
+           let saved = try? JSONDecoder().decode([ThreatHit].self, from: data) {
+            hits = saved.filter { !($0.kind == .domain && FeedCheck.sharedHost($0.indicator)) }   // matches made before shared hosts were skipped
+        }
         osUpdated = Self.lastOSUpdate()
     }
 
@@ -322,7 +324,7 @@ final class ThreatIntel: ObservableObject {
                       let all = try? JSONDecoder().decode([String: Indicator].self, from: data) else { continue }
                 for (k, v) in all {
                     if v.type == "sha256" { hashes[k] = "\(feed.title): \(v.detail)" }
-                    else if !FeedCheck.neverFlag(k) { c2[k] = "\(feed.title): \(v.detail)" }
+                    else if !FeedCheck.neverFlag(k), !FeedCheck.sharedHost(k) { c2[k] = "\(feed.title): \(v.detail)" }
                 }
                 counts[feed.rawValue] = all.count
             }
@@ -356,6 +358,14 @@ final class ThreatIntel: ObservableObject {
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
         var out: [String: Indicator] = [:]
+        // A URL names one file or channel. Its host is flagged only when the attacker owns it: not a platform where
+        // anyone can publish, and not a host whose URLs belong to several malware families (shared, whoever runs it).
+        var families: [String: Set<String>] = [:]
+        for item in items where item["ioc_type"] as? String == "url" {
+            if let host = (item["ioc"] as? String).flatMap({ URL(string: $0.lowercased())?.host }) {
+                families[host, default: []].insert(item["malware_printable"] as? String ?? "")
+            }
+        }
         for item in items {
             guard var ioc = (item["ioc"] as? String)?.lowercased(), let type = item["ioc_type"] as? String else { continue }
             let family = item["malware_printable"] as? String ?? "malware"
@@ -368,7 +378,10 @@ final class ThreatIntel: ObservableObject {
                 out[ioc] = Indicator(detail: detail, seen: seen, type: "ip:port")
                 if let ip = ioc.split(separator: ":").first { out[String(ip)] = Indicator(detail: detail, seen: seen, type: "ip") }
             case "url":
-                if let host = URL(string: ioc)?.host?.lowercased() { ioc = host; out[ioc] = Indicator(detail: detail, seen: seen, type: "domain") }
+                guard let host = URL(string: ioc)?.host?.lowercased(), !FeedCheck.sharedHost(host),
+                      (families[host]?.count ?? 0) < FeedCheck.sharedAfterFamilies else { continue }
+                ioc = host
+                out[ioc] = Indicator(detail: detail, seen: seen, type: "domain")
             case "sha256_hash": out[ioc] = Indicator(detail: detail, seen: seen, type: "sha256")
             default: continue
             }
@@ -428,7 +441,7 @@ final class ThreatIntel: ObservableObject {
     func listedDomain(_ host: String) -> (domain: String, detail: String)? {
         var h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".~≈"))
         while h.contains(".") {
-            if FeedCheck.neverFlag(h) { return nil }      // a major provider's own domain: never by a parent match
+            if FeedCheck.neverFlag(h) || FeedCheck.sharedHost(h) { return nil }   // a platform's own host: never by a parent match
             if let d = c2[h] { return (h, d) }
             if domains.contains(h) { return (h, "HaGeZi Threat Intelligence: malware or phishing domain") }
             h = String(h.drop { $0 != "." }.dropFirst())
@@ -694,6 +707,33 @@ enum FeedCheck {
         "fastly.net", "digicert.com", "letsencrypt.org", "anthropic.com", "claude.ai", "abuse.ch", "cisa.gov",
         "jsdelivr.net", "slack.com", "zoom.us",
     ]
+
+    /// Hosts where anyone can publish: code, paste and file sharing, and chat or social pages that malware uses as a
+    /// dead drop (a Telegram channel or Steam profile holding the real server's address). Lists name them for one
+    /// file or channel, which a connection can't tell apart, so a match on the host is noise. Exact hosts only: a
+    /// customer's own subdomain (`evil.workers.dev`) stays matchable. Anonymous file drops (catbox, gofile) are left
+    /// out on purpose, they are rare on an ordinary Mac and a real signal.
+    static let sharedHosts: Set<String> = [
+        "raw.githubusercontent.com", "gist.githubusercontent.com", "objects.githubusercontent.com",
+        "codeload.github.com", "gist.github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "huggingface.co",
+        "t.me", "telegram.me", "telegram.org", "api.telegram.org", "telegra.ph",
+        "discord.com", "discordapp.com", "cdn.discordapp.com", "media.discordapp.net",
+        "steamcommunity.com", "x.com", "twitter.com", "vk.com", "reddit.com",
+        "pastebin.com", "paste.ee", "rentry.co",
+        "dropbox.com", "dl.dropboxusercontent.com", "mediafire.com", "download.mediafire.com", "mega.nz",
+        "drive.google.com", "docs.google.com", "sites.google.com", "drive.usercontent.google.com",
+        "onedrive.live.com", "1drv.ms", "archive.org", "sourceforge.net",
+        "bit.ly", "tinyurl.com", "is.gd",
+    ]
+
+    /// A host whose listed URLs belong to this many malware families in one download is shared, whoever runs it.
+    static let sharedAfterFamilies = 3
+
+    static func sharedHost(_ host: String) -> Bool {
+        var h = host.lowercased()
+        if h.hasPrefix("www.") { h.removeFirst(4) }
+        return sharedHosts.contains(h)
+    }
 
     static func neverFlag(_ entry: String) -> Bool {
         var d = entry.lowercased()

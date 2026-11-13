@@ -9,6 +9,13 @@
   defends against and what it doesn't, how it protects itself, its known weaknesses, and which MITRE ATT&CK
   techniques it alerts on, can stop, only records, or misses.
 
+### Fixes
+
+- **Fewer false "known malware" alerts.** ThreatFox lists single malicious files on GitHub, Telegram, Discord, Steam,
+  Dropbox and similar platforms, and Hostwatch flagged the whole platform. A platform anyone can publish to is no
+  longer flagged by one file on it, nor is a host shared by three or more malware families. Earlier alerts for these
+  hosts are cleared.
+
 ## 0.15.0 – Protection, and the AI you choose
 
 ### New: Protection (Rules ▸ Protection)
