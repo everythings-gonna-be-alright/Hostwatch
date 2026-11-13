@@ -11,7 +11,9 @@
 
 - **Clearer Protection charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers now add up
   what its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers
-  an Audio Graph. The Network card counts the same new destinations in its numbers and its chart.
+  an Audio Graph. The Network card counts the same new destinations in its numbers and its chart. In a large or full-screen
+  window the charts grow into the spare height instead of leaving it empty, and the Overview's panels are Liquid
+  Glass.
 
 ### Fixes
 
