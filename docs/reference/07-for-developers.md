@@ -31,7 +31,7 @@ Only part of it, while working:
 ```
 
 `--changed` finds the types the changed source files declare and runs every suite whose file mentions one of them
-(a changed test file runs as itself). It is a shortcut for the edit loop; the merge gate still runs everything.
+(a changed test file runs as itself). It is a shortcut for the edit loop. The merge gate still runs everything.
 
 **Swift** (`tests/swift`, Swift Testing, `swift test`) covers:
 

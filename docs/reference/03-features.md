@@ -44,7 +44,7 @@ only a version, e.g. `claude/versions/#.#.#`.
   `launchctl`, `defaults`…) and admin tools (`sudo`, `chown`, `diskutil`…) keep one pattern each, with their
   arguments.
 - **Earlier patterns:** at launch, patterns saved by an earlier version that these rules now write as one are moved
-  into it, with counts and dates added up. Only automatic ones move (routine Safe, or New nobody touched); your
+  into it, with counts and dates added up. Only automatic ones move (routine Safe, or New nobody touched). Your
   decisions, a rule's or an AI's stay as they are. On a real store: 21,172 → 7,600 patterns. Preview it with
   `Hostwatch --regroup-report` (read-only).
 
@@ -300,7 +300,7 @@ waits in Needs You.
   (one by one, each covers only itself), *…decided by learned rules* and *…decided by baseline rules*. AI and your
   decisions each have **Undo** (back to New).
 - **In plain words:** every learned rule and proposal reads as a sentence: *who* does *what* → *what happens*,
-  e.g. **git** reads anything under ~/Documents/ProcessHUD → **Safe: decided for you, never asked about, left out
+  e.g. **git** reads anything under ~/Documents/MyApp → **Safe: decided for you, never asked about, left out
   of Stories**. A proposal also lists *If you approve*: how many New patterns change now, that future matches are
   decided without asking, and how many of your decisions it agrees with. *Details* shows the exact match (kind ·
   program → pattern). A baseline rule says what it trusts: the kinds of behaviour the app showed in its first week,
@@ -387,7 +387,7 @@ what one session did, not just what `zsh` or `git` did in general.
 
 - **Events ▸ Group:** *No Groups*, *By Process* or *By AI Session*, next to the Show buttons. *By AI Session* gives one
   row per session with its events under it, the rest under *No AI session*. A session row is a band across the
-  list, the way `claude --resume` lists sessions: the maker's mark, the topic, then *ProcessHUD · main · 12 min ·
+  list, the way `claude --resume` lists sessions: the maker's mark, the topic, then *MyApp · main · 12 min ·
   5 conn*, and on the right *Only this session* (the list keeps only that tree, *All sessions* takes it off),
   *Patterns*, the worst status among its events and their count. Groups open when shown (one you fold stays folded while the window is open). Right-click a band for the
   same actions and the Claude session id.
@@ -413,10 +413,10 @@ what one session did, not just what `zsh` or `git` did in general.
   *No AI session*. The band offers *Mark all Safe…* (after asking) for everything the session did so far.
 - **Everywhere else:** in the Events table an agent's event carries the maker's mark next to its kind (the session
   is in the tooltip), a destination on the Network tab that a session
-  reached carries a *via Claude · ProcessHUD* tag, and a story that happened inside a session starts with its name. In
+  reached carries a *via Claude · MyApp* tag, and a story that happened inside a session starts with its name. In
   Time Travel, sessions are replayed from the window's recorded process starts, so the grouping and the column work
   for yesterday's session too (named when the saved list knows the pid and start, else by pid).
-- **For Claude:** the MCP tool `agent_sessions` lists them; `trace_process` with a session's pid shows what it did.
+- **For Claude:** the MCP tool `agent_sessions` lists them, and `trace_process` with a session's pid shows what it did.
   The list is saved in `agent-sessions.json` while Hostwatch runs.
 
 #### Stories: chains, not single events

@@ -64,15 +64,15 @@ temporary launchd job after an administrator prompt, every launch.
 **Where Full Disk Access goes:** macOS treats Hostwatch.app as the responsible process for eslogger. So Full Disk
 Access must be granted to **Hostwatch.app**.
 
-**Where the log goes:** the service writes `/var/log/hostwatch-collector.log`; a collector started by the admin
+**Where the log goes:** the service writes `/var/log/hostwatch-collector.log`. A collector started by the admin
 prompt (a build without a Developer ID) writes `~/Library/Logs/Hostwatch/agent.log`. Open it with *Help ▸ Collector
 Log*.
 
 **Stopping and safety:**
 
-- **Remove…** (the service): unregisters it with your password; it stops and won't start at boot. **Stop** (an
+- **Remove…** (the service): unregisters it with your password. It stops and won't start at boot. **Stop** (an
   admin-prompted collector) sends a shutdown command carrying a random token, written with mode 0600 to
-  `~/Library/Application Support/Hostwatch/collector.token`; the service ignores that command.
+  `~/Library/Application Support/Hostwatch/collector.token`. The service ignores that command.
 - **If the app quits or dies:** the service keeps running but goes idle after 15 s with no client (no `eslogger`,
   no packet capture, firewall off) until Hostwatch connects again. An admin-prompted collector exits within about
   2 s if the app that launched it dies (`--owner-pid`).
