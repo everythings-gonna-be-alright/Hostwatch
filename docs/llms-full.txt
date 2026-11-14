@@ -1346,11 +1346,12 @@ the firewall does. Your decision on the pattern comes first, then its risk, then
 curl and other programs that run whatever they're told are judged by what they run.
 
 - **Always allow or always block a program in a place:** every protected place, a built-in group or one of your
-  folders and files, has **+** with *Always Allow a Program…* and *Always Block a Program…*. The programs show as chips
+  folders and files, reads as a sentence: the programs expected there (they always pass), *Any other program: Ask me
+  or Block*, and *Allow a Program…* and *Block a Program…*. The programs show as chips
   under the place, green or red, each removable. An app covers the programs inside it. These are your decisions, so
   they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
   protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
-  Watch. To block every program from a folder, protect it with *Others: Block*.
+  Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
 - **Allow and block destinations:** on the *Network Firewall* page, add a rule for a domain (its subdomains too) or an
   IP address, for one program (an app covers the programs inside it) or any program, to Allow or Block. Your rules
   come before threat lists and patterns, the most specific wins, and Block when two are equally specific.

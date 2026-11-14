@@ -71,8 +71,9 @@ struct ProtectionView: View {
     private var files: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Protected files and folders").font(.headline)
-            Text("Programs that aren't expected in these places are asked about, or blocked. With + on a place, always allow "
-                 + "a program there, or always block one: your decision, before any pattern or AI.")
+            Text("Each place lists the programs expected there, which always pass. Choose what happens when any other "
+                 + "program opens it, Ask me or Block, and add programs you always allow or always block there. Your "
+                 + "choices come before patterns and AI.")
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(ProtectedGroup.all) { group in card(group) }
             HStack {
@@ -115,18 +116,15 @@ struct ProtectionView: View {
             }
             Spacer()
             if hits > 0 { Text("\(hits)×").foregroundStyle(.secondary).monospacedDigit().help("Found by the rehearsal") }
-            Picker("Others", selection: Binding(get: { place.others }, set: { v in binding { $0.others = v } })) {
-                Text("Others: Ask").tag(ProtectionVerdict.ask)
-                Text("Others: Block").tag(ProtectionVerdict.block)
-            }
-            .labelsHidden().fixedSize().disabled(!place.on)
-            ExceptionsMenu(exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }), place: place.name)
             Toggle("", isOn: Binding(get: { place.on }, set: { on in binding { $0.on = on } }))
                 .labelsHidden().toggleStyle(.switch).controlSize(.small)
             Button { protection.removePlace(place.id) } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
         }
-            ExceptionChips(exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }))
+            PlaceChoices(others: Binding(get: { place.others }, set: { v in binding { $0.others = v } }),
+                         exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }),
+                         place: place.name)
+                .disabled(!place.on).opacity(place.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -148,20 +146,16 @@ struct ProtectionView: View {
             }
             Spacer()
             if hits > 0 { Text("\(hits)×").foregroundStyle(.secondary).monospacedDigit().help("Found by the rehearsal") }
-            Picker("Others", selection: Binding(get: { setting.others }, set: { v in
-                var s = setting; s.others = v; protection.groups[group.id] = s
-            })) {
-                Text("Others: Ask").tag(ProtectionVerdict.ask)
-                Text("Others: Block").tag(ProtectionVerdict.block)
-            }
-            .labelsHidden().fixedSize().disabled(!setting.on)
-            ExceptionsMenu(exceptions: exceptions, place: group.title)
             Toggle("", isOn: Binding(get: { setting.on }, set: { on in
-                var s = setting; s.on = on; protection.groups[group.id] = s
+                var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.on = on; protection.groups[group.id] = s
             }))
             .labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
-            ExceptionChips(exceptions: exceptions).padding(.leading, 32)
+            PlaceChoices(others: Binding(get: { setting.others }, set: { v in
+                var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.others = v; protection.groups[group.id] = s
+            }), exceptions: exceptions, place: group.title)
+                .disabled(!setting.on).opacity(setting.on ? 1 : 0.5)
+                .padding(.leading, 32)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
@@ -321,22 +315,33 @@ final class FoundExpansion: ObservableObject {
     @Published var connections = false
 }
 
-/// + on a place: always allow, or always block, a program there (an app covers the programs inside it).
-struct ExceptionsMenu: View {
+/// A place's choices, as a sentence: what any other program meets (Ask me or Block), and the programs you always
+/// allow or always block there, added with visible buttons and shown as chips. "Others: Ask" said none of this.
+struct PlaceChoices: View {
+    @Binding var others: ProtectionVerdict
     @Binding var exceptions: PlaceExceptions
     let place: String
 
     var body: some View {
-        Menu {
-            Button("Always Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
-            Button("Always Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
-        } label: {
-            Image(systemName: "plus.circle")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Any other program").font(.callout).foregroundStyle(.secondary)
+                Picker("Any other program", selection: $others) {
+                    Text("Ask me").tag(ProtectionVerdict.ask)
+                    Text("Block").tag(ProtectionVerdict.block)
+                }
+                .labelsHidden().fixedSize().controlSize(.small)
+                .help("What happens when a program not expected in \(place), and not in your list below, opens it")
+                Spacer(minLength: 12)
+                Button("Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
+                    .help("Always let a program into \(place), without asking")
+                Button("Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
+                    .help("Always stop a program in \(place)")
+            }
+            .buttonStyle(.link)
+            .controlSize(.small)
+            ExceptionChips(exceptions: $exceptions)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Always allow, or always block, a program in \(place)")
     }
 
     private func choose(_ add: (String) -> Void) {
