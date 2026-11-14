@@ -157,7 +157,7 @@ extension AppDelegate {
             std("Paste", #selector(NSText.paste(_:)), "v"),
             std("Select All", #selector(NSText.selectAll(_:)), "a"),
             .separator(),
-            std("Find", #selector(NSResponder.performTextFinderAction(_:)), "f").withTag(Int(NSTextFinder.Action.showFindInterface.rawValue)),
+            item("Find", #selector(focusSearch), key: "f"),
         ])
 
         // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
@@ -241,6 +241,8 @@ extension AppDelegate {
             return model.windowTab == 1                                         // a Patterns filter
         case #selector(backToNow):
             return travel.active
+        case #selector(focusSearch):
+            return ToolbarSearchField.current?.window != nil && model.windowTab != 4
         case #selector(exportEvents):
             return !model.history.isEmpty
         case #selector(launchChainOfSelection):
@@ -501,6 +503,12 @@ extension AppDelegate {
 
     @objc func togglePause() { model.paused.toggle() }
     @objc func backToNow() { travel.exit() }
+    /// Edit ▸ Find: the window's search field, on the tabs that have one.
+    @objc func focusSearch() {
+        guard let field = ToolbarSearchField.current, let window = field.window else { return }
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(field)
+    }
     @objc func launchChainOfSelection() {
         guard let e = selectedEvents.first else { return }
         showLaunchChain(for: e)

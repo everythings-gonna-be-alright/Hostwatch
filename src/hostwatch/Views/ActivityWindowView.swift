@@ -175,9 +175,6 @@ struct ActivityWindowView: View {
         }
         // Native window toolbar (bridged by NSHostingController): Liquid Glass controls + search.
         .toolbar { toolbarContent }
-        .searchable(text: searchText, placement: .toolbar,
-                    prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
-                             "Domain, host, program", "Not used on Protection", "Not used on Overview"][min(model.windowTab, 5)])
         .navigationTitle("Hostwatch")
         .navigationSubtitle(subtitle)
     }
@@ -247,6 +244,17 @@ struct ActivityWindowView: View {
     }
 
     /// One search field, routed to whichever tab is showing.
+    /// What the search field searches on this tab, nil where there is nothing to search.
+    private var searchPrompt: String? {
+        switch model.windowTab {
+        case 0: "Name, path, host, PID"
+        case 1: "Process or pattern"
+        case 2: "Chain, process, path"
+        case 3: "Domain, host, program"
+        default: nil
+        }
+    }
+
     private var searchText: Binding<String> {
         model.windowTab == 1 ? $signatures.search : $model.searchText
     }
@@ -310,6 +318,12 @@ struct ActivityWindowView: View {
             .help("Show or hide the HUD overlay (⌃⌥⌘H)")
             Button(action: actions.openSettings) { Label("Settings", systemImage: "gearshape") }
                 .help("Settings (⌘,)")
+        }
+        // Search where there is something to search: Protection has none, so no field there.
+        ToolbarItem(placement: .primaryAction) {
+            if let prompt = searchPrompt {
+                ToolbarSearchField(text: searchText, prompt: prompt).frame(minWidth: 180, idealWidth: 260, maxWidth: 320)
+            }
         }
     }
 
