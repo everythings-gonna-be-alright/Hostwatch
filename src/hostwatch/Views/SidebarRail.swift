@@ -129,7 +129,6 @@ struct ProtectionRailItems: View {
         let stops = protection.findings.values.filter { $0.verdict == .block }.count + networkStops()
         RailButton(symbol: "shield.lefthalf.filled", title: "Overview", selected: page == .protectionOverview) { open(.protectionOverview) }
         RailButton(symbol: "lock.doc", title: "Protected Files and Folders", selected: page == .protectedFiles) { open(.protectedFiles) }
-        RailButton(symbol: "hand.raised", title: "Allow and Block", selected: page == .accessRules) { open(.accessRules) }
         if let firewall { FirewallRailButton(firewall: firewall, page: page, open: open) }
         RailButton(symbol: "exclamationmark.shield", title: "Found", badge: stops, selected: page == .protectionFound) { open(.protectionFound) }
     }

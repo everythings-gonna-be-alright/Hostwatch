@@ -1,42 +1,38 @@
 import AppKit
 import SwiftUI
 
-/// Protection ▸ Allow and Block: your own rules, a folder or file, or a network destination, for one program or any
-/// program. Two glass sections, each with its rules and Add Rule. The form says why a rule can't be added.
-struct AccessRulesView: View {
+/// Your Allow and Block rules of one kind, where they belong: file rules in Protected Files and Folders, network
+/// rules on the Network Firewall page. A glass section with its rules and Add Rule. The form says why a rule can't
+/// be added.
+struct AccessRulesSection: View {
     @ObservedObject var protection: ProtectionMonitor
+    let kind: AccessRule.Kind
     @StateObject private var form = AccessRuleForm()
 
-    var body: some View {
-        GlassEffectContainer(spacing: 12) {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Allow and Block").font(.headline)
-                    Text("Your own rules come before everything automatic: patterns, AI and threat lists. The most specific "
-                         + "rule wins (one program over any program, a deeper folder over its parent), and Block when two are "
-                         + "equally specific. Block acts in Ask and Strict and shows as \u{201C}would block\u{201D} in Watch.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                section(.files, title: "Files and folders", symbol: "folder",
-                        empty: "No rules yet. Block a folder for every program, or allow one program into a protected place.")
-                section(.network, title: "Network", symbol: "network",
-                        empty: "No rules yet. Block a domain for every program, or always allow one program to a server.")
-            }
-        }
+    private var title: String { kind == .files ? "Allow and block" : "Allow and block destinations" }
+    private var explanation: String {
+        kind == .files
+            ? "Your own rules for a folder or file, for one program or any program. They come before everything automatic, "
+              + "the most specific wins, and Block when two are equally specific."
+            : "Your own rules for a domain (its subdomains too) or an IP address, for one program or any program. They come "
+              + "before threat lists and patterns, the most specific wins, and Block when two are equally specific."
     }
 
-    private func section(_ kind: AccessRule.Kind, title: String, symbol: String, empty: String) -> some View {
+    var body: some View {
         let rules = protection.accessRules.filter { $0.kind == kind }
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+                Text(title).font(.headline)
                 Spacer()
                 Button { form.start(kind) } label: { Label("Add Rule…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
             }
+            Text(explanation).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if form.kind == kind { AccessRuleEditor(form: form, protection: protection) }
             if rules.isEmpty && form.kind != kind {
-                Text(empty).font(.callout).foregroundStyle(.secondary)
+                Text(kind == .files ? "No rules yet. Block a folder for every program, or allow one program into a protected place."
+                     : "No rules yet. Block a domain for every program, or always allow one program to a server.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             ForEach(rules) { rule in row(rule) }
         }

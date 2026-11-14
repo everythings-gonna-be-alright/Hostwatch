@@ -13,8 +13,8 @@
   holds Overview, Protected Files and Folders, Network Firewall and Found, every page in Liquid Glass panels. Found
   is the one place to decide what was found, launches, files and connections, instead of connections being listed
   twice: the Network Firewall page says how many are left, with *Review in Found*.
-- **Your own Allow and Block rules.** A new *Allow and Block* page in Protection lets you allow or block a folder or
-  file, or a domain or IP address, for one program or for any program. Your rules come before patterns, AI and threat
+- **Your own Allow and Block rules.** Allow or block a folder or file (in Protected Files and Folders), or a domain
+  or IP address (on the Network Firewall page), for one program or for any program. Your rules come before patterns, AI and threat
   lists, the most specific one wins, and Block wins a tie. Allowing every program into a whole area or a protected
   place isn't possible, only one program you choose.
 - **Clearer charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers add up what
