@@ -6,19 +6,6 @@ import SwiftUI
 enum RulesSegment: Int, CaseIterable {
     case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall
 
-    var title: String {
-        switch self {
-        case .allPatterns: "All Patterns"
-        case .needsYou: "Needs You"
-        case .rules: "Rules"
-        case .decided: "Decisions"
-        case .protectionOverview: "Overview"
-        case .protectedFiles: "Protected Files and Folders"
-        case .protectionFound: "Found"
-        case .firewall: "Network Firewall"
-        }
-    }
-
     /// The Protection tab's pages; the rest belong to the Patterns tab.
     var isProtection: Bool { rawValue >= RulesSegment.protectionOverview.rawValue }
     /// The window tab holding this page.
@@ -48,23 +35,6 @@ final class RulesTabState: ObservableObject {
     func sidebarShown(_ windowTab: Int) -> Bool { windowTab == 4 ? protectionSidebar : patternsSidebar }
     func toggleSidebar(_ windowTab: Int) {
         if windowTab == 4 { protectionSidebar.toggle() } else if windowTab == 1 { patternsSidebar.toggle() }
-    }
-}
-
-/// Hides or shows the left sidebar: the same small toggle as the right panel's (the Patterns inspector), at the
-/// other end of the bar. Only on pages that have a sidebar.
-struct SidebarToggle: View {
-    @ObservedObject var tab: RulesTabState
-    let windowTab: Int
-
-    var body: some View {
-        Toggle(isOn: Binding(get: { tab.sidebarShown(windowTab) },
-                             set: { _ in withAnimation(.snappy(duration: 0.2)) { tab.toggleSidebar(windowTab) } })) {
-            Image(systemName: "sidebar.leading")
-        }
-        .toggleStyle(.button)
-        .controlSize(.small)
-        .help(tab.sidebarShown(windowTab) ? "Hide the sidebar (⌃⌘S)" : "Show the sidebar (⌃⌘S)")
     }
 }
 
@@ -106,35 +76,74 @@ struct RulesView: View {
         // A source list, as System Settings and Mail do it: two groups of pages, a badge only where something
         // waits for you. A row of four segments mixed the two groups and had no room to grow.
         HStack(spacing: 0) {
+            // Expanded: the full sidebar. Collapsed: a rail of icons, so where you are and what waits stay in view.
             if scope == .patterns ? tab.patternsSidebar : tab.protectionSidebar {
-                sidebar.transition(.move(edge: .leading))
-                Divider()
+                sidebar
+            } else {
+                rail
             }
+            Divider()
             detail
         }
     }
 
     private var page: RulesSegment { scope == .patterns ? tab.patterns : tab.protection }
 
+    /// The full sidebar, with the collapse button on its own at the top, exactly where the rail has it: the button
+    /// doesn't move when the sidebar collapses or expands, so a second click undoes the first.
     private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                SidebarCollapseButton(collapsed: false) { toggle() }
+                Spacer()
+            }
+            .padding(.leading, SidebarMetrics.buttonInset)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
+            list
+        }
+        .frame(width: 236)          // "Protected Files and Folders" whole, with its icon
+        .background(SidebarMaterial())
+    }
+
+    private var list: some View {
         List(selection: Binding<RulesSegment?>(get: { page }, set: { if let s = $0 { tab.open(s) } })) {
             if scope == .patterns {
-                Section("Patterns") {
+                Section {
                     Label("All Patterns", systemImage: "square.stack.3d.up").tag(RulesSegment.allPatterns)
                     Label("Needs You", systemImage: "tray.full").badge(waiting).tag(RulesSegment.needsYou)
                     Label("Rules", systemImage: "checklist").tag(RulesSegment.rules)
                     Label("Decisions", systemImage: "person.crop.circle.badge.checkmark").tag(RulesSegment.decided)
-                }
+                } header: { Text("Patterns") }
             } else if let protection {
-                Section("Protection") {
+                Section {
                     ProtectionSidebarRows(protection: protection, firewall: firewall, networkStops: {
                         connections().filter { $0.1.verdict == .block }.count
                     })
-                }
+                } header: { Text("Protection") }
             }
         }
         .listStyle(.sidebar)
-        .frame(width: 236)          // "Protected Files and Folders" whole, with its icon
+        .scrollContentBackground(.hidden)
+    }
+
+    private func toggle() {
+        withAnimation(.snappy(duration: 0.22)) { tab.toggleSidebar(scope == .patterns ? 1 : 4) }
+    }
+
+    private var rail: some View {
+        SidebarRail(expand: toggle) {
+            if scope == .patterns {
+                RailButton(symbol: "square.stack.3d.up", title: "All Patterns", selected: page == .allPatterns) { tab.open(.allPatterns) }
+                RailButton(symbol: "tray.full", title: "Needs You", badge: waiting, selected: page == .needsYou) { tab.open(.needsYou) }
+                RailButton(symbol: "checklist", title: "Rules", selected: page == .rules) { tab.open(.rules) }
+                RailButton(symbol: "person.crop.circle.badge.checkmark", title: "Decisions", selected: page == .decided) { tab.open(.decided) }
+            } else if let protection {
+                ProtectionRailItems(protection: protection, firewall: firewall, networkStops: {
+                    connections().filter { $0.1.verdict == .block }.count
+                }, page: page, open: { tab.open($0) })
+            }
+        }
     }
 
     @ViewBuilder private var detail: some View {
@@ -145,21 +154,8 @@ struct RulesView: View {
         }
     }
 
-    /// The page's name, and the sidebar toggle: the bar the Patterns table has, for every other sidebar page.
-    private var pageBar: some View {
-        HStack(spacing: 10) {
-            SidebarToggle(tab: tab, windowTab: scope == .patterns ? 1 : 4)
-            Text(page.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-    }
-
     private var pages: some View {
         VStack(spacing: 0) {
-            pageBar
-            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     switch page {

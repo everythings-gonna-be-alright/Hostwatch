@@ -174,7 +174,7 @@ extension AppDelegate {
         show.submenu = showMenu
         submenu("View", tabs + [
             .separator(),
-            item("Hide Sidebar", #selector(toggleSidebar), key: "s", modifiers: [.control, .command]),
+            item("Collapse Sidebar", #selector(toggleSidebar), key: "s", modifiers: [.control, .command]),
             item("Two-Line Rows", #selector(toggleTwoLineRows)),
             item("Running Now", #selector(toggleRunningNow), key: "r", modifiers: [.command, .option]),
             show,
@@ -244,7 +244,7 @@ extension AppDelegate {
         case #selector(backToNow):
             return travel.active
         case #selector(toggleSidebar):
-            mi.title = rulesTab.sidebarShown(model.windowTab) ? "Hide Sidebar" : "Show Sidebar"
+            mi.title = rulesTab.sidebarShown(model.windowTab) ? "Collapse Sidebar" : "Expand Sidebar"
             return RulesTabState.hasSidebar(model.windowTab)
         case #selector(toggleTwoLineRows):
             mi.state = UserDefaults.standard.object(forKey: PatternsView.twoLineKey) as? Bool ?? true ? .on : .off

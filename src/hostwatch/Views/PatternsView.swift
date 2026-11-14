@@ -95,8 +95,6 @@ struct PatternsView: View {
     @StateObject private var groups = GroupExpansion()
     /// Two lines per pattern (four columns that fit the window) or the classic one line with ten columns.
     @AppStorage(PatternsView.twoLineKey) private var twoLine = true
-    /// The tab's sidebar state, for the toggle at the start of the bar (the inspector's is at the end).
-    var sidebar: RulesTabState? = nil
     static let twoLineKey = "patternsTwoLineRows"
 
     var body: some View {
@@ -418,7 +416,6 @@ struct PatternsView: View {
 
     private func toolbar(count: Int) -> some View {
         HStack(spacing: 10) {
-            if let sidebar { SidebarToggle(tab: sidebar, windowTab: 1) }
             if let scope = signatures.scope {
                 HStack(spacing: 6) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(.tint)

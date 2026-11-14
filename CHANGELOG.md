@@ -31,9 +31,10 @@
 - **Patterns fit the window.** Each pattern now takes two lines in four columns: the process over its pattern,
   who decided over the signer and reason, the count over when it was last seen. Nothing runs off the right edge any
   more. *View ▸ Two-Line Rows* switches back to the one-line table with ten columns.
-- **Hide the sidebar.** The Patterns and Protection tabs can hide their sidebar for a wider table, with the small
-  sidebar toggle at the start of the page's bar (the same toggle as the inspector's, at the other end) or *View ▸
-  Hide Sidebar* (⌃⌘S). Each tab remembers its choice. Pages under a sidebar now name themselves in that bar.
+- **Collapse the sidebar to icons.** The Patterns and Protection sidebars fold into a narrow rail of icons for a
+  wider table, keeping the current page highlighted and the badges in view, so you never lose where you are. The
+  small button at the top of the sidebar (in the same place in both states) or *View ▸ Collapse Sidebar* (⌃⌘S)
+  switches. Each tab remembers its choice.
 
 ### Fixes
 

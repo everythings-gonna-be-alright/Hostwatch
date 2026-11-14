@@ -252,7 +252,7 @@ glance and quick actions.
 |------|----------|
 | *File* | Export Events… (⇧⌘E: the list, or the selected events, as JSON lines), Close Window (⌘W) |
 | *Edit* | Undo, Redo, Cut, Copy, Paste, Select All, Find (⌘F) |
-| *View* | Events ⌘1 · Patterns ⌘2 · Protection ⌘3 · Stories ⌘4 · Network ⌘5, Hide Sidebar (⌃⌘S, on Patterns and Protection), Two-Line Rows (Patterns), Running Now (⌥⌘R), **Show** (event kinds in Events, the pattern filter in Patterns), Show HUD, Enter Full Screen (⌃⌘F, Esc leaves) |
+| *View* | Events ⌘1 · Patterns ⌘2 · Protection ⌘3 · Stories ⌘4 · Network ⌘5, Collapse Sidebar (⌃⌘S: to a rail of icons, on Patterns and Protection), Two-Line Rows (Patterns), Running Now (⌥⌘R), **Show** (event kinds in Events, the pattern filter in Patterns), Show HUD, Enter Full Screen (⌃⌘F, Esc leaves) |
 | *History* | Time Travel (⌥⌘T), Earlier (⌘[), Later (⌘]), Back to Now, Pause List (⌥⌘P), Clear List (⌘K) |
 | *Selection* | Ask AI… (⌘↩), Watch Closely… (⌥⌘W), Show Launch Chain (⌥⌘L), Mark As ▸ Safe / Suspicious / Dangerous / Unclassified, Exclude… |
 | *Protection* | Whether you're protected, Pause Protection ▸ 15 Minutes / 1 Hour / Until Tomorrow, Resume Protection, the mode of Launches, Files and Network, Hold Suspicious Processes, Start/Stop Collector, Protection Overview |
