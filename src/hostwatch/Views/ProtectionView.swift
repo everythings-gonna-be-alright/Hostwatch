@@ -13,6 +13,7 @@ struct ProtectionSidebarRows: View {
         let stops = protection.findings.values.filter { $0.verdict == .block }.count + networkStops()
         Label("Overview", systemImage: "shield.lefthalf.filled").tag(RulesSegment.protectionOverview)
         Label("Protected Files and Folders", systemImage: "lock.doc").tag(RulesSegment.protectedFiles)
+        Label("Allow and Block", systemImage: "hand.raised").tag(RulesSegment.accessRules)
         if let firewall {
             FirewallSidebarRow(firewall: firewall)
         }
