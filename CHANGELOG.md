@@ -42,6 +42,8 @@
   this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI" and then
   "allowed by AI", even with every window closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.
+- **Icons on the Events switches.** *Events* and *Running Now*, and *No Groups*, *By Process* and *By AI Session*,
+  show their icons beside their names, so they read at a glance.
 - **The HUD starts hidden.** A new install opens with the window and the menu bar icon only. Turn the HUD on with
   *View ▸ Show HUD* (⌃⌥⌘H) or from the menu bar icon. If you already turned it on or off, your choice stays.
 
