@@ -124,7 +124,7 @@ enum FirewallPolicy {
         if !hostwatch.isEmpty, f.program == hostwatch {
             return FirewallDecision(verdict: .allow, reason: "Hostwatch itself")
         }
-        // Your Allow and Block rules (Protection ▸ Allow and Block): your decisions, before threat lists and patterns.
+        // Your Allow and Block rules (on the Network Firewall page): your decisions, before threat lists and patterns.
         if let rule {
             return FirewallDecision(verdict: rule.action == .allow ? .allow : .block, reason: "your rule: " + rule.sentence)
         }

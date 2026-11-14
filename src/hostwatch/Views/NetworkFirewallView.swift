@@ -9,6 +9,8 @@ struct NetworkFirewallPage: View {
     let showNetwork: () -> Void
     /// Protection ▸ Found, where the firewall's findings are decided.
     var openFound: () -> Void = {}
+    /// Where your Allow and Block rules live (the network ones are shown here).
+    var protection: ProtectionMonitor? = nil
 
     var body: some View {
         let found = firewall.list(status: { signatures.status(forKey: $0) })
@@ -18,6 +20,7 @@ struct NetworkFirewallPage: View {
                 numbers(found)
                 if !firewall.prompts.isEmpty { waiting }
                 FirewallRulesSection(firewall: firewall, signatures: signatures)
+                if let protection { AccessRulesSection(protection: protection, kind: .network) }
                 findings(found)
                 howItDecides
             }
