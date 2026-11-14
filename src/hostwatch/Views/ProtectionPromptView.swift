@@ -40,8 +40,10 @@ struct ProtectionPromptView: View {
                         .font(.callout.monospacedDigit()).foregroundStyle(.orange)
                 }
             }
-            if let note = ask.aiNote {
-                Label(note, systemImage: "sparkles")
+            if let verdict = ask.aiVerdict {
+                AIConclusion(verdict: verdict, limit: ask.aiLimit)
+            } else if let note = ask.aiNote {
+                Label(note, systemImage: "sparkles")                     // no answer, or no model: one quiet line
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -64,18 +66,67 @@ struct ProtectionPromptView: View {
             HStack {
                 if waiting > 1 { Text("\(waiting - 1) more waiting").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
-                Button("Block") { respond(.block) }.buttonStyle(.glass)
+                // Two pairs, the same choice on each side: once (this time only) or always (decides the pattern).
+                Button("Always Block") { respond(.block) }.buttonStyle(.glass)
+                    .help("Stop it, and mark its pattern Dangerous: it's stopped every time")
+                Button("Block Once") { respond(.blockOnce) }.buttonStyle(.glass)
+                    .help("Stop it this time. Next time you're asked again")
+                Divider().frame(height: 18)
                 Button("Allow Once") { respond(.allowOnce) }.buttonStyle(.glass)
+                    .help("Let it go on this time. Next time you're asked again")
                 Button("Always Allow") { respond(.alwaysAllow) }.buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
+                    .help("Let it go on, and mark its pattern Safe")
             }
             .controlSize(.large)
         }
         .padding(22)
-        .frame(width: 520)
+        .frame(width: 600)
         .task(id: ask.id) {
             let wait = ask.deadline.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             if !Task.isCancelled { expired() }
         }
+    }
+}
+
+/// The AI's conclusion, as a card the eye finds: the verdict as a headline in its colour, the confidence, the reason,
+/// and, when the case is yours whatever the AI says, why.
+private struct AIConclusion: View {
+    let verdict: LocalVerdict
+    let limit: String?
+
+    private var headline: String {
+        switch verdict.verdict {
+        case .safe: "AI thinks it's safe"
+        case .suspicious: "AI thinks it's suspicious"
+        case .dangerous: "AI thinks it's dangerous"
+        case .unknown: "AI isn't sure"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").foregroundStyle(verdict.verdict.color)
+                Text(headline).font(.headline).foregroundStyle(verdict.verdict.color)
+                Text("\(verdict.confidence.rawValue.capitalized) confidence")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+                Spacer(minLength: 0)
+            }
+            if !verdict.reason.isEmpty {
+                Text(verdict.reason).font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
+            if let limit {
+                Label("Yours to decide: \(limit).", systemImage: "hand.raised")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(verdict.verdict.color.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(verdict.verdict.color.opacity(0.30), lineWidth: 0.5))
+        .accessibilityElement(children: .combine)
     }
 }

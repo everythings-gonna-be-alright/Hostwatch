@@ -331,7 +331,7 @@ import Testing
 
     @Test func shellsSensitiveFilesHighRiskAndWarningsStayYours() {
         let sure = verdict(.safe, .high)
-        for case .ask(let note) in [
+        for case .ask(let note, _, _) in [
             LiveAICheck.outcome(verdict: sure, risk: .normal, warned: false, refusal: "python runs whatever it is told"),
             LiveAICheck.outcome(verdict: sure, risk: .high, warned: false, refusal: nil),
             LiveAICheck.outcome(verdict: sure, risk: .normal, warned: true, refusal: nil),
@@ -449,5 +449,33 @@ import Testing
         #expect(s.sent.map(\.1) == [SIGSTOP] && e.pausedTheShellWay(4242))
         ref.connected = false
         #expect(e.pause(pid: 4300, path: "/usr/bin/curl") && s.sent.map(\.1) == [SIGSTOP, SIGSTOP])   // not connected
+    }
+}
+
+/// Block Once stops the program and decides nothing; Always Block marks its pattern too. The AI's conclusion reaches
+/// the question with its verdict and why it's yours.
+@MainActor @Suite struct ProtectionAnswers {
+    @Test func blockOnceStopsWithoutDecidingThePattern() {
+        let (m, s) = ProtectionReactive().monitor(path: "/usr/bin/curl")
+        var marked: [SignatureStatus] = []
+        m.markPattern = { _, status in marked.append(status) }
+        m.launchMode = .ask
+        var e = ProtectionReactive().launch("/usr/bin/curl")
+        m.consider(&e, status: .unclassified)
+        m.respond(m.prompts[0].id, .blockOnce)
+        #expect(s.sent.map(\.1) == [SIGSTOP, SIGKILL] && marked.isEmpty)
+        var again = ProtectionReactive().launch("/usr/bin/curl")
+        m.consider(&again, status: .unclassified)
+        m.respond(m.prompts[0].id, .block)
+        #expect(marked == [.dangerous])
+    }
+
+    @Test func theConclusionCarriesTheVerdictAndWhyItsYours() {
+        let v = LocalVerdict(verdict: .safe, confidence: .high, reason: "ordinary")
+        guard case .ask(_, let verdict, let limit) = LiveAICheck.outcome(verdict: v, risk: .normal, warned: false,
+                                                                          refusal: "curl runs whatever it is told") else {
+            Issue.record("a refused Safe must be asked"); return
+        }
+        #expect(verdict == v && limit == "curl runs whatever it is told")
     }
 }
