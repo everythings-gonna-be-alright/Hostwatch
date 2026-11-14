@@ -21,6 +21,7 @@ struct ShowFilterPicker: View {
                 Picker("Show", selection: $filter) {
                     ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                .labelsHidden()                                   // the bar's own "Show" names it already
                 .fixedSize()
             }
         }
@@ -348,12 +349,18 @@ struct ActivityWindowView: View {
 
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
     /// No Groups · By Process · By AI Session, for the Events list and Running Now alike.
-    private var groupingPicker: some View {
+    private func groupingPicker(compact: Bool = false) -> some View {
         HStack(spacing: 12) {
             Divider().frame(height: 16)
-            Text("Group").font(.system(size: 11)).foregroundStyle(.secondary)
+            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary) }
             Picker("Group", selection: $model.eventGrouping) {
-                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).labelStyle(.titleAndIcon).tag($0) }
+                ForEach(EventGrouping.allCases, id: \.self) { g in
+                    Group {
+                        if compact { Label(g.title, systemImage: g.symbol).labelStyle(.iconOnly) }
+                        else { Label(g.title, systemImage: g.symbol).labelStyle(.titleAndIcon) }
+                    }
+                    .help(g.title).tag(g)
+                }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -363,15 +370,38 @@ struct ActivityWindowView: View {
         }
     }
 
+    /// The first version of the bar that fits the window. Its controls keep their size, so a bar wider than the
+    /// window made the page wider and cut both ends off: full, then compact, then compact scrolling sideways.
     private var filterBar: some View {
+        ViewThatFits(in: .horizontal) {
+            filterRow(compact: false)
+            filterRow(compact: true)
+            ScrollView(.horizontal, showsIndicators: false) { filterRow(compact: true) }
+        }
+    }
+
+    private func filterRow(compact: Bool) -> some View {
         HStack(spacing: 12) {
             let heavyCount = heavy.entries.count
             Picker("View", selection: $running.showing) {
                 // A segmented control shows a label's title alone unless asked: the icons tell the two apart at a glance.
-                Label("Events", systemImage: "list.bullet").labelStyle(.titleAndIcon).tag(false)
+                Group {
+                    if compact { Label("Events", systemImage: "list.bullet").labelStyle(.iconOnly) }
+                    else { Label("Events", systemImage: "list.bullet").labelStyle(.titleAndIcon) }
+                }
+                .help("Events").tag(false)
                 // Where the heavy card folds to: a flame and the count while something runs heavy.
-                Label(heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
-                      systemImage: heavyCount > 0 ? "flame.fill" : "cpu").labelStyle(.titleAndIcon).tag(true)
+                Group {
+                    if compact && heavyCount > 0 {
+                        Label("\(heavyCount)", systemImage: "flame.fill").labelStyle(.titleAndIcon)    // the flame and its count
+                    } else if compact {
+                        Label("Running Now", systemImage: "cpu").labelStyle(.iconOnly)
+                    } else {
+                        Label(heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
+                              systemImage: heavyCount > 0 ? "flame.fill" : "cpu").labelStyle(.titleAndIcon)
+                    }
+                }
+                .help("Running Now").tag(true)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -379,7 +409,7 @@ struct ActivityWindowView: View {
             .help(traveling ? "Events: what happened in the window · Running Now: what was running at the playhead (⌥⌘R)"
                   : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
             if runningNow {
-                groupingPicker
+                groupingPicker(compact: compact)
                 if running.isRecorded {
                     Text(running.recordedAt.map { "Recorded \($0.formatted(date: .omitted, time: .standard)) · once a minute" }
                          ?? "Nothing recorded at this moment")
@@ -391,14 +421,22 @@ struct ActivityWindowView: View {
                 Spacer(minLength: 0)
             } else {
                 Divider().frame(height: 16)
-                Text("Show").font(.system(size: 11)).foregroundStyle(.secondary)
+                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary) }
                 KindFilters(model: model, feed: model.live)
-                if traveling {
+                if compact {
+                    // One pop-up instead of the row of buttons: All Activity, New, Important…
+                    Picker("Show", selection: $model.signatureFilter) {
+                        ForEach(SignatureFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .help("Show: filter by how patterns are decided")
+                } else if traveling {
                     ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
                 } else {
                     LiveShowFilter(feed: model.live, filter: $model.signatureFilter, counts: { liveDerived.counts })
                 }
-                groupingPicker
+                groupingPicker(compact: compact)
                 if model.onlySession != nil {
                     Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
                         .buttonStyle(.link).font(.system(size: 11))
