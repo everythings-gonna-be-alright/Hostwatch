@@ -780,9 +780,11 @@ curl and other programs that run whatever they're told are judged by what they r
   they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
   protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
   Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
-- **Allow and block destinations:** on the *Network Firewall* page, add a rule for a domain (its subdomains too) or an
-  IP address, for one program (an app covers the programs inside it) or any program, to Allow or Block. Your rules
-  come before threat lists and patterns, the most specific wins, and Block when two are equally specific.
+- **Your destinations:** on the *Network Firewall* page, *Add Destination…* takes a domain (its subdomains too) or an
+  IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
+  and *Allow a Program…* and *Block a Program…*, with the programs as chips. They are your decisions, so they come
+  before threat lists and patterns. The most specific destination decides (`api.example.com` over `example.com`), and
+  a program on both lists is blocked. *Firewall decides* leaves it to your firewall mode.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
   something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
   files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than

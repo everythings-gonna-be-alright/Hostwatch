@@ -88,9 +88,13 @@ final class ProtectionMonitor: ObservableObject {
     @Published var customPlaces: [CustomPlace] {
         didSet { defaults.set(try? JSONEncoder().encode(customPlaces), forKey: Keys.custom); changed() }
     }
-    /// Your Allow and Block rules, files and network (the firewall reads the network ones through the app).
+    /// Rules saved by the short-lived separate list: read once, moved into places and destinations, then empty.
     @Published var accessRules: [AccessRule] {
         didSet { defaults.set(try? JSONEncoder().encode(accessRules), forKey: Keys.rules); changed() }
+    }
+    /// Network destinations you decided (the firewall reads them through the app).
+    @Published var destinations: [Destination] {
+        didSet { defaults.set(try? JSONEncoder().encode(destinations), forKey: Keys.destinations); changed() }
     }
     /// The kill switch: nothing is stopped (or rehearsed) until then.
     @Published var pausedUntil: Date? { didSet { changed() } }
@@ -136,6 +140,7 @@ final class ProtectionMonitor: ObservableObject {
     private enum Keys {
         static let launch = "protectionLaunchMode", file = "protectionFileMode", groups = "protectionGroups"
         static let since = "protectionSince", custom = "protectionCustomPlaces", rules = "protectionAccessRules"
+        static let destinations = "protectionDestinations"
     }
 
     init(defaults: UserDefaults = .standard,
@@ -150,6 +155,7 @@ final class ProtectionMonitor: ObservableObject {
         groups = defaults.data(forKey: Keys.groups).flatMap { try? JSONDecoder().decode([String: ProtectedGroupSetting].self, from: $0) } ?? [:]
         customPlaces = defaults.data(forKey: Keys.custom).flatMap { try? JSONDecoder().decode([CustomPlace].self, from: $0) } ?? []
         accessRules = defaults.data(forKey: Keys.rules).flatMap { try? JSONDecoder().decode([AccessRule].self, from: $0) } ?? []
+        destinations = defaults.data(forKey: Keys.destinations).flatMap { try? JSONDecoder().decode([Destination].self, from: $0) } ?? []
         let started = defaults.object(forKey: Keys.since) as? Date ?? Date()
         since = started
         defaults.set(started, forKey: Keys.since)
@@ -162,6 +168,7 @@ final class ProtectionMonitor: ObservableObject {
             hourly = saved
         }
         if accessRules.contains(where: { $0.kind == .files }) { moveFileRulesIntoPlaces() }
+        if accessRules.contains(where: { $0.kind == .network }) { moveNetworkRulesIntoDestinations() }
     }
 
     func mode(_ area: ProtectionArea) -> ProtectionMode { area == .launches ? launchMode : fileMode }
@@ -348,9 +355,24 @@ final class ProtectionMonitor: ObservableObject {
         accessRules.removeAll { $0.kind == .files }
     }
 
-    /// The network rules that decide this connection, for the firewall.
-    func networkRule(host: String, ip: String, program: String) -> AccessRule? {
-        AccessRules.matchNetwork(accessRules, host: host, ip: ip, program: program)
+    /// Network rules from the separate list become destinations: a rule for any program the destination's choice,
+    /// a rule for one program its exception.
+    func moveNetworkRulesIntoDestinations() {
+        for d in Destinations.from(accessRules) {
+            if let i = destinations.firstIndex(where: { $0.target == d.target }) {
+                destinations[i].exceptions.allowed += d.exceptions.allowed.filter { !destinations[i].exceptions.allowed.contains($0) }
+                destinations[i].exceptions.blocked += d.exceptions.blocked.filter { !destinations[i].exceptions.blocked.contains($0) }
+                if d.others != .firewall { destinations[i].others = d.others }
+            } else {
+                destinations.append(d)
+            }
+        }
+        accessRules.removeAll { $0.kind == .network }
+    }
+
+    /// Your decision for a connection from your destinations, for the firewall: nil when you left it to the firewall.
+    func networkDecision(host: String, ip: String, program: String) -> FirewallDecision? {
+        Destinations.decide(destinations, host: host, ip: ip, program: program)
     }
 
     func forget(_ ids: [String]) {
