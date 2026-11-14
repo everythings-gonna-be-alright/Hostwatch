@@ -174,6 +174,8 @@ extension AppDelegate {
         show.submenu = showMenu
         submenu("View", tabs + [
             .separator(),
+            item("Hide Sidebar", #selector(toggleSidebar), key: "s", modifiers: [.control, .command]),
+            item("Two-Line Rows", #selector(toggleTwoLineRows)),
             item("Running Now", #selector(toggleRunningNow), key: "r", modifiers: [.command, .option]),
             show,
             .separator(),
@@ -241,6 +243,12 @@ extension AppDelegate {
             return model.windowTab == 1                                         // a Patterns filter
         case #selector(backToNow):
             return travel.active
+        case #selector(toggleSidebar):
+            mi.title = rulesTab.sidebarShown(model.windowTab) ? "Hide Sidebar" : "Show Sidebar"
+            return RulesTabState.hasSidebar(model.windowTab)
+        case #selector(toggleTwoLineRows):
+            mi.state = UserDefaults.standard.object(forKey: PatternsView.twoLineKey) as? Bool ?? true ? .on : .off
+            return model.windowTab == 1
         case #selector(focusSearch):
             return ToolbarSearchField.current?.window != nil && model.windowTab != 4
         case #selector(exportEvents):
@@ -503,6 +511,11 @@ extension AppDelegate {
 
     @objc func togglePause() { model.paused.toggle() }
     @objc func backToNow() { travel.exit() }
+    @objc func toggleSidebar() { rulesTab.toggleSidebar(model.windowTab) }
+    @objc func toggleTwoLineRows() {
+        let on = UserDefaults.standard.object(forKey: PatternsView.twoLineKey) as? Bool ?? true
+        UserDefaults.standard.set(!on, forKey: PatternsView.twoLineKey)
+    }
     /// Edit ▸ Find: the window's search field, on the tabs that have one.
     @objc func focusSearch() {
         guard let field = ToolbarSearchField.current, let window = field.window else { return }

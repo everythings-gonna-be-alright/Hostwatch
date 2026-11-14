@@ -21,6 +21,21 @@ final class RulesTabState: ObservableObject {
     func open(_ page: RulesSegment) {
         if page.isProtection { protection = page } else { patterns = page }
     }
+
+    /// Each tab's sidebar can be hidden, for a wider table; remembered between launches.
+    @Published var patternsSidebar = UserDefaults.standard.object(forKey: "patternsSidebar") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(patternsSidebar, forKey: "patternsSidebar") }
+    }
+    @Published var protectionSidebar = UserDefaults.standard.object(forKey: "protectionSidebar") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(protectionSidebar, forKey: "protectionSidebar") }
+    }
+
+    /// Whether this window tab has a sidebar, and whether it's showing.
+    static func hasSidebar(_ windowTab: Int) -> Bool { windowTab == 1 || windowTab == 4 }
+    func sidebarShown(_ windowTab: Int) -> Bool { windowTab == 4 ? protectionSidebar : patternsSidebar }
+    func toggleSidebar(_ windowTab: Int) {
+        if windowTab == 4 { protectionSidebar.toggle() } else if windowTab == 1 { patternsSidebar.toggle() }
+    }
 }
 
 /// The two tabs built on this view: the same sidebar style, each with its own section.
@@ -61,8 +76,10 @@ struct RulesView: View {
         // A source list, as System Settings and Mail do it: two groups of pages, a badge only where something
         // waits for you. A row of four segments mixed the two groups and had no room to grow.
         HStack(spacing: 0) {
-            sidebar
-            Divider()
+            if scope == .patterns ? tab.patternsSidebar : tab.protectionSidebar {
+                sidebar.transition(.move(edge: .leading))
+                Divider()
+            }
             detail
         }
     }

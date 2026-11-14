@@ -28,6 +28,12 @@
   button, and the Protection tab has no search field, since it has nothing to search. Every Protection page now uses
   Liquid Glass panels like the Overview, and the selected tab stands out clearly with any accent colour.
 
+- **Patterns fit the window.** Each pattern now takes two lines in four columns: the process over its pattern,
+  who decided over the signer and reason, the count over when it was last seen. Nothing runs off the right edge any
+  more. *View ▸ Two-Line Rows* switches back to the one-line table with ten columns.
+- **Hide the sidebar.** The Patterns and Protection tabs can hide their sidebar for a wider table, from the sidebar
+  button at the left of the toolbar or *View ▸ Hide Sidebar* (⌃⌘S). Each tab remembers its choice.
+
 ### Fixes
 
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
