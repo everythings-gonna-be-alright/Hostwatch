@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Launch and file protection: Watch rehearses on the live feed, Ask and Strict need Endpoint Security.
     let protection = ProtectionMonitor()
     var protectionPanel: NSPanel?
+    /// The question the panel shows: a refresh of the same question doesn't sound again.
+    var protectionPanelAskID: Int?
     /// "Checking … with AI": shown while the AI looks at a paused launch or file access.
     let aiNotices = AICheckNotices()
     /// One window per waiting question.

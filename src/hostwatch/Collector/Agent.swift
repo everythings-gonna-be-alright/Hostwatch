@@ -181,6 +181,9 @@ final class AgentClient: @unchecked Sendable {
     private var window = 0
     private var fileCount = 0
 
+    /// The user the kernel says is connected: the hold service acts only on this user's processes.
+    var uid: uid_t = 0
+
     init(fd: Int32) { self.fd = fd }
 
     func configure(_ cfg: [String: Any]) {
@@ -301,6 +304,7 @@ final class Agent: @unchecked Sendable {
 
     /// The firewall (Ask and Strict modes): the relay and pf redirect, decisions from the app.
     lazy var firewall = AgentFirewall(agent: self)
+    let hold = AgentHold()
     lazy var watch = AgentWatch(agent: self)
 
     init() { ignoredPids = [selfPid] }
@@ -423,6 +427,7 @@ final class Agent: @unchecked Sendable {
         if had { lastClientSeen = ProcessInfo.processInfo.systemUptime }
         clientsLock.unlock()
         guard had else { return }
+        hold.releaseAll(of: client)                        // nothing stays held without the app that asked
         close(client.fd)
         // A service with nobody to ask: the firewall goes off, so nothing is held or blocked unanswered. The app
         // sends its mode again when it reconnects.

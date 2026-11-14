@@ -20,3 +20,11 @@ protocol for held launches and opens (`guard_ask`, `guard_answer`, `guard_status
 countdown panel, but this version ships no Endpoint Security client: the collector half is the remaining work once
 the entitlement arrives. Its fail-safes are part of this decision: everything passes without the app or past
 macOS's deadline, Hostwatch's own processes are never held, and nothing is held unless a mode enforces.
+
+**Update: a pause the shell can't see.** SIGSTOP made an interactive shell report "Job has stopped" and take the
+terminal back, the program going on in the background after Allow. When the collector runs as the root service, the
+app asks it to hold the program (`AgentHold`): it suspends the task through its task port, invisible to the shell,
+where macOS allows (not its own platform programs), and uses SIGSTOP otherwise, reporting which. It acts only on the
+connected user's processes, and releases everything when the app disconnects or after 40 seconds. Without the service,
+or without an answer within a second, the app pauses with SIGSTOP as before. When the shell saw a stop, the question
+says to type fg after Allow.

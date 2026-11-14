@@ -8,6 +8,8 @@ struct ProtectionPromptView: View {
     let chain: LaunchChainReport
     /// The protected card's or your place's name ("SSH keys", "contracts").
     var place: String? = nil
+    /// Paused the Ctrl+Z way, from your shell: say how to bring it back after Allow.
+    var fgHint = false
     let waiting: Int
     let respond: (ProtectionMonitor.PromptAnswer) -> Void
     let expired: () -> Void
@@ -42,6 +44,11 @@ struct ProtectionPromptView: View {
                 Label(note, systemImage: "sparkles")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if fgHint {
+                Label("Your shell shows it as stopped. After Allow it goes on in the background: type fg in your terminal to bring it back.",
+                      systemImage: "terminal")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if ask.reactive {
                 Text(ask.area == .launches ? "It started and is paused until you answer."
