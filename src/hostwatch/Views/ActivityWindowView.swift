@@ -319,7 +319,9 @@ struct ActivityWindowView: View {
             Button(action: actions.openSettings) { Label("Settings", systemImage: "gearshape") }
                 .help("Settings (⌘,)")
         }
-        // Search where there is something to search: Protection has none, so no field there.
+        // Search where there is something to search: Protection has none, so no field there. A fixed spacer gives it
+        // its own glass capsule, as the system search field had: items side by side share one otherwise.
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItem(placement: .primaryAction) {
             if let prompt = searchPrompt {
                 ToolbarSearchField(text: searchText, prompt: prompt).frame(minWidth: 180, idealWidth: 260, maxWidth: 320)
