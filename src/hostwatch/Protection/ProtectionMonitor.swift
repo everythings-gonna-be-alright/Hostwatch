@@ -39,6 +39,13 @@ enum EnforcerState: Equatable, Sendable {
 
 /// What protection would stop or ask about, folded by pattern: the rehearsal's findings.
 struct ProtectionFinding: Codable, Identifiable, Equatable, Sendable {
+    /// How long a finding stays when it doesn't happen again: a question a week, something that would be stopped a
+    /// month (it matters more). Only the list entry goes: the pattern and your decisions stay, and it comes back if
+    /// it happens again.
+    static func keeps(_ verdict: ProtectionVerdict) -> TimeInterval { verdict == .block ? 30 * 86_400 : 7 * 86_400 }
+
+    func isStale(now: Date) -> Bool { now.timeIntervalSince(lastSeen) > Self.keeps(verdict) }
+
     var id: String                                  // area|pattern key
     var area: ProtectionArea
     var patternKey: String
@@ -117,6 +124,8 @@ final class ProtectionMonitor: ObservableObject {
     private let defaults: UserDefaults
     private let fileURL: URL
     private var dirty = false
+    /// When old findings were last forgotten: at launch, then at most once an hour as findings come in.
+    private var lastSweep = Date.distantPast
     private var publishScheduled = false
     static let findingLimit = 300
 
@@ -140,7 +149,9 @@ final class ProtectionMonitor: ObservableObject {
         since = started
         defaults.set(started, forKey: Keys.since)
         if let data = Vault.shared.read(fileURL), let saved = try? Self.decoder.decode([ProtectionFinding].self, from: data) {
-            findings = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let now = Date()
+            findings = Dictionary(saved.filter { !$0.isStale(now: now) }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            lastSweep = now
         }
         if let data = Vault.shared.read(hourlyURL), let saved = try? JSONDecoder().decode([HourCount].self, from: data) {
             hourly = saved
@@ -278,6 +289,10 @@ final class ProtectionMonitor: ObservableObject {
                 findings[oldest.id] = nil
             }
         }
+        if now.timeIntervalSince(lastSweep) > 3600 {
+            lastSweep = now
+            findings = findings.filter { !$0.value.isStale(now: now) }
+        }
         dirty = true
         publishSoon()
     }
@@ -294,6 +309,11 @@ final class ProtectionMonitor: ObservableObject {
         for id in ids { findings[id] = nil }
         dirty = true
         publishSoon()
+    }
+
+    /// Found ▸ Forget: the entries that match leave the list. Decisions and patterns are untouched.
+    func forget(where match: (ProtectionFinding) -> Bool) {
+        forget(findings.values.filter(match).map(\.id))
     }
 
     func count(_ area: ProtectionArea, _ verdict: ProtectionVerdict) -> Int { today[area]?[verdict] ?? 0 }

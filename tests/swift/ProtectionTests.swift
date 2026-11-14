@@ -385,3 +385,35 @@ import Testing
         #expect(ProtectionOverview.columns(width: 2000, cards: 2) == 2)      // never more columns than cards
     }
 }
+
+/// Found doesn't grow forever: entries that don't happen again leave by themselves, and Forget clears many at once.
+@MainActor @Suite struct FoundForgetting {
+    func finding(_ verdict: ProtectionVerdict, daysAgo: Double) -> ProtectionFinding {
+        let seen = Date().addingTimeInterval(-daysAgo * 86_400)
+        return ProtectionFinding(id: "x", area: .launches, patternKey: "k", name: "n", program: "/p", pattern: "/p",
+                                 verdict: verdict, reason: "", group: nil, count: 1, firstSeen: seen, lastSeen: seen)
+    }
+
+    @Test func questionsLeaveAfterAWeekStopsAfterAMonth() {
+        #expect(!finding(.ask, daysAgo: 6).isStale(now: Date()))
+        #expect(finding(.ask, daysAgo: 8).isStale(now: Date()))
+        #expect(!finding(.block, daysAgo: 20).isStale(now: Date()))
+        #expect(finding(.block, daysAgo: 31).isStale(now: Date()))
+    }
+
+    @Test func forgetClearsWhatMatchesAndKeepsTheRest() {
+        let suite = "found-\(UUID().uuidString)"
+        let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
+                                  fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json"))
+        m.launchMode = .watch
+        var stop = ActivityEvent(kind: .exec, time: "1", pid: 1, ppid: 1, name: "d", proc: "/tmp/d", target: "/tmp/d", extra: "", parent: "/bin/zsh")
+        m.consider(&stop, status: .dangerous)
+        var ask = ActivityEvent(kind: .exec, time: "1", pid: 2, ppid: 1, name: "curl", proc: "/usr/bin/curl", target: "/usr/bin/curl", extra: "", parent: "/bin/zsh")
+        m.consider(&ask, status: .unclassified)
+        #expect(m.findings.count == 2)
+        m.forget { $0.verdict == .ask }
+        #expect(m.findings.count == 1 && m.findings.values.first?.verdict == .block)
+        m.forget { _ in true }
+        #expect(m.findings.isEmpty)
+    }
+}
