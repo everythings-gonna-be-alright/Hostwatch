@@ -115,13 +115,18 @@ enum FirewallPolicy {
     /// `threatException`: you allowed this program to reach this destination despite a threat list (a shared host
     /// such as raw.githubusercontent.com is listed for one bad file among millions). Only your explicit click sets it.
     static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil, askAgain: Bool = false,
-                       threatException: Bool = false, hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
+                       threatException: Bool = false, rule: AccessRule? = nil,
+                       hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
         let bucket = SignatureBuilder.hostBucket(f.ip)
         if SignatureBuilder.localBuckets.contains(bucket) {
             return FirewallDecision(verdict: .allow, reason: "local network")
         }
         if !hostwatch.isEmpty, f.program == hostwatch {
             return FirewallDecision(verdict: .allow, reason: "Hostwatch itself")
+        }
+        // Your Allow and Block rules (Protection ▸ Allow and Block): your decisions, before threat lists and patterns.
+        if let rule {
+            return FirewallDecision(verdict: rule.action == .allow ? .allow : .block, reason: "your rule: " + rule.sentence)
         }
         if let blockedDomain {
             return FirewallDecision(verdict: .block, reason: "you blocked \(blockedDomain) for this app")
@@ -262,7 +267,7 @@ final class FirewallMonitor: ObservableObject {
     @discardableResult
     func observe(_ e: ActivityEvent, status: SignatureStatus, now: Date = Date()) -> FirewallDecision? {
         guard mode != .off, let f = Self.facts(e) else { return nil }
-        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f))
+        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), rule: rule(f))
         guard decision.verdict != .allow else { allowedCount += 1; return decision }
         let id = [f.program, f.proto, f.host.isEmpty ? f.ip : f.host, f.port].joined(separator: "|")
         if var old = entries[id] {
@@ -280,9 +285,19 @@ final class FirewallMonitor: ObservableObject {
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
         entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
             .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts),
-                                              askAgain: asksAgain($0.facts), threatException: threatAllowed($0.facts))) }
+                                              askAgain: asksAgain($0.facts), threatException: threatAllowed($0.facts), rule: rule($0.facts))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
+    }
+
+    /// Your network Allow and Block rules (set by the app from Protection): the one that decides a connection.
+    var networkRule: (FirewallFacts) -> AccessRule? = { _ in nil }
+    private func rule(_ f: FirewallFacts) -> AccessRule? { networkRule(f) }
+
+    /// Your rules changed: the list is judged again, and the collector forgets the answers it remembers.
+    func rulesChanged() {
+        revision += 1
+        flushAnswers()
     }
 
     func clear() { entries = [:]; allowedCount = 0; blockedCount = 0; scheduleSave() }
@@ -468,7 +483,7 @@ final class FirewallMonitor: ObservableObject {
         var e = event
         e.knownBad = knownBad(e)
         guard let f = Self.facts(e) else { answer?(key, true, 60); return }
-        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f))
+        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), rule: rule(f))
         switch d.verdict {
         case .allow:
             answer?(key, true, 300)

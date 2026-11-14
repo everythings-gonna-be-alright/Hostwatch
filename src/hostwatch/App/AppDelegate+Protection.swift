@@ -9,6 +9,7 @@ extension AppDelegate {
         protection.onConfigChange = { [weak self] in
             guard let self else { return }
             self.model.guardConfig = self.protection.collectorConfig()
+            self.firewall.rulesChanged()                     // a network rule may have changed what passes
         }
         protection.answer = { [weak self] id, allow, ttl in self?.model.sendGuardAnswer(id: id, allow: allow, ttl: ttl) }
         protection.markPattern = { [weak self] key, status in
@@ -17,6 +18,7 @@ extension AppDelegate {
         protection.onPromptsChange = { [weak self] in self?.refreshProtectionPanels() }
         protection.aiCheck = { [weak self] event in await self?.checkWithAI(event) }
         protection.onAIAllowed = { [weak self] ask, note in self?.aiNotices.allowed(ask, note: note) }
+        firewall.networkRule = { [weak self] f in self?.protection.networkRule(host: f.host, ip: f.ip, program: f.program) }
         model.onGuardStatus = { [weak self] state, detail in self?.protection.enforcerStatus(state, detail) }
         model.onGuardAsk = { [weak self] obj in
             guard let self, let ask = Self.protectionAsk(obj) else { return }

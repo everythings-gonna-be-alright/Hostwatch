@@ -88,6 +88,10 @@ final class ProtectionMonitor: ObservableObject {
     @Published var customPlaces: [CustomPlace] {
         didSet { defaults.set(try? JSONEncoder().encode(customPlaces), forKey: Keys.custom); changed() }
     }
+    /// Your Allow and Block rules, files and network (the firewall reads the network ones through the app).
+    @Published var accessRules: [AccessRule] {
+        didSet { defaults.set(try? JSONEncoder().encode(accessRules), forKey: Keys.rules); changed() }
+    }
     /// The kill switch: nothing is stopped (or rehearsed) until then.
     @Published var pausedUntil: Date? { didSet { changed() } }
     @Published private(set) var enforcer: EnforcerState = .unknown
@@ -131,7 +135,7 @@ final class ProtectionMonitor: ObservableObject {
 
     private enum Keys {
         static let launch = "protectionLaunchMode", file = "protectionFileMode", groups = "protectionGroups"
-        static let since = "protectionSince", custom = "protectionCustomPlaces"
+        static let since = "protectionSince", custom = "protectionCustomPlaces", rules = "protectionAccessRules"
     }
 
     init(defaults: UserDefaults = .standard,
@@ -145,6 +149,7 @@ final class ProtectionMonitor: ObservableObject {
         fileMode = defaults.string(forKey: Keys.file).flatMap(ProtectionMode.init) ?? .watch
         groups = defaults.data(forKey: Keys.groups).flatMap { try? JSONDecoder().decode([String: ProtectedGroupSetting].self, from: $0) } ?? [:]
         customPlaces = defaults.data(forKey: Keys.custom).flatMap { try? JSONDecoder().decode([CustomPlace].self, from: $0) } ?? []
+        accessRules = defaults.data(forKey: Keys.rules).flatMap { try? JSONDecoder().decode([AccessRule].self, from: $0) } ?? []
         let started = defaults.object(forKey: Keys.since) as? Date ?? Date()
         since = started
         defaults.set(started, forKey: Keys.since)
@@ -248,6 +253,10 @@ final class ProtectionMonitor: ObservableObject {
                                                              riskReason: e.signatureReason, knownBad: e.knownBad))
         case .file:
             guard fileMode != .off else { return nil }
+            // Your rules first: they are your decisions, before the protected groups and any pattern.
+            if let rule = AccessRules.matchFile(accessRules, path: e.target, program: e.proc) {
+                return (.files, .init(verdict: rule.action == .allow ? .allow : .block, reason: "your rule: " + rule.sentence))
+            }
             if let d = ProtectionPolicy.decideFile(pattern: e.signaturePattern, status: status, risk: e.signatureRisk,
                                                    settings: groups) {
                 return (.files, d)
@@ -303,6 +312,11 @@ final class ProtectionMonitor: ObservableObject {
         let before = findings.count
         findings = findings.filter { !keys.contains($0.value.patternKey) }
         if findings.count != before { dirty = true; publishSoon() }
+    }
+
+    /// The network rules that decide this connection, for the firewall.
+    func networkRule(host: String, ip: String, program: String) -> AccessRule? {
+        AccessRules.matchNetwork(accessRules, host: host, ip: ip, program: program)
     }
 
     func forget(_ ids: [String]) {

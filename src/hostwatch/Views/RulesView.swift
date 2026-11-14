@@ -4,7 +4,7 @@ import SwiftUI
 /// suggestion you accepted: *Needs You* is what's still New, *Rules* is what decides automatically, *Decisions* shows
 /// who decided what. Protection's pages are what it does with those decisions.
 enum RulesSegment: Int, CaseIterable {
-    case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall
+    case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall, accessRules
 
     /// The Protection tab's pages; the rest belong to the Patterns tab.
     var isProtection: Bool { rawValue >= RulesSegment.protectionOverview.rawValue }
@@ -170,6 +170,8 @@ struct RulesView: View {
                             NetworkFirewallPage(firewall: firewall, signatures: signatures, showNetwork: showNetwork,
                                                openFound: { tab.open(.protectionFound) })
                         }
+                    case .accessRules:
+                        if let protection { AccessRulesView(protection: protection) }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
                             ProtectionView(protection: protection, firewall: firewall, connections: connections,

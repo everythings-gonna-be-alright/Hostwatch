@@ -773,6 +773,13 @@ Hostwatch can show what it would stop: a launch, or a program reading places lik
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
 curl and other programs that run whatever they're told are judged by what they run.
 
+- **Allow and Block (your own rules):** in *Protection ▸ Allow and Block*, add a rule for a folder or file, or for a
+  domain (its subdomains too) or an IP address, for one program (an app covers the programs inside it) or any
+  program, to Allow or Block. Your rules come before everything automatic: patterns, AI and threat lists. The most
+  specific rule wins (one program over any program, a deeper folder over its parent), and Block when two are equally
+  specific. Block acts in Ask and Strict and shows as "would block" in Watch. Allowing *any* program a whole area
+  (your home, a folder right below it, /tmp) or a protected place such as your SSH keys isn't possible: choose the
+  program. Each rule has a switch and can be removed.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
   something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
   files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than
