@@ -21,7 +21,20 @@ struct SidebarRail<Items: View>: View {
         .padding(.top, 10)
         .frame(width: SidebarMetrics.railWidth)
         .frame(maxHeight: .infinity)
-        .background(SidebarMaterial())
+        .modifier(SidebarGlass())
+    }
+}
+
+/// The sidebar as macOS 26 draws its own: a pane of Liquid Glass floating a little inside the window, so what's
+/// behind it shows through softly. The rail and the full sidebar share it, one control in two states.
+struct SidebarGlass: ViewModifier {
+    static let inset: CGFloat = 8
+    func body(content: Content) -> some View {
+        content
+            .background(SidebarMaterial().opacity(0.55))          // the window behind, through the glass
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(Self.inset)
     }
 }
 

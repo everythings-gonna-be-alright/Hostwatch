@@ -33,8 +33,9 @@
   more. *View ▸ Two-Line Rows* switches back to the one-line table with ten columns.
 - **Collapse the sidebar to icons.** The Patterns and Protection sidebars fold into a narrow rail of icons for a
   wider table, keeping the current page highlighted and the badges in view, so you never lose where you are. The
-  small button at the top of the sidebar (in the same place in both states) or *View ▸ Collapse Sidebar* (⌃⌘S)
-  switches. Each tab remembers its choice.
+  small button beside the sidebar's title (at the top of the rail) or *View ▸ Collapse Sidebar* (⌃⌘S)
+  switches. Each tab remembers its choice. Both are a floating pane of Liquid Glass, as macOS draws its own
+  sidebars.
 
 ### Fixes
 
