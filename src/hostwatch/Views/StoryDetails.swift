@@ -197,7 +197,7 @@ struct StoryDetailView: View {
                         .foregroundStyle(story.severity.color)
                     Text("score").font(.caption).foregroundStyle(.secondary)
                 }
-                .help("Each distinct stage adds its weight; persistence, credentials and swapped binaries weigh most")
+                .help("Each distinct stage adds its weight. Persistence, credentials and swapped binaries weigh most")
             }
             FlowLayout(spacing: 6) {
                 StatusPill(status: story.severity)

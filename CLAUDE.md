@@ -61,6 +61,15 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
 - **Patterns are keys.** `kind|process|pattern` is the identity of a decision; changing how a pattern is built
   orphans old decisions unless `SignatureStore.regroup` (or a merge alias) moves them.
 
+## Design
+
+- **Read `docs/DESIGN.md` before adding or changing anything you can see.** It turns Apple's HIG (macOS 26, Liquid
+  Glass) into this app's rules: controls (an action is a button, never a link), colour (selection in the text colour,
+  status colours reserved), type (monospaced only for data), card anatomy shared by places and destinations, layouts
+  that work from 1,240 × 720 to full screen, words, feedback and accessibility. `DesignRules` fails the gate on the
+  mechanical ones. Reuse the shared components (`PlaceChoices`, `ExceptionChips`, `IconSegments`, `protectionGlass`)
+  before writing new ones.
+
 ## Style
 
 - `src/hostwatch/<Area>/`: one folder per area (`Events`, `Patterns`, `Detection`, `Firewall`, `History`,

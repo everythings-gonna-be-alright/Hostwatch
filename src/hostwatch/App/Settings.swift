@@ -262,7 +262,7 @@ private struct GeneralPane: View {
             } header: {
                 Text("Updates")
             } footer: {
-                Footnote("Once a day Hostwatch asks GitHub (api.github.com) for the latest release; nothing "
+                Footnote("Once a day Hostwatch asks GitHub (api.github.com) for the latest release. Nothing "
                          + "about this Mac is sent, and nothing is downloaded or installed by itself.")
             }
             Section {
@@ -311,7 +311,7 @@ private struct ResetSheet: View {
                 option($plan.history, "Event history and logs",
                        "Recorded events (Time Travel), resource history and the collector log.")
             }
-            Text("Full Disk Access stays granted; remove it in System Settings if you want.")
+            Text("Full Disk Access stays granted. Remove it in System Settings if you want.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Spacer()
@@ -427,7 +427,7 @@ private struct DetectionPane: View {
             } footer: {
                 Footnote("A new app signed by a developer you already trust (valid, not quarantined, not in Downloads) "
                          + "gets its own baseline rule by itself. Each rule trusts only the kinds of behaviour the app "
-                         + "showed in its first week; anything new for it comes to Needs You. macOS's own tools are always "
+                         + "showed in its first week. Anything new for it comes to Needs You. macOS's own tools are always "
                          + "trusted. A rule you delete isn't made again by itself.")
             }
             Section {
@@ -519,7 +519,7 @@ private struct AIPane: View {
             } header: {
                 Text("Suggestions")
             } footer: {
-                Footnote("AI suggests a status for new patterns; you accept it in Patterns ▸ Needs You. Every 90 s it "
+                Footnote("AI suggests a status for new patterns. You accept it in Patterns ▸ Needs You. Every 90 s it "
                          + "looks at up to 40 new patterns (seen for over a minute). Accepting by itself skips "
                          + "high-risk patterns. By itself, no AI marks Safe a high-risk pattern, or what a shell, interpreter or "
                          + "other run-anything tool launches, connects to or writes (their reads of your own project "
@@ -549,7 +549,7 @@ private struct AIPane: View {
                         HStack {
                             Text("Issued · shown only once").foregroundStyle(.secondary)
                             Button("New Token…") { newToken() }
-                                .help("Creates a new token and command; Claude Code registrations with the old one stop working")
+                                .help("Creates a new token and command. Claude Code registrations with the old one stop working")
                         }
                     }
                 }
@@ -571,10 +571,10 @@ private struct AIPane: View {
             } header: {
                 Text("Use with Claude Code")
             } footer: {
-                Footnote("Read-only access to recorded activity for Claude Code. Off until you allow it; then "
+                Footnote("Read-only access to recorded activity for Claude Code. Off until you allow it. Then "
                          + "Claude Code must present the token from this command. Hostwatch keeps only the "
                          + "token's hash, so copy the command now. New Token or turning access off cuts off "
-                         + "every earlier registration. Secrets are masked; nothing can be changed through it.")
+                         + "every earlier registration. Secrets are masked. Nothing can be changed through it.")
             }
         }
         .sheet(isPresented: $ui.showGuardLog) {

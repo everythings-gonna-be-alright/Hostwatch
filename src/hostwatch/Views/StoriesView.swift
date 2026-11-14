@@ -55,7 +55,7 @@ struct StoriesView: View {
             if stories.ignoredCount > 0 {
                 Text("·")
                 Button("Reset \(stories.ignoredCount) ignored chains") { stories.clearIgnored() }
-                    .buttonStyle(.link)
+                    .buttonStyle(.glass).controlSize(.small)
             }
             Spacer()
         }

@@ -133,7 +133,7 @@ struct FullDiskAccessView: View {
                         Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
                         Text("Already turned on? macOS sometimes needs Hostwatch to reopen.")
                             .foregroundStyle(.secondary)
-                        Button("Quit & Reopen") { setup.relaunch() }.buttonStyle(.link)
+                        Button("Quit & Reopen") { setup.relaunch() }.buttonStyle(.glass).controlSize(.small)
                     }
                     .font(.caption)
                     .transition(.opacity)
@@ -158,7 +158,7 @@ struct FullDiskAccessView: View {
             if let startAnyway, !setup.granted {
                 Button("Start Without Access", action: startAnyway)
                     .buttonStyle(.glass)
-                    .help("Network activity still works; processes and files stay invisible")
+                    .help("Network activity still works. Processes and files stay invisible")
             }
             Spacer()
             Button(setup.granted ? "Later" : "Not Now", action: close)

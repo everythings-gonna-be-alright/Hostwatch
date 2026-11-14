@@ -464,7 +464,7 @@ struct PatternsView: View {
                     signatures.groupBySession = choice == .session
                     signatures.groupByProcess = choice == .process
                 }), compact: compact)
-            .help("Group the patterns: flat, one row per program, or one row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI) with the patterns it produced under it, seen-once ones included; the rest under No AI session")
+            .help("Group the patterns: flat, one row per program, or one row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI) with the patterns it produced under it, seen-once ones included. The rest under No AI session")
             Menu {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
@@ -677,7 +677,7 @@ private struct CombineSheet: View {
         let others = covered.filter { !state.keys.contains($0.id) }
         VStack(alignment: .leading, spacing: 14) {
             Text("Combine \(chosen.count) Patterns into One").font(.headline)
-            Text("One shared pattern replaces them; later activity that matches it joins it instead of making new patterns.")
+            Text("One shared pattern replaces them. Later activity that matches it joins it instead of making new patterns.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(chosen.prefix(6)) { e in

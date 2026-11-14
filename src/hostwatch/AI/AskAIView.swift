@@ -114,7 +114,7 @@ struct AskAIView: View {
             if event.inferred && (event.target.hasPrefix("?") || event.target.isEmpty) {
                 Row("Destination") {
                     Text("Unknown").foregroundStyle(.secondary)
-                        .help("The connection closed before Hostwatch could read it; only its traffic was counted.")
+                        .help("The connection closed before Hostwatch could read it. Only its traffic was counted.")
                 }
             } else {
                 Row("Destination") { Text(event.host.isEmpty ? "No hostname" : event.host).textSelection(.enabled) }
@@ -397,7 +397,7 @@ struct AIAskBar: View {
             .labelsHidden()
             .fixedSize()
             .help("Claude: strongest analysis, evidence is sent to Anthropic. On-device: Apple's private model, "
-                  + "smaller, evidence shortened to fit; nothing leaves the Mac.")
+                  + "smaller, evidence shortened to fit. Nothing leaves the Mac.")
             .disabled(analysis.state == .asking)
             if analysis.engine == .claude {
                 Toggle("Read local files", isOn: $analysis.allowFileTools)

@@ -1347,14 +1347,14 @@ curl and other programs that run whatever they're told are judged by what they r
 
 - **Always allow or always block a program in a place:** every protected place, a built-in group or one of your
   folders and files, reads as a sentence: the programs expected there (they always pass), *Any other program: Ask me
-  or Block*, and *Allow a Program…* and *Block a Program…*. The programs show as chips
+  or Block*, and **Add Program** (*Always Allow a Program…* or *Always Block a Program…*). The programs show as chips
   under the place, green or red, each removable. An app covers the programs inside it. These are your decisions, so
   they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
   protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
   Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
 - **Your destinations:** on the *Network Firewall* page, *Add Destination…* takes a domain (its subdomains too) or an
   IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
-  and *Allow a Program…* and *Block a Program…*, with the programs as chips. They are your decisions, so they come
+  and **Add Program**, with the programs as chips. They are your decisions, so they come
   before threat lists and patterns. The most specific destination decides (`api.example.com` over `example.com`), and
   a program on both lists is blocked. *Firewall decides* leaves it to your firewall mode.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
