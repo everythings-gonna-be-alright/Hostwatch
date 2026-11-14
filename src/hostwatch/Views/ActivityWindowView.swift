@@ -353,7 +353,7 @@ struct ActivityWindowView: View {
             Divider().frame(height: 16)
             Text("Group").font(.system(size: 11)).foregroundStyle(.secondary)
             Picker("Group", selection: $model.eventGrouping) {
-                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).labelStyle(.titleAndIcon).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -367,10 +367,11 @@ struct ActivityWindowView: View {
         HStack(spacing: 12) {
             let heavyCount = heavy.entries.count
             Picker("View", selection: $running.showing) {
-                Label("Events", systemImage: "list.bullet").tag(false)
+                // A segmented control shows a label's title alone unless asked: the icons tell the two apart at a glance.
+                Label("Events", systemImage: "list.bullet").labelStyle(.titleAndIcon).tag(false)
                 // Where the heavy card folds to: a flame and the count while something runs heavy.
                 Label(heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
-                      systemImage: heavyCount > 0 ? "flame.fill" : "cpu").tag(true)
+                      systemImage: heavyCount > 0 ? "flame.fill" : "cpu").labelStyle(.titleAndIcon).tag(true)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
