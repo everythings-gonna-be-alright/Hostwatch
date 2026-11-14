@@ -223,12 +223,43 @@ struct BaselineRule: Codable, Identifiable, Equatable {
 
 // MARK: - Learner
 
-/// Learns this Mac's normal behaviour in waves after the first launch (5, 15 and 60 minutes). Each
-/// wave sorts New patterns with `BaselinePolicy`, making a rule per trusted app; the rules then keep
-/// trusting their future normal-risk patterns.
+/// Learns this Mac's normal behaviour during its first day (the learning day, 24 hours by default): waves at 5, 15
+/// and 60 minutes, then every hour until the end. Each wave sorts New patterns with `BaselinePolicy`, making a rule
+/// per trusted app (the rules then keep trusting their future normal-risk patterns), and sends recurring patterns of
+/// other signed programs to the on-device model, whose sure Safe is applied while learning. source:
+/// docs/adr/0016-the-learning-day.md
 @MainActor
 final class BaselineLearner: ObservableObject {
-    static let waves: [TimeInterval] = [5 * 60, 15 * 60, 60 * 60]
+    static let firstWaves: [TimeInterval] = [5 * 60, 15 * 60, 60 * 60]
+    static let durationKey = "learningDuration"
+    static let defaultDuration: TimeInterval = 24 * 3600
+    /// The note on what the on-device model decided while learning, so the summary and Undo can find it.
+    static let learnedNote = "learned during the learning day"
+
+    /// How long learning lasts (Settings ▸ Detection: 1, 3 or 7 days; Extend adds a day).
+    var duration: TimeInterval {
+        let d = defaults.double(forKey: Self.durationKey)
+        return d > 0 ? d : Self.defaultDuration
+    }
+
+    /// The waves of the learning day: the first three, then one an hour until the end.
+    var waves: [TimeInterval] {
+        Self.firstWaves + stride(from: 2 * 3600.0, through: duration, by: 3600).map { $0 }
+    }
+
+    /// When learning ends, while it's running.
+    var learningEnds: Date? {
+        guard case .learning = phase, let startedAt else { return nil }
+        return startedAt.addingTimeInterval(duration)
+    }
+
+    /// Patterns decided while learning: by the baseline rules, or by the on-device model.
+    var learnedCount: Int { store.allEntries.filter { $0.source == "baseline" || $0.note == Self.learnedNote }.count }
+
+    /// Seen at least three times, over at least an hour: typical for this Mac, not a one-off.
+    static func recurs(_ e: SignatureEntry) -> Bool {
+        e.count >= 3 && e.lastSeen.timeIntervalSince(e.firstSeen) >= 3600
+    }
     static let applyInterval: TimeInterval = 30
 
     enum Phase: Equatable { case idle, learning(wave: Int, at: Date), done }
@@ -313,8 +344,9 @@ final class BaselineLearner: ObservableObject {
 
     private func updatePhase() {
         guard let startedAt else { phase = rules.isEmpty ? .idle : .done; return }
-        if wavesDone >= Self.waves.count { phase = .done; return }
-        phase = .learning(wave: wavesDone + 1, at: startedAt.addingTimeInterval(Self.waves[wavesDone]))
+        let waves = self.waves
+        if wavesDone >= waves.count { phase = .done; return }
+        phase = .learning(wave: wavesDone + 1, at: startedAt.addingTimeInterval(waves[wavesDone]))
     }
 
     private func save() {
@@ -456,13 +488,18 @@ final class BaselineLearner: ObservableObject {
             case .trust(let key):
                 ensureRule(key)
                 if admit(entry, ruleID: key.id) { byRule[key.id, default: []].append(entry.id) }
-            case .onDevice: onDeviceKeys.append(entry.id)
+            case .onDevice:
+                // After the first hour, only what recurs: one-offs aren't "typical for this Mac".
+                if wavesDone < Self.firstWaves.count || Self.recurs(entry) { onDeviceKeys.append(entry.id) }
             case .review, .ignore: break
             }
         }
         for (id, keys) in byRule { if let rule = rules.first(where: { $0.id == id }) { trust(keys, by: rule) } }
-        if !onDeviceKeys.isEmpty { classifier?.triageOnDevice(keys: onDeviceKeys) }   // suggestions for you
-        if startedAt != nil, wavesDone < Self.waves.count { defaults.set(wavesDone + 1, forKey: "baselineWavesDone") }
+        // While learning, the model's sure Safe is applied (what an AI may never allow alone stays a suggestion);
+        // after it, its answers are suggestions for you.
+        let learning: Bool = { if case .learning = phase { return true } else { return false } }()
+        if !onDeviceKeys.isEmpty { classifier?.triageOnDevice(keys: onDeviceKeys, applyAs: learning ? Self.learnedNote : nil) }
+        if startedAt != nil, wavesDone < waves.count { defaults.set(wavesDone + 1, forKey: "baselineWavesDone") }
         save()
         updatePhase()
         await applyApproved()
@@ -509,9 +546,27 @@ final class BaselineLearner: ObservableObject {
     }
 
     /// "Update Baseline": for existing installs, or to finish learning early.
+    /// Learning lasts this long (Settings ▸ Detection): changing it while learning moves the end.
+    func setDuration(_ seconds: TimeInterval) {
+        defaults.set(seconds, forKey: Self.durationKey)
+        updatePhase()
+        schedule()
+    }
+
+    /// One more day of learning.
+    func extend() { setDuration(duration + 24 * 3600) }
+
+    /// Learn this Mac again from now: for an install from before the learning day, or after big changes.
+    func learnAgain() {
+        defaults.set(now(), forKey: "baselineStartedAt")
+        defaults.set(0, forKey: "baselineWavesDone")
+        updatePhase()
+        schedule()
+    }
+
     func buildNow() async {
         if startedAt == nil { defaults.set(now(), forKey: "baselineStartedAt") }
-        defaults.set(Self.waves.count - 1, forKey: "baselineWavesDone")   // this run is the last wave
+        defaults.set(waves.count - 1, forKey: "baselineWavesDone")   // this run is the last wave
         timer?.invalidate()
         await runWave()
     }
@@ -607,8 +662,10 @@ final class BaselineLearner: ObservableObject {
     var statusText: String {
         switch phase {
         case .idle: return "Not built yet"
-        case .learning(let wave, let at):
-            return "Learning · wave \(wave) of \(Self.waves.count) at \(at.formatted(date: .omitted, time: .shortened))"
+        case .learning:
+            let left = max(0, (learningEnds ?? now()).timeIntervalSince(now()))
+            let hours = Int((left / 3600).rounded(.up))
+            return "Learning this Mac · \(hours >= 48 ? "\(hours / 24) days" : "\(hours) h") left · \(learnedCount) learned"
         case .done:
             let review = report?.reviewCount ?? 0
             return "\(rules.filter { !$0.paused }.count) rules trust \(trustedCount) patterns · \(review) to review"

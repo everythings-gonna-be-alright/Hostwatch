@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.16.0 – AI that checks first, and a window that fits
+## 0.16.0 – A learning day, AI that checks first, and a window that fits
+
+### New: the learning day
+
+- **Hostwatch learns this Mac for a day.** For its first 24 hours (or 3 or 7 days, in Settings ▸ Detection), it
+  learns what is typical here: ordinary activity of signed apps is trusted, and what other signed programs do again
+  and again is decided by the on-device AI, so few patterns are left for you to classify. One-offs wait, and shells,
+  your sensitive files and anything unsigned, downloaded or high-risk are never learned. The menu bar shows how long
+  is left, and *Extend by a Day*, *End Now* and *Learn This Mac Again* are in Settings.
 
 ### New: Protection
 

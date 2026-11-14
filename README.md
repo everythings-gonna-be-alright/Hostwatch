@@ -58,6 +58,8 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 ## What's new
 
 **0.16.0**
+- **📚 A learning day** – for its first 24 hours Hostwatch learns what's typical on your Mac, so on day two only a
+  handful of patterns need you. Shells, your secrets and anything unsigned are never learned.
 - **🤖 AI checks first** – with Protection on Ask, a program Hostwatch doesn't know is checked by your AI before you're
   asked. A sure Safe goes on this time, with a glass notice. Otherwise the question shows the AI's conclusion, and
   *Block Once* joins *Allow Once*. Shells and your secrets stay yours to decide.

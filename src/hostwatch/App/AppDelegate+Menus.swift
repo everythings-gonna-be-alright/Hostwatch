@@ -61,8 +61,8 @@ extension AppDelegate {
             menu.addItem(item("Claude Code: \(n) \(n == 1 ? "action" : "actions") blocked today…", #selector(openGuardLog),
                               symbol: "xmark.shield.fill"))
         }
-        if case .learning(let wave, _) = baseline.phase {
-            let learning = NSMenuItem(title: "Learning this Mac's normal behaviour (wave \(wave) of 3)", action: nil, keyEquivalent: "")
+        if case .learning = baseline.phase {
+            let learning = NSMenuItem(title: baseline.statusText, action: nil, keyEquivalent: "")
             learning.image = symbol("hourglass")
             learning.isEnabled = false
             menu.addItem(learning)
