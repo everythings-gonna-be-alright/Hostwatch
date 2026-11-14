@@ -287,6 +287,17 @@ final class FirewallMonitor: ObservableObject {
 
     func clear() { entries = [:]; allowedCount = 0; blockedCount = 0; scheduleSave() }
 
+    /// Found ▸ Forget: these seen connections leave the list, nothing else. Unlike `forget(_:signatures:)` no
+    /// decision, block or exception changes, and a connection that happens again comes back.
+    func dismiss(_ ids: [String]) {
+        var removed = false
+        for id in ids where entries[id] != nil { entries[id] = nil; removed = true }
+        guard removed else { return }
+        revision += 1
+        dirty = true
+        scheduleSave()
+    }
+
     // MARK: Domains you blocked for one app
 
     /// "program name|domain", the program named as the Network tab names it, the domain as it groups hosts

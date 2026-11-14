@@ -116,6 +116,7 @@ struct NetworkFirewallPage: View {
                 Text("What the firewall found").font(.headline)
                 Spacer()
                 Button("Show All in Network…", action: showNetwork).buttonStyle(.link)
+                if !found.isEmpty { ConnectionsForgetMenu(firewall: firewall, found: found) }
                 // Out of the way, and said plainly: it forgets what was seen, never a rule (those are listed above).
                 Menu {
                     Button("Forget Seen Connections…") {

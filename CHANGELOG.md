@@ -14,9 +14,11 @@
 - **Clearer charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers add up what
   its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers an
   Audio Graph. In a large or full-screen window the charts grow into the spare height.
-- **Found clears itself, and in bulk.** Entries that don't happen again leave Found by themselves, a question after a
-  week, something that would be stopped after a month. A *Forget* menu clears the questions, what's older than a
-  day, or everything at once. Decisions and patterns stay, and anything that happens again comes back.
+- **Found clears itself, and in bulk.** Entries that don't happen again leave Found by themselves: a launch or file
+  question after a week, something that would be stopped after a month, a connection not seen for a week. A *Forget*
+  menu, for launches and files and for connections (in Found and on the Network Firewall page), clears the questions,
+  what's older than a day, or everything at once. Decisions, rules and patterns stay, and anything that happens again
+  comes back.
 
 ### New: Patterns and the window
 
