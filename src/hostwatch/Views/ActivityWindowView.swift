@@ -296,6 +296,18 @@ struct ActivityWindowView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Always there, so the tabs never move: disabled on tabs without a sidebar.
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { rulesTab.toggleSidebar(model.windowTab) }
+            } label: {
+                Label("Sidebar", systemImage: "sidebar.left")
+            }
+            .help("Hide or show the sidebar (⌃⌘S)")
+            .disabled(!RulesTabState.hasSidebar(model.windowTab))
+        }
+        .sharedBackgroundVisibility(.hidden)                  // its own glass, not the tabs' capsule
+        ToolbarSpacer(.fixed, placement: .navigation)
         ToolbarItem(placement: .navigation) {
             WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
         }

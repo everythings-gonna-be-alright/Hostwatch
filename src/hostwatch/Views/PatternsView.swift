@@ -93,6 +93,9 @@ struct PatternsView: View {
     @StateObject private var combine = CombineState()
     @StateObject private var inspector = InspectorState()
     @StateObject private var groups = GroupExpansion()
+    /// Two lines per pattern (four columns that fit the window) or the classic one line with ten columns.
+    @AppStorage(PatternsView.twoLineKey) private var twoLine = true
+    static let twoLineKey = "patternsTwoLineRows"
 
     var body: some View {
         let rows = list.rows
@@ -144,8 +147,94 @@ struct PatternsView: View {
         if alert.runModal() == .alertFirstButtonReturn { signatures.set(.safe, keys: keys) }
     }
 
+    /// The status pill (and the flame for high risk); on a group row, the band that carries the whole row.
+    private func statusCell(_ item: PatternItem) -> some View {
+        Group {
+            if item.isGroup {
+                Color.clear.frame(width: 1, height: 30)
+            } else {
+                HStack(spacing: 4) {
+                    StatusPill(status: item.status)
+                    if item.entry.risk == .high {
+                        Image(systemName: "flame.fill").foregroundStyle(.red).help("High-risk pattern")
+                    }
+                }
+            }
+        }
+        .background(RowBand(content: item.isGroup ? AnyView(band(item)) : nil))
+        .font(.system(size: 12))
+    }
+
+    /// Who signed the program: a green seal when trusted, an orange shield when unsigned or broken.
+    private func signerLabel(_ item: PatternItem) -> some View {
+        let id = SigningCache.shared.cached(SignatureStore.subjectPath(item.entry))
+        return HStack(spacing: 4) {
+            if let id, id.untrustedCode || id.valid == false {
+                Image(systemName: "exclamationmark.shield").foregroundStyle(.orange)
+            } else if let id, SigningCache.shared.isTrusted(id) {
+                Image(systemName: "checkmark.seal").foregroundStyle(.green)
+            }
+            Text(item.signer).lineLimit(1)
+        }
+        .help(id.map { "\($0.label) · Team \($0.teamID ?? "none")"
+            + (SigningCache.shared.isTrusted($0) ? " · trusted" : "") } ?? "not inspected yet")
+    }
+
     private func table(_ rows: [PatternItem]) -> some View {
             Table(selection: $signatures.selection, sortOrder: $signatures.patternOrder) {
+                if twoLine {
+                    TableColumn("Status", value: \.priority) { item in statusCell(item) }
+                        .width(min: 96, ideal: 104, max: 140)
+                    TableColumn("Pattern", value: \.processName) { item in
+                        if !item.isGroup {
+                            HStack(alignment: .center, spacing: 8) {
+                                KindTile(kind: item.entry.kind, size: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(displayProcessName(item.entry.process)).fontWeight(.semibold)
+                                        .lineLimit(1).help(item.entry.process)
+                                    Text(item.pattern)
+                                        .font(.system(size: 11.5, design: .monospaced))
+                                        .lineLimit(1).truncationMode(.middle)
+                                        .help(RuleText.does(kind: item.entry.kind, pattern: item.pattern))
+                                }
+                            }
+                            .font(.system(size: 12))
+                            .padding(.vertical, 3)
+                        }
+                    }
+                    .width(min: 220, ideal: 520)
+                    TableColumn("Decided By", value: \.decidedBy) { item in
+                        if !item.isGroup {
+                            VStack(alignment: .leading, spacing: 2) {
+                                DeciderLabel(text: item.decidedBy)
+                                HStack(spacing: 4) {
+                                    if !item.signer.isEmpty { signerLabel(item) }
+                                    if !item.reason.isEmpty {
+                                        // the dot only between two values, never in front of one
+                                        Text(item.signer.isEmpty ? item.reason : "· \(item.reason)").lineLimit(1).help(item.reason)
+                                    }
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+                            .font(.system(size: 12))
+                        }
+                    }
+                    .width(min: 140, ideal: 260)
+                    TableColumn("Seen", value: \.count) { item in
+                        if !item.isGroup {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(item.count)×").monospacedDigit()
+                                Text(Self.relative.localizedString(for: item.lastSeen, relativeTo: Date()))
+                                    .foregroundStyle(.secondary)
+                                    .help("First seen \(item.firstSeen.formatted()), last seen \(item.lastSeen.formatted())")
+                            }
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
+                    .width(min: 70, ideal: 90, max: 120)
+                }
+                if !twoLine {
                 TableColumn("Status", value: \.priority) { item in
                     Group {
                     Group {
@@ -267,6 +356,7 @@ struct PatternsView: View {
                     .font(.system(size: 12))
                 }
                 .width(min: 70, ideal: 90, max: 130)
+                }
             } rows: {
                 // Group rows start folded; a click on one is remembered while the window lives.
                 ForEach(rows) { item in
