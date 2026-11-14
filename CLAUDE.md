@@ -9,6 +9,7 @@ MCP server and every command-line tool. Read `docs/ARCHITECTURE.md` first (the m
 ```bash
 swift build                                  # debug binary at .build/debug/Hostwatch (command-line modes work from it)
 ./scripts/build-app.sh                       # dist/Hostwatch.app, signed with the Developer ID when the keychain has it
+                                             #   (local builds skip whole-module optimisation: ~40 s, not ~77 s; RELEASE=1 keeps it)
 ./scripts/test.sh                            # everything (~30 s): the merge gate runs exactly this
 ./scripts/test.sh --changed                  # only the suites that mention types declared in changed files
 ./scripts/test.sh --only 'FewerPatterns|RuleText'

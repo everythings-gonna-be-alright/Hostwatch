@@ -70,8 +70,8 @@ the ones a machine can check.
 
 ## 7. Feedback
 
-- **Show waiting.** A check that takes seconds shows it is working and how long it may take (the AI notice's pulsing
-  icon and filling bar).
+- **Show waiting.** A check that takes seconds shows it is working and how long it may take (the AI notice's progress
+  ring filling around its pulsing icon).
 - **One question at a time.** One action never opens two panels. A second question waits for the first answer and
   says how they relate ("You just allowed curl to run.").
 - **Numbers agree with what they summarise.** A card's figures are the totals of its chart, a badge counts what the

@@ -99,11 +99,7 @@ struct AICheckNoticeView: View {
             .frame(maxWidth: 240, alignment: .leading)
             Spacer(minLength: 4)
             if item.state == .checking {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.tint)
-                    .symbolEffect(.variableColor.iterative.reversing, options: .repeating)
-                    .symbolEffect(.pulse, options: .repeating)
+                WaitRing(started: item.started)
             } else {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     .symbolEffect(.bounce, value: item.state)
@@ -111,31 +107,33 @@ struct AICheckNoticeView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .overlay(alignment: .bottom) {
-            if item.state == .checking { WaitBar(started: item.started).padding(.horizontal, 14).padding(.bottom, 4) }
-        }
         .frame(width: 320)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
 
-/// How long the AI may still take: a thin bar filling over LiveAICheck.timeLimit, the time the program waits.
-private struct WaitBar: View {
+/// How long the AI may still take: a ring filling over LiveAICheck.timeLimit (the time the program waits), the
+/// sparkles pulsing inside it while the AI works.
+private struct WaitRing: View {
     let started: Date
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
             let done = min(1, max(0, context.date.timeIntervalSince(started) / LiveAICheck.timeLimit))
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule().fill(LinearGradient(colors: [.accentColor.opacity(0.5), .accentColor], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(4, geo.size.width * done))
-                }
+            ZStack {
+                Circle().stroke(Color.primary.opacity(0.12), lineWidth: 2.5)
+                Circle()
+                    .trim(from: 0, to: max(0.02, done))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .symbolEffect(.pulse, options: .repeating)
             }
-            .frame(height: 3)
+            .frame(width: 24, height: 24)
         }
-        .accessibilityHidden(true)
+        .accessibilityLabel("Checking with AI")
     }
 }
