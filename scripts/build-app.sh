@@ -15,6 +15,9 @@ if [ "${DEMO:-0}" = 1 ]; then
   SWIFT_FLAGS+=(-Xswiftc -DDEMO --build-path .build-demo)
   NAME="Hostwatch Demo"; BUNDLE_ID="tech.hostwatch.demo"
 fi
+# Whole-module optimisation re-optimises the whole app on any change (77 s for a one-line edit). Local builds skip it
+# (40 s, a few percent slower at run time); releases (RELEASE=1, package.sh) keep it.
+if [ "${RELEASE:-0}" != 1 ]; then SWIFT_FLAGS+=(-Xswiftc -no-whole-module-optimization); fi
 swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}"
 BIN="$(swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "${SWIFT_FLAGS[@]}" --show-bin-path)/Hostwatch"
 

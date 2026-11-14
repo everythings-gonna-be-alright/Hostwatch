@@ -6,8 +6,8 @@
 
 - **AI checks paused programs first.** With Protection on Ask, a launch or file access Hostwatch doesn't know is
   first looked at by the AI you chose (on-device or your own server). If it's sure the program is safe, it goes on,
-  this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI", with an
-  animated icon and a bar filling over the seconds the program waits, then "allowed by AI", even with every window
+  this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI", with a
+  progress ring filling over the seconds the program waits, then "allowed by AI", even with every window
   closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.
 - **Protection has its own tab.** The Rules tab mixed decisions about patterns with protection. The Protection tab
@@ -61,6 +61,8 @@
   longer reports "Job has stopped" where macOS allows it: the collector suspends the program in a way the shell can't
   see. macOS refuses that for its own tools such as curl, which are paused as before, and the question then tells you
   to type fg after Allow to bring the program back to your terminal.
+- **The HUD keeps its shape.** When a heavy process or a flagged event appeared at the top, the list pushed the bottom
+  line and the rounded corners out of the HUD. The list now gives way instead.
 - **One question at a time.** A command such as `curl https://example.com` raised a launch question and a connection
   question at once. The connection question now waits for your launch answer: block the launch and it goes, allow it
   and the connection question follows, saying you just allowed the program to run.

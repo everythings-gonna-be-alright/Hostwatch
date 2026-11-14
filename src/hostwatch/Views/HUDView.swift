@@ -49,7 +49,8 @@ struct HUDView: View {
             header
             Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
             // What needs a look first, only when something does.
-            HUDAttention(flagged: attention, heavy: vitals.liveContext.entries, s: s) { e in
+            let flagged = attention
+            HUDAttention(flagged: flagged, heavy: vitals.liveContext.entries, s: s) { e in
                 if !e.protectionReason.isEmpty { return e.protectionReason }
                 if let bad = intel.flag(for: e) { return bad }
                 let parent = (e.parent as NSString).lastPathComponent
@@ -76,9 +77,12 @@ struct HUDView: View {
                 .padding(.vertical, 8)
             } else {
                 VStack(alignment: .leading, spacing: 1) {
-                    // Each banner takes about two rows of room.
-                    // Each banner takes about two rows of room. Repeats fold into one row (HUDFold).
-                    let rows = max(0, model.overlayRows - 2 * min(2, stories.recent().count))
+                    // The panel's height is fixed (the rows you chose), so the list gives way to what's above it: each
+                    // banner takes about two rows, the attention card a row per line and one for its padding. Repeats
+                    // fold into one row (HUDFold).
+                    let attentionLines = flagged.count + min(2, vitals.liveContext.entries.count)
+                    let rows = max(0, model.overlayRows - 2 * min(2, stories.recent().count)
+                                      - (attentionLines > 0 ? attentionLines + 1 : 0))
                     ForEach(model.overlayItems(rows: rows, flag: { vitals.badge(for: $0) != nil || intel.flag(for: $0) != nil })) { item in
                         let event = item.event
                         EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event),
@@ -98,6 +102,9 @@ struct HUDView: View {
                             }
                     }
                 }
+                // Whatever appears above, the list gives way: the footer and the rounded corners stay in the window.
+                .frame(minHeight: 0, alignment: .top)
+                .clipped()
             }
             // One quiet line at the bottom, coloured only when something is abnormal.
             if model.overlayShowResources, let sample = metrics.latest {
