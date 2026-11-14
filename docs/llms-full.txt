@@ -115,10 +115,17 @@ Log*.
 **Running it by hand:** `./scripts/run-agent.sh` runs the collector from Terminal (`sudo Hostwatch --collector`).
 The app detects it and does not start a second one.
 
-### Baseline: the first hour
+### Baseline: the learning day
 
-On the first launch, Hostwatch learns what is normal on your Mac, so it doesn't ask you about everything. It learns
-in **three waves, at 5, 15 and 60 minutes**.
+On the first launch, Hostwatch spends a day learning what is normal on your Mac, so it doesn't ask you about
+everything. It learns in **waves at 5, 15 and 60 minutes, then every hour** until the day is over. *Settings ▸
+Detection ▸ Learning day* makes it 3 or 7 days, *Extend by a Day* adds one, *End Now* finishes it, and *Learn This Mac
+Again* starts it over (also for an install from before the learning day). The menu bar icon shows how long is left.
+
+During the learning day, what other signed programs do **again and again** (at least three times, over at least an
+hour) goes to the on-device AI, and its sure *Safe* is applied, recorded as the AI's decision ("learned during the
+learning day"). One-offs aren't typical, so they wait. What an AI may never allow alone (shells, interpreters, your
+sensitive files, high-risk patterns) is never learned. After the learning day, the AI's answers are suggestions again.
 
 Each wave sorts the New patterns seen so far (`BaselinePolicy`) into these groups:
 
@@ -232,7 +239,7 @@ glance and quick actions.
   - *A macOS update fixes N exploited flaws…* (or *N exploited macOS flaws since your last update…*)
   - *Claude Code guard was removed — Restore*
   - *Claude Code: N actions blocked today…*
-  - *Learning this Mac's normal behaviour (wave N of 3)*
+  - *Learning this Mac · 14 h left · 812 learned*
   - *<version> Available…*
 - **Actions:**
   - **Start Collector…** (shown when the collector is off)

@@ -16,7 +16,7 @@ glance and quick actions.
   - *A macOS update fixes N exploited flaws…* (or *N exploited macOS flaws since your last update…*)
   - *Claude Code guard was removed — Restore*
   - *Claude Code: N actions blocked today…*
-  - *Learning this Mac's normal behaviour (wave N of 3)*
+  - *Learning this Mac · 14 h left · 812 learned*
   - *<version> Available…*
 - **Actions:**
   - **Start Collector…** (shown when the collector is off)

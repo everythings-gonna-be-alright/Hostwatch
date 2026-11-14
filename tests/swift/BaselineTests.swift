@@ -128,15 +128,65 @@ import Testing
         return (learner, store, defaults)
     }
 
-    @Test func wavesAtFiveFifteenAndSixtyMinutes() async throws {
+    @Test func wavesThroughTheLearningDay() async throws {
         let (learner, _, defaults) = try makeLearner()
         let start = try #require(defaults.object(forKey: "baselineStartedAt") as? Date)
-        for (i, minutes) in [5.0, 15, 60].enumerated() {
+        #expect(learner.waves.count == 3 + 23)                                  // 5, 15, 60 min, then hourly to 24 h
+        for (i, minutes) in [5.0, 15, 60, 120].enumerated() {
             guard case .learning(let wave, let at) = learner.phase else { Issue.record("not learning"); return }
             #expect(wave == i + 1 && abs(at.timeIntervalSince(start) - minutes * 60) < 1)
             await learner.runWave()
         }
-        #expect(learner.phase == .done)
+        #expect(learner.statusText.hasPrefix("Learning this Mac"))
+        await learner.buildNow()                                                // End Now
+        #expect(learner.phase == .done && learner.learningEnds == nil)
+    }
+
+    @Test func theLearningDayCanBeLongerExtendedOrStartedAgain() throws {
+        let (learner, _, defaults) = try makeLearner()
+        let start = try #require(defaults.object(forKey: "baselineStartedAt") as? Date)
+        learner.setDuration(3 * 86_400)
+        #expect(learner.waves.count == 3 + 71 && abs(learner.learningEnds!.timeIntervalSince(start) - 3 * 86_400) < 1)
+        learner.extend()
+        #expect(abs(learner.duration - 4 * 86_400) < 1)
+        let (old, _, _) = try makeLearner(fresh: false)
+        #expect(old.phase == .idle)
+        old.learnAgain()                                                        // an install from before
+        guard case .learning(let wave, _) = old.phase else { Issue.record("not learning"); return }
+        #expect(wave == 1)
+    }
+
+    @Test func onlyWhatRecursIsTypical() {
+        var e = entry(proc: "/x")
+        e.count = 3; e.firstSeen = Date().addingTimeInterval(-7200); e.lastSeen = Date()
+        #expect(BaselineLearner.recurs(e))
+        e.count = 2
+        #expect(!BaselineLearner.recurs(e))                                    // too few
+        e.count = 9; e.firstSeen = Date().addingTimeInterval(-600)
+        #expect(!BaselineLearner.recurs(e))                                    // all in ten minutes: a burst, not a habit
+    }
+
+    @Test func whileLearningASureSafeIsAppliedAfterItsASuggestion() async throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-learn-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = SignatureStore(directory: dir)
+        store.autoAcceptAI = false
+        let classifier = PatternClassifier(store: store, localModel: AlwaysSafe())
+        let learner = BaselineLearner(store: store, classifier: classifier, defaults: scratchDefaults("hw-learn"), freshInstall: true)
+        learner.identify = { self.identify($0) }
+        let tool = net("/Applications/signed/Tool.app/Contents/MacOS/Tool", pid: 70, to: "93.184.216.34:443", host: "api.example.com")
+        store.observe(tool)
+        await learner.runWave()                                                 // wave 1: learning
+        for _ in 0..<50 where store.status(for: tool) != .safe { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(store.status(for: tool) == .safe && store.entry(tool.signatureKey)?.note == BaselineLearner.learnedNote)
+        #expect(learner.learnedCount >= 1)
+        await learner.buildNow()                                                // learning ends
+        let later = net("/Applications/signed/Other.app/Contents/MacOS/Other", pid: 71, to: "198.51.100.7:443", host: "cdn.example.org")
+        store.observe(later)
+        await learner.runWave()                                                 // after learning: a suggestion only
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(store.status(for: later) == .unclassified)
     }
 
     @Test func existingInstallsDontStartByThemselves() throws {

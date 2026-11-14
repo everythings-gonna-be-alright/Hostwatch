@@ -457,6 +457,25 @@ private struct DetectionPane: View {
                             .disabled(baseline.running)
                     }
                 }
+                LabeledContent("Learning day") {
+                    HStack {
+                        Picker("Learning day", selection: Binding(get: { baseline.duration }, set: { baseline.setDuration($0); ui.refresh += 1 })) {
+                            Text("1 day").tag(24 * 3600.0)
+                            Text("3 days").tag(3 * 24 * 3600.0)
+                            Text("7 days").tag(7 * 24 * 3600.0)
+                            if ![24 * 3600.0, 3 * 24 * 3600.0, 7 * 24 * 3600.0].contains(baseline.duration) {
+                                Text("\(Int(baseline.duration / 86_400)) days").tag(baseline.duration)
+                            }
+                        }
+                        .labelsHidden().fixedSize()
+                        if baseline.learningEnds != nil {
+                            Button("Extend by a Day") { baseline.extend(); ui.refresh += 1 }
+                            Button("End Now") { Task { await baseline.buildNow(); ui.refresh += 1 } }
+                        } else {
+                            Button("Learn This Mac Again") { baseline.learnAgain(); ui.refresh += 1 }
+                        }
+                    }
+                }
                 LabeledContent("Domain learning") {
                     HStack {
                         Text(domains.isLearning
@@ -475,8 +494,11 @@ private struct DetectionPane: View {
             } header: {
                 Text("Baselines")
             } footer: {
-                Footnote("Patterns: three waves (5, 15, 60 min) after the first launch trust ordinary signed activity "
-                         + "and leave anything unsigned, downloaded or high-risk for you. Domains: while learning, "
+                Footnote("Learning day: for its first day (or 3 or 7), Hostwatch learns this Mac. Ordinary activity of "
+                         + "signed apps is trusted, and what other signed programs do again and again is decided by the "
+                         + "on-device AI, so few patterns are left for you. Shells, your sensitive files and anything "
+                         + "unsigned, downloaded or high-risk are never learned. Undo a learned app in Patterns ▸ Rules. "
+                         + "Domains: while learning, "
                          + "what trusted software reaches becomes usual instead of new. "
                          + "Ignored stories are chains you chose to never be alerted about again.")
             }

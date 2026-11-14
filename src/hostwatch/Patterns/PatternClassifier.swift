@@ -208,7 +208,9 @@ final class PatternClassifier: ObservableObject {
     /// On-device first pass when available, then Claude for the rest (each step optional).
     /// Baseline: the on-device model only (never Claude) for these patterns; whatever it can't settle,
     /// and anything high-risk, stays New for you.
-    func triageOnDevice(keys: [String]) {
+    /// `applyAs`: during the learning day, a sure Safe is applied with this note (unless an AI may never allow the
+    /// pattern alone, `aiSafeRefusal`); otherwise every answer is a suggestion.
+    func triageOnDevice(keys: [String], applyAs note: String? = nil) {
         let model = localModel
         guard model.status().isReady else { return }
         let batch = keys.compactMap { store.entry($0) }
@@ -221,8 +223,12 @@ final class PatternClassifier: ObservableObject {
                 if Task.isCancelled { return }
                 let verdict = try? await model.triage(prompt)
                 guard let self else { return }
-                if case .settle(let status, let note) = TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: false, warned: warned[entry.id] ?? false) {
-                    self.store.suggest(status, key: entry.id, source: "on-device", note: note)
+                if case .settle(let status, let why) = TriageRouter.route(risk: entry.risk, local: verdict, claudeEnabled: false, warned: warned[entry.id] ?? false) {
+                    if let note, status == .safe, SignatureBuilder.aiSafeRefusal(entry) == nil {
+                        self.store.set(.safe, keys: [entry.id], source: "on-device", note: note)
+                    } else {
+                        self.store.suggest(status, key: entry.id, source: "on-device", note: why)
+                    }
                 }
             }
         }
