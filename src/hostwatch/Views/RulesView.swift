@@ -295,11 +295,11 @@ struct RulesView: View {
                 } label: { Image(systemName: "ellipsis") }
                     .menuStyle(.button).buttonStyle(.glass).fixedSize()
                     .disabled(baseline.rules.isEmpty)
-                    .help("Remove every baseline rule; what they trusted goes back to New")
+                    .help("Remove every baseline rule. What they trusted goes back to New")
             }
             .controlSize(.small)
             Text("One rule per app (its developer's signature must match), plus one for macOS itself. A rule trusts "
-                 + "the kinds of normal-risk behaviour the app showed in its first week; something new for it comes to "
+                 + "the kinds of normal-risk behaviour the app showed in its first week. Something new for it comes to "
                  + "Needs You. Never high-risk, unsigned or downloaded code, interpreters or shells.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             let recent = recentlyTrusted
@@ -312,7 +312,7 @@ struct RulesView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
                     Spacer()
                     Button("Show") { showKeys("Trusted automatically, last 24 hours", recent.flatMap(\.keys)) }
-                        .buttonStyle(.link).font(.system(size: 12))
+                        .buttonStyle(.glass).controlSize(.small).font(.system(size: 12))
                 }
             }
             if !baseline.rules.isEmpty {
@@ -343,8 +343,8 @@ struct RulesView: View {
     private var learnedSection: some View {
         section("Learned rules", subtitle: "\(book.activeCount) active · from your decisions") {
             HStack(spacing: 10) {
-                Text("Claude turns patterns you marked yourself into rules; Hostwatch checks each one (never a "
-                     + "blanket trust of python, bash or node); you approve it in Needs You.")
+                Text("Claude turns patterns you marked yourself into rules. Hostwatch checks each one (never a "
+                     + "blanket trust of python, bash or node). You approve it in Needs You.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if book.running {
@@ -558,7 +558,7 @@ private struct BaselineRuleRow: View {
             Spacer()
             Button(rule.paused ? "Resume" : "Pause") { baseline.setPaused(rule, !rule.paused) }.buttonStyle(.glass)
             Button(role: .destructive) { baseline.delete(rule) } label: { Image(systemName: "trash") }.buttonStyle(.glass)
-                .help("Delete this rule; its patterns become New. Update Baseline may create it again: pause it to keep it off.")
+                .help("Delete this rule. Its patterns become New. Update Baseline may create it again: pause it to keep it off.")
         }
         .controlSize(.small)
         .font(.system(size: 12))
@@ -613,7 +613,7 @@ private struct InlinePatterns: View {
                     Text("and \(entries.count - Self.limit) more").foregroundStyle(.tertiary)
                 }
                 Button("Open in Patterns", action: openAll)
-                    .buttonStyle(.link)
+                    .buttonStyle(.glass).controlSize(.small)
             }
             .font(.system(size: 11))
             .padding(.top, 2)
@@ -683,10 +683,10 @@ private struct ReviewRow: View {
             }
             if !anyCode {
                 Button("Trust") { Task { await baseline.trustApp(group) } }.buttonStyle(.glass)
-                    .help("Your decision: mark these Safe; a signed app also gets a baseline rule (Trusted by you)")
+                    .help("Your decision: mark these Safe. A signed app also gets a baseline rule (Trusted by you)")
             }
             Button("Dismiss") { baseline.dismiss(group) }.buttonStyle(.glass)
-                .help("Hide it here; its patterns stay New")
+                .help("Hide it here. Its patterns stay New")
             Menu {
                 Button("Show in Patterns") { showKeys(group.app, group.keys) }
                 Button("Mark Suspicious") { baseline.markSuspicious(group) }

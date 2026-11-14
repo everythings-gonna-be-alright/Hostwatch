@@ -470,7 +470,7 @@ struct NetworkView: View {
         }
         if !picked.isEmpty {
             Button(named.isEmpty ? "Forget" : "Forget (treat as new next time)") { forget(picked) }
-                .help("Also removes its firewall connections and the Allow or Block you gave them; they're asked about again")
+                .help("Also removes its firewall connections and the Allow or Block you gave them. They're asked about again")
             Divider()
         }
         if let e = picked.first(where: \.isConnection)?.entry, picked.count == 1 {

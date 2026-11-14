@@ -15,8 +15,8 @@
   is the one place to decide what was found, launches, files and connections, instead of connections being listed
   twice: the Network Firewall page says how many are left, with *Review in Found*.
 - **Always allow or always block a program in a place.** Every protected place, built-in or your own, now reads as
-  a sentence: the programs expected there, *Any other program: Ask me or Block*, and *Allow a Program…* and *Block a
-  Program…*, your choices shown as chips under it. Your decision, before patterns and AI.
+  a sentence: the programs expected there, *Any other program: Ask me or Block*, and an **Add Program** button to
+  always allow or always block one, your choices shown as chips under it. Your decision, before patterns and AI.
 - **Your destinations.** On the Network Firewall page, add a domain or IP address and decide it the way you decide a
   protected place: *Any other program: Firewall decides, Allow or Block*, plus programs you always allow or always
   block there. Before threat lists and patterns, the most specific destination decides.
@@ -43,6 +43,7 @@
   whether you're protected, a timed pause, each area's mode, holds and the collector. *File ▸ Export Events…* saves the
   list or the selection as JSON lines. The menu bar icon says whether you're protected and offers a timed *Pause
   Protection*.
+- **Quieter buttons.** Actions that looked like blue web links are buttons now, styled like the rest of the window.
 - **A tidier toolbar.** The Settings button is back, the Protection tab has no search field since it has nothing to
   search, the selected tab stands out with any accent colour, and the Events switches show their icons.
 - **The HUD starts hidden.** A new install opens with the window and the menu bar icon only. Turn the HUD on with

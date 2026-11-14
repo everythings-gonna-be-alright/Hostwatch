@@ -411,7 +411,7 @@ struct ActivityWindowView: View {
                 groupingPicker(compact: compact)
                 if model.onlySession != nil {
                     Button("All Sessions") { model.onlySession = nil; model.onlySessionPids = nil }
-                        .buttonStyle(.link).font(.system(size: 11))
+                        .buttonStyle(.glass).controlSize(.small).font(.system(size: 11))
                 }
                 Spacer(minLength: 0)
                 // The patterns of the events the list shows: its filters, search and kinds decide.
@@ -467,7 +467,7 @@ struct ActivityWindowView: View {
                 Image(systemName: "checkmark.circle").foregroundStyle(.secondary)
                 Text(traveling ? "Nothing ran heavy at this moment." : "Those processes are no longer heavy.")
                     .foregroundStyle(.secondary)
-                Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.link)
+                Button("Show All Events") { model.onlyPids = nil }.buttonStyle(.glass).controlSize(.small)
             }
             .font(.callout)
             .padding(.horizontal, 16).padding(.vertical, 8)
@@ -590,7 +590,7 @@ struct ActivityWindowView: View {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
                 Spacer(minLength: 12)
                 Button(history.statusText) { history.revealInFinder() }
-                    .buttonStyle(.link)
+                    .buttonStyle(.glass).controlSize(.small)
                     .help("Show history files in Finder")
                 if traveling {
                     EventCountText(shown: Self.eventCount(rows), total: travel.listed.count, restored: 0, filtering: searchFiltering,

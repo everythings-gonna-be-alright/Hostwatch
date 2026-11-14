@@ -188,7 +188,7 @@ struct ProtectionView: View {
                         ForEach(showAll.files ? all[...] : all.prefix(Self.limit)) { f in finding(f) }
                         if all.count > Self.limit {
                             Button(showAll.files ? "Show fewer" : "Show all \(all.count)") { showAll.files.toggle() }
-                                .buttonStyle(.link).font(.caption).padding(.vertical, 6)
+                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -211,7 +211,7 @@ struct ProtectionView: View {
                         }
                         if network.count > Self.limit {
                             Button(showAll.connections ? "Show fewer" : "Show all \(network.count)") { showAll.connections.toggle() }
-                                .buttonStyle(.link).font(.caption).padding(.vertical, 6)
+                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -336,13 +336,20 @@ struct PlaceChoices<Choice: Hashable>: View {
                 .labelsHidden().fixedSize().controlSize(.small)
                 .help("What happens when a program not in your list below uses \(place)")
                 Spacer(minLength: 12)
-                Button("Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
-                    .help("Always allow a program here, without asking")
-                Button("Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
-                    .help("Always block a program here")
+                // One labelled button, styled like the page's other buttons: an action, not a link (HIG). Blue link
+                // text on every card was noise, and a bare + was easy to miss.
+                Menu {
+                    Button("Always Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
+                    Button("Always Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
+                } label: {
+                    Label("Add Program", systemImage: "plus")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .fixedSize()
+                .help("Always allow, or always block, a program here")
             }
-            .buttonStyle(.link)
-            .controlSize(.small)
             ExceptionChips(exceptions: $exceptions)
         }
     }

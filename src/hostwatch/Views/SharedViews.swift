@@ -472,7 +472,7 @@ struct GroupBand: View {
             Spacer(minLength: 12)
             HStack(spacing: 14) {
                 ForEach(links.indices, id: \.self) { i in
-                    Button(links[i].title, action: links[i].action).buttonStyle(.link).font(.system(size: 11.5))
+                    Button(links[i].title, action: links[i].action).buttonStyle(.glass).controlSize(.small).font(.system(size: 11.5))
                 }
                 ForEach(notes, id: \.self) { Text($0).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary) }
                 if newCount > 0 { Text("\(newCount) New").font(.system(size: 11)).foregroundStyle(.orange) }
