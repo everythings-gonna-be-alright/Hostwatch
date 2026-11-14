@@ -6,7 +6,7 @@
 
 - **AI checks paused programs first.** With Protection on Ask, a launch or file access Hostwatch doesn't know is
   first looked at by the AI you chose (on-device or your own server). If it's sure the program is safe, it goes on,
-  this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI", with a
+  this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI", with a green
   progress ring filling over the seconds the program waits, then "allowed by AI", even with every window
   closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.

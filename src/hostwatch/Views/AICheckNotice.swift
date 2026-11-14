@@ -125,11 +125,12 @@ private struct WaitRing: View {
                 Circle().stroke(Color.primary.opacity(0.12), lineWidth: 2.5)
                 Circle()
                     .trim(from: 0, to: max(0.02, done))
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    // Green, not the accent colour: a graphite accent made it grey, and the check leads to "allowed".
+                    .stroke(Color.green, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Image(systemName: "sparkles")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(.green)
                     .symbolEffect(.pulse, options: .repeating)
             }
             .frame(width: 24, height: 24)
