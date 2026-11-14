@@ -458,26 +458,12 @@ struct PatternsView: View {
             Divider().frame(height: 16)
             if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
             // The same control as on Events: flat, one row per program, or one row per AI session.
-            Picker("Group", selection: Binding(
+            IconSegments(grouping: Binding(
                 get: { signatures.groupBySession ? EventGrouping.session : signatures.groupByProcess ? .process : .none },
                 set: { choice in
                     signatures.groupBySession = choice == .session
                     signatures.groupByProcess = choice == .process
-                })) {
-                ForEach(EventGrouping.allCases, id: \.self) { g in
-                    Group {
-                        if compact {
-                            Label(g.title, systemImage: g.symbol).labelStyle(.iconOnly)
-                        } else {
-                            Label(g.title, systemImage: g.symbol).labelStyle(.titleAndIcon)
-                        }
-                    }
-                    .help(g.title).tag(g)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+                }), compact: compact)
             .help("Group the patterns: flat, one row per program, or one row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI) with the patterns it produced under it, seen-once ones included; the rest under No AI session")
             Menu {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in

@@ -353,18 +353,7 @@ struct ActivityWindowView: View {
         HStack(spacing: 12) {
             Divider().frame(height: 16)
             if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
-            Picker("Group", selection: $model.eventGrouping) {
-                ForEach(EventGrouping.allCases, id: \.self) { g in
-                    Group {
-                        if compact { Label(g.title, systemImage: g.symbol).labelStyle(.iconOnly) }
-                        else { Label(g.title, systemImage: g.symbol).labelStyle(.titleAndIcon) }
-                    }
-                    .help(g.title).tag(g)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            IconSegments(grouping: $model.eventGrouping, compact: compact)
             .help(runningNow ? "Group the processes: flat, under their parent process, or under the AI session (Claude Code…) they belong to"
                   : "Group the list: flat, one row per program, or one row per AI session (Claude Code…) with its events under it")
         }
@@ -383,29 +372,12 @@ struct ActivityWindowView: View {
     private func filterRow(compact: Bool) -> some View {
         HStack(spacing: 12) {
             let heavyCount = heavy.entries.count
-            Picker("View", selection: $running.showing) {
-                // A segmented control shows a label's title alone unless asked: the icons tell the two apart at a glance.
-                Group {
-                    if compact { Label("Events", systemImage: "list.bullet").labelStyle(.iconOnly) }
-                    else { Label("Events", systemImage: "list.bullet").labelStyle(.titleAndIcon) }
-                }
-                .help("Events").tag(false)
-                // Where the heavy card folds to: a flame and the count while something runs heavy.
-                Group {
-                    if compact && heavyCount > 0 {
-                        Label("\(heavyCount)", systemImage: "flame.fill").labelStyle(.titleAndIcon)    // the flame and its count
-                    } else if compact {
-                        Label("Running Now", systemImage: "cpu").labelStyle(.iconOnly)
-                    } else {
-                        Label(heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
-                              systemImage: heavyCount > 0 ? "flame.fill" : "cpu").labelStyle(.titleAndIcon)
-                    }
-                }
-                .help("Running Now").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            // Where the heavy card folds to: a flame and the count while something runs heavy.
+            IconSegments(selection: $running.showing, items: [
+                .init(value: false, title: "Events", symbol: "list.bullet"),
+                .init(value: true, title: heavyCount > 0 ? "Running Now  \(heavyCount)" : "Running Now",
+                      symbol: heavyCount > 0 ? "flame.fill" : "cpu"),
+            ], compact: compact)
             .help(traveling ? "Events: what happened in the window · Running Now: what was running at the playhead (⌥⌘R)"
                   : "Events: what happened · Running Now: every process running at this moment (⌥⌘R)")
             if runningNow {
