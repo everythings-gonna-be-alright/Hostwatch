@@ -1,69 +1,50 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 – AI that checks first, and a window that fits
 
-### New
-
-- **A security policy and a threat model.** `SECURITY.md` says how to report a vulnerability privately, what is in
-  scope and how quickly you'll hear back. A new docs chapter, *Threat model and attack coverage*, says what Hostwatch
-  defends against and what it doesn't, how it protects itself, its known weaknesses, and which MITRE ATT&CK
-  techniques it alerts on, can stop, only records, or misses.
-
-- **Clearer Protection charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers now add up
-  what its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers
-  an Audio Graph. The Network card counts the same new destinations in its numbers and its chart. In a large or full-screen
-  window the charts grow into the spare height instead of leaving it empty, and the Overview's panels are Liquid
-  Glass.
-
-- **A clearer menu bar.** Menus are named for what they act on: *History* (Time Travel, the list), *Selection* (Ask
-  AI, Watch Closely, Show Launch Chain, Mark As, Exclude) and a new *Protection* menu with every security switch:
-  whether you're protected, a timed pause, the mode of each area, holds and the collector. *File ▸ Export Events…*
-  saves the list or the selection as JSON lines. Filters in *View ▸ Show* are enabled only in the tab they apply to.
-  The menu bar icon says whether you're protected, opens Rules, and offers a timed *Pause Protection*.
-
-- **Patterns and Protection, each in its own tab.** The Rules tab mixed decisions about patterns with protection.
-  Now the Patterns tab has a sidebar with All Patterns (the table), Needs You, Rules and Decisions, and carries the
-  badge for what waits for you. The old Rules tab is the Protection tab: Overview, Protected Files and Folders,
-  Network Firewall and Found. ⌘2 and ⌘3 still open them. The Settings button is back in the toolbar, after the HUD
-  button, and the Protection tab has no search field, since it has nothing to search. Every Protection page now uses
-  Liquid Glass panels like the Overview, and the selected tab stands out clearly with any accent colour.
-
-- **Patterns fit the window.** Each pattern now takes two lines in four columns: the process over its pattern,
-  who decided over the signer and reason, the count over when it was last seen. Nothing runs off the right edge any
-  more. *View ▸ Two-Line Rows* switches back to the one-line table with ten columns.
-- **Collapse the sidebar to icons.** The Patterns and Protection sidebars fold into a narrow rail of icons for a
-  wider table, keeping the current page highlighted and the badges in view, so you never lose where you are. The
-  small button beside the sidebar's title (at the top of the rail) or *View ▸ Collapse Sidebar* (⌃⌘S)
-  switches. Each tab remembers its choice. Both are a floating pane of Liquid Glass, as macOS draws its own
-  sidebars.
+### New: Protection
 
 - **AI checks paused programs first.** With Protection on Ask, a launch or file access Hostwatch doesn't know is
   first looked at by the AI you chose (on-device or your own server). If it's sure the program is safe, it goes on,
   this time only, and you aren't interrupted. A glass notice at the top right shows "Checking … with AI" and then
   "allowed by AI", even with every window closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.
-- **Icons on the Events switches.** *Events* and *Running Now*, and *No Groups*, *By Process* and *By AI Session*
-  on Events and Patterns, show their icons beside their names, so they read at a glance. The selected one is raised
-  like the selected tab, readable with any accent colour.
+- **Protection has its own tab.** The Rules tab mixed decisions about patterns with protection. The Protection tab
+  holds Overview, Protected Files and Folders, Network Firewall and Found, every page in Liquid Glass panels.
+- **Clearer charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers add up what
+  its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers an
+  Audio Graph. In a large or full-screen window the charts grow into the spare height.
+- **Found clears itself, and in bulk.** Entries that don't happen again leave Found by themselves, a question after a
+  week, something that would be stopped after a month. A *Forget* menu clears the questions, what's older than a
+  day, or everything at once. Decisions and patterns stay, and anything that happens again comes back.
+
+### New: Patterns and the window
+
+- **Patterns fit the window.** The Patterns tab has a sidebar with All Patterns, Needs You, Rules and Decisions, and
+  carries the badge for what waits for you. Each pattern takes two lines in four columns: the process over its
+  pattern, who decided over the signer and reason, the count over when it was last seen. *View ▸ Two-Line Rows*
+  switches back to the one-line table.
+- **Collapse the sidebar to icons.** The Patterns and Protection sidebars fold into a narrow glass rail of icons,
+  keeping the current page highlighted and the badges in view. The small button beside the sidebar's title or *View ▸
+  Collapse Sidebar* (⌃⌘S) switches, and each tab remembers its choice.
+- **A clearer menu bar.** Menus are named for what they act on: *History* (Time Travel, the list), *Selection* (Ask
+  AI, Watch Closely, Show Launch Chain, Mark As, Exclude) and a new *Protection* menu with every security switch:
+  whether you're protected, a timed pause, each area's mode, holds and the collector. *File ▸ Export Events…* saves the
+  list or the selection as JSON lines. The menu bar icon says whether you're protected and offers a timed *Pause
+  Protection*.
+- **A tidier toolbar.** The Settings button is back, the Protection tab has no search field since it has nothing to
+  search, the selected tab stands out with any accent colour, and the Events switches show their icons.
 - **The HUD starts hidden.** A new install opens with the window and the menu bar icon only. Turn the HUD on with
-  *View ▸ Show HUD* (⌃⌥⌘H) or from the menu bar icon. If you already turned it on or off, your choice stays.
+  *View ▸ Show HUD* (⌃⌥⌘H) or from the menu bar icon. A choice you already made stays.
+
+### New: security documents
+
+- **A security policy and a threat model.** `SECURITY.md` says how to report a vulnerability privately. A new docs
+  chapter, *Threat model and attack coverage*, says what Hostwatch defends against and what it doesn't, its known
+  weaknesses, and which MITRE ATT&CK techniques it alerts on, can stop, only records, or misses.
 
 ### Fixes
 
-- **Found clears itself, and in bulk.** Entries that don't happen again leave Protection ▸ Found by themselves, a
-  question after a week, something that would be stopped after a month. A *Forget* menu clears the questions, what's
-  older than a day, or everything at once. Only list entries go: decisions and patterns stay, and anything that
-  happens again comes back.
-- **Events fits a narrow window.** Its bar no longer cuts off at both ends: it drops its captions, shows icons for
-  Events and Running Now and for grouping, and puts the decision filter in one pop-up when space is short. The
-  pop-up no longer shows a second "Show", and the captions never break onto two lines.
-- **Protection fits a narrow window too.** Its three cards sit side by side when there's room, two and one when
-  there isn't, one per row in a very narrow window. The window can't be made smaller than 1,240 × 720 points, the
-  size at which the whole toolbar, search field included, and every page still fit.
-- **Patterns fits a narrow window.** The filter bar was wider than a small window and pushed the whole page past
-  its edges, the sidebar off the left and the columns off the right. It now drops its captions and shows icons when
-  space is short, and scrolls sideways as a last resort.
-- **The zebra stripes are back on Patterns without groups.** In two-line rows every row looked striped.
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
   time limit, so patterns, stories and threat lists stopped until someone resumed it. It is now *Pause List*: the list
   stops so you can read it, detection goes on, and what arrived meanwhile appears on resume.
@@ -71,6 +52,9 @@
   Dropbox and similar platforms, and Hostwatch flagged the whole platform. A platform anyone can publish to is no
   longer flagged by one file on it, nor is a host shared by three or more malware families. Earlier alerts for these
   hosts are cleared.
+- **Every page fits a smaller window.** The Events and Patterns bars drop their captions and show icons when space is
+  short instead of cutting off, and the Protection cards wrap. The window can't be made smaller than 1,240 × 720
+  points, where the whole toolbar fits.
 
 ## 0.15.0 – Protection, and the AI you choose
 
