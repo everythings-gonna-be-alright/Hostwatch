@@ -20,7 +20,7 @@ struct NetworkFirewallPage: View {
                 numbers(found)
                 if !firewall.prompts.isEmpty { waiting }
                 FirewallRulesSection(firewall: firewall, signatures: signatures)
-                if let protection { AccessRulesSection(protection: protection, kind: .network) }
+                if let protection { DestinationsSection(protection: protection) }
                 findings(found)
                 howItDecides
             }
@@ -311,4 +311,94 @@ struct FirewallRulesSection: View {
             action().controlSize(.small)
         }
     }
+}
+
+/// Your destinations, shaped like protected places: a domain (its subdomains too) or an IP, what any other program
+/// meets there (Firewall decides, Allow or Block), and programs you always allow or always block, as chips.
+struct DestinationsSection: View {
+    @ObservedObject var protection: ProtectionMonitor
+    @StateObject private var adding = DestinationDraft()
+
+    static let options: [(DestinationChoice, String)] = [(.firewall, "Firewall decides"), (.allow, "Allow"), (.block, "Block")]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Your destinations").font(.headline)
+                Spacer()
+                Button { adding.open = true } label: { Label("Add Destination…", systemImage: "plus") }
+                    .buttonStyle(.glass).controlSize(.small)
+            }
+            Text("A domain (its subdomains too) or an IP address, with what any other program meets there and the programs "
+                 + "you always allow or always block. Your decisions, before threat lists and patterns.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if adding.open { addRow }
+            if protection.destinations.isEmpty && !adding.open {
+                Text("None yet. Block a domain for every program, or always allow one app to a server.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            ForEach(protection.destinations) { d in card(d) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(16)
+    }
+
+    private var addRow: some View {
+        let problem = adding.text.isEmpty ? nil : Destinations.refusal(adding.text)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                TextField("example.com or 203.0.113.9", text: $adding.text)
+                    .textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                    .onSubmit(add)
+                Button("Cancel") { adding.open = false; adding.text = "" }.controlSize(.small)
+                Button("Add", action: add).buttonStyle(.glassProminent).controlSize(.small)
+                    .disabled(adding.text.isEmpty || problem != nil)
+            }
+            if let problem { Label(problem, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
+        }
+    }
+
+    private func add() {
+        let target = adding.text.trimmingCharacters(in: .whitespaces).lowercased()
+        guard Destinations.refusal(target) == nil else { return }
+        if !protection.destinations.contains(where: { $0.target == target }) {
+            protection.destinations.append(Destination(target: target))
+        }
+        adding.open = false
+        adding.text = ""
+    }
+
+    /// The same card as a protected place: name and what it covers, on and off, then the choices and the chips.
+    private func card(_ d: Destination) -> some View {
+        let binding = { (change: @escaping (inout Destination) -> Void) in
+            if let i = protection.destinations.firstIndex(where: { $0.id == d.id }) { change(&protection.destinations[i]) }
+        }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: d.isIP ? "number" : "globe").foregroundStyle(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(d.target).font(.system(size: 13, weight: .medium, design: .monospaced))
+                    Text(d.isIP ? "This IP address" : "And its subdomains").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(get: { d.on }, set: { on in binding { $0.on = on } }))
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                Button { protection.destinations.removeAll { $0.id == d.id } } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless).help("Remove \(d.target)")
+            }
+            PlaceChoices(others: Binding(get: { d.others }, set: { v in binding { $0.others = v } }), options: Self.options,
+                         exceptions: Binding(get: { d.exceptions }, set: { e in binding { $0.exceptions = e } }), place: d.target)
+                .disabled(!d.on).opacity(d.on ? 1 : 0.5)
+                .padding(.leading, 32)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .protectionGlass(14)
+    }
+}
+
+/// The destination being typed (no @State macro with the command line tools).
+final class DestinationDraft: ObservableObject {
+    @Published var open = false
+    @Published var text = ""
 }

@@ -47,6 +47,7 @@ struct ProtectionView: View {
     var go: (RulesSegment) -> Void = { _ in }
 
     private static let limit = 40
+    static let placeOptions: [(ProtectionVerdict, String)] = [(.ask, "Ask me"), (.block, "Block")]
     /// "Show all": a long section opens in full on request (the first 40 keep the page quick).
     @StateObject private var showAll = FoundExpansion()
     private static let relative: RelativeDateTimeFormatter = {
@@ -122,7 +123,7 @@ struct ProtectionView: View {
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
         }
             PlaceChoices(others: Binding(get: { place.others }, set: { v in binding { $0.others = v } }),
-                         exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }),
+                         options: Self.placeOptions, exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }),
                          place: place.name)
                 .disabled(!place.on).opacity(place.on ? 1 : 0.5)
                 .padding(.leading, 32)
@@ -153,7 +154,7 @@ struct ProtectionView: View {
         }
             PlaceChoices(others: Binding(get: { setting.others }, set: { v in
                 var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.others = v; protection.groups[group.id] = s
-            }), exceptions: exceptions, place: group.title)
+            }), options: Self.placeOptions, exceptions: exceptions, place: group.title)
                 .disabled(!setting.on).opacity(setting.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
@@ -317,8 +318,11 @@ final class FoundExpansion: ObservableObject {
 
 /// A place's choices, as a sentence: what any other program meets (Ask me or Block), and the programs you always
 /// allow or always block there, added with visible buttons and shown as chips. "Others: Ask" said none of this.
-struct PlaceChoices: View {
-    @Binding var others: ProtectionVerdict
+struct PlaceChoices<Choice: Hashable>: View {
+    @Binding var others: Choice
+    /// The choices for any other program, in order: Ask me and Block for a place, Firewall decides, Allow and Block
+    /// for a destination. One component, so folders and destinations read the same.
+    let options: [(Choice, String)]
     @Binding var exceptions: PlaceExceptions
     let place: String
 
@@ -327,16 +331,15 @@ struct PlaceChoices: View {
             HStack(spacing: 8) {
                 Text("Any other program").font(.callout).foregroundStyle(.secondary)
                 Picker("Any other program", selection: $others) {
-                    Text("Ask me").tag(ProtectionVerdict.ask)
-                    Text("Block").tag(ProtectionVerdict.block)
+                    ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
                 }
                 .labelsHidden().fixedSize().controlSize(.small)
-                .help("What happens when a program not expected in \(place), and not in your list below, opens it")
+                .help("What happens when a program not in your list below uses \(place)")
                 Spacer(minLength: 12)
                 Button("Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
-                    .help("Always let a program into \(place), without asking")
+                    .help("Always allow a program here, without asking")
                 Button("Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
-                    .help("Always stop a program in \(place)")
+                    .help("Always block a program here")
             }
             .buttonStyle(.link)
             .controlSize(.small)

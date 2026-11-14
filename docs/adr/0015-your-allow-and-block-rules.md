@@ -25,3 +25,10 @@ other. Files now have one model. Every place (a built-in group or yours) has `Pl
 allowed and always blocked there, decided before the pattern's status, Block when a program is on both, the deepest
 place first. "Allow any program" is no longer a choice for files: a place is protected or it isn't. Earlier file rules
 are moved into the place that covers them (`moveFileRulesIntoPlaces`). Network rules stay `AccessRule`, unchanged.
+
+**Update: destinations share the places' design.** Network rules became `Destination`: a domain (its subdomains too)
+or an IP, a choice for any other program (Firewall decides, Allow or Block) and the same `PlaceExceptions`, shown with
+the same components as a protected place (`PlaceChoices`, `ExceptionChips`). The most specific destination decides,
+its exceptions first, Block when a program is on both, and Firewall decides leaves it to the mode. FirewallPolicy takes
+the decision as `yours`. Saved network rules move into destinations (`Destinations.from`). `AccessRule` remains only to
+read what the short-lived list saved.

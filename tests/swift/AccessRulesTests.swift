@@ -5,62 +5,49 @@ import Testing
 /// Your Allow and Block rules: matched most specific first (Block on a tie), refused where allowing every program
 /// would open a whole area or a secret, and applied by Protection and the firewall before anything automatic.
 @MainActor @Suite struct AccessRuleMatching {
-    let home = "/Users/someone"
-    func file(_ target: String, _ action: AccessRule.Action, program: String? = nil) -> AccessRule {
-        AccessRule(kind: .files, target: target, program: program, action: action)
-    }
-
     @Test func aFolderCoversWhatsInsideAndAnAppItsPrograms() {
-        let rules = [file("\(home)/Documents/contracts", .block)]
-        #expect(AccessRules.matchFile(rules, path: "\(home)/Documents/contracts/nda.pdf", program: "/usr/bin/cat") != nil)
-        #expect(AccessRules.matchFile(rules, path: "\(home)/Documents/contracts-old/x", program: "/usr/bin/cat") == nil)
+        #expect(AccessRules.covers("/tmp/contracts", "/tmp/contracts/nda.pdf"))
+        #expect(!AccessRules.covers("/tmp/contracts", "/tmp/contracts-old/x"))
+        #expect(AccessRules.covers("/var/tmp/x", "/private/var/tmp/x/y"))
         #expect(AccessRules.runs("/Applications/Preview.app", "/Applications/Preview.app/Contents/MacOS/Preview"))
         #expect(!AccessRules.runs("/Applications/Preview.app", "/Applications/Preview.application"))
-        #expect(AccessRules.covers("/var/tmp/x", "/private/var/tmp/x/y"))
+    }
+}
+
+/// Network destinations, shaped like places: a domain covers its subdomains, the most specific decides, its program
+/// exceptions first (Block when on both), then its choice for any other program, before threat lists and patterns.
+@MainActor @Suite struct DestinationsDecide {
+    @Test func theMostSpecificDestinationAndItsExceptionsDecide() {
+        var wide = Destination(target: "example.com"); wide.others = .block
+        var narrow = Destination(target: "api.example.com"); narrow.exceptions.allowed = ["/Applications/Slack.app"]
+        let list = [wide, narrow]
+        #expect(Destinations.decide(list, host: "cdn.example.com", ip: "1.2.3.4", program: "/x")?.verdict == .block)
+        #expect(Destinations.decide(list, host: "api.example.com", ip: "1.2.3.4",
+                                    program: "/Applications/Slack.app/Contents/MacOS/Slack")?.verdict == .allow)
+        #expect(Destinations.decide(list, host: "api.example.com", ip: "1.2.3.4", program: "/x") == nil)   // firewall decides
+        #expect(Destinations.decide(list, host: "notexample.com", ip: "1.2.3.4", program: "/x") == nil)
+        var both = Destination(target: "203.0.113.9"); both.exceptions = PlaceExceptions(allowed: ["/x"], blocked: ["/x"])
+        #expect(Destinations.decide([both], host: "", ip: "203.0.113.9", program: "/x")?.verdict == .block)
     }
 
-    @Test func theMostSpecificWinsAndBlockWinsATie() {
-        let preview = "/Applications/Preview.app"
-        let rules = [file("\(home)/Documents", .block), file("\(home)/Documents/contracts", .allow, program: preview),
-                     file("\(home)/Documents/contracts", .block)]
-        #expect(AccessRules.matchFile(rules, path: "\(home)/Documents/contracts/a", program: preview + "/Contents/MacOS/Preview")?.action == .allow)
-        #expect(AccessRules.matchFile(rules, path: "\(home)/Documents/contracts/a", program: "/usr/bin/curl")?.action == .block)
-        let tie = [file("\(home)/x", .allow), file("\(home)/x", .block)]
-        #expect(AccessRules.matchFile(tie, path: "\(home)/x/y", program: "/bin/cat")?.action == .block)
-        #expect(AccessRules.matchFile([file("\(home)/x", .block).with { $0.on = false }], path: "\(home)/x/y", program: "/bin/cat") == nil)
+    @Test func onlyWholeDomainsAndIPs() {
+        #expect(Destinations.refusal("example.com") == nil && Destinations.refusal("203.0.113.9") == nil)
+        #expect(Destinations.refusal("com") != nil && Destinations.refusal("https://example.com/x") != nil)
     }
 
-    @Test func aDomainCoversItsSubdomains() {
-        let rules = [AccessRule(kind: .network, target: "example.com", program: nil, action: .block),
-                     AccessRule(kind: .network, target: "203.0.113.9", program: nil, action: .allow)]
-        #expect(AccessRules.matchNetwork(rules, host: "api.example.com", ip: "1.2.3.4", program: "/x")?.action == .block)
-        #expect(AccessRules.matchNetwork(rules, host: "notexample.com", ip: "1.2.3.4", program: "/x") == nil)
-        #expect(AccessRules.matchNetwork(rules, host: "", ip: "203.0.113.9", program: "/x")?.action == .allow)
-    }
-
-    @Test func allowingEveryProgramAWholeAreaOrASecretIsRefused() {
-        let sensitive = ["\(home)/.ssh"]
-        func refused(_ r: AccessRule) -> Bool { AccessRules.refusal(r, home: home, sensitive: sensitive) != nil }
-        #expect(refused(file(home, .allow)))
-        #expect(refused(file("\(home)/Documents", .allow)))
-        #expect(refused(file("/tmp", .allow)))
-        #expect(refused(file("\(home)/.ssh", .allow)))
-        #expect(!refused(file("\(home)/Documents/site", .allow)))                      // a project folder: fine
-        #expect(!refused(file("\(home)/.ssh", .allow, program: "/usr/bin/ssh")))         // one program: your call
-        #expect(!refused(file(home, .block)))                                            // Block may be broad
-        #expect(refused(AccessRule(kind: .network, target: "com", program: nil, action: .allow)))
-        #expect(!refused(AccessRule(kind: .network, target: "github.com", program: nil, action: .allow)))
-    }
-
-    @Test func theFirewallAppliesNetworkRulesFirst() {
-        let suite = "rules-\(UUID().uuidString)"
+    @Test func yourDecisionComesBeforeThreatListsAndOldRulesMoveIn() {
+        let suite = "dest-\(UUID().uuidString)"
         let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
                                   fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json"))
-        m.accessRules = [AccessRule(kind: .network, target: "example.com", program: nil, action: .allow)]
+        m.accessRules = [AccessRule(kind: .network, target: "Example.com", program: nil, action: .allow),
+                         AccessRule(kind: .network, target: "example.com", program: "/usr/bin/curl", action: .block)]
+        m.moveNetworkRulesIntoDestinations()
+        #expect(m.accessRules.isEmpty && m.destinations.count == 1)
+        #expect(m.destinations[0].others == .allow && m.destinations[0].exceptions.blocked == ["/usr/bin/curl"])
         let facts = FirewallFacts(program: "/x", proto: "TCP", ip: "93.184.216.34", port: "443", host: "api.example.com",
                                   risk: .high, riskReason: "downloaded", knownBad: "ThreatFox", patternKey: "k")
-        let rule = m.networkRule(host: facts.host, ip: facts.ip, program: facts.program)
-        #expect(FirewallPolicy.decide(facts, status: .dangerous, rule: rule).verdict == .allow)   // your rule first
+        let yours = m.networkDecision(host: facts.host, ip: facts.ip, program: facts.program)
+        #expect(FirewallPolicy.decide(facts, status: .dangerous, yours: yours).verdict == .allow)
         #expect(FirewallPolicy.decide(facts, status: .dangerous).verdict == .block)
     }
 }

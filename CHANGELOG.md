@@ -17,8 +17,9 @@
 - **Always allow or always block a program in a place.** Every protected place, built-in or your own, now reads as
   a sentence: the programs expected there, *Any other program: Ask me or Block*, and *Allow a Program…* and *Block a
   Program…*, your choices shown as chips under it. Your decision, before patterns and AI.
-- **Allow and block destinations.** On the Network Firewall page, allow or block a domain or IP address for one
-  program or any program, before threat lists and patterns. The most specific rule wins, and Block wins a tie.
+- **Your destinations.** On the Network Firewall page, add a domain or IP address and decide it the way you decide a
+  protected place: *Any other program: Firewall decides, Allow or Block*, plus programs you always allow or always
+  block there. Before threat lists and patterns, the most specific destination decides.
 - **Clearer charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers add up what
   its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers an
   Audio Graph. In a large or full-screen window the charts grow into the spare height.
