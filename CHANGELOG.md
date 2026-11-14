@@ -37,6 +37,9 @@
   switches. Each tab remembers its choice. Both are a floating pane of Liquid Glass, as macOS draws its own
   sidebars.
 
+- **The HUD starts hidden.** A new install opens with the window and the menu bar icon only. Turn the HUD on with
+  *View ▸ Show HUD* (⌃⌥⌘H) or from the menu bar icon. If you already turned it on or off, your choice stays.
+
 ### Fixes
 
 - **The zebra stripes are back on Patterns without groups.** In two-line rows every row looked striped.
