@@ -414,7 +414,17 @@ struct PatternsView: View {
             .padding(.vertical, 6)
     }
 
+    /// The first version of the bar that fits the window. Its controls keep their size, so a bar wider than the window
+    /// made the whole page wider: the sidebar went off the left edge, the columns off the right.
     private func toolbar(count: Int) -> some View {
+        ViewThatFits(in: .horizontal) {
+            bar(count: count, compact: false)
+            bar(count: count, compact: true)                      // no captions, icons for the grouping and marking
+            ScrollView(.horizontal, showsIndicators: false) { bar(count: count, compact: true) }
+        }
+    }
+
+    private func bar(count: Int, compact: Bool) -> some View {
         HStack(spacing: 10) {
             if let scope = signatures.scope {
                 HStack(spacing: 6) {
@@ -429,12 +439,16 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
-                Text("Show").font(.system(size: 11)).foregroundStyle(.secondary)
+                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary) }
                 ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important],
                                  allowsMenu: false)
                 let once = list.counts.oneOffs
                 Toggle(isOn: $signatures.showSeenOnce) {
-                    Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
+                    if compact {
+                        Label(once > 0 ? "\(once)" : "", systemImage: "1.circle")
+                    } else {
+                        Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
+                    }
                 }
                 .toggleStyle(.button)
                 .fixedSize()
@@ -442,7 +456,7 @@ struct PatternsView: View {
                       + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
             Divider().frame(height: 16)
-            Text("Group").font(.system(size: 11)).foregroundStyle(.secondary)
+            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary) }
             // The same control as on Events: flat, one row per program, or one row per AI session.
             Picker("Group", selection: Binding(
                 get: { signatures.groupBySession ? EventGrouping.session : signatures.groupByProcess ? .process : .none },
@@ -450,13 +464,22 @@ struct PatternsView: View {
                     signatures.groupBySession = choice == .session
                     signatures.groupByProcess = choice == .process
                 })) {
-                ForEach(EventGrouping.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                ForEach(EventGrouping.allCases, id: \.self) { g in
+                    Group {
+                        if compact {
+                            Label(g.title, systemImage: g.symbol).labelStyle(.iconOnly)
+                        } else {
+                            Label(g.title, systemImage: g.symbol).labelStyle(.titleAndIcon)
+                        }
+                    }
+                    .help(g.title).tag(g)
+                }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
             .help("Group the patterns: flat, one row per program, or one row per AI coding session (Claude Code, Cursor agent, Codex, Gemini CLI) with the patterns it produced under it, seen-once ones included; the rest under No AI session")
-            Menu("Mark Selected") {
+            Menu {
                 ForEach(SignatureStatus.allCases, id: \.self) { status in
                     Button(status == .unclassified ? "Unclassified" : status.title) {
                         signatures.set(status, keys: signatures.keys(forSelection: signatures.selection))
@@ -466,7 +489,10 @@ struct PatternsView: View {
                 Button("Combine Into One Pattern…") { combine.start(signatures.keys(forSelection: signatures.selection), signatures) }
                     .disabled(signatures.keys(forSelection: signatures.selection).count < 2)
                 Button("Delete Selected Patterns") { signatures.delete(keys: signatures.keys(forSelection: signatures.selection)) }
+            } label: {
+                if compact { Image(systemName: "checkmark.circle") } else { Text("Mark Selected") }
             }
+            .help("Mark the selected patterns")
             .disabled(signatures.selection.isEmpty)
             .fixedSize()
             Spacer()
@@ -705,3 +731,4 @@ private struct CombineSheet: View {
         .frame(width: 560)
     }
 }
+

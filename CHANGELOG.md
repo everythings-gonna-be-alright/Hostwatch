@@ -49,6 +49,9 @@
 
 ### Fixes
 
+- **Patterns fits a narrow window.** The filter bar was wider than a small window and pushed the whole page past
+  its edges, the sidebar off the left and the columns off the right. It now drops its captions and shows icons when
+  space is short, and scrolls sideways as a last resort.
 - **The zebra stripes are back on Patterns without groups.** In two-line rows every row looked striped.
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
   time limit, so patterns, stories and threat lists stopped until someone resumed it. It is now *Pause List*: the list
