@@ -53,11 +53,13 @@ struct ProtectionView: View {
 
     var body: some View {
         let _ = protection.revision
-        VStack(alignment: .leading, spacing: 22) {
-            switch page {
-            case .protectedFiles: files
-            case .protectionFound: findings
-            default: ProtectionOverview(protection: protection, firewall: firewall, connections: connections, go: go)
+        GlassEffectContainer(spacing: 12) {
+            VStack(alignment: .leading, spacing: 22) {
+                switch page {
+                case .protectedFiles: files
+                case .protectionFound: findings
+                default: ProtectionOverview(protection: protection, firewall: firewall, connections: connections, go: go)
+                }
             }
         }
     }
@@ -121,7 +123,7 @@ struct ProtectionView: View {
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary.opacity(0.35)))
+        .protectionGlass(14)
     }
 
     private func card(_ group: ProtectedGroup) -> some View {
@@ -148,7 +150,7 @@ struct ProtectionView: View {
             .labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary.opacity(0.35)))
+        .protectionGlass(14)
     }
 
     // MARK: Findings
@@ -168,23 +170,33 @@ struct ProtectionView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if !all.isEmpty {
                     Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
-                    ForEach(all.prefix(Self.limit)) { f in finding(f) }
-                    if all.count > Self.limit {
-                        Text("and \(all.count - Self.limit) more").font(.caption).foregroundStyle(.tertiary)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(all.prefix(Self.limit)) { f in finding(f) }
+                        if all.count > Self.limit {
+                            Text("and \(all.count - Self.limit) more").font(.caption).foregroundStyle(.tertiary)
+                        }
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .protectionGlass(16)
                 }
                 // Connections: the firewall's findings, decided the same way.
                 if !network.isEmpty {
                     Text("Connections").font(.subheadline.weight(.semibold)).padding(.top, 8)
-                    ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
-                        NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
-                            markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
+                            NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
+                                markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
+                            }
+                        }
+                        if network.count > Self.limit {
+                            Text("and \(network.count - Self.limit) more on the Network Firewall page").font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
                     }
-                    if network.count > Self.limit {
-                        Text("and \(network.count - Self.limit) more on the Network Firewall page").font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .protectionGlass(16)
                 }
             }
         }
@@ -214,5 +226,12 @@ struct ProtectionView: View {
         }
         .controlSize(.small)
         .padding(.vertical, 4)
+    }
+}
+
+extension View {
+    /// The Protection pages' panel: Liquid Glass, as the Overview's cards, optionally tinted (a warning in orange).
+    func protectionGlass(_ radius: CGFloat = 16, tint: Color? = nil) -> some View {
+        glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
