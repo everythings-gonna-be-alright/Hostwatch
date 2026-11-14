@@ -15,7 +15,13 @@ extension AppDelegate {
         protection.markPattern = { [weak self] key, status in
             self?.signatures.set(status, keys: [key], note: status == .safe ? "allowed in Protection" : "blocked in Protection")
         }
-        protection.onPromptsChange = { [weak self] in self?.refreshProtectionPanels() }
+        protection.onPromptsChange = { [weak self] in
+            self?.refreshProtectionPanels()
+            self?.refreshFirewallPanels()               // a held connection question may be next
+        }
+        protection.onLaunchAnswered = { [weak self] event, allowed in
+            self?.firewall.launchAnswered(pid: event.pid, name: event.name, allowed: allowed)
+        }
         protection.aiCheck = { [weak self] event in await self?.checkWithAI(event) }
         protection.onAIAllowed = { [weak self] ask, note in self?.aiNotices.allowed(ask, note: note) }
         firewall.networkRule = { [weak self] f in self?.protection.networkRule(host: f.host, ip: f.ip, program: f.program) }

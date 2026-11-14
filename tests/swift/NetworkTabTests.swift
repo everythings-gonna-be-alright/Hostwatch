@@ -182,3 +182,25 @@ import Testing
         #expect(fw.entries.isEmpty)
     }
 }
+
+/// One question at a time: a connection question from a program whose launch is being asked about follows that
+/// answer. Blocked launch: its connections are refused without deciding a pattern. Allowed: the question says so.
+@MainActor @Suite struct LaunchThenConnection {
+    @Test func blockedLaunchRefusesItsConnectionsWithoutDecidingThePattern() {
+        let (fw, store) = NetworkTab().firewall()
+        var refused: [String] = []
+        fw.answer = { key, allow, _ in if !allow { refused.append(key) } }
+        let prompt = try! #require(fw.prompts.first { $0.event.pid == 7 })
+        fw.launchAnswered(pid: 7, name: "curl", allowed: false)
+        #expect(fw.prompts.isEmpty && refused == [prompt.key])
+        #expect(store.entry(prompt.patternKey)?.status != .suspicious)       // the destination wasn't decided
+    }
+
+    @Test func allowedLaunchLetsTheConnectionQuestionSaySo() {
+        let (fw, _) = NetworkTab().firewall()
+        fw.launchAnswered(pid: 7, name: "curl", allowed: true)
+        #expect(fw.prompts.first { $0.event.pid == 7 }?.context == "You just allowed curl to run.")
+        fw.launchAnswered(pid: 999, name: "x", allowed: false)                  // another program: nothing happens
+        #expect(fw.prompts.count == 1)
+    }
+}

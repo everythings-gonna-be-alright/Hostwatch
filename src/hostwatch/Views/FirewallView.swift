@@ -135,6 +135,10 @@ struct FirewallPromptView: View {
                             .offset(x: 6, y: 4)
                     }
                     .accessibilityHidden(true)
+                if let context = prompt.context {
+                    Label(context, systemImage: "checkmark.circle.fill")
+                        .font(.callout.weight(.medium)).foregroundStyle(.green)
+                }
                 VStack(spacing: 5) {
                     Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
                          ?? (prompt.who == "Unknown program" ? "An unknown program wants to connect to \(prompt.destination)"

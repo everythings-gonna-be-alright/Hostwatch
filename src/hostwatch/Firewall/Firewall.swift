@@ -77,6 +77,8 @@ struct FirewallPrompt: Identifiable {
     let event: ActivityEvent
     let reason: String
     let since: Date
+    /// What you just decided about the same program ("You just allowed curl to run"), so two questions read as one.
+    var context: String? = nil
     var patternKey: String { event.signatureKey }
     var destination: String { event.host.isEmpty ? (event.remoteHost ?? event.target) : event.host }
     /// "Docker container" when a VM gateway carries it, else the program's name.
@@ -519,6 +521,22 @@ final class FirewallMonitor: ObservableObject {
             adviceWatch[id] = nil
             if let a = advice.removeValue(forKey: id), a.state == .asking { a.cancel() }
         }
+    }
+
+    /// You answered the launch question of the program these connections come from (Protection asks one question at
+    /// a time). Blocked: it was stopped, so its waiting connections are refused, without deciding any pattern (you
+    /// blocked the launch, not the destination). Allowed: the connection question comes next, saying so.
+    func launchAnswered(pid: Int, name: String, allowed: Bool) {
+        guard pid > 0, prompts.contains(where: { $0.event.pid == pid }) else { return }
+        if allowed {
+            for i in prompts.indices where prompts[i].event.pid == pid { prompts[i].context = "You just allowed \(name) to run." }
+        } else {
+            let mine = prompts.filter { $0.event.pid == pid }
+            prompts.removeAll { $0.event.pid == pid }
+            dropAdvice(mine.map(\.id))
+            for p in mine { answer?(p.key, false, 30) }
+        }
+        onPromptsChange?()
     }
 
     /// Your answer. Allow / Block decide the pattern, which answers the other waiting connections of that

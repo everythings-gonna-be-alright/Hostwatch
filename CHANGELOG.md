@@ -55,6 +55,9 @@
 
 ### Fixes
 
+- **One question at a time.** A command such as `curl https://example.com` raised a launch question and a connection
+  question at once. The connection question now waits for your launch answer: block the launch and it goes, allow it
+  and the connection question follows, saying you just allowed the program to run.
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
   time limit, so patterns, stories and threat lists stopped until someone resumed it. It is now *Pause List*: the list
   stops so you can read it, detection goes on, and what arrived meanwhile appears on resume.
