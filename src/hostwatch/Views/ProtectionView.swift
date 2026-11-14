@@ -187,7 +187,12 @@ struct ProtectionView: View {
                 }
                 // Connections: the firewall's findings, decided the same way.
                 if !network.isEmpty {
-                    Text("Connections").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    HStack {
+                        Text("Connections").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        if let firewall { ConnectionsForgetMenu(firewall: firewall, found: network) }
+                    }
+                    .padding(.top, 8)
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
                             NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
@@ -207,28 +212,13 @@ struct ProtectionView: View {
         }
     }
 
-    /// Clearing a long list at once. Only the entries go: decisions and patterns stay, and anything that happens again
-    /// comes back. Old entries also go by themselves (a question after a week, a stop after a month).
+    /// Launches and files: clearing a long list at once (only the entries go, see ForgetMenu).
     private func forgetMenu(_ all: [ProtectionFinding]) -> some View {
-        let questions = all.filter { $0.verdict == .ask }.count
         let dayAgo = Date().addingTimeInterval(-86_400)
-        let old = all.filter { $0.lastSeen < dayAgo }.count
-        return Menu {
-            Button("Forget Questions (\(questions))") { protection.forget { $0.verdict == .ask } }
-                .disabled(questions == 0)
-            Button("Forget Older Than a Day (\(old))") { protection.forget { $0.lastSeen < dayAgo } }
-                .disabled(old == 0)
-            Divider()
-            Button("Forget All (\(all.count))") { protection.forget { _ in true } }
-        } label: {
-            Label("Forget", systemImage: "eraser")
-        }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .fixedSize()
-        .help("Clear entries from this list. Decisions and patterns stay. What happens again comes back. "
-              + "Old entries also leave by themselves: a question after a week, a stop after a month.")
+        return ForgetMenu(questions: all.filter { $0.verdict == .ask }.count, older: all.filter { $0.lastSeen < dayAgo }.count,
+                          all: all.count, forgetQuestions: { protection.forget { $0.verdict == .ask } },
+                          forgetOlder: { protection.forget { $0.lastSeen < dayAgo } }, forgetAll: { protection.forget { _ in true } },
+                          after: "a question after a week, a stop after a month")
     }
 
     private func finding(_ f: ProtectionFinding) -> some View {
@@ -262,5 +252,50 @@ extension View {
     /// The Protection pages' panel: Liquid Glass, as the Overview's cards, optionally tinted (a warning in orange).
     func protectionGlass(_ radius: CGFloat = 16, tint: Color? = nil) -> some View {
         glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
+
+/// Found ▸ Forget: clears a long list at once. Only the entries go: decisions, rules and patterns stay, and anything
+/// that happens again comes back. Old entries also leave by themselves (`after` says when).
+struct ForgetMenu: View {
+    let questions: Int
+    let older: Int
+    let all: Int
+    let forgetQuestions: () -> Void
+    let forgetOlder: () -> Void
+    let forgetAll: () -> Void
+    let after: String
+
+    var body: some View {
+        Menu {
+            Button("Forget Questions (\(questions))", action: forgetQuestions).disabled(questions == 0)
+            Button("Forget Older Than a Day (\(older))", action: forgetOlder).disabled(older == 0)
+            Divider()
+            Button("Forget All (\(all))", action: forgetAll).disabled(all == 0)
+        } label: {
+            Label("Forget", systemImage: "eraser")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Clear entries from this list. Decisions, rules and patterns stay. What happens again comes back. "
+              + "Old entries also leave by themselves: \(after).")
+    }
+}
+
+/// The firewall's findings, forgotten from the list only (FirewallMonitor.dismiss): what would be blocked or asked.
+struct ConnectionsForgetMenu: View {
+    @ObservedObject var firewall: FirewallMonitor
+    let found: [(FirewallEntry, FirewallDecision)]
+
+    var body: some View {
+        let dayAgo = Date().addingTimeInterval(-86_400)
+        let questions = found.filter { $0.1.verdict == .ask }.map(\.0.id)
+        let older = found.filter { $0.0.lastSeen < dayAgo }.map(\.0.id)
+        ForgetMenu(questions: questions.count, older: older.count, all: found.count,
+                   forgetQuestions: { firewall.dismiss(questions) }, forgetOlder: { firewall.dismiss(older) },
+                   forgetAll: { firewall.dismiss(found.map(\.0.id)) },
+                   after: "a connection not seen for a week")
     }
 }

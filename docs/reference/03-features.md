@@ -773,8 +773,10 @@ the firewall does. Your decision on the pattern comes first, then its risk, then
 curl and other programs that run whatever they're told are judged by what they run.
 
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
-  something that would be stopped after a month. *Forget* clears the questions, entries older than a day, or all of
-  them. Only the list entries go: decisions and patterns stay, and what happens again comes back.
+  something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
+  files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than
+  a day, or all of them. Only the list entries go: decisions, rules and patterns stay, and what happens again comes
+  back.
 - **AI checks first (Ask):** a paused launch or file access is first looked at by the AI you chose (the on-device
   model or your own server, within 12 seconds). If it is sure it's safe, the program goes on, this time only, and a
   glass notice at the top right says so. It also shows "Checking … with AI" while it looks, whether or not a window

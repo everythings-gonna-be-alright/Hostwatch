@@ -167,3 +167,18 @@ import Testing
         #expect(store.status(forKey: entry.facts.patternKey) == .safe && fw.list(status: status).isEmpty)
     }
 }
+
+/// Found ▸ Forget for connections: the entries leave the list, and no decision, block or exception changes.
+@MainActor @Suite struct ConnectionsForget {
+    @Test func dismissRemovesOnlyTheListEntries() {
+        let (fw, _) = NetworkTab().firewall()
+        let before = fw.entries.count
+        let first = try! #require(fw.entries.keys.sorted().first)
+        let blocks = fw.domainBlocks
+        fw.dismiss([first, "not-there"])
+        #expect(fw.entries.count == before - 1 && fw.entries[first] == nil)
+        #expect(fw.domainBlocks == blocks)                          // rules untouched
+        fw.dismiss(Array(fw.entries.keys))
+        #expect(fw.entries.isEmpty)
+    }
+}
