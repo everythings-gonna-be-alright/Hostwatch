@@ -28,7 +28,8 @@ the ones a machine can check.
   text (the tab bar, `IconSegments`, the rail). The user's accent can be graphite, which made accent-tinted selection
   look unselected.
 - **Status colours are reserved:** red for stopped, blocked or critical, orange for attention and warnings, green for
-  allowed or safe, grey for pending or a question. Always with an icon or a word, never colour alone.
+  allowed or safe (and the AI check's progress ring, which leads to "allowed"), grey for pending or a question.
+  Never the accent colour for something that must be noticed: it can be graphite. Always with an icon or a word, never colour alone.
 
 ## 3. Type
 
