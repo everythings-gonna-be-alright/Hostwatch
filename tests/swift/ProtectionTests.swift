@@ -374,3 +374,14 @@ import Testing
         #expect(m2.prompts.first?.aiNote?.contains("No fast AI model") == true)
     }
 }
+
+/// The Overview's cards wrap instead of pushing past a narrow window: three across, then two and one, then one.
+@MainActor @Suite struct OverviewCardColumns {
+    @Test func cardsWrapByWidth() {
+        #expect(ProtectionOverview.columns(width: 0, cards: 3) == 3)          // before it's measured
+        #expect(ProtectionOverview.columns(width: 1200, cards: 3) == 3)
+        #expect(ProtectionOverview.columns(width: 600, cards: 3) == 2)
+        #expect(ProtectionOverview.columns(width: 300, cards: 3) == 1)
+        #expect(ProtectionOverview.columns(width: 2000, cards: 2) == 2)      // never more columns than cards
+    }
+}

@@ -150,7 +150,7 @@ struct ActivityWindowView: View {
             .onAppear { visitedTabs.insert(model.windowTab) }
             .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
         }
-        .frame(minWidth: 900, minHeight: 480)
+        .frame(minWidth: 960, minHeight: 600)      // every page fits from here: the Protection cards wrap, the Patterns bar compacts
         // The Patterns rows are ready before the tab is opened.
         .onAppear {
             patternList.sessionGroups = { [weak model] in
