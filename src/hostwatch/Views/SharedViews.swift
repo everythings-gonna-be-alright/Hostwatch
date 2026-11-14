@@ -384,6 +384,9 @@ struct RowBand: NSViewRepresentable {
             let existing = row.subviews.first { $0.identifier == Self.bandID } as? NSHostingView<AnyView>
             tint.table = table
             tint.needsDisplay = true
+            // A flat table with rows of varying height (Patterns in two lines) gets a filled background on every
+            // row from SwiftUI, which hid the zebra: every row looked striped. The stripes are ours, so rows are clear.
+            if row.backgroundColor != .clear { row.backgroundColor = .clear }
             // SwiftUI's row view draws a separator line under each row: the Events list has none.
             for sub in row.subviews where String(describing: type(of: sub)).contains("SeparatorDrawing") { sub.isHidden = true }
             guard let content else {

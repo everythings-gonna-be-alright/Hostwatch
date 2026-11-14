@@ -31,11 +31,13 @@
 - **Patterns fit the window.** Each pattern now takes two lines in four columns: the process over its pattern,
   who decided over the signer and reason, the count over when it was last seen. Nothing runs off the right edge any
   more. *View ▸ Two-Line Rows* switches back to the one-line table with ten columns.
-- **Hide the sidebar.** The Patterns and Protection tabs can hide their sidebar for a wider table, from the sidebar
-  button at the left of the toolbar or *View ▸ Hide Sidebar* (⌃⌘S). Each tab remembers its choice.
+- **Hide the sidebar.** The Patterns and Protection tabs can hide their sidebar for a wider table, with the small
+  sidebar toggle at the start of the page's bar (the same toggle as the inspector's, at the other end) or *View ▸
+  Hide Sidebar* (⌃⌘S). Each tab remembers its choice. Pages under a sidebar now name themselves in that bar.
 
 ### Fixes
 
+- **The zebra stripes are back on Patterns without groups.** In two-line rows every row looked striped.
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
   time limit, so patterns, stories and threat lists stopped until someone resumed it. It is now *Pause List*: the list
   stops so you can read it, detection goes on, and what arrived meanwhile appears on resume.

@@ -6,6 +6,19 @@ import SwiftUI
 enum RulesSegment: Int, CaseIterable {
     case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall
 
+    var title: String {
+        switch self {
+        case .allPatterns: "All Patterns"
+        case .needsYou: "Needs You"
+        case .rules: "Rules"
+        case .decided: "Decisions"
+        case .protectionOverview: "Overview"
+        case .protectedFiles: "Protected Files and Folders"
+        case .protectionFound: "Found"
+        case .firewall: "Network Firewall"
+        }
+    }
+
     /// The Protection tab's pages; the rest belong to the Patterns tab.
     var isProtection: Bool { rawValue >= RulesSegment.protectionOverview.rawValue }
     /// The window tab holding this page.
@@ -35,6 +48,23 @@ final class RulesTabState: ObservableObject {
     func sidebarShown(_ windowTab: Int) -> Bool { windowTab == 4 ? protectionSidebar : patternsSidebar }
     func toggleSidebar(_ windowTab: Int) {
         if windowTab == 4 { protectionSidebar.toggle() } else if windowTab == 1 { patternsSidebar.toggle() }
+    }
+}
+
+/// Hides or shows the left sidebar: the same small toggle as the right panel's (the Patterns inspector), at the
+/// other end of the bar. Only on pages that have a sidebar.
+struct SidebarToggle: View {
+    @ObservedObject var tab: RulesTabState
+    let windowTab: Int
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { tab.sidebarShown(windowTab) },
+                             set: { _ in withAnimation(.snappy(duration: 0.2)) { tab.toggleSidebar(windowTab) } })) {
+            Image(systemName: "sidebar.leading")
+        }
+        .toggleStyle(.button)
+        .controlSize(.small)
+        .help(tab.sidebarShown(windowTab) ? "Hide the sidebar (⌃⌘S)" : "Show the sidebar (⌃⌘S)")
     }
 }
 
@@ -115,8 +145,21 @@ struct RulesView: View {
         }
     }
 
+    /// The page's name, and the sidebar toggle: the bar the Patterns table has, for every other sidebar page.
+    private var pageBar: some View {
+        HStack(spacing: 10) {
+            SidebarToggle(tab: tab, windowTab: scope == .patterns ? 1 : 4)
+            Text(page.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+    }
+
     private var pages: some View {
         VStack(spacing: 0) {
+            pageBar
+            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     switch page {
