@@ -57,7 +57,7 @@
   Events and Running Now and for grouping, and puts the decision filter in one pop-up when space is short. The
   pop-up no longer shows a second "Show".
 - **Protection fits a narrow window too.** Its three cards sit side by side when there's room, two and one when
-  there isn't, one per row in a very narrow window. The window can't be made smaller than 1,120 × 640 points, the
+  there isn't, one per row in a very narrow window. The window can't be made smaller than 1,240 × 720 points, the
   size at which the whole toolbar, search field included, and every page still fit.
 - **Patterns fits a narrow window.** The filter bar was wider than a small window and pushed the whole page past
   its edges, the sidebar off the left and the columns off the right. It now drops its captions and shows icons when
