@@ -90,7 +90,7 @@ Earlier versions: see the [changelog](CHANGELOG.md).
 **🧠 Learn what's normal**
 - **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
 - **Patterns** – events grouped by behaviour and by program. Ordinary ones are decided automatically, so few need you.
-- **Rules tab** – *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what).
+- **Patterns tab** – the table of all patterns, *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what). **Protection** is its own tab.
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.

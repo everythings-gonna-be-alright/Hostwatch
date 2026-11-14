@@ -52,7 +52,7 @@ final class SignatureStore: ObservableObject {
 
     // MARK: Learned rules
 
-    /// Active rules you approved (Rules tab). Authority: you > your rules > Claude/on-device > auto.
+    /// Active rules you approved (Patterns ▸ Rules). Authority: you > your rules > Claude/on-device > auto.
     private(set) var learnedRules: [LearnedRule] = []
     /// Called after you mark something, so rules can re-check themselves against your decisions.
     var onDecisionsChanged: (() -> Void)?

@@ -58,8 +58,7 @@ extension AppDelegate {
                                         host: "registry.npmjs.org", hostSource: "dns")
                 firewall.handleAsk(key: "demo", event: ask)
             case "protection":
-                rulesTab.segment = .protectionOverview
-                rulesTab.chosen = true
+                rulesTab.open(.protectionOverview)
                 model.windowTab = 4
             case "watch":
                 if let e = cleanerLaunch {

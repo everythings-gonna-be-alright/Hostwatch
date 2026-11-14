@@ -178,7 +178,7 @@ final class PatternClassifier: ObservableObject {
             .sorted { $0.risk != $1.risk ? $0.risk > $1.risk : $0.lastSeen > $1.lastSeen }
             .prefix(batchSize)
         guard !next.isEmpty else {
-            lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? ", verdicts applied." : ". See Rules ▸ Needs You.")
+            lastMessage = "Classified \(run.attempted.count) patterns" + (run.apply ? ", verdicts applied." : ". See Patterns ▸ Needs You.")
             bulk = nil
             return
         }

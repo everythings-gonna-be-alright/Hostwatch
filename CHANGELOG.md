@@ -21,6 +21,12 @@
   saves the list or the selection as JSON lines. Filters in *View ▸ Show* are enabled only in the tab they apply to.
   The menu bar icon says whether you're protected, opens Rules, and offers a timed *Pause Protection*.
 
+- **Patterns and Protection, each in its own tab.** The Rules tab mixed decisions about patterns with protection.
+  Now the Patterns tab has a sidebar with All Patterns (the table), Needs You, Rules and Decisions, and carries the
+  badge for what waits for you. The old Rules tab is the Protection tab: Overview, Protected Files and Folders,
+  Network Firewall and Found. ⌘2 and ⌘3 still open them. The Settings button is back in the toolbar, after the HUD
+  button.
+
 ### Fixes
 
 - **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no

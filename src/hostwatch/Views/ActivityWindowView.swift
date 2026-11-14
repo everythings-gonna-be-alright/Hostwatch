@@ -177,7 +177,7 @@ struct ActivityWindowView: View {
         .toolbar { toolbarContent }
         .searchable(text: searchText, placement: .toolbar,
                     prompt: ["Name, path, host, PID", "Process or pattern", "Chain, process, path",
-                             "Domain, host, program", "Not used on Rules", "Not used on Overview"][min(model.windowTab, 5)])
+                             "Domain, host, program", "Not used on Protection", "Not used on Overview"][min(model.windowTab, 5)])
         .navigationTitle("Hostwatch")
         .navigationSubtitle(subtitle)
     }
@@ -196,27 +196,38 @@ struct ActivityWindowView: View {
                 } else {
                     eventsList
                 }
-            case 1: PatternsView(signatures: signatures, classifier: classifier, actions: actions,
-                                 filter: $model.signatureFilter, list: patternList, active: model.windowTab == 1)
+            case 1: patternsAndProtection(.patterns)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
-            default: RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
-                               protection: model.protection, firewall: firewall,
-                               showPatterns: { app in
-                                   signatures.scope = nil
-                                   signatures.search = app
-                                   model.windowTab = 1
-                               },
-                               showKeys: { title, keys in
-                                   signatures.search = ""
-                                   signatures.scope = .init(title: title, keys: Set(keys))
-                                   model.windowTab = 1
-                               },
-                               showNetwork: { model.windowTab = 3 })
+            default: patternsAndProtection(.protection)
             }
+    }
+
+    /// The Patterns tab (the table, Needs You, Rules, Decisions) and the Protection tab: one sidebar style, each
+    /// with its own section. Links between them open the page in whichever tab holds it.
+    private func patternsAndProtection(_ scope: RulesScope) -> some View {
+        RulesView(book: rules, signatures: signatures, classifier: classifier, baseline: baseline, tab: rulesTab,
+                  scope: scope,
+                  allPatterns: scope == .patterns ? AnyView(PatternsView(signatures: signatures, classifier: classifier,
+                                                                          actions: actions, filter: $model.signatureFilter,
+                                                                          list: patternList, active: model.windowTab == 1)) : nil,
+                  protection: model.protection, firewall: firewall,
+                  showPatterns: { app in
+                      signatures.scope = nil
+                      signatures.search = app
+                      rulesTab.open(.allPatterns)
+                      model.windowTab = 1
+                  },
+                  showKeys: { title, keys in
+                      signatures.search = ""
+                      signatures.scope = .init(title: title, keys: Set(keys))
+                      rulesTab.open(.allPatterns)
+                      model.windowTab = 1
+                  },
+                  showNetwork: { model.windowTab = 3 })
     }
 
     /// Running Now follows the playhead while traveling, the present otherwise.
@@ -253,7 +264,7 @@ struct ActivityWindowView: View {
         case 2: return "\(state) · \(stories.activeCount) open stories"
         case 3:
             return "\(state) · \(domains.newCount) new domains" + (firewall.prompts.isEmpty ? "" : " · \(firewall.prompts.count) waiting")
-        default: return "\(state) · \(rules.activeCount) active rules"
+        default: return state                       // Protection: the state already says whether you are protected
         }
     }
 
@@ -265,9 +276,9 @@ struct ActivityWindowView: View {
         let dangerous = stories.stories.filter { !$0.dismissed && $0.severity == .dangerous }.count
         return [
             .init(id: 0, title: "Events", symbol: "list.bullet.rectangle"),
-            .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up"),
-            .init(id: 4, title: "Rules", symbol: "checklist",
+            .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up",
                   badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .accentColor),
+            .init(id: 4, title: "Protection", symbol: "shield.lefthalf.filled"),
             .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
                   badge: dangerous > 0 ? "\(dangerous)" : nil, badgeTint: .red),
             .init(id: 3, title: "Network", symbol: "network.badge.shield.half.filled",
@@ -297,6 +308,8 @@ struct ActivityWindowView: View {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")
             }
             .help("Show or hide the HUD overlay (⌃⌥⌘H)")
+            Button(action: actions.openSettings) { Label("Settings", systemImage: "gearshape") }
+                .help("Settings (⌘,)")
         }
     }
 

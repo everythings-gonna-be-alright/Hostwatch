@@ -56,7 +56,7 @@ This pane decides how Hostwatch reacts to suspicious and unusual activity.
 
 ### Firewall settings
 
-They moved to *Rules ▸ Protection*, next to launch and file protection. See
+They moved to *Protection*, next to launch and file protection. See
 [Launch and file protection](03-features.md#launch-and-file-protection-rules--protection) and
 [Firewall](03-features.md#firewall).
 

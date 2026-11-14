@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Rules ▸ Protection ▸ Overview, built like a System Settings pane: the state with its one next action, a card per
+/// Protection ▸ Overview, built like a System Settings pane: the state with its one next action, a card per
 /// area (mode, what it does, today), then the pages to go on to as a grouped list. How enforcement works sits behind
 /// the Help button, not in the page. It fills the window: the charts take the spare height.
 struct ProtectionOverview: View {

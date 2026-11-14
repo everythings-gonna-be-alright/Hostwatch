@@ -186,12 +186,12 @@ struct ClassifyAllButton: View {
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Picker("", selection: $ui.apply) {
                 Text("Apply the verdicts").tag(true)
-                Text("Suggest only, I’ll decide in Rules ▸ Needs You").tag(false)
+                Text("Suggest only, I’ll decide in Patterns ▸ Needs You").tag(false)
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
             Text(ui.apply ? "Never Safe for high-risk patterns, python, bash and the like: those stay for you."
-                 : "You accept them in Rules ▸ Needs You.")
+                 : "You accept them in Patterns ▸ Needs You.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Text("Engine: Settings ▸ AI").font(.caption).foregroundStyle(.tertiary)

@@ -83,7 +83,7 @@ extension AppDelegate {
         // what needs you).
         menu.addItem(item("Stories", #selector(openStories), symbol: "point.3.connected.trianglepath.dotted"))
         menu.addItem(item("Patterns", #selector(openPatterns), symbol: "square.stack.3d.up"))
-        menu.addItem(item("Rules", #selector(openRules), symbol: "checklist"))
+        menu.addItem(item("Protection", #selector(openProtectionOverview), symbol: "shield.lefthalf.filled"))
         let domainsItem = item("Network", #selector(openDomains), symbol: "network.badge.shield.half.filled")
         domainsItem.toolTip = "Firewall and domains"
         menu.addItem(domainsItem)
@@ -161,7 +161,7 @@ extension AppDelegate {
         ])
 
         // Shown in this order (⌘1–⌘5); the tag is the window tab's index.
-        let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Network", 3)].enumerated().map { i, tab in
+        let tabs = [("Events", 0), ("Patterns", 1), ("Protection", 4), ("Stories", 2), ("Network", 3)].enumerated().map { i, tab in
             tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
         let kinds = EventKind.allCases.map { tagged(item($0.title, #selector(toggleKindItem(_:))), $0.rawValue) }
@@ -432,11 +432,10 @@ extension AppDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// The baseline lives in the Rules tab.
+    /// The baseline review is Patterns ▸ Needs You.
     func openBaselineReport() {
-        rulesTab.segment = .needsYou
-        rulesTab.chosen = true
-        model.windowTab = 4
+        rulesTab.open(.needsYou)
+        model.windowTab = 1
         openActivityWindow(fullScreen: false)
     }
 
@@ -446,10 +445,9 @@ extension AppDelegate {
 
     func openSettings(_ pane: SettingsPane?) { settings.show(pane) }
 
-    /// The firewall's settings live in Rules ▸ Protection ▸ Network Firewall, with launch and file protection.
+    /// The firewall's settings live in Protection ▸ Network Firewall, with launch and file protection.
     @objc func openFirewallPane() {
-        rulesTab.segment = .firewall
-        rulesTab.chosen = true
+        rulesTab.open(.firewall)
         model.windowTab = 4
         openActivityWindow(fullScreen: false)
     }
@@ -496,6 +494,7 @@ extension AppDelegate {
     }
 
     @objc func openPatterns() {
+        rulesTab.open(.allPatterns)
         model.windowTab = 1
         openActivityWindow(fullScreen: false)
     }

@@ -95,7 +95,7 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
 - **Searching and marking:** Patterns use the Show filter, can be searched and multi-selected. Right-click to mark
   one or many patterns, or **Mark All … From This Process** as a whole-process rule.
 - **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*, *AI suggests
-  Safe* (waiting for you), *Automatic (routine)* or *New*. **Needs You…** opens Rules ▸ Needs You.
+  Safe* (waiting for you), *Automatic (routine)* or *New*. *Needs You* in the sidebar lists what waits for you.
 
 **Group** (*No Groups*, *By Process*, *By AI Session*, the same control as on Events) is *By Process* by default: one
 row per program (by name), with its patterns under it (*By AI Session* groups them by the coding-agent session that
@@ -137,7 +137,7 @@ so detection works the first time.
 
 **AI suggests, you decide.** An AI can propose a status for New patterns, but you stay in charge:
 
-- **Asking:** *Ask AI for Suggestions* (Rules ▸ Needs You) sends up to 40 New patterns (high-risk first, then most
+- **Asking:** *Ask AI for Suggestions* (Patterns ▸ Needs You) sends up to 40 New patterns (high-risk first, then most
   recent), with code-signing facts, to the on-device model and/or Claude. For Claude that's one
   headless `claude -p` call, about 8 s and $0.03.
 - **Suggestions only:** each verdict is stored as a **suggestion** on the pattern. Nothing changes until you
@@ -278,16 +278,17 @@ Debug helper: `Hostwatch.app/Contents/MacOS/Hostwatch --signature-report <histor
 groups into patterns and risk levels (`REPORT_KIND=file|net|exec|routine|normal|high`, `REPORT_GREP=…`,
 `REPORT_TOP=n`).
 
-#### Rules tab: Patterns and Protection
+#### Patterns and Protection tabs
 
-Your to-do list and your decisions in one place: what's waiting for you, the rules that decide for you, and
-everything you've already decided.
+The *Patterns* tab is everything about patterns: the table of all of them, what's waiting for you, the rules that
+decide for you, and everything you've already decided. The *Protection* tab is what protection does with those
+decisions.
 
 Every pattern is decided by **you**, a **rule** (learned or baseline), or an **AI suggestion** you accepted. That is
-also the order of authority: you come first. The Rules tab has a sidebar with two groups. *Patterns* holds three
-pages: Needs You, Rules and Decisions. *Protection* holds Overview, Protected Files and Folders, and Found (see Launch and file
-protection). Only Needs You and Found carry a badge, because only they wait for you. The tab's own badge counts what
-waits in Needs You.
+also the order of authority: you come first. Both tabs have a sidebar. *Patterns* holds All Patterns (the table),
+Needs You, Rules and Decisions, and its tab badge counts what waits in Needs You. *Protection* holds Overview,
+Protected Files and Folders, Network Firewall and Found (see Launch and file protection). Only Needs You and Found
+carry a badge, because only they wait for you.
 
 - **Needs You:** what waits for your decision. Rebuilt live as patterns change. Interpreters, shells and Hostwatch
   itself aren't listed. It shows:
@@ -316,7 +317,7 @@ your own decisions, and nothing changes until you approve it.
 How to use it:
 
 1. Mark a few patterns yourself.
-2. Click **Suggest Rules…** (Rules ▸ Rules ▸ Learned rules).
+2. Click **Suggest Rules…** (Patterns ▸ Rules ▸ Learned rules).
 3. Review the proposals that pass the checks. **Approve** applies a rule. **Reject** drops it.
 
 Approved rules are saved in `rules.json`. Suggesting rules needs Claude, so it's disabled when the engine is *Apple
@@ -351,7 +352,7 @@ Every proposal is checked locally before you see it:
 | a Safe rule whose matching decisions are all on patterns seen < 5 times or within an hour | **refused** (not regular) |
 
 **While it runs:** **Needs You** shows a progress card with how many of your decisions were sent, a live timer and
-**Cancel**. The Rules tab reads *Rules (…)*. Afterwards a result line says how many proposals came back and how many
+**Cancel**. The Patterns tab reads *Patterns (…)*. Afterwards a result line says how many proposals came back and how many
 passed the checks, or why none did.
 
 **Precedence**, from strongest to weakest:
@@ -640,7 +641,7 @@ judged by the path rules like your own builds, and you decide their patterns.
 
 Choose how strict to be: only watch, ask you about each new connection, or allow only what you've approved.
 
-Pick a mode in *Rules ▸ Protection*, on the Overview's Network card or the *Network Firewall* page: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
+Pick a mode in *Protection*, on the Overview's Network card or the *Network Firewall* page: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
 **Network** tab (⌘5), next to the domains (see below).
 
 - **Watch:** judges every connection and lists what wouldn't simply pass. Watch blocks nothing.
@@ -741,7 +742,7 @@ In a firewall question, **Ask Claude** has the shortcut ⌘K.
 
 When something looks wrong, pause it, or watch it closely to see what it does.
 
-#### Launch and file protection (Rules ▸ Protection)
+#### Launch and file protection (Protection)
 
 Four pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
 while rehearsing, green while protecting, orange while paused) with its one next step (**Start Watching** turns on
