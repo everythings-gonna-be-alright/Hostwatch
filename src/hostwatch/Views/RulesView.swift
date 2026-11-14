@@ -82,28 +82,30 @@ struct RulesView: View {
             } else {
                 rail
             }
-            Divider()
-            detail
+            detail                  // no divider: the glass pane floats, its edge is the separation
         }
     }
 
     private var page: RulesSegment { scope == .patterns ? tab.patterns : tab.protection }
 
-    /// The full sidebar, with the collapse button on its own at the top, exactly where the rail has it: the button
-    /// doesn't move when the sidebar collapses or expands, so a second click undoes the first.
+    /// The full sidebar: one header row with the section's title and, level with it, the button that collapses the
+    /// sidebar to its rail. The list below carries no header of its own.
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack {
-                SidebarCollapseButton(collapsed: false) { toggle() }
+            HStack(alignment: .center) {
+                Text(scope == .patterns ? "Patterns" : "Protection")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
                 Spacer()
+                SidebarCollapseButton(collapsed: false) { toggle() }
             }
-            .padding(.leading, SidebarMetrics.buttonInset)
+            .padding(.leading, 18)
+            .padding(.trailing, 8)
             .padding(.top, 10)
-            .padding(.bottom, 2)
             list
         }
         .frame(width: 236)          // "Protected Files and Folders" whole, with its icon
-        .background(SidebarMaterial())
+        .modifier(SidebarGlass())
     }
 
     private var list: some View {
@@ -114,13 +116,13 @@ struct RulesView: View {
                     Label("Needs You", systemImage: "tray.full").badge(waiting).tag(RulesSegment.needsYou)
                     Label("Rules", systemImage: "checklist").tag(RulesSegment.rules)
                     Label("Decisions", systemImage: "person.crop.circle.badge.checkmark").tag(RulesSegment.decided)
-                } header: { Text("Patterns") }
+                }
             } else if let protection {
                 Section {
                     ProtectionSidebarRows(protection: protection, firewall: firewall, networkStops: {
                         connections().filter { $0.1.verdict == .block }.count
                     })
-                } header: { Text("Protection") }
+                }
             }
         }
         .listStyle(.sidebar)
