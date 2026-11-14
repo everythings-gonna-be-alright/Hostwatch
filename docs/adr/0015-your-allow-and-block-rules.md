@@ -18,3 +18,10 @@ makes it judge its list again and the collector forget its cached answers.
 
 **Consequences.** An Allow rule for one program can open a secret to it, by your choice. Rules don't apply to launches
 (a launch has patterns and the Launches mode), only to file access and connections.
+
+**Update: places with exceptions.** File rules in a list of their own overlapped "Your folders and files": blocking
+every program from a folder was already a protected folder with *Others: Block*, and two lists could contradict each
+other. Files now have one model. Every place (a built-in group or yours) has `PlaceExceptions`: programs always
+allowed and always blocked there, decided before the pattern's status, Block when a program is on both, the deepest
+place first. "Allow any program" is no longer a choice for files: a place is protected or it isn't. Earlier file rules
+are moved into the place that covers them (`moveFileRulesIntoPlaces`). Network rules stay `AccessRule`, unchanged.

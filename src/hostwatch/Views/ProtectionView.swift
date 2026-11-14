@@ -71,8 +71,8 @@ struct ProtectionView: View {
     private var files: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Protected files and folders").font(.headline)
-            Text("Programs that aren't expected in these places are asked about, or blocked. Allow one by marking its "
-                 + "pattern Safe, here or in Patterns.")
+            Text("Programs that aren't expected in these places are asked about, or blocked. With + on a place, always allow "
+                 + "a program there, or always block one: your decision, before any pattern or AI.")
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(ProtectedGroup.all) { group in card(group) }
             HStack {
@@ -86,7 +86,6 @@ struct ProtectionView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(protection.customPlaces) { place in customRow(place) }
-            AccessRulesSection(protection: protection, kind: .files).padding(.top, 12)
         }
     }
 
@@ -106,7 +105,8 @@ struct ProtectionView: View {
         let binding = { (change: @escaping (inout CustomPlace) -> Void) in
             if let i = protection.customPlaces.firstIndex(where: { $0.id == place.id }) { change(&protection.customPlaces[i]) }
         }
-        return HStack(spacing: 10) {
+        return VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 10) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: place.path)).resizable().frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.name).fontWeight(.medium)
@@ -120,10 +120,14 @@ struct ProtectionView: View {
                 Text("Others: Block").tag(ProtectionVerdict.block)
             }
             .labelsHidden().fixedSize().disabled(!place.on)
+            ExceptionsMenu(exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }), place: place.name)
             Toggle("", isOn: Binding(get: { place.on }, set: { on in binding { $0.on = on } }))
                 .labelsHidden().toggleStyle(.switch).controlSize(.small)
             Button { protection.removePlace(place.id) } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
+        }
+            ExceptionChips(exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }))
+                .padding(.leading, 32)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
@@ -132,7 +136,11 @@ struct ProtectionView: View {
     private func card(_ group: ProtectedGroup) -> some View {
         let setting = protection.groups[group.id] ?? ProtectedGroupSetting()
         let hits = protection.findings(group: group.id).reduce(0) { $0 + $1.count }
-        return HStack(spacing: 10) {
+        let exceptions = Binding(get: { setting.exceptions }, set: { e in
+            var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.exceptions = e; protection.groups[group.id] = s
+        })
+        return VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 10) {
             Image(systemName: group.symbol).foregroundStyle(.secondary).frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.title).fontWeight(.medium)
@@ -147,10 +155,13 @@ struct ProtectionView: View {
                 Text("Others: Block").tag(ProtectionVerdict.block)
             }
             .labelsHidden().fixedSize().disabled(!setting.on)
+            ExceptionsMenu(exceptions: exceptions, place: group.title)
             Toggle("", isOn: Binding(get: { setting.on }, set: { on in
                 var s = setting; s.on = on; protection.groups[group.id] = s
             }))
             .labelsHidden().toggleStyle(.switch).controlSize(.small)
+        }
+            ExceptionChips(exceptions: exceptions).padding(.leading, 32)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
@@ -308,4 +319,66 @@ struct ConnectionsForgetMenu: View {
 final class FoundExpansion: ObservableObject {
     @Published var files = false
     @Published var connections = false
+}
+
+/// + on a place: always allow, or always block, a program there (an app covers the programs inside it).
+struct ExceptionsMenu: View {
+    @Binding var exceptions: PlaceExceptions
+    let place: String
+
+    var body: some View {
+        Menu {
+            Button("Always Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
+            Button("Always Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
+        } label: {
+            Image(systemName: "plus.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Always allow, or always block, a program in \(place)")
+    }
+
+    private func choose(_ add: (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.message = "Choose an app, or a command-line program. An app covers every program inside it."
+        if panel.runModal() == .OK, let url = panel.url { add(url.standardizedFileURL.path) }
+    }
+}
+
+/// A place's exceptions as small chips: green always allowed, red always blocked, each removable.
+struct ExceptionChips: View {
+    @Binding var exceptions: PlaceExceptions
+
+    var body: some View {
+        if !exceptions.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(exceptions.allowed, id: \.self) { p in chip(p, allowed: true) }
+                ForEach(exceptions.blocked, id: \.self) { p in chip(p, allowed: false) }
+            }
+        }
+    }
+
+    private func chip(_ program: String, allowed: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: allowed ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .foregroundStyle(allowed ? Color.green : Color.red)
+            Text(PlaceExceptions.name(program)).lineLimit(1)
+            Button {
+                if allowed { exceptions.allowed.removeAll { $0 == program } } else { exceptions.blocked.removeAll { $0 == program } }
+            } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Remove: \(allowed ? "no longer always allowed" : "no longer always blocked")")
+        }
+        .font(.caption)
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(Capsule().fill(Color.primary.opacity(0.07)))
+        .help("\(allowed ? "Always allowed" : "Always blocked") here: \(program)")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(PlaceExceptions.name(program)), \(allowed ? "always allowed" : "always blocked")")
+    }
 }
