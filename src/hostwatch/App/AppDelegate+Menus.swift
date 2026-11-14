@@ -21,13 +21,15 @@ extension AppDelegate {
         guard menu === statusItem?.menu else { return }
         menu.removeAllItems()
 
-        let state = model.paused ? "Paused" : model.connected ? "Live" : collector.isRunning ? "Starting…" : "Collector off"
+        let watching = model.connected ? "Live" : collector.isRunning ? "Starting…" : "Collector off"
+        // Whether you're protected comes first, as in every security menu bar app: "Live · Protecting".
+        let state = model.connected ? "\(watching) · \(protectionStatusTitle)" : watching
         var attention: [String] = []
         if stories.activeCount > 0 { attention.append("\(stories.activeCount) open \(stories.activeCount == 1 ? "story" : "stories")") }
         let highRisk = signatures.newHighRiskCount()
         if highRisk > 0 { attention.append("\(highRisk) high-risk") }
         let status = NSMenuItem(title: ([state] + attention).joined(separator: " · "), action: nil, keyEquivalent: "")
-        status.image = symbol("circle.fill", color: model.paused ? .systemYellow : model.connected ? .systemGreen : .systemOrange)
+        status.image = symbol("circle.fill", color: protection.paused ? .systemYellow : model.connected ? .systemGreen : .systemOrange)
         status.isEnabled = false
         menu.addItem(status)
         if !hold.held.isEmpty {
@@ -81,13 +83,21 @@ extension AppDelegate {
         // what needs you).
         menu.addItem(item("Stories", #selector(openStories), symbol: "point.3.connected.trianglepath.dotted"))
         menu.addItem(item("Patterns", #selector(openPatterns), symbol: "square.stack.3d.up"))
+        menu.addItem(item("Rules", #selector(openRules), symbol: "checklist"))
         let domainsItem = item("Network", #selector(openDomains), symbol: "network.badge.shield.half.filled")
         domainsItem.toolTip = "Firewall and domains"
         menu.addItem(domainsItem)
         menu.addItem(.separator())
 
-        menu.addItem(item(model.paused ? "Resume Live Stream" : "Pause Live Stream", #selector(togglePause),
-                          symbol: model.paused ? "play.fill" : "pause.fill"))
+        // A pause always ends by itself: a tray click must never leave the Mac unprotected until someone remembers.
+        if protection.paused {
+            menu.addItem(item("Resume Protection", #selector(resumeProtection), symbol: "play.fill"))
+        } else if protection.state(network: firewall.mode) != .off {
+            let pause = NSMenuItem(title: "Pause Protection", action: nil, keyEquivalent: "")
+            pause.image = NSImage(systemSymbolName: "pause.fill", accessibilityDescription: nil)
+            pause.submenu = pauseSubmenu()
+            menu.addItem(pause)
+        }
         let hud = item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command])
         hud.state = model.overlayEnabled ? .on : .off
         menu.addItem(hud)
@@ -133,6 +143,11 @@ extension AppDelegate {
             .separator(),
             std("Quit Hostwatch", #selector(NSApplication.terminate(_:)), "q"),
         ])
+        submenu("File", [
+            item("Export Events…", #selector(exportEvents), key: "e", modifiers: [.command, .shift]),
+            .separator(),
+            std("Close Window", #selector(NSWindow.performClose(_:)), "w"),
+        ])
         submenu("Edit", [
             std("Undo", Selector(("undo:")), "z"),
             std("Redo", Selector(("redo:")), "z", [.command, .shift]),
@@ -149,43 +164,51 @@ extension AppDelegate {
         let tabs = [("Events", 0), ("Patterns", 1), ("Rules", 4), ("Stories", 2), ("Network", 3)].enumerated().map { i, tab in
             tagged(item(tab.0, #selector(showTab(_:)), key: "\(i + 1)"), tab.1)
         }
-        let showFilter = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
-        let filters = NSMenu()
-        for f in SignatureFilter.allCases { filters.addItem(tagged(item(f.title, #selector(setFilter(_:))), f.rawValue)) }
-        showFilter.submenu = filters
         let kinds = EventKind.allCases.map { tagged(item($0.title, #selector(toggleKindItem(_:))), $0.rawValue) }
+        // View: how the window shows things. Filters belong to one tab each, so they're enabled only there.
+        let show = NSMenuItem(title: "Show", action: nil, keyEquivalent: "")
+        let showMenu = NSMenu()
+        kinds.forEach(showMenu.addItem)
+        showMenu.addItem(.separator())
+        for f in SignatureFilter.allCases { showMenu.addItem(tagged(item(f.title, #selector(setFilter(_:))), f.rawValue)) }
+        show.submenu = showMenu
         submenu("View", tabs + [
             .separator(),
             item("Running Now", #selector(toggleRunningNow), key: "r", modifiers: [.command, .option]),
-            item("Time Travel", #selector(toggleTimeTravel), key: "t", modifiers: [.command, .option]),
-            item("Earlier", #selector(timeTravelEarlier), key: "["),
-            item("Later", #selector(timeTravelLater), key: "]"),
-            .separator(), showFilter, .separator()] + kinds + [
+            show,
             .separator(),
             item("Show HUD", #selector(toggleOverlay), key: "h", modifiers: [.control, .option, .command]),
             std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
         ])
-
-        let marks = SignatureStatus.allCases.map {
-            tagged(item("Mark \($0.title)", #selector(markSelection(_:))), $0.rawValue)
-        }
-        submenu("Activity", [
-            item("Pause Live Stream", #selector(togglePause)),
-            item("Clear Events", #selector(clearEvents), key: "k"),
+        // History: moving through time, and the list itself. Pausing the list never pauses detection.
+        submenu("History", [
+            item("Time Travel", #selector(toggleTimeTravel), key: "t", modifiers: [.command, .option]),
+            item("Earlier", #selector(timeTravelEarlier), key: "["),
+            item("Later", #selector(timeTravelLater), key: "]"),
+            item("Back to Now", #selector(backToNow)),
             .separator(),
-            item("Ask AI About Selection…", #selector(askAboutSelection), key: "\r"),
-            item("Watch Selected Process Closely…", #selector(watchSelection), key: "w", modifiers: [.command, .option]),
-        ] + marks + [
-            item("Exclude Selection…", #selector(excludeSelection)),
-            .separator(),
-            item("Start Collector", #selector(toggleCollector)),
+            item("Pause List", #selector(togglePause), key: "p", modifiers: [.command, .option]),
+            item("Clear List", #selector(clearEvents), key: "k"),
         ])
+        // Selection: what you do to the selected events or patterns, named for what it acts on.
+        let markAs = NSMenuItem(title: "Mark As", action: nil, keyEquivalent: "")
+        let marks = NSMenu()
+        for status in SignatureStatus.allCases { marks.addItem(tagged(item(status.title, #selector(markSelection(_:))), status.rawValue)) }
+        markAs.submenu = marks
+        submenu("Selection", [
+            item("Ask AI…", #selector(askAboutSelection), key: "\r"),
+            item("Watch Closely…", #selector(watchSelection), key: "w", modifiers: [.command, .option]),
+            item("Show Launch Chain", #selector(launchChainOfSelection), key: "l", modifiers: [.command, .option]),
+            .separator(),
+            markAs,
+            item("Exclude…", #selector(excludeSelection)),
+        ])
+        submenu("Protection", protectionMenuItems())
         let windowMenu = NSMenu(title: "Window")
         [std("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
          std("Zoom", #selector(NSWindow.performZoom(_:))),
-         std("Close", #selector(NSWindow.performClose(_:)), "w"),
          .separator(),
-         item("Activity Window", #selector(openWindowed), key: "0"),
+         item("Hostwatch", #selector(openWindowed), key: "0"),
          item("Held Processes", #selector(showHeld)),
          .separator(),
          std("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)))].forEach(windowMenu.addItem)
@@ -196,7 +219,8 @@ extension AppDelegate {
         let helpMenu = NSMenu(title: "Help")
         [item("Hostwatch Help", #selector(openHelp)),
          .separator(),
-         item("Use with Claude Code…", #selector(showAISettings)),
+         item("Threat Model and Coverage", #selector(openThreatModel)),
+         .separator(),
          item("Collector Log", #selector(showCollectorLog)),
          item("Full Disk Access Settings…", #selector(openFDA))].forEach(helpMenu.addItem)
         let helpHolder = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
@@ -208,13 +232,22 @@ extension AppDelegate {
 
     /// Checkmarks, titles and enabled state for menu items, at the moment a menu opens.
     func validateMenuItem(_ mi: NSMenuItem) -> Bool {
+        if let answer = validateProtectionItem(mi) { return answer }
         switch mi.action {
         case #selector(showTab(_:)):
             mi.state = activityWindow?.isVisible == true && model.windowTab == mi.representedObject as? Int ? .on : .off
         case #selector(setFilter(_:)):
             mi.state = model.signatureFilter.rawValue == mi.representedObject as? String ? .on : .off
+            return model.windowTab == 1                                         // a Patterns filter
+        case #selector(backToNow):
+            return travel.active
+        case #selector(exportEvents):
+            return !model.history.isEmpty
+        case #selector(launchChainOfSelection):
+            return selectedEvents.count == 1
         case #selector(toggleKindItem(_:)):
             mi.state = model.visibleKinds.contains { $0.rawValue == mi.representedObject as? String } ? .on : .off
+            return model.windowTab == 0                                         // an Events filter
         case #selector(toggleOverlay):
             mi.state = model.overlayEnabled ? .on : .off
         case #selector(toggleHold):
@@ -228,7 +261,7 @@ extension AppDelegate {
         case #selector(toggleRunningNow):
             mi.state = running.showing && model.windowTab == 0 ? .on : .off
         case #selector(togglePause):
-            mi.title = model.paused ? "Resume Live Stream" : "Pause Live Stream"
+            mi.title = model.paused ? "Resume List" : "Pause List"
         case #selector(toggleCollector):
             if mi.menu !== statusItem?.menu {
                 mi.title = collector.isRunning ? "Stop Collector" : "Start Collector…"
@@ -468,6 +501,14 @@ extension AppDelegate {
     }
 
     @objc func togglePause() { model.paused.toggle() }
+    @objc func backToNow() { travel.exit() }
+    @objc func launchChainOfSelection() {
+        guard let e = selectedEvents.first else { return }
+        showLaunchChain(for: e)
+    }
+    @objc func openThreatModel() {
+        if let url = URL(string: "https://hostwatch.tech/docs/threat-model.html") { NSWorkspace.shared.open(url) }
+    }
     @objc func clearEvents() { model.clear() }
     @objc func quit() { NSApp.terminate(nil) }
     @objc func openFullScreen() { openActivityWindow(fullScreen: true) }

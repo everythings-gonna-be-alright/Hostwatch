@@ -57,7 +57,12 @@ final class HUDModel: ObservableObject {
     @Published private(set) var connected = false
     /// Why the collector socket was refused (it exists but can't be trusted); nil when fine.
     @Published private(set) var socketWarning: String?
-    @Published var paused = false
+    /// The list is paused: it stops scrolling so you can read it. Detection never pauses with it (patterns, stories,
+    /// threat lists, holds and protection go on), and what arrives meanwhile shows when the list resumes. Pausing
+    /// detection by accident, from a button that looked like a display control, would leave the Mac unwatched.
+    @Published var paused = false {
+        didSet { if oldValue && !paused { flushUI() } }
+    }
     @Published var searchText = ""
     /// "Show Only These" in the heavy-process strip: only events of these processes.
     @Published var onlyPids: Set<Int>?
@@ -545,8 +550,7 @@ final class HUDModel: ObservableObject {
                 }
                 continue
             }
-            guard !paused,
-                  var event = ActivityEvent.parse(Data(line)),
+            guard var event = ActivityEvent.parse(Data(line)),
                   !rules.excludes(event)
             else { continue }
             event.isFirst = signatures.observe(event)
@@ -574,7 +578,7 @@ final class HUDModel: ObservableObject {
         uiBuffer.append(contentsOf: fresh)
         // While hidden, keep only what the list could show anyway.
         if uiBuffer.count > historyLimit { uiBuffer.removeFirst(uiBuffer.count - historyLimit) }
-        guard uiVisible, !flushScheduled else { return }
+        guard uiVisible, !paused, !flushScheduled else { return }
         flushScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.uiInterval) { [weak self] in
             MainActor.assumeIsolated { self?.flushUI() }
@@ -609,6 +613,7 @@ final class HUDModel: ObservableObject {
     /// Hands buffered events to the list, counters and HUD in one update.
     func flushUI() {
         flushScheduled = false
+        guard !paused else { return }           // held for when the list resumes
         guard !uiBuffer.isEmpty || !countBuffer.isEmpty else { return }
         if !uiBuffer.isEmpty {
             var updated = history

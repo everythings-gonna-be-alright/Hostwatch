@@ -224,7 +224,8 @@ below explain what each one does.
 **Menu bar icon.** The icon is the app icon's list mark, tinted like your other menu bar icons. It is for a quick
 glance and quick actions.
 
-- **Status line:** Live, Paused, Starting… or Collector off, plus the number of open stories and high-risk patterns.
+- **Status line:** Live, Starting… or Collector off, then whether you're protected (*Protecting*, *Rehearsing*,
+  *Paused until 14:20* or *Protection is off*), plus the number of open stories and high-risk patterns.
 - **Extra lines, only when they apply:**
   - *N processes held — Review…*
   - *N known-bad matches this week…*
@@ -236,8 +237,10 @@ glance and quick actions.
 - **Actions:**
   - **Start Collector…** (shown when the collector is off)
   - **Open Hostwatch** (⌘O)
-  - **Stories**, **Patterns** and **Network**, which open those tabs (no counters: the tabs badge what needs you).
-  - Pause Live Stream
+  - **Stories**, **Patterns**, **Rules** and **Network**, which open those tabs (no counters: the tabs badge what
+    needs you).
+  - **Pause Protection ▸ 15 Minutes / 1 Hour / Until Tomorrow**, or **Resume Protection** while paused. A pause
+    always ends by itself.
   - **Show HUD** (⌃⌥⌘H). This shortcut works from any app.
   - Hold Suspicious Processes
   - **Settings…** (⌘,)
@@ -247,11 +250,19 @@ glance and quick actions.
 
 | Menu | Commands |
 |------|----------|
+| *File* | Export Events… (⇧⌘E: the list, or the selected events, as JSON lines), Close Window (⌘W) |
 | *Edit* | Undo, Redo, Cut, Copy, Paste, Select All, Find (⌘F) |
-| *View* | Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, Running Now (⌥⌘R), Time Travel (⌥⌘T), Earlier (⌘[) and Later (⌘]) during Time Travel, the **Show** filter, event-kind toggles, Show HUD, Enter Full Screen (⌃⌘F, Esc leaves) |
-| *Activity* | Pause Live Stream, Clear Events (⌘K), Ask AI About Selection (⌘↩), Watch Selected Process Closely… (⌥⌘W), Mark Safe / Suspicious / Dangerous / Unclassified, Exclude Selection…, Start/Stop Collector |
-| *Window* | Activity Window (⌘0), Held Processes |
-| *Help* | **Hostwatch Help** (these docs), Use with Claude Code…, Collector Log, Full Disk Access Settings |
+| *View* | Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5, Running Now (⌥⌘R), **Show** (event kinds in Events, the pattern filter in Patterns), Show HUD, Enter Full Screen (⌃⌘F, Esc leaves) |
+| *History* | Time Travel (⌥⌘T), Earlier (⌘[), Later (⌘]), Back to Now, Pause List (⌥⌘P), Clear List (⌘K) |
+| *Selection* | Ask AI… (⌘↩), Watch Closely… (⌥⌘W), Show Launch Chain (⌥⌘L), Mark As ▸ Safe / Suspicious / Dangerous / Unclassified, Exclude… |
+| *Protection* | Whether you're protected, Pause Protection ▸ 15 Minutes / 1 Hour / Until Tomorrow, Resume Protection, the mode of Launches, Files and Network, Hold Suspicious Processes, Start/Stop Collector, Protection Overview |
+| *Window* | Hostwatch (⌘0), Held Processes |
+| *Help* | **Hostwatch Help** (these docs), Threat Model and Coverage, Collector Log, Full Disk Access Settings |
+
+**Pausing the list never pauses detection.** *Pause List*, the pause button in the window and the HUD's pause
+button stop the list scrolling so you can read it. Patterns, stories, threat lists, holds and protection go on, and
+what arrived meanwhile appears when the list resumes. To stop protection itself, use *Pause Protection*, which
+always ends by itself.
 
 **Right-click a row.** This works on events, patterns and domains. It also works in the HUD while click-through is
 off. The menu offers:
@@ -287,7 +298,7 @@ click-through, so your clicks pass through it to the apps underneath.
 
 From top to bottom:
 
-- **Header:** *Hostwatch · Live* (or *Paused*, *Collector off*), with Pause and Open Hostwatch (the window, not full
+- **Header:** *Hostwatch · Live* (or *Paused* while the list is paused, *Collector off*), with Pause and Open Hostwatch (the window, not full
   screen) buttons while the HUD takes clicks. Drag the HUD by any spot that isn't a row or a button.
 - **Needs a look:** only when something does. Flagged, threat-listed or stopped events of the last ten minutes, with
   why, and processes running heavy.
