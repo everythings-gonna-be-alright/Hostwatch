@@ -167,7 +167,8 @@ struct RulesView: View {
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
                     case .firewall:
                         if let firewall {
-                            NetworkFirewallPage(firewall: firewall, signatures: signatures, showNetwork: showNetwork)
+                            NetworkFirewallPage(firewall: firewall, signatures: signatures, showNetwork: showNetwork,
+                                               openFound: { tab.open(.protectionFound) })
                         }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {

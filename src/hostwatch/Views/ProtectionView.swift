@@ -47,6 +47,8 @@ struct ProtectionView: View {
     var go: (RulesSegment) -> Void = { _ in }
 
     private static let limit = 40
+    /// "Show all": a long section opens in full on request (the first 40 keep the page quick).
+    @StateObject private var showAll = FoundExpansion()
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; f.dateTimeStyle = .named; return f
     }()
@@ -176,9 +178,10 @@ struct ProtectionView: View {
                 if !all.isEmpty {
                     Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(all.prefix(Self.limit)) { f in finding(f) }
+                        ForEach(showAll.files ? all[...] : all.prefix(Self.limit)) { f in finding(f) }
                         if all.count > Self.limit {
-                            Text("and \(all.count - Self.limit) more").font(.caption).foregroundStyle(.tertiary)
+                            Button(showAll.files ? "Show fewer" : "Show all \(all.count)") { showAll.files.toggle() }
+                                .buttonStyle(.link).font(.caption).padding(.vertical, 6)
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -194,14 +197,14 @@ struct ProtectionView: View {
                     }
                     .padding(.top, 8)
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(network.prefix(Self.limit), id: \.0.id) { entry, decision in
+                        ForEach(showAll.connections ? network[...] : network.prefix(Self.limit), id: \.0.id) { entry, decision in
                             NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
                                 markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
                             }
                         }
                         if network.count > Self.limit {
-                            Text("and \(network.count - Self.limit) more on the Network Firewall page").font(.caption)
-                                .foregroundStyle(.tertiary)
+                            Button(showAll.connections ? "Show fewer" : "Show all \(network.count)") { showAll.connections.toggle() }
+                                .buttonStyle(.link).font(.caption).padding(.vertical, 6)
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -298,4 +301,10 @@ struct ConnectionsForgetMenu: View {
                    forgetAll: { firewall.dismiss(found.map(\.0.id)) },
                    after: "a connection not seen for a week")
     }
+}
+
+/// Which Found sections are open in full (no @State macro with the command line tools).
+final class FoundExpansion: ObservableObject {
+    @Published var files = false
+    @Published var connections = false
 }

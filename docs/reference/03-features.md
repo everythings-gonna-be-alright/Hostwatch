@@ -761,12 +761,13 @@ The firewall's chart counts new destinations by when they were first seen. Hourl
 The firewall is the third area, beside Launches and Files: the Overview's *Network* card has its four modes and the
 same two numbers (what it blocks or would, what it asks about or would), and the *Network Firewall* page has the
 mode with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge
-counts them), **Your rules**, what it found with *Allow* and *Block*, and how it decides. *Your rules* is the full
+counts them), **Your rules**, how many connections are left to decide with **Review in Found**, and how it decides. *Your rules* is the full
 list: what you blocked (a domain for an app, or a connection pattern marked Suspicious or Dangerous, with who
 decided), what you allowed despite a threat list, and what you asked to be asked about again, each with *Unblock* or
 *Remove*. It doesn't depend on the list of seen connections: *Forget Seen Connections…* (in the ⋯ menu, with a
-confirmation) starts that list again and never touches a rule. *Found* lists connections too, under
-launches and files, and its badge counts all three.
+confirmation) starts that list again and never touches a rule. *Found* is the one place to decide what the
+firewall found, under launches and files, with *Allow* and *Block*, and its badge counts all three. A long section
+opens in full with *Show all*.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
