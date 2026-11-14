@@ -417,3 +417,37 @@ import Testing
         #expect(m.findings.isEmpty)
     }
 }
+
+/// The collector's hold: invisible to your shell where macOS allows, SIGSTOP otherwise, paused here when the
+/// collector can't hold it, and released where it was held.
+@MainActor @Suite struct ProtectionRemoteHold {
+    func engine() -> (ReactiveEnforcer, ProtectionReactive.Signals, Ref) {
+        let (m, s) = ProtectionReactive().monitor(path: "/usr/bin/curl")
+        let ref = Ref()
+        m.engine.remote = ReactiveEnforcer.Remote(hold: { ref.held.append($0); return ref.connected },
+                                                  release: { ref.released.append(($0, $1)) })
+        return (m.engine, s, ref)
+    }
+    final class Ref { var held: [Int32] = []; var released: [(Int32, Bool)] = []; var connected = true }
+
+    @Test func theCollectorHoldsAndTheMethodDecidesTheHint() {
+        let (e, s, ref) = engine()
+        #expect(e.pause(pid: 4242, path: "/usr/bin/curl") && ref.held == [4242] && s.sent.isEmpty)   // nothing signalled here
+        e.holdResult(pid: 4242, method: "task")
+        #expect(!e.pausedTheShellWay(4242))                   // invisible: no fg hint
+        e.release(pid: 4242, path: "/usr/bin/curl", stop: false)
+        #expect(ref.released.count == 1 && ref.released[0].1 == false && e.pausedCount == 0)
+        #expect(e.pause(pid: 4243, path: "/usr/bin/curl"))
+        e.holdResult(pid: 4243, method: "signal")
+        #expect(e.pausedTheShellWay(4243))                    // the shell saw a stop: say "type fg"
+    }
+
+    @Test func whenTheCollectorCantItsPausedHere() {
+        let (e, s, ref) = engine()
+        #expect(e.pause(pid: 4242, path: "/usr/bin/curl"))
+        e.holdResult(pid: 4242, method: "none")
+        #expect(s.sent.map(\.1) == [SIGSTOP] && e.pausedTheShellWay(4242))
+        ref.connected = false
+        #expect(e.pause(pid: 4300, path: "/usr/bin/curl") && s.sent.map(\.1) == [SIGSTOP, SIGSTOP])   // not connected
+    }
+}

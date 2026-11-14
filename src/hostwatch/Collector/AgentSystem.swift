@@ -326,6 +326,7 @@ extension Agent {
             var timeout = timeval(tv_sec: 2, tv_usec: 0)
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
             let client = AgentClient(fd: fd)
+            client.uid = peer.uid
             addClient(client)
             Thread.detachNewThread { [self] in readClient(client) }
         }
@@ -362,6 +363,8 @@ extension Agent {
                 }
                 if let fw = cfg["firewall"] as? [String: Any] { firewall.configure(fw, from: client) }
                 if let answer = cfg["fw_answer"] as? [String: Any] { firewall.answer(answer) }
+                if let h = cfg["hold"] as? [String: Any] { hold.hold(h, from: client); return }
+                if let r = cfg["release"] as? [String: Any] { hold.release(r, from: client); return }
                 if let w = cfg["watch"] as? [String: Any] { watch.handle(w, from: client) }
                 if cfg["processes"] as? Bool == true { sendProcessList(to: client); return }
                 client.lock.lock()

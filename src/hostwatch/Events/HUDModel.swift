@@ -451,6 +451,10 @@ final class HUDModel: ObservableObject {
         send(["guard_answer": ["id": id, "allow": allow, "ttl": ttl]])
     }
 
+    /// Asks the root collector to hold a program while you're asked (invisible to your shell where macOS allows).
+    func sendHold(pid: Int) { send(["hold": ["pid": pid]]) }
+    func sendRelease(pid: Int, stop: Bool) { send(["release": ["pid": pid, "stop": stop]]) }
+
     func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
         send(["fw_answer": ["key": key, "pass": pass, "ttl": ttl]])
     }
@@ -486,6 +490,9 @@ final class HUDModel: ObservableObject {
     private static let watchMarker = Data(#""kind":"watch""#.utf8)
     private static let guardMarker = Data(#""kind":"guard_"#.utf8)
     private static let processListMarker = Data(#""kind":"proc_list""#.utf8)
+    private static let holdMarker = Data(#"{"kind":"hold_result""#.utf8)
+    /// The collector held a program (or couldn't): "task" (invisible), "signal" (SIGSTOP) or "none".
+    var onHoldResult: ((Int, String) -> Void)?
     private struct TopMessage: Decodable {
         var procs: [TopProcess]
         var disk_read: Double?
@@ -530,6 +537,13 @@ final class HUDModel: ObservableObject {
                     case "guard_block": onGuardBlock?(obj)
                     default: break
                     }
+                }
+                continue
+            }
+            // The collector's hold, at the start of the line: an event's text can't put it there.
+            if line.prefix(24).range(of: Self.holdMarker) != nil {
+                if let obj = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any], let pid = obj["pid"] as? Int {
+                    onHoldResult?(pid, obj["method"] as? String ?? "none")
                 }
                 continue
             }

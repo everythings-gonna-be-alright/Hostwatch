@@ -56,6 +56,10 @@
 
 ### Fixes
 
+- **A pause your terminal doesn't notice.** When Protection pauses a program you started in a terminal, the shell no
+  longer reports "Job has stopped" where macOS allows it: the collector suspends the program in a way the shell can't
+  see. macOS refuses that for its own tools such as curl, which are paused as before, and the question then tells you
+  to type fg after Allow to bring the program back to your terminal.
 - **One question at a time.** A command such as `curl https://example.com` raised a launch question and a connection
   question at once. The connection question now waits for your launch answer: block the launch and it goes, allow it
   and the connection question follows, saying you just allowed the program to run.

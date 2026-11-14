@@ -19,6 +19,16 @@ extension AppDelegate {
             self?.refreshProtectionPanels()
             self?.refreshFirewallPanels()               // a held connection question may be next
         }
+        // The collector holds programs invisibly to your shell when it runs as the root service.
+        protection.engine.remote = ReactiveEnforcer.Remote(
+            hold: { [weak self] pid in
+                guard let self, self.collector.usesDaemon, self.model.connected else { return false }
+                self.model.sendHold(pid: Int(pid))
+                return true
+            },
+            release: { [weak self] pid, stop in self?.model.sendRelease(pid: Int(pid), stop: stop) })
+        model.onHoldResult = { [weak self] pid, method in self?.protection.engine.holdResult(pid: pid, method: method) }
+        protection.engine.onMethodKnown = { [weak self] _ in self?.refreshProtectionPanels() }
         protection.onLaunchAnswered = { [weak self] event, allowed in
             self?.firewall.launchAnswered(pid: event.pid, name: event.name, allowed: allowed)
         }
@@ -82,7 +92,11 @@ extension AppDelegate {
         guard let ask = protection.prompts.first(where: { !$0.checking }) else { return }
         let chain = launchChainReport(for: ask.event)
         let place = ask.group.flatMap { protection.placeTitle(group: $0) }
-        let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, place: place,
+        // Paused the way the shell sees, from an interactive shell: after Allow, it goes on in the background.
+        let shells: Set<String> = ["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu"]
+        let fromShell = shells.contains((ask.event.parent as NSString).lastPathComponent)
+        let fgHint = fromShell && protection.engine.pausedTheShellWay(ask.event.pid)
+        let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, place: place, fgHint: fgHint,
                                                             waiting: protection.prompts.filter { !$0.checking }.count) { [weak self] choice in
             self?.protection.respond(ask.id, choice)
         } expired: { [weak self] in
@@ -90,6 +104,7 @@ extension AppDelegate {
         })
         protectionPanel = panel
         QuestionPanel.show(panel, slot: 0)
-        NSSound(named: "Tink")?.play()
+        if protectionPanelAskID != ask.id { NSSound(named: "Tink")?.play() }
+        protectionPanelAskID = ask.id
     }
 }
