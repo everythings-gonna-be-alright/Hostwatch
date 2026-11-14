@@ -45,14 +45,14 @@ struct WindowTabBar: View {
                     }
                     .padding(.horizontal, showTitles ? 9 : 8)
                     .padding(.vertical, 5)
-                    // Selected: an accent-tinted capsule with a hairline edge and accent text, clearly
-                    // distinct in light and dark (a plain grey was too faint).
-                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                    // Selected: a raised capsule in the text colour itself, with full-strength text. The accent
+                    // colour was used before, and with a graphite accent it looked as dark as the unselected tabs.
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
                     .background {
                         if selected {
-                            Capsule().fill(Color.accentColor.opacity(0.22))
-                                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 0.75))
-                                .shadow(color: .black.opacity(0.12), radius: 1.5, y: 0.5)
+                            Capsule().fill(Color.primary.opacity(0.16))
+                                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.75))
+                                .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
                         }
                     }
                     .contentShape(Capsule())

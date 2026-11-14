@@ -58,7 +58,9 @@ extension AppDelegate {
                                         host: "registry.npmjs.org", hostSource: "dns")
                 firewall.handleAsk(key: "demo", event: ask)
             case "protection":
-                rulesTab.open(.protectionOverview)
+                // HOSTWATCH_DEMO_PAGE=files, found or firewall: another Protection page, for screenshots.
+                let pages: [String: RulesSegment] = ["files": .protectedFiles, "found": .protectionFound, "firewall": .firewall]
+                rulesTab.open(pages[ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? ""] ?? .protectionOverview)
                 model.windowTab = 4
             case "watch":
                 if let e = cleanerLaunch {

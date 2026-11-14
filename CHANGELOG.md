@@ -25,7 +25,8 @@
   Now the Patterns tab has a sidebar with All Patterns (the table), Needs You, Rules and Decisions, and carries the
   badge for what waits for you. The old Rules tab is the Protection tab: Overview, Protected Files and Folders,
   Network Firewall and Found. ⌘2 and ⌘3 still open them. The Settings button is back in the toolbar, after the HUD
-  button, and the Protection tab has no search field, since it has nothing to search.
+  button, and the Protection tab has no search field, since it has nothing to search. Every Protection page now uses
+  Liquid Glass panels like the Overview, and the selected tab stands out clearly with any accent colour.
 
 ### Fixes
 

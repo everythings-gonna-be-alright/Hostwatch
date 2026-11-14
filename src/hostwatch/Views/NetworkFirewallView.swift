@@ -12,13 +12,15 @@ struct NetworkFirewallPage: View {
 
     var body: some View {
         let found = firewall.list(status: { signatures.status(forKey: $0) })
-        VStack(alignment: .leading, spacing: 18) {
-            modeCard
-            numbers(found)
-            if !firewall.prompts.isEmpty { waiting }
-            FirewallRulesSection(firewall: firewall, signatures: signatures)
-            findings(found)
-            howItDecides
+        GlassEffectContainer(spacing: 12) {
+            VStack(alignment: .leading, spacing: 18) {
+                modeCard
+                numbers(found)
+                if !firewall.prompts.isEmpty { waiting }
+                FirewallRulesSection(firewall: firewall, signatures: signatures)
+                findings(found)
+                howItDecides
+            }
         }
     }
 
@@ -59,7 +61,7 @@ struct NetworkFirewallPage: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.quaternary.opacity(0.4)))
+        .protectionGlass(20)
     }
 
     @ViewBuilder private var relayStatus: some View {
@@ -103,7 +105,7 @@ struct NetworkFirewallPage: View {
             ForEach(firewall.prompts) { FirewallWaitingRow(prompt: $0, firewall: firewall) }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.1)))
+        .protectionGlass(16, tint: .orange.opacity(0.18))
     }
 
     // MARK: Found
@@ -147,6 +149,9 @@ struct NetworkFirewallPage: View {
                 }
             }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(16)
     }
 
     // MARK: How
@@ -163,7 +168,7 @@ struct NetworkFirewallPage: View {
         } icon: { Image(systemName: "info.circle") }
         .font(.callout).foregroundStyle(.secondary)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.3)))
+        .protectionGlass(16)
     }
 }
 
@@ -293,7 +298,7 @@ struct FirewallRulesSection: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.35)))
+        .protectionGlass(14)
     }
 
     private func line<Action: View>(program: String, what: String, detail: String, @ViewBuilder action: () -> Action) -> some View {
