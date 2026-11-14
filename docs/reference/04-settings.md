@@ -28,7 +28,7 @@ This pane covers startup, the collector, permissions, updates and resetting Host
 
 The HUD is Hostwatch's on-screen overlay. This pane sets what it shows and how it looks.
 
-- *Show HUD* turns it on or off. Shortcut: ⌃⌥⌘H.
+- *Show HUD* turns it on or off. It is off by default. Shortcut: ⌃⌥⌘H.
 - *Click-through* is off by default.
 - *Show CPU, memory, network and disk* is on by default.
 - **Background:** choose Glass, Clear Glass or Solid. Preview tiles show each one.

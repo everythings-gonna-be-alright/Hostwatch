@@ -234,7 +234,7 @@ final class HUDModel: ObservableObject {
             defaults.removeObject(forKey: Keys.clickThrough)
         }
         overlayClickThrough = defaults.object(forKey: Keys.clickThrough) as? Bool ?? false
-        overlayEnabled = defaults.object(forKey: Keys.overlayEnabled) as? Bool ?? true
+        overlayEnabled = defaults.object(forKey: Keys.overlayEnabled) as? Bool ?? false     // off until you turn it on: the window and the menu bar icon come first
         overlayBackground = defaults.string(forKey: Keys.overlayBackground)
             .flatMap(OverlayBackground.init(stored:)) ?? .glass
         // One-time switch to the Liquid Glass look for existing installs.
