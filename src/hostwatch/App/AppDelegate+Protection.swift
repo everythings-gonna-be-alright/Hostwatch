@@ -15,6 +15,8 @@ extension AppDelegate {
             self?.signatures.set(status, keys: [key], note: status == .safe ? "allowed in Protection" : "blocked in Protection")
         }
         protection.onPromptsChange = { [weak self] in self?.refreshProtectionPanels() }
+        protection.aiCheck = { [weak self] event in await self?.checkWithAI(event) }
+        protection.onAIAllowed = { [weak self] ask, note in self?.aiNotices.allowed(ask, note: note) }
         model.onGuardStatus = { [weak self] state, detail in self?.protection.enforcerStatus(state, detail) }
         model.onGuardAsk = { [weak self] obj in
             guard let self, let ask = Self.protectionAsk(obj) else { return }
@@ -51,15 +53,29 @@ extension AppDelegate {
                              deadline: Date().addingTimeInterval(seconds))
     }
 
-    /// One glass question panel at a time, like the firewall's: a launch waits only a few seconds.
+    /// A paused program, as the AI sees it: the fast model you chose (on-device, or your own server), the pattern
+    /// with its context, the rule in LiveAICheck. Nil when no fast model is ready: then you are asked straight away.
+    func checkWithAI(_ event: ActivityEvent) async -> LiveAICheck.Outcome? {
+        let model = LocalModelChoice.model()
+        guard model.status().isReady, let entry = signatures.entry(event.signatureKey) else { return nil }
+        let context = classifier.context?(entry)
+        let warned = !TriagePrompt.warningSigns(entry, context: context).isEmpty
+        let verdict = try? await model.triage(TriagePrompt.pattern(entry, context: context))
+        return LiveAICheck.outcome(verdict: verdict, risk: entry.risk, warned: warned,
+                                   refusal: SignatureBuilder.aiSafeRefusal(entry))
+    }
+
+    /// One glass question panel at a time, like the firewall's: a launch waits only a few seconds. What the AI is
+    /// still checking isn't a question yet: it shows as a notice.
     func refreshProtectionPanels() {
+        aiNotices.setChecking(protection.prompts.filter(\.checking))
         protectionPanel?.orderOut(nil)
         protectionPanel = nil
-        guard let ask = protection.prompts.first else { return }
+        guard let ask = protection.prompts.first(where: { !$0.checking }) else { return }
         let chain = launchChainReport(for: ask.event)
         let place = ask.group.flatMap { protection.placeTitle(group: $0) }
         let panel = QuestionPanel.make(ProtectionPromptView(ask: ask, chain: chain, place: place,
-                                                            waiting: protection.prompts.count) { [weak self] choice in
+                                                            waiting: protection.prompts.filter { !$0.checking }.count) { [weak self] choice in
             self?.protection.respond(ask.id, choice)
         } expired: { [weak self] in
             self?.protection.expire(ask.id)

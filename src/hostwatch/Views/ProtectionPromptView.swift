@@ -38,6 +38,11 @@ struct ProtectionPromptView: View {
                         .font(.callout.monospacedDigit()).foregroundStyle(.orange)
                 }
             }
+            if let note = ask.aiNote {
+                Label(note, systemImage: "sparkles")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if ask.reactive {
                 Text(ask.area == .launches ? "It started and is paused until you answer."
                      : "It opened the file and is paused until you answer. Block stops it.")

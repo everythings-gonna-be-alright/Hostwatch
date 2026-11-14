@@ -525,6 +525,7 @@ private struct AIPane: View {
                          + "other run-anything tool launches, connects to or writes (their reads of your own project "
                          + "folders excepted). Classify with AI ▸ Apply the Verdicts is your decision and applies them.")
             }
+            AICheckSettingSection()
             ClaudeGuardSection(claudeGuard: claudeGuard, ui: ui)
             Section {
                 Toggle("Allow Claude Code to read Hostwatch data (MCP)", isOn: Binding(
@@ -868,5 +869,24 @@ private struct AbuseKeySheet: View {
     private func close() {
         ui.abuseKeyDraft = ""
         ui.showKeySheet = false
+    }
+}
+
+/// Settings ▸ AI: whether a paused launch or file access is checked by AI before you're asked.
+private struct AICheckSettingSection: View {
+    @AppStorage(LiveAICheck.settingKey) private var on = true
+
+    var body: some View {
+        Section {
+            Toggle("Check new launches and file access with AI first", isOn: $on)
+        } header: {
+            Text("Protection")
+        } footer: {
+            Footnote("When Protection is on Ask and a program it doesn't know is paused, the AI you chose looks at it first "
+                     + "(the on-device model or your own server, not Claude: it must answer within seconds). If it is sure "
+                     + "the program is safe, it goes on, this time only, and a notice at the top right says so. Otherwise, "
+                     + "or with no answer in 12 seconds, you're asked, with what the AI said. Shells, interpreters, "
+                     + "high-risk programs and your sensitive files are always yours to decide.")
+        }
     }
 }
