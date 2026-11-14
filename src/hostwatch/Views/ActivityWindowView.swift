@@ -210,8 +210,8 @@ struct ActivityWindowView: View {
                   scope: scope,
                   allPatterns: scope == .patterns ? AnyView(PatternsView(signatures: signatures, classifier: classifier,
                                                                           actions: actions, filter: $model.signatureFilter,
-                                                                          list: patternList, active: model.windowTab == 1,
-                                                                          sidebar: rulesTab)) : nil,
+                                                                          list: patternList, active: model.windowTab == 1
+                                                                          )) : nil,
                   protection: model.protection, firewall: firewall,
                   showPatterns: { app in
                       signatures.scope = nil
