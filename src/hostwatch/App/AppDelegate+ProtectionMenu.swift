@@ -103,13 +103,7 @@ extension AppDelegate {
     }
 
     @objc func openProtectionOverview() {
-        rulesTab.segment = .protectionOverview
-        rulesTab.chosen = true
-        model.windowTab = 4
-        openActivityWindow(fullScreen: false)
-    }
-
-    @objc func openRules() {
+        rulesTab.open(.protectionOverview)
         model.windowTab = 4
         openActivityWindow(fullScreen: false)
     }

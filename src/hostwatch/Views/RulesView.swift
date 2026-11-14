@@ -1,15 +1,30 @@
 import SwiftUI
 
-/// Rules tab, three views of one idea: every pattern is decided by you, a rule, the baseline (code
-/// signatures) or an AI suggestion you accepted. *Needs You* is what's still New, *Rules* is what decides
-/// automatically, *Decided* shows who decided what (AI apart from you).
-/// The Rules tab's pages: what you decide about patterns, and what protection does with those decisions.
-enum RulesSegment: Int, CaseIterable { case needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall }
+/// The Patterns and Protection tabs. Every pattern is decided by you, a rule, the baseline (code signatures) or an AI
+/// suggestion you accepted: *Needs You* is what's still New, *Rules* is what decides automatically, *Decisions* shows
+/// who decided what. Protection's pages are what it does with those decisions.
+enum RulesSegment: Int, CaseIterable {
+    case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall
 
-final class RulesTabState: ObservableObject {
-    @Published var segment: RulesSegment = .needsYou
-    var chosen = false
+    /// The Protection tab's pages; the rest belong to the Patterns tab.
+    var isProtection: Bool { rawValue >= RulesSegment.protectionOverview.rawValue }
+    /// The window tab holding this page.
+    var windowTab: Int { isProtection ? 4 : 1 }
 }
+
+/// Which page each of the two tabs shows: Patterns (the table, Needs You, Rules, Decisions) and Protection.
+final class RulesTabState: ObservableObject {
+    @Published var patterns: RulesSegment = .allPatterns
+    @Published var protection: RulesSegment = .protectionOverview
+
+    /// Shows a page in whichever tab holds it.
+    func open(_ page: RulesSegment) {
+        if page.isProtection { protection = page } else { patterns = page }
+    }
+}
+
+/// The two tabs built on this view: the same sidebar style, each with its own section.
+enum RulesScope { case patterns, protection }
 
 struct RulesView: View {
     @ObservedObject var book: RuleBook
@@ -17,6 +32,9 @@ struct RulesView: View {
     @ObservedObject var classifier: PatternClassifier
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var tab: RulesTabState
+    var scope: RulesScope = .patterns
+    /// The Patterns tab's main page, the table (full height, it scrolls by itself).
+    var allPatterns: AnyView? = nil
     /// Launch and file protection (its own segment: the toolbar has no room, and these are rules too).
     var protection: ProtectionMonitor? = nil
     /// The network firewall's settings: protection for connections, next to launches and files.
@@ -47,19 +65,20 @@ struct RulesView: View {
             Divider()
             detail
         }
-        .onAppear {
-            if !tab.chosen { tab.segment = waiting > 0 ? .needsYou : .rules }
-        }
     }
 
+    private var page: RulesSegment { scope == .patterns ? tab.patterns : tab.protection }
+
     private var sidebar: some View {
-        List(selection: Binding<RulesSegment?>(get: { tab.segment }, set: { if let s = $0 { tab.segment = s; tab.chosen = true } })) {
-            Section("Patterns") {
-                Label("Needs You", systemImage: "tray.full").badge(waiting).tag(RulesSegment.needsYou)
-                Label("Rules", systemImage: "checklist").tag(RulesSegment.rules)
-                Label("Decisions", systemImage: "person.crop.circle.badge.checkmark").tag(RulesSegment.decided)
-            }
-            if let protection {
+        List(selection: Binding<RulesSegment?>(get: { page }, set: { if let s = $0 { tab.open(s) } })) {
+            if scope == .patterns {
+                Section("Patterns") {
+                    Label("All Patterns", systemImage: "square.stack.3d.up").tag(RulesSegment.allPatterns)
+                    Label("Needs You", systemImage: "tray.full").badge(waiting).tag(RulesSegment.needsYou)
+                    Label("Rules", systemImage: "checklist").tag(RulesSegment.rules)
+                    Label("Decisions", systemImage: "person.crop.circle.badge.checkmark").tag(RulesSegment.decided)
+                }
+            } else if let protection {
                 Section("Protection") {
                     ProtectionSidebarRows(protection: protection, firewall: firewall, networkStops: {
                         connections().filter { $0.1.verdict == .block }.count
@@ -71,11 +90,20 @@ struct RulesView: View {
         .frame(width: 236)          // "Protected Files and Folders" whole, with its icon
     }
 
-    private var detail: some View {
+    @ViewBuilder private var detail: some View {
+        if page == .allPatterns, let allPatterns {
+            allPatterns.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            pages
+        }
+    }
+
+    private var pages: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    switch tab.segment {
+                    switch page {
+                    case .allPatterns: EmptyView()
                     case .needsYou: needsYou
                     case .rules: baselineSection; learnedSection
                     case .decided: DecidedView(signatures: signatures, showKeys: showKeys)
@@ -90,10 +118,10 @@ struct RulesView: View {
                                                firewall?.mark(status, keys: [entry.facts.patternKey], in: signatures,
                                                               note: status == .safe ? "allowed in Protection" : "blocked in Protection")
                                            },
-                                           page: tab.segment, mark: { keys, status in
+                                           page: page, mark: { keys, status in
                                 signatures.set(status, keys: keys,
                                                note: status == .safe ? "allowed in Protection" : "blocked in Protection")
-                            }, go: { tab.segment = $0; tab.chosen = true })
+                            }, go: { tab.open($0) })
                         }
                     }
                 }
@@ -265,7 +293,7 @@ struct RulesView: View {
                     Text("Claude is working… proposals appear in Needs You").font(.system(size: 12)).foregroundStyle(.secondary)
                     Button("Cancel") { book.cancel() }.buttonStyle(.glass)
                 } else {
-                    Button { book.suggest(); tab.segment = .needsYou } label: { Label("Suggest Rules…", systemImage: "sparkles") }
+                    Button { book.suggest(); tab.open(.needsYou) } label: { Label("Suggest Rules…", systemImage: "sparkles") }
                         .buttonStyle(.glass)
                         .disabled(classifier.engine == .onDevice || book.yourDecisions.count < 2)
                         .help(classifier.engine == .onDevice

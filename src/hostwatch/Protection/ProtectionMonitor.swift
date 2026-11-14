@@ -73,7 +73,7 @@ final class ProtectionMonitor: ObservableObject {
     @Published var groups: [String: ProtectedGroupSetting] {
         didSet { defaults.set(try? JSONEncoder().encode(groups), forKey: Keys.groups); changed() }
     }
-    /// Folders and files you protect yourself (Rules ▸ Protection ▸ Protected Files and Folders).
+    /// Folders and files you protect yourself (Protection ▸ Protected Files and Folders).
     @Published var customPlaces: [CustomPlace] {
         didSet { defaults.set(try? JSONEncoder().encode(customPlaces), forKey: Keys.custom); changed() }
     }

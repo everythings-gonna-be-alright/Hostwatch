@@ -452,7 +452,7 @@ private struct DetectionPane: View {
                 LabeledContent("Patterns") {
                     HStack {
                         Text(baseline.statusText).foregroundStyle(.secondary).lineLimit(1)
-                        Button("Show in Rules", action: openBaseline)
+                        Button("Show in Patterns", action: openBaseline)
                         Button(baseline.running ? "Updating…" : "Update Baseline") { Task { await baseline.buildNow() } }
                             .disabled(baseline.running)
                     }
@@ -519,7 +519,7 @@ private struct AIPane: View {
             } header: {
                 Text("Suggestions")
             } footer: {
-                Footnote("AI suggests a status for new patterns; you accept it in Rules ▸ Needs You. Every 90 s it "
+                Footnote("AI suggests a status for new patterns; you accept it in Patterns ▸ Needs You. Every 90 s it "
                          + "looks at up to 40 new patterns (seen for over a minute). Accepting by itself skips "
                          + "high-risk patterns. By itself, no AI marks Safe a high-risk pattern, or what a shell, interpreter or "
                          + "other run-anything tool launches, connects to or writes (their reads of your own project "

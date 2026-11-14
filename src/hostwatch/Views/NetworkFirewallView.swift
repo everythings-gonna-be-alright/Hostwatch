@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Rules ▸ Protection ▸ Network Firewall, built like the other Protection pages: the mode and what it does on top,
+/// Protection ▸ Network Firewall, built like the other Protection pages: the mode and what it does on top,
 /// numbers you read at a glance, what waits for you, then what the firewall found, to decide before it enforces.
 struct NetworkFirewallPage: View {
     @ObservedObject var firewall: FirewallMonitor

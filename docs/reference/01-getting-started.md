@@ -116,7 +116,7 @@ Each wave sorts the New patterns seen so far (`BaselinePolicy`) into these group
 - **Never trusted or listed:** Hostwatch's own activity, and interpreters and shells (macOS's own included). They stay
   New.
 
-**Baseline rules** appear in the Rules tab. They are narrow:
+**Baseline rules** appear in Patterns ▸ Rules. They are narrow:
 
 - **One per app and its signer,** for example *Slack · Slack Technologies*. It includes the app's helpers, and the
   signer must match.
@@ -158,7 +158,7 @@ trusted apps among them. It is local and uses code signatures only, no AI.
   - **See the patterns:** click *N patterns ›* to list them in the row.
   - **More actions:** *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**. Show in Patterns opens exactly those
     patterns, and a removable chip replaces the Show filter.
-- **Existing installs** don't start learning by themselves. Use **Update Baseline** (Rules tab or Settings ▸
+- **Existing installs** don't start learning by themselves. Use **Update Baseline** (Patterns ▸ Rules or Settings ▸
   Detection).
 - **Fewer decisions for you:**
   - **macOS itself is always trusted.** Apple tools on the sealed system volume fall under the one *macOS system*
@@ -174,7 +174,7 @@ trusted apps among them. It is local and uses code signatures only, no AI.
   - **Needs You lists only what's active.** A pattern not seen for 7 days leaves it. It stays New in Patterns and
     comes back if it happens again.
   - **Homebrew tools share one row.**
-  - **Recent automatic trust:** Rules ▸ Rules shows *Trusted automatically in the last 24 hours: N new patterns
+  - **Recent automatic trust:** Patterns ▸ Rules shows *Trusted automatically in the last 24 hours: N new patterns
     (Docker 12, …)* with Show.
 - **Older baselines:** baselines from the first version (one rule per developer) are undone once and sorted again.
 

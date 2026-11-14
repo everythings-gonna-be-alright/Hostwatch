@@ -386,9 +386,6 @@ struct PatternsView: View {
             selectShown: { [list, signatures] in
                 signatures.selection = Set(list.rows.flatMap { $0.children ?? [$0] }.filter { !$0.isGroup }.map(\.id))
             }, active: active)
-            Button { actions.openBaseline() } label: { Label("Needs You…", systemImage: "checklist") }
-                .buttonStyle(.glass)
-                .help("Rules ▸ Needs You: decide New patterns, with AI suggestions")
             Toggle(isOn: $inspector.shown.animation(.snappy(duration: 0.2))) { Image(systemName: "sidebar.trailing") }
                 .toggleStyle(.button)
                 .help(inspector.shown ? "Hide the inspector" : "Show the inspector: the selected pattern in full")
