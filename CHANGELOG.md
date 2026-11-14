@@ -49,6 +49,10 @@
 
 ### Fixes
 
+- **Found clears itself, and in bulk.** Entries that don't happen again leave Protection ▸ Found by themselves, a
+  question after a week, something that would be stopped after a month. A *Forget* menu clears the questions, what's
+  older than a day, or everything at once. Only list entries go: decisions and patterns stay, and anything that
+  happens again comes back.
 - **Events fits a narrow window.** Its bar no longer cuts off at both ends: it drops its captions, shows icons for
   Events and Running Now and for grouping, and puts the decision filter in one pop-up when space is short. The
   pop-up no longer shows a second "Show".

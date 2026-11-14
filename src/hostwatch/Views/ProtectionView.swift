@@ -161,12 +161,17 @@ struct ProtectionView: View {
         }
         let network = connections()
         return VStack(alignment: .leading, spacing: 8) {
-            Text("What protection found").font(.headline)
+            HStack {
+                Text("What protection found").font(.headline)
+                Spacer()
+                if !all.isEmpty { forgetMenu(all) }
+            }
             if all.isEmpty && network.isEmpty {
                 Text("Nothing yet. What would be stopped or asked about appears here, so you can decide first.")
                     .foregroundStyle(.secondary)
             } else {
-                Text("Allow marks the pattern Safe. Block marks it Dangerous. Either way it leaves this list.")
+                Text("Allow marks the pattern Safe. Block marks it Dangerous. Either way it leaves this list. "
+                     + "Entries that don't happen again leave by themselves: a question after a week, a stop after a month.")
                     .font(.caption).foregroundStyle(.secondary)
                 if !all.isEmpty {
                     Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
@@ -200,6 +205,30 @@ struct ProtectionView: View {
                 }
             }
         }
+    }
+
+    /// Clearing a long list at once. Only the entries go: decisions and patterns stay, and anything that happens again
+    /// comes back. Old entries also go by themselves (a question after a week, a stop after a month).
+    private func forgetMenu(_ all: [ProtectionFinding]) -> some View {
+        let questions = all.filter { $0.verdict == .ask }.count
+        let dayAgo = Date().addingTimeInterval(-86_400)
+        let old = all.filter { $0.lastSeen < dayAgo }.count
+        return Menu {
+            Button("Forget Questions (\(questions))") { protection.forget { $0.verdict == .ask } }
+                .disabled(questions == 0)
+            Button("Forget Older Than a Day (\(old))") { protection.forget { $0.lastSeen < dayAgo } }
+                .disabled(old == 0)
+            Divider()
+            Button("Forget All (\(all.count))") { protection.forget { _ in true } }
+        } label: {
+            Label("Forget", systemImage: "eraser")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Clear entries from this list. Decisions and patterns stay. What happens again comes back. "
+              + "Old entries also leave by themselves: a question after a week, a stop after a month.")
     }
 
     private func finding(_ f: ProtectionFinding) -> some View {
