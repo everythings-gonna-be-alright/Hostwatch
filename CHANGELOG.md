@@ -49,6 +49,9 @@
 
 ### Fixes
 
+- **Protection fits a narrow window too.** Its three cards sit side by side when there's room, two and one when
+  there isn't, one per row in a very narrow window. The window can't be made smaller than 960 × 600 points, the
+  size at which every page still looks right.
 - **Patterns fits a narrow window.** The filter bar was wider than a small window and pushed the whole page past
   its edges, the sidebar off the left and the columns off the right. It now drops its captions and shows icons when
   space is short, and scrolls sideways as a last resort.

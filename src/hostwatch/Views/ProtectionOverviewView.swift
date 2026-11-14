@@ -41,22 +41,28 @@ struct ProtectionOverview: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(ProtectionArea.allCases, id: \.self) { area in
-                        AreaCard(protection: protection, area: area, buckets: series[area] ?? [], range: range, yMax: yMax,
-                                 chartHeight: layout.chartHeight, go: go)
-                    }
-                    if let firewall {
-                        FirewallCard(firewall: firewall, buckets: network, range: range, yMax: yMax,
-                                     chartHeight: layout.chartHeight, go: go)
+                // Three across when they fit, else two and one, else one per row: the cards' mode switches don't shrink,
+                // and three of them side by side pushed the page past a narrow window's edge.
+                let cards = cardViews(series: series, network: network, range: range, yMax: yMax)
+                let columns = Self.columns(width: layout.width, cards: cards.count)
+                VStack(spacing: 14) {
+                    ForEach(Array(stride(from: 0, to: cards.count, by: columns)), id: \.self) { start in
+                        HStack(alignment: .top, spacing: 14) {
+                            ForEach(start..<min(start + columns, cards.count), id: \.self) { cards[$0] }
+                            // a short last row keeps the cards their width
+                            ForEach(0..<(columns - min(columns, cards.count - start)), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)     // every card in a row as tall as the tallest
                     }
                 }
-                .fixedSize(horizontal: false, vertical: true)     // every card as tall as the tallest
             }
             next(found)
         }
         .frame(maxWidth: .infinity, alignment: .leading)        // a dashboard fills the window, full screen included
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { layout.content = $0; fit() }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { w in if abs(w - layout.width) >= 1 { layout.width = w } }
         .onChange(of: viewport) { fit() }
         }
     }
@@ -72,6 +78,30 @@ struct ProtectionOverview: View {
     }
 
     // MARK: State
+
+    /// Launches, Files and (with the firewall) Network, in that order.
+    private func cardViews(series: [ProtectionArea: [ProtectionTimeline.Bucket]], network: [ProtectionTimeline.Bucket],
+                           range: ProtectionTimeline.Range, yMax: Int) -> [AnyView] {
+        var cards: [AnyView] = ProtectionArea.allCases.map { area in
+            AnyView(AreaCard(protection: protection, area: area, buckets: series[area] ?? [], range: range, yMax: yMax,
+                             chartHeight: layout.chartHeight, go: go))
+        }
+        if let firewall {
+            cards.append(AnyView(FirewallCard(firewall: firewall, buckets: network, range: range, yMax: yMax,
+                                              chartHeight: layout.chartHeight, go: go)))
+        }
+        return cards
+    }
+
+    /// The narrowest a card can be: its Off · Watch · Ask · Strict switch and padding.
+    static let cardMinWidth: CGFloat = 270
+
+    /// How many cards fit side by side in `width` (all of them before the width is known).
+    static func columns(width: CGFloat, cards: Int, spacing: CGFloat = 14) -> Int {
+        guard width > 0, cards > 0 else { return max(cards, 1) }
+        let fit = Int((width + spacing) / (cardMinWidth + spacing))
+        return min(cards, max(1, fit))
+    }
 
     private var state: ProtectionState {
         protection.state(network: firewall?.mode ?? .off)
@@ -411,6 +441,8 @@ private struct OverviewCard: ViewModifier {
 /// The charts' height for the window's size (no @State macro with the command line tools).
 final class OverviewLayout: ObservableObject {
     @Published var chartHeight: CGFloat = 120
+    /// The page's width, for how many cards fit side by side.
+    @Published var width: CGFloat = 0
     var content: CGFloat = 0
 }
 
