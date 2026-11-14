@@ -10,6 +10,9 @@
   progress ring filling over the seconds the program waits, then "allowed by AI", even with every window
   closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.
+  The question shows the AI's conclusion as a card: its verdict in colour, its confidence and its reason.
+- **Block Once.** The question about a paused program offers the same choice on both sides: *Always Block* (marks the
+  pattern Dangerous), *Block Once* (stops it this time, decides nothing), *Allow Once* and *Always Allow*.
 - **Protection has its own tab.** The Rules tab mixed decisions about patterns with protection. The Protection tab
   holds Overview, Protected Files and Folders, Network Firewall and Found, every page in Liquid Glass panels. Found
   is the one place to decide what was found, launches, files and connections, instead of connections being listed

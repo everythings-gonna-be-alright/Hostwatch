@@ -75,6 +75,9 @@ struct ProtectionAsk: Identifiable, Sendable {
     var checking = false
     /// What the AI said, shown in the question when it didn't settle it.
     var aiNote: String? = nil
+    /// The AI's verdict, for the question's conclusion card, and why it couldn't allow it alone.
+    var aiVerdict: LocalVerdict? = nil
+    var aiLimit: String? = nil
 }
 
 @MainActor
@@ -503,9 +506,11 @@ final class ProtectionMonitor: ObservableObject {
                 self.onPromptsChange?()
                 self.onAIAllowed?(done, note)
                 if done.area == .launches { self.onLaunchAnswered?(done.event, true) }
-            case .ask(let note)?:
+            case .ask(let note, let verdict, let limit)?:
                 self.prompts[i].checking = false
                 self.prompts[i].aiNote = note
+                self.prompts[i].aiVerdict = verdict
+                self.prompts[i].aiLimit = limit
                 self.onPromptsChange?()
             case nil:
                 self.prompts[i].checking = false
@@ -526,7 +531,8 @@ final class ProtectionMonitor: ObservableObject {
         }
     }
 
-    enum PromptAnswer { case block, allowOnce, alwaysAllow }
+    /// Always Block and Always Allow decide the pattern. Block Once and Allow Once decide only this time.
+    enum PromptAnswer { case block, blockOnce, allowOnce, alwaysAllow }
 
     /// Your answer in the panel. Block and Always Allow stick as pattern decisions, as in the firewall.
     func respond(_ id: Int, _ choice: PromptAnswer) {
@@ -534,15 +540,20 @@ final class ProtectionMonitor: ObservableObject {
         let ask = prompts.remove(at: i)
         onPromptsChange?()
         if ask.reactive {
-            engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: choice == .block)
+            engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: choice == .block || choice == .blockOnce)
         }
-        if ask.area == .launches { onLaunchAnswered?(ask.event, choice != .block) }
+        if ask.area == .launches { onLaunchAnswered?(ask.event, choice == .allowOnce || choice == .alwaysAllow) }
         switch choice {
         case .block:
             if !ask.reactive { answer?(id, false, 60) }
             markPattern?(ask.event.signatureKey, .dangerous)
             record(area: ask.area, event: ask.event,
                    decision: .init(verdict: .block, reason: "you blocked it", group: ask.group), verdict: .block, enforced: true)
+        case .blockOnce:
+            // Stopped this time, nothing decided: the next run is asked about again.
+            if !ask.reactive { answer?(id, false, 0) }
+            record(area: ask.area, event: ask.event,
+                   decision: .init(verdict: .block, reason: "you blocked it once", group: ask.group), verdict: .block, enforced: true)
         case .allowOnce:
             if !ask.reactive { answer?(id, true, 0) }
         case .alwaysAllow:

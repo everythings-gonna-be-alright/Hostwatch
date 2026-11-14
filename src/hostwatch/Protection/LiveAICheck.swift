@@ -12,8 +12,9 @@ enum LiveAICheck {
     enum Outcome: Equatable {
         /// Goes on this time. The note says why, for the notice and Found.
         case allow(String)
-        /// You decide. The note is the AI's view, shown in the question.
-        case ask(String)
+        /// You decide. The note is the AI's view in a sentence; the verdict and why the AI couldn't allow it alone
+        /// (the limit) let the question show the conclusion as a card.
+        case ask(String, verdict: LocalVerdict? = nil, limit: String? = nil)
     }
 
     static func enabled(_ defaults: UserDefaults = .standard) -> Bool {
@@ -25,10 +26,10 @@ enum LiveAICheck {
     static func outcome(verdict: LocalVerdict?, risk: PatternRisk, warned: Bool, refusal: String?) -> Outcome {
         guard let v = verdict else { return .ask("The AI didn't answer in time.") }
         let said = "AI: \(v.verdict.rawValue.lowercased()), \(v.confidence.rawValue) confidence. \(v.reason)"
-        guard v.verdict == .safe, v.confidence == .high else { return .ask(said) }
-        if let refusal { return .ask(said + " Not allowed by AI alone: \(refusal).") }
-        if risk == .high { return .ask(said + " Not allowed by AI alone: it's a high-risk pattern.") }
-        if warned { return .ask(said + " Not allowed by AI alone: Hostwatch found a warning sign.") }
+        guard v.verdict == .safe, v.confidence == .high else { return .ask(said, verdict: v) }
+        if let refusal { return .ask(said + " Not allowed by AI alone: \(refusal).", verdict: v, limit: refusal) }
+        if risk == .high { return .ask(said + " Not allowed by AI alone: it's a high-risk pattern.", verdict: v, limit: "it's a high-risk pattern") }
+        if warned { return .ask(said + " Not allowed by AI alone: Hostwatch found a warning sign.", verdict: v, limit: "Hostwatch found a warning sign") }
         return .allow(v.reason.isEmpty ? "The AI rated it safe." : v.reason)
     }
 }
