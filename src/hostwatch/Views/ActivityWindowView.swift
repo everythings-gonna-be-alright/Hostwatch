@@ -352,7 +352,7 @@ struct ActivityWindowView: View {
     private func groupingPicker(compact: Bool = false) -> some View {
         HStack(spacing: 12) {
             Divider().frame(height: 16)
-            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary) }
+            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
             Picker("Group", selection: $model.eventGrouping) {
                 ForEach(EventGrouping.allCases, id: \.self) { g in
                     Group {
@@ -421,7 +421,7 @@ struct ActivityWindowView: View {
                 Spacer(minLength: 0)
             } else {
                 Divider().frame(height: 16)
-                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary) }
+                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
                 KindFilters(model: model, feed: model.live)
                 if compact {
                     // One pop-up instead of the row of buttons: All Activity, New, Important…

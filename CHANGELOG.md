@@ -55,7 +55,7 @@
   happens again comes back.
 - **Events fits a narrow window.** Its bar no longer cuts off at both ends: it drops its captions, shows icons for
   Events and Running Now and for grouping, and puts the decision filter in one pop-up when space is short. The
-  pop-up no longer shows a second "Show".
+  pop-up no longer shows a second "Show", and the captions never break onto two lines.
 - **Protection fits a narrow window too.** Its three cards sit side by side when there's room, two and one when
   there isn't, one per row in a very narrow window. The window can't be made smaller than 1,240 × 720 points, the
   size at which the whole toolbar, search field included, and every page still fit.
