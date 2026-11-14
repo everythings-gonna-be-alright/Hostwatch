@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Rules ▸ Protection ▸ Overview, built like a System Settings pane: the state with its one next action, a card per
 /// area (mode, what it does, today), then the pages to go on to as a grouped list. How enforcement works sits behind
-/// the Help button, not in the page. A readable width, so rows don't stretch across a wide window.
+/// the Help button, not in the page. It fills the window: the charts take the spare height.
 struct ProtectionOverview: View {
     @ObservedObject var protection: ProtectionMonitor
     var firewall: FirewallMonitor? = nil
@@ -15,8 +15,6 @@ struct ProtectionOverview: View {
     /// The visible height of the page: a tall window gives the extra height to the charts, not to empty space.
     @Environment(\.viewportHeight) private var viewport
     @StateObject private var layout = OverviewLayout()
-
-    static let readableWidth: CGFloat = 1100
 
     var body: some View {
         let _ = protection.revision
@@ -57,19 +55,19 @@ struct ProtectionOverview: View {
             }
             next(found)
         }
-        .frame(maxWidth: Self.readableWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)        // a dashboard fills the window, full screen included
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { layout.content = $0; fit() }
         .onChange(of: viewport) { fit() }
         }
     }
 
     /// The charts take what the window has left over: the page without its charts is the measured height minus the
-    /// charts, so the fit settles in one step. Never shorter than the 120 pt a small window gets, never taller
-    /// than 300 pt, past which a bar chart of a few dozen numbers only gets emptier.
+    /// charts, so the fit settles in one step. Never shorter than the 120 pt a small window gets, so the page ends
+    /// at the window's bottom edge at any size, full screen on a large display included.
     private func fit() {
         guard viewport > 0, layout.content > 0 else { return }
         let rest = layout.content - layout.chartHeight
-        let want = min(300, max(120, (viewport - rest).rounded(.down)))
+        let want = max(120, (viewport - rest).rounded(.down))
         if abs(want - layout.chartHeight) >= 1 { layout.chartHeight = want }
     }
 

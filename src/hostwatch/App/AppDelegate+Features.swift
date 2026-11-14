@@ -21,9 +21,11 @@ extension AppDelegate {
             return true
         }
         if let frame = NSScreen.main?.visibleFrame, let window = activityWindow {
-            // 1280 × 780 for the website's screenshots. HOSTWATCH_DEMO_SIZE=full fills the screen, to check large windows.
-            let full = ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_SIZE"] == "full"
-            window.setFrame(full ? frame : NSRect(x: frame.midX - 640, y: frame.midY - 390, width: 1280, height: 780), display: true)
+            // 1280 × 780 for the website's screenshots. HOSTWATCH_DEMO_SIZE=full fills the screen, =fullscreen enters
+            // full-screen mode, to check large windows.
+            let size = ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_SIZE"]
+            window.setFrame(size == "full" ? frame : NSRect(x: frame.midX - 640, y: frame.midY - 390, width: 1280, height: 780), display: true)
+            if size == "fullscreen" { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { window.toggleFullScreen(nil) } }
         }
         model.overlayEnabled = Demo.scene == "hud"
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
