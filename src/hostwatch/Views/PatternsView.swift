@@ -439,7 +439,7 @@ struct PatternsView: View {
                 .background(Capsule().fill(Color.accentColor.opacity(0.14)))
                 .fixedSize()
             } else {
-                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary) }
+                if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
                 ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important],
                                  allowsMenu: false)
                 let once = list.counts.oneOffs
@@ -456,7 +456,7 @@ struct PatternsView: View {
                       + "finds them anyway). They're forgotten a week later unless they happen again.")
             }
             Divider().frame(height: 16)
-            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary) }
+            if !compact { Text("Group").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
             // The same control as on Events: flat, one row per program, or one row per AI session.
             Picker("Group", selection: Binding(
                 get: { signatures.groupBySession ? EventGrouping.session : signatures.groupByProcess ? .process : .none },
