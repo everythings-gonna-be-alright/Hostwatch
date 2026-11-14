@@ -52,21 +52,74 @@ import Testing
         #expect(!refused(AccessRule(kind: .network, target: "github.com", program: nil, action: .allow)))
     }
 
-    @Test func protectionAndTheFirewallApplyThemFirst() {
+    @Test func theFirewallAppliesNetworkRulesFirst() {
         let suite = "rules-\(UUID().uuidString)"
         let m = ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
                                   fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json"))
-        m.fileMode = .watch
-        m.accessRules = [file("/tmp/secret-project", .block)]
-        let open = ActivityEvent(kind: .file, time: "1", pid: 5, ppid: 1, name: "cat", proc: "/bin/cat",
-                                 target: "/tmp/secret-project/plan.txt", extra: "r", parent: "/bin/zsh")
-        #expect(m.decide(open, status: .safe)?.1.verdict == .block)             // before the pattern's Safe
         m.accessRules = [AccessRule(kind: .network, target: "example.com", program: nil, action: .allow)]
         let facts = FirewallFacts(program: "/x", proto: "TCP", ip: "93.184.216.34", port: "443", host: "api.example.com",
                                   risk: .high, riskReason: "downloaded", knownBad: "ThreatFox", patternKey: "k")
         let rule = m.networkRule(host: facts.host, ip: facts.ip, program: facts.program)
         #expect(FirewallPolicy.decide(facts, status: .dangerous, rule: rule).verdict == .allow)   // your rule first
         #expect(FirewallPolicy.decide(facts, status: .dangerous).verdict == .block)
+    }
+}
+
+/// Folders and files: one model, places with exceptions. A program you always allow or always block in a place is
+/// decided there before its pattern, Block when it's on both lists, the deepest place first.
+@MainActor @Suite struct PlaceExceptionsDecide {
+    func monitor() -> ProtectionMonitor {
+        let suite = "places-\(UUID().uuidString)"
+        return ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
+                                 fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json"))
+    }
+    func open(_ path: String, by program: String) -> ActivityEvent {
+        ActivityEvent(kind: .file, time: "1", pid: 5, ppid: 1, name: (program as NSString).lastPathComponent, proc: program,
+                      target: path, extra: "r", parent: "/bin/zsh")
+    }
+
+    @Test func exceptionsComeBeforeThePatternAndBlockWinsBoth() {
+        let preview = "/System/Applications/Preview.app"
+        var place = CustomPlace(path: "/tmp/contracts", isFolder: true)
+        place.exceptions = PlaceExceptions(allowed: [preview, "/usr/bin/curl"], blocked: ["/usr/bin/curl"])
+        let d1 = ProtectionPolicy.decideCustom(path: "/tmp/contracts/a.pdf", actor: preview + "/Contents/MacOS/Preview",
+                                               status: .dangerous, places: [place])
+        #expect(d1?.verdict == .allow)                                        // your exception over the pattern
+        let d2 = ProtectionPolicy.decideCustom(path: "/tmp/contracts/a.pdf", actor: "/usr/bin/curl", status: .safe, places: [place])
+        #expect(d2?.verdict == .block)                                        // on both lists: blocked
+    }
+
+    @Test func theDeepestPlaceDecides() {
+        let outer = CustomPlace(path: "/tmp/work", isFolder: true, others: .block)
+        var inner = CustomPlace(path: "/tmp/work/site", isFolder: true, others: .ask)
+        inner.exceptions.allowed = ["/usr/local/bin/hugo"]
+        let d = ProtectionPolicy.decideCustom(path: "/tmp/work/site/index.md", actor: "/usr/local/bin/hugo",
+                                              status: .unclassified, places: [outer, inner])
+        #expect(d?.verdict == .allow)
+    }
+
+    @Test func settingsSavedBeforeExceptionsStillRead() throws {
+        let old = #"{"on":true,"others":"block"}"#
+        let s = try JSONDecoder().decode(ProtectedGroupSetting.self, from: Data(old.utf8))
+        #expect(s.others == .block && s.exceptions.isEmpty)
+        let place = #"{"id":"a","path":"/tmp/x","isFolder":true,"on":true,"others":"ask"}"#
+        #expect(try JSONDecoder().decode(CustomPlace.self, from: Data(place.utf8)).exceptions.isEmpty)
+    }
+
+    @Test func oldFileRulesMoveIntoThePlaces() {
+        let m = monitor()
+        m.customPlaces = [CustomPlace(path: "/tmp/contracts", isFolder: true)]
+        m.accessRules = [
+            AccessRule(kind: .files, target: "/tmp/contracts/2026", program: "/usr/bin/curl", action: .block),   // into the place
+            AccessRule(kind: .files, target: "/tmp/private", program: nil, action: .block),                      // a blocked place
+            AccessRule(kind: .network, target: "example.com", program: nil, action: .block),                     // stays
+        ]
+        m.moveFileRulesIntoPlaces(home: "/Users/someone")
+        #expect(m.customPlaces.first { $0.path == "/tmp/contracts" }?.exceptions.blocked == ["/usr/bin/curl"])
+        #expect(m.customPlaces.first { $0.path == "/tmp/private" }?.others == .block)
+        #expect(m.accessRules.map(\.kind) == [.network])
+        m.fileMode = .watch
+        #expect(m.decide(open("/tmp/contracts/2026/a", by: "/usr/bin/curl"), status: .safe)?.1.verdict == .block)
     }
 }
 

@@ -95,12 +95,51 @@ struct ProtectedGroup: Identifiable, Sendable {
 
 /// A folder or file you protect yourself. Nobody is expected there but macOS's own programs: allow one by marking
 /// its pattern Safe, as for any card.
+/// Programs you decided for one place: always let in, or always stopped. Your decisions, so they come before the
+/// pattern's status and the place's choice for others. An app covers the programs inside it.
+struct PlaceExceptions: Codable, Equatable, Sendable {
+    var allowed: [String] = []
+    var blocked: [String] = []
+
+    var isEmpty: Bool { allowed.isEmpty && blocked.isEmpty }
+
+    /// Block first: a program on both lists is stopped.
+    func verdict(for program: String) -> ProtectionVerdict? {
+        guard !program.isEmpty else { return nil }
+        if blocked.contains(where: { AccessRules.runs($0, program) }) { return .block }
+        if allowed.contains(where: { AccessRules.runs($0, program) }) { return .allow }
+        return nil
+    }
+
+    static func name(_ program: String) -> String {
+        let n = (program as NSString).lastPathComponent
+        return n.hasSuffix(".app") ? String(n.dropLast(4)) : n
+    }
+}
+
 struct CustomPlace: Codable, Identifiable, Equatable, Sendable {
     var id = UUID().uuidString
     var path: String                               // absolute, standardized
     var isFolder: Bool
     var on = true
     var others: ProtectionVerdict = .ask
+    var exceptions = PlaceExceptions()
+
+    init(id: String = UUID().uuidString, path: String, isFolder: Bool, on: Bool = true, others: ProtectionVerdict = .ask,
+         exceptions: PlaceExceptions = PlaceExceptions()) {
+        (self.id, self.path, self.isFolder, self.on, self.others, self.exceptions) = (id, path, isFolder, on, others, exceptions)
+    }
+
+    /// Places saved before exceptions existed still read.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        path = try c.decode(String.self, forKey: .path)
+        isFolder = try c.decodeIfPresent(Bool.self, forKey: .isFolder) ?? true
+        on = try c.decodeIfPresent(Bool.self, forKey: .on) ?? true
+        others = try c.decodeIfPresent(ProtectionVerdict.self, forKey: .others) ?? .ask
+        exceptions = try c.decodeIfPresent(PlaceExceptions.self, forKey: .exceptions) ?? PlaceExceptions()
+    }
 
     var groupID: String { "custom:\(id)" }
     var name: String { (path as NSString).lastPathComponent }
@@ -116,6 +155,19 @@ struct CustomPlace: Codable, Identifiable, Equatable, Sendable {
 struct ProtectedGroupSetting: Codable, Equatable, Sendable {
     var on = true
     var others: ProtectionVerdict = .ask
+    var exceptions = PlaceExceptions()
+
+    init(on: Bool = true, others: ProtectionVerdict = .ask, exceptions: PlaceExceptions = PlaceExceptions()) {
+        (self.on, self.others, self.exceptions) = (on, others, exceptions)
+    }
+
+    /// Settings saved before exceptions existed still read.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        on = try c.decodeIfPresent(Bool.self, forKey: .on) ?? true
+        others = try c.decodeIfPresent(ProtectionVerdict.self, forKey: .others) ?? .ask
+        exceptions = try c.decodeIfPresent(PlaceExceptions.self, forKey: .exceptions) ?? PlaceExceptions()
+    }
 }
 
 enum ProtectionPolicy {
@@ -146,11 +198,12 @@ enum ProtectionPolicy {
     /// the pattern comes first, then the programs expected there (the pattern's risk already says so), then the
     /// card's choice for everyone else.
     static func decideFile(pattern: String, status: SignatureStatus, risk: PatternRisk,
-                           settings: [String: ProtectedGroupSetting]) -> ProtectionDecision? {
+                           settings: [String: ProtectedGroupSetting], actor: String = "") -> ProtectionDecision? {
         guard let label = label(of: pattern), let group = ProtectedGroup.group(forLabel: label) else { return nil }
         let setting = settings[group.id] ?? ProtectedGroupSetting()
         guard setting.on else { return nil }
         if group.writesOnly, pattern.split(separator: " ").first?.contains("w") != true { return nil }
+        if let v = setting.exceptions.verdict(for: actor) { return exception(v, actor, group.id) }
         switch status {
         case .dangerous, .suspicious:
             return .init(verdict: .block, reason: "its pattern is marked \(status.title)", group: group.id)
@@ -166,7 +219,9 @@ enum ProtectionPolicy {
     /// on the pattern first, then macOS's own programs (Finder, Spotlight, backups) pass, then the place's choice.
     static func decideCustom(path: String, actor: String, status: SignatureStatus, places: [CustomPlace],
                              hostwatch: String = Bundle.main.executablePath ?? "") -> ProtectionDecision? {
-        guard let place = places.first(where: { $0.on && $0.covers(path) }) else { return nil }
+        // The deepest place that covers it: a folder inside a protected folder has its own exceptions.
+        guard let place = places.filter({ $0.on && $0.covers(path) }).max(by: { $0.path.count < $1.path.count }) else { return nil }
+        if let v = place.exceptions.verdict(for: actor) { return exception(v, actor, place.groupID) }
         switch status {
         case .dangerous, .suspicious:
             return .init(verdict: .block, reason: "its pattern is marked \(status.title)", group: place.groupID)
@@ -178,6 +233,11 @@ enum ProtectionPolicy {
             return .init(verdict: .allow, reason: "macOS system program", group: place.groupID)
         }
         return .init(verdict: place.others, reason: "\(place.name): protected by you", group: place.groupID)
+    }
+
+    private static func exception(_ v: ProtectionVerdict, _ actor: String, _ group: String) -> ProtectionDecision {
+        let who = PlaceExceptions.name(actor)
+        return .init(verdict: v, reason: v == .allow ? "you always allow \(who) here" : "you always block \(who) here", group: group)
     }
 
     /// What a mode does with a decision: nil when nothing is shown or done. Strict turns a question into a block,

@@ -161,6 +161,7 @@ final class ProtectionMonitor: ObservableObject {
         if let data = Vault.shared.read(hourlyURL), let saved = try? JSONDecoder().decode([HourCount].self, from: data) {
             hourly = saved
         }
+        if accessRules.contains(where: { $0.kind == .files }) { moveFileRulesIntoPlaces() }
     }
 
     func mode(_ area: ProtectionArea) -> ProtectionMode { area == .launches ? launchMode : fileMode }
@@ -253,12 +254,8 @@ final class ProtectionMonitor: ObservableObject {
                                                              riskReason: e.signatureReason, knownBad: e.knownBad))
         case .file:
             guard fileMode != .off else { return nil }
-            // Your rules first: they are your decisions, before the protected groups and any pattern.
-            if let rule = AccessRules.matchFile(accessRules, path: e.target, program: e.proc) {
-                return (.files, .init(verdict: rule.action == .allow ? .allow : .block, reason: "your rule: " + rule.sentence))
-            }
             if let d = ProtectionPolicy.decideFile(pattern: e.signaturePattern, status: status, risk: e.signatureRisk,
-                                                   settings: groups) {
+                                                   settings: groups, actor: e.proc) {
                 return (.files, d)
             }
             return ProtectionPolicy.decideCustom(path: e.target, actor: e.proc, status: status, places: customPlaces)
@@ -312,6 +309,40 @@ final class ProtectionMonitor: ObservableObject {
         let before = findings.count
         findings = findings.filter { !keys.contains($0.value.patternKey) }
         if findings.count != before { dirty = true; publishSoon() }
+    }
+
+    /// File rules from the short-lived separate list become what they meant on the places: a program's Allow or Block
+    /// an exception of the place that covers it (a new protected folder when none does), Block for every program a
+    /// protected folder whose others are blocked. Allow for every program only overrode pattern statuses: dropped.
+    func moveFileRulesIntoPlaces(home: String = NSHomeDirectory()) {
+        for rule in accessRules where rule.kind == .files && rule.on {
+            let path = rule.target
+            guard let program = rule.program else {
+                guard rule.action == .block else { continue }
+                if let i = customPlaces.firstIndex(where: { $0.path == path }) { customPlaces[i].others = .block }
+                else { customPlaces.append(CustomPlace(path: path, isFolder: true, others: .block)) }
+                continue
+            }
+            func add(_ e: inout PlaceExceptions) {
+                if rule.action == .allow { if !e.allowed.contains(program) { e.allowed.append(program) } }
+                else if !e.blocked.contains(program) { e.blocked.append(program) }
+            }
+            if let i = customPlaces.indices.filter({ customPlaces[$0].covers(path) })
+                .max(by: { customPlaces[$0].path.count < customPlaces[$1].path.count }) {
+                add(&customPlaces[i].exceptions)
+            } else if let group = ProtectedGroup.all.first(where: { g in
+                g.prefixes(home: home).contains { AccessRules.covers($0, path) || AccessRules.covers(path, $0) }
+            }) {
+                var s = groups[group.id] ?? ProtectedGroupSetting()
+                add(&s.exceptions)
+                groups[group.id] = s
+            } else {
+                var place = CustomPlace(path: path, isFolder: true)
+                add(&place.exceptions)
+                customPlaces.append(place)
+            }
+        }
+        accessRules.removeAll { $0.kind == .files }
     }
 
     /// The network rules that decide this connection, for the firewall.
@@ -399,10 +430,11 @@ final class ProtectionMonitor: ObservableObject {
         let cards: [[String: Any]] = ProtectedGroup.all.compactMap { g in
             let s = groups[g.id] ?? ProtectedGroupSetting()
             guard s.on else { return nil }
-            return ["id": g.id, "prefixes": g.prefixes(home: home), "owners": g.owners, "writesOnly": g.writesOnly,
-                    "others": s.others.rawValue]
+            return ["id": g.id, "prefixes": g.prefixes(home: home), "owners": g.owners + s.exceptions.allowed,
+                    "blocked": s.exceptions.blocked, "writesOnly": g.writesOnly, "others": s.others.rawValue]
         } + customPlaces.filter(\.on).map {
-            ["id": $0.groupID, "prefixes": [$0.path], "owners": [String](), "writesOnly": false, "others": $0.others.rawValue]
+            ["id": $0.groupID, "prefixes": [$0.path], "owners": $0.exceptions.allowed, "blocked": $0.exceptions.blocked,
+             "writesOnly": false, "others": $0.others.rawValue]
         }
         return ["launches": paused ? "off" : launchMode.rawValue, "files": paused ? "off" : fileMode.rawValue,
                 "groups": cards, "hostwatch": Bundle.main.executablePath ?? ""]
