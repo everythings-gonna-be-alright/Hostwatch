@@ -59,12 +59,14 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 **0.16.0**
 - **🤖 AI checks first** – with Protection on Ask, a program Hostwatch doesn't know is checked by your AI before you're
-  asked. A sure Safe goes on this time, with a glass notice. Shells and your secrets stay yours to decide.
-- **🛡️ Protection in its own tab** – overview charts for 24 hours, 7 days or 30 days on one honest scale, and a Found
-  list that clears itself.
+  asked. A sure Safe goes on this time, with a glass notice. Otherwise the question shows the AI's conclusion, and
+  *Block Once* joins *Allow Once*. Shells and your secrets stay yours to decide.
+- **🛡️ Protection in its own tab** – places and network destinations decided the same way (any other program: ask,
+  allow or block, plus programs you always allow or always block), charts on one honest scale, and a Found list that
+  clears itself.
 - **🗂️ Patterns that fit** – two-line rows, a sidebar that folds to icons, and a menu bar with every security switch.
-- **🚫 Fixes** – pausing the list no longer pauses detection, and one malicious file no longer flags all of GitHub or
-  Telegram.
+- **🚫 Fixes** – pausing the list no longer pauses detection, a pause your terminal doesn't notice, one question at a
+  time, and one malicious file no longer flags all of GitHub or Telegram.
 
 **0.15.0**
 - **🛡️ Protection** – launches and protected files (SSH keys, credentials, keychains, your own folders) decided like
