@@ -13,6 +13,8 @@ final class AICheckNotices: ObservableObject {
         let path: String
         let what: String
         var state: State
+        /// When the check began: the bar fills from here over LiveAICheck.timeLimit.
+        var started = Date()
     }
 
     @Published private(set) var items: [Item] = []
@@ -21,8 +23,10 @@ final class AICheckNotices: ObservableObject {
     /// The programs being checked now (from Protection's paused questions).
     func setChecking(_ asks: [ProtectionAsk]) {
         let allowed = items.filter { if case .allowed = $0.state { return true } else { return false } }
-        let checking = asks.map { Item(id: $0.id, name: $0.event.name, path: $0.event.proc,
-                                       what: $0.area == .launches ? "launch" : "file access", state: .checking) }
+        let checking = asks.map { ask in
+            Item(id: ask.id, name: ask.event.name, path: ask.event.proc, what: ask.area == .launches ? "launch" : "file access",
+                 state: .checking, started: items.first { $0.id == ask.id }?.started ?? Date())   // the bar keeps its place
+        }
         items = checking + allowed.filter { a in !checking.contains { $0.id == a.id } }
         show()
     }
@@ -95,15 +99,43 @@ struct AICheckNoticeView: View {
             .frame(maxWidth: 240, alignment: .leading)
             Spacer(minLength: 4)
             if item.state == .checking {
-                ProgressView().controlSize(.small)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.tint)
+                    .symbolEffect(.variableColor.iterative.reversing, options: .repeating)
+                    .symbolEffect(.pulse, options: .repeating)
             } else {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    .symbolEffect(.bounce, value: item.state)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            if item.state == .checking { WaitBar(started: item.started).padding(.horizontal, 14).padding(.bottom, 4) }
+        }
         .frame(width: 320)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// How long the AI may still take: a thin bar filling over LiveAICheck.timeLimit, the time the program waits.
+private struct WaitBar: View {
+    let started: Date
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let done = min(1, max(0, context.date.timeIntervalSince(started) / LiveAICheck.timeLimit))
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule().fill(LinearGradient(colors: [.accentColor.opacity(0.5), .accentColor], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(4, geo.size.width * done))
+                }
+            }
+            .frame(height: 3)
+        }
+        .accessibilityHidden(true)
     }
 }
