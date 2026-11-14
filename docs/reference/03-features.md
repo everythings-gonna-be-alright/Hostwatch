@@ -772,6 +772,11 @@ Hostwatch can show what it would stop: a launch, or a program reading places lik
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
 curl and other programs that run whatever they're told are judged by what they run.
 
+- **AI checks first (Ask):** a paused launch or file access is first looked at by the AI you chose (the on-device
+  model or your own server, within 12 seconds). If it is sure it's safe, the program goes on, this time only, and a
+  glass notice at the top right says so. It also shows "Checking … with AI" while it looks, whether or not a window
+  is open. Otherwise you're asked, with what the AI said. Shells, interpreters, high-risk programs and your sensitive
+  files are always yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
 - **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a

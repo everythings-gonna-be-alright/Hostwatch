@@ -1344,6 +1344,11 @@ Hostwatch can show what it would stop: a launch, or a program reading places lik
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
 curl and other programs that run whatever they're told are judged by what they run.
 
+- **AI checks first (Ask):** a paused launch or file access is first looked at by the AI you chose (the on-device
+  model or your own server, within 12 seconds). If it is sure it's safe, the program goes on, this time only, and a
+  glass notice at the top right says so. It also shows "Checking … with AI" while it looks, whether or not a window
+  is open. Otherwise you're asked, with what the AI said. Shells, interpreters, high-risk programs and your sensitive
+  files are always yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
 - **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a
@@ -2545,6 +2550,7 @@ Each line where data crosses from a less trusted side to a more trusted one, and
 | Data on disk | Read by another program running as you | Encrypted. The key needs Hostwatch's code signature, or your keychain password in a dialog. | Settings (the preferences file) are plain |
 | Secrets in command lines | Stored in history or sent to an AI | Masked by one rule set: headers, tokens, passwords, URL credentials, known token formats, private keys | A secret in a shape no rule knows can slip through |
 | Threat lists | A poisoned list flags a popular domain, or a list carries code | Shape, size and growth checks. Big platforms can't be flagged by their own domain. A malicious file on a platform anyone can publish to (GitHub, Telegram, Dropbox…) doesn't flag the platform. Lists only raise alerts. | A list provider can still miss things or be late. Malware calling home through such a platform isn't a list match, only its behaviour is judged. |
+| AI check of paused programs | A crafted command line talks the AI into letting a program go on | Only a sure Safe lets it go on, once. Never a shell, interpreter, high-risk program or sensitive file. A warning sign Hostwatch found blocks it. The decision stays yours | One launch of an ordinary program could get through on a wrong verdict. Turn the check off in Settings ▸ AI. |
 | AI triage | A command line written to fool the AI ("this is safe") | The AI never decides alone for shells and interpreters. Precedence: you, then your rules, then AI, then automatic. Risk only goes up by itself. | The AI can still be wrong about ordinary programs. Its verdict is shown as the AI's, and you can reopen it. |
 | Hold and protection | A process frozen forever, or the wrong process signalled | A watchdog resumes every held process after 65 s. The path is checked before every signal, so a reused pid is left alone. | Stopping happens just after the start, see below |
 | Release | A tampered download | Developer ID signature, Apple notarization, a stapled ticket, a published SHA-256 | Trust in Apple and GitHub |

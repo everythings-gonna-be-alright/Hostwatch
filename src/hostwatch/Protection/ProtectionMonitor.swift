@@ -64,6 +64,10 @@ struct ProtectionAsk: Identifiable, Sendable {
     var deadline: Date
     /// Paused by Hostwatch itself (no Endpoint Security): the answer stops or resumes the process.
     var reactive = false
+    /// The AI is looking at it: no question yet, a notice instead.
+    var checking = false
+    /// What the AI said, shown in the question when it didn't settle it.
+    var aiNote: String? = nil
 }
 
 @MainActor
@@ -179,6 +183,13 @@ final class ProtectionMonitor: ObservableObject {
 
     /// One live event: in Watch, marks what would be stopped and counts the rest. In Ask and Strict (without
     /// Endpoint Security) the reactive engine acts: a blocked program is stopped, a question pauses it.
+    /// Asks the AI about a paused program (LiveAICheck): nil when no fast model is ready. Set by the app.
+    var aiCheck: ((ActivityEvent) async -> LiveAICheck.Outcome?)?
+    /// A program the AI let go on, for the notice. Set by the app.
+    var onAIAllowed: ((ProtectionAsk, String) -> Void)?
+    /// Patterns the AI let go on this session: they pass again without another check, until you decide them.
+    private(set) var aiAllowed: Set<String> = []
+
     func consider(_ e: inout ActivityEvent, status: SignatureStatus) {
         guard !paused, let (area, decision) = decide(e, status: status) else { return }
         let mode = self.mode(area)
@@ -198,15 +209,20 @@ final class ProtectionMonitor: ObservableObject {
             e.protection = stopped ? .blocked : .wouldBlock
             e.protectionReason = stopped ? decision.reason : decision.reason + " (couldn't be stopped: not yours, or protected)"
         case .ask:
+            // Let go by the AI earlier this session: it isn't paused or checked again.
+            if aiAllowed.contains(e.signatureKey) { return }
             guard engine.pause(pid: e.pid, path: path) else {
                 record(area: area, event: e, decision: decision, verdict: .ask, enforced: false)
                 return
             }
             nextLocalAsk += 1                              // negative ids: never the collector's
+            let checking = aiCheck != nil && LiveAICheck.enabled(defaults)
             prompts.append(ProtectionAsk(id: -nextLocalAsk, event: e,
                                          area: area, reason: decision.reason, group: decision.group,
-                                         deadline: Date().addingTimeInterval(ReactiveEnforcer.pauseTimeout), reactive: true))
+                                         deadline: Date().addingTimeInterval(ReactiveEnforcer.pauseTimeout), reactive: true,
+                                         checking: checking))
             onPromptsChange?()
+            if checking { checkWithAI(-nextLocalAsk) }
         case .allow:
             break
         }
@@ -375,6 +391,46 @@ final class ProtectionMonitor: ObservableObject {
             held.group = decision.group
             prompts.append(held)
             onPromptsChange?()
+        }
+    }
+
+    /// The AI looks at a paused program, within LiveAICheck.timeLimit. Safe lets it go on this time; anything else,
+    /// or no answer, turns it into your question with the AI's view in it.
+    private func checkWithAI(_ id: Int) {
+        guard let ask = prompts.first(where: { $0.id == id }), let check = aiCheck else { return }
+        Task { @MainActor [weak self] in
+            let outcome = await Self.withTimeLimit(LiveAICheck.timeLimit) { await check(ask.event) }
+            guard let self, let i = self.prompts.firstIndex(where: { $0.id == id }) else { return }
+            switch outcome {
+            case .allow(let note)?:
+                let done = self.prompts.remove(at: i)
+                self.aiAllowed.insert(done.event.signatureKey)
+                self.engine.release(pid: done.event.pid, path: Self.subject(done.event), stop: false)
+                self.record(area: done.area, event: done.event,
+                            decision: .init(verdict: .ask, reason: "allowed this time by AI: " + note, group: done.group),
+                            verdict: .ask, enforced: false)
+                self.onPromptsChange?()
+                self.onAIAllowed?(done, note)
+            case .ask(let note)?:
+                self.prompts[i].checking = false
+                self.prompts[i].aiNote = note
+                self.onPromptsChange?()
+            case nil:
+                self.prompts[i].checking = false
+                self.prompts[i].aiNote = "No fast AI model is ready (Settings ▸ AI), so you decide."
+                self.onPromptsChange?()
+            }
+        }
+    }
+
+    /// The work's result, or nil when it takes longer than `seconds`.
+    static func withTimeLimit<T: Sendable>(_ seconds: TimeInterval, _ work: @escaping @Sendable () async -> T?) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask { try? await Task.sleep(for: .seconds(seconds)); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 

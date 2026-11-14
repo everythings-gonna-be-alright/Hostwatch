@@ -316,3 +316,61 @@ import Testing
         #expect([3, 6, 7, 11, 23, 140, 1000].map(ProtectionTimeline.tidy) == [3, 10, 10, 20, 25, 200, 1000])
     }
 }
+
+/// A paused program checked by AI first: only a sure Safe lets it go on, this time, and never for what is yours to
+/// decide. The question still comes for everything else, with what the AI said.
+@MainActor @Suite struct ProtectionAIChecks {
+    func verdict(_ v: Verdict, _ c: LocalVerdict.Confidence) -> LocalVerdict { .init(verdict: v, confidence: c, reason: "ordinary") }
+
+    @Test func onlyASureSafeAllows() {
+        #expect(LiveAICheck.outcome(verdict: verdict(.safe, .high), risk: .normal, warned: false, refusal: nil) == .allow("ordinary"))
+        #expect(LiveAICheck.outcome(verdict: verdict(.safe, .medium), risk: .normal, warned: false, refusal: nil) != .allow("ordinary"))
+        #expect(LiveAICheck.outcome(verdict: verdict(.suspicious, .high), risk: .normal, warned: false, refusal: nil) != .allow("ordinary"))
+        #expect(LiveAICheck.outcome(verdict: nil, risk: .normal, warned: false, refusal: nil) == .ask("The AI didn't answer in time."))
+    }
+
+    @Test func shellsSensitiveFilesHighRiskAndWarningsStayYours() {
+        let sure = verdict(.safe, .high)
+        for case .ask(let note) in [
+            LiveAICheck.outcome(verdict: sure, risk: .normal, warned: false, refusal: "python runs whatever it is told"),
+            LiveAICheck.outcome(verdict: sure, risk: .high, warned: false, refusal: nil),
+            LiveAICheck.outcome(verdict: sure, risk: .normal, warned: true, refusal: nil),
+        ] { #expect(note.contains("Not allowed by AI alone")) }
+    }
+
+    @Test func onByDefaultAndCanBeTurnedOff() {
+        let d = UserDefaults(suiteName: "aicheck-\(UUID().uuidString)")!
+        #expect(LiveAICheck.enabled(d))
+        d.set(false, forKey: LiveAICheck.settingKey)
+        #expect(!LiveAICheck.enabled(d))
+    }
+
+    func paused(_ outcome: LiveAICheck.Outcome?) async -> (ProtectionMonitor, ProtectionReactive.Signals, [String]) {
+        let (m, s) = ProtectionReactive().monitor(path: "/usr/bin/curl")
+        m.launchMode = .ask
+        var allowed: [String] = []
+        m.aiCheck = { _ in outcome }
+        m.onAIAllowed = { ask, _ in allowed.append(ask.event.name) }
+        var e = ProtectionReactive().launch("/usr/bin/curl")
+        m.consider(&e, status: .unclassified)
+        #expect(m.prompts.first?.checking == true)           // a notice, not yet a question
+        for _ in 0..<50 where m.prompts.first?.checking == true { try? await Task.sleep(for: .milliseconds(20)) }
+        return (m, s, allowed)
+    }
+
+    @Test func safeLetsItGoOnOnceAndThePatternPassesThisSession() async {
+        let (m, s, allowed) = await paused(.allow("ordinary"))
+        #expect(m.prompts.isEmpty && s.sent.map(\.1) == [SIGSTOP, SIGCONT] && allowed == ["dropper"])
+        var again = ProtectionReactive().launch("/usr/bin/curl")
+        m.consider(&again, status: .unclassified)
+        #expect(m.prompts.isEmpty && s.sent.count == 2)       // not paused again
+    }
+
+    @Test func anythingElseBecomesYourQuestionWithTheAIsView() async {
+        let (m, s, allowed) = await paused(.ask("AI: suspicious, high confidence."))
+        #expect(m.prompts.count == 1 && m.prompts[0].checking == false && allowed.isEmpty)
+        #expect(m.prompts[0].aiNote == "AI: suspicious, high confidence." && s.sent.map(\.1) == [SIGSTOP])
+        let (m2, _, _) = await paused(nil)
+        #expect(m2.prompts.first?.aiNote?.contains("No fast AI model") == true)
+    }
+}
