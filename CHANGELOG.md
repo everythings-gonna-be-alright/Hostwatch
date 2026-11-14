@@ -10,7 +10,9 @@
   "allowed by AI", even with every window closed. Otherwise you're asked, with what the AI said. Shells,
   interpreters, high-risk programs and your sensitive files are always yours to decide. Turn it off in Settings ▸ AI.
 - **Protection has its own tab.** The Rules tab mixed decisions about patterns with protection. The Protection tab
-  holds Overview, Protected Files and Folders, Network Firewall and Found, every page in Liquid Glass panels.
+  holds Overview, Protected Files and Folders, Network Firewall and Found, every page in Liquid Glass panels. Found
+  is the one place to decide what was found, launches, files and connections, instead of connections being listed
+  twice: the Network Firewall page says how many are left, with *Review in Found*.
 - **Clearer charts.** Choose *24 Hours*, *7 Days* or *30 Days* for all cards at once. Each card's numbers add up what
   its chart shows, the cards share one scale so they compare honestly, and VoiceOver reads every bar and offers an
   Audio Graph. In a large or full-screen window the charts grow into the spare height.

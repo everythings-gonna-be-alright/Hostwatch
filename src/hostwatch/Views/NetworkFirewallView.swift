@@ -7,8 +7,8 @@ struct NetworkFirewallPage: View {
     @ObservedObject var firewall: FirewallMonitor
     @ObservedObject var signatures: SignatureStore
     let showNetwork: () -> Void
-
-    private static let limit = 30
+    /// Protection ▸ Found, where the firewall's findings are decided.
+    var openFound: () -> Void = {}
 
     var body: some View {
         let found = firewall.list(status: { signatures.status(forKey: $0) })
@@ -110,45 +110,41 @@ struct NetworkFirewallPage: View {
 
     // MARK: Found
 
+    /// What the firewall found is decided in Protection ▸ Found, with launches and files: one place for everything
+    /// to decide (it was listed twice, here and there). Here, how many, and the way there.
     private func findings(_ found: [(FirewallEntry, FirewallDecision)]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("What the firewall found").font(.headline)
-                Spacer()
-                Button("Show All in Network…", action: showNetwork).buttonStyle(.link)
-                if !found.isEmpty { ConnectionsForgetMenu(firewall: firewall, found: found) }
-                // Out of the way, and said plainly: it forgets what was seen, never a rule (those are listed above).
-                Menu {
-                    Button("Forget Seen Connections…") {
-                        let alert = NSAlert()
-                        alert.messageText = "Forget the connections seen so far?"
-                        alert.informativeText = "The list and its counts start again. Your rules stay as they are: blocks, "
-                            + "exceptions and every Allow or Block you made."
-                        alert.addButton(withTitle: "Forget")
-                        alert.addButton(withTitle: "Cancel")
-                        if alert.runModal() == .alertFirstButtonReturn { firewall.clear() }
-                    }
-                    .disabled(firewall.entries.isEmpty)
-                } label: { Image(systemName: "ellipsis.circle") }
-                .menuStyle(.borderlessButton).fixedSize()
+        let block = found.filter { $0.1.verdict == .block }.count
+        return HStack(spacing: 10) {
+            Image(systemName: found.isEmpty ? "checkmark.circle" : "exclamationmark.shield")
+                .foregroundStyle(found.isEmpty ? Color.secondary : block > 0 ? Color.red : Color.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(found.isEmpty ? "Nothing to decide" : "\(found.count) connection\(found.count == 1 ? "" : "s") to decide")
+                    .fontWeight(.semibold)
+                Text(found.isEmpty
+                     ? (firewall.mode == .off ? "Turn on Watch to see what would be blocked or asked about." : "Every connection seen passes.")
+                     : "\(block) would be blocked, \(found.count - block) asked about. Allow or Block them in Found, with launches and files.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            if found.isEmpty {
-                Text(firewall.mode == .off ? "Turn on Watch to see what would be blocked or asked about."
-                     : "Nothing to decide: every connection seen passes.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Allow marks the program's pattern for that destination Safe. Block marks it Dangerous.")
-                    .font(.caption).foregroundStyle(.secondary)
-                ForEach(found.prefix(Self.limit), id: \.0.id) { entry, decision in
-                    NetworkFindingRow(entry: entry, decision: decision, mode: firewall.mode, firewall: firewall) { status in
-                        firewall.mark(status, keys: [entry.facts.patternKey], in: signatures,
-                                      note: status == .safe ? "allowed in Protection" : "blocked in Protection")
-                    }
-                }
-                if found.count > Self.limit {
-                    Text("and \(found.count - Self.limit) more in Network").font(.caption).foregroundStyle(.tertiary)
-                }
+            Spacer()
+            if !found.isEmpty {
+                Button { openFound() } label: { Label("Review in Found", systemImage: "chevron.right").labelStyle(.titleOnly) }
+                    .buttonStyle(.glassProminent)
             }
+            // Out of the way, and said plainly: it forgets what was seen, never a rule (those are listed above).
+            Menu {
+                Button("Show All in Network…", action: showNetwork)
+                Button("Forget Seen Connections…") {
+                    let alert = NSAlert()
+                    alert.messageText = "Forget the connections seen so far?"
+                    alert.informativeText = "The list and its counts start again. Your rules stay as they are: blocks, "
+                        + "exceptions and every Allow or Block you made."
+                    alert.addButton(withTitle: "Forget")
+                    alert.addButton(withTitle: "Cancel")
+                    if alert.runModal() == .alertFirstButtonReturn { firewall.clear() }
+                }
+                .disabled(firewall.entries.isEmpty)
+            } label: { Image(systemName: "ellipsis.circle") }
+            .menuStyle(.borderlessButton).fixedSize()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
