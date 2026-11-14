@@ -160,8 +160,10 @@ extension AppDelegate {
             panel.orderOut(nil)
             firewallPanels[id] = nil
         }
+        // One question at a time: a connection from a program whose launch you're being asked about waits for that answer.
+        let launching = Set(protection.prompts.filter { $0.area == .launches }.map(\.event.pid))
         var added = false
-        for prompt in firewall.prompts where firewallPanels[prompt.id] == nil {
+        for prompt in firewall.prompts where firewallPanels[prompt.id] == nil && !launching.contains(prompt.event.pid) {
             let panel = QuestionPanel.make(FirewallPromptView(firewall: firewall, id: prompt.id,
                                                               chain: launchChainReport(for: prompt.event)))
             QuestionPanel.show(panel, slot: firewallPanels.count)

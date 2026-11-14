@@ -202,6 +202,9 @@ final class ProtectionMonitor: ObservableObject {
     /// Endpoint Security) the reactive engine acts: a blocked program is stopped, a question pauses it.
     /// Asks the AI about a paused program (LiveAICheck): nil when no fast model is ready. Set by the app.
     var aiCheck: ((ActivityEvent) async -> LiveAICheck.Outcome?)?
+    /// A launch question was answered (by you, the AI or the time limit): allowed or stopped. Set by the app, so the
+    /// firewall's question about the same program comes after, or goes.
+    var onLaunchAnswered: ((ActivityEvent, Bool) -> Void)?
     /// A program the AI let go on, for the notice. Set by the app.
     var onAIAllowed: ((ProtectionAsk, String) -> Void)?
     /// Patterns the AI let go on this session: they pass again without another check, until you decide them.
@@ -477,6 +480,7 @@ final class ProtectionMonitor: ObservableObject {
                             verdict: .ask, enforced: false)
                 self.onPromptsChange?()
                 self.onAIAllowed?(done, note)
+                if done.area == .launches { self.onLaunchAnswered?(done.event, true) }
             case .ask(let note)?:
                 self.prompts[i].checking = false
                 self.prompts[i].aiNote = note
@@ -510,6 +514,7 @@ final class ProtectionMonitor: ObservableObject {
         if ask.reactive {
             engine.release(pid: ask.event.pid, path: Self.subject(ask.event), stop: choice == .block)
         }
+        if ask.area == .launches { onLaunchAnswered?(ask.event, choice != .block) }
         switch choice {
         case .block:
             if !ask.reactive { answer?(id, false, 60) }
