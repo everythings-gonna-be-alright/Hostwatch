@@ -465,8 +465,14 @@ struct PatternsView: View {
                     signatures.groupByProcess = choice == .process
                 })) {
                 ForEach(EventGrouping.allCases, id: \.self) { g in
-                    Label(g.title, systemImage: g.symbol).labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
-                        .help(g.title).tag(g)
+                    Group {
+                        if compact {
+                            Label(g.title, systemImage: g.symbol).labelStyle(.iconOnly)
+                        } else {
+                            Label(g.title, systemImage: g.symbol).labelStyle(.titleAndIcon)
+                        }
+                    }
+                    .help(g.title).tag(g)
                 }
             }
             .pickerStyle(.segmented)
@@ -726,9 +732,3 @@ private struct CombineSheet: View {
     }
 }
 
-/// A label style chosen at run time: the bar shows titles when there's room, icons alone when there isn't.
-struct AnyLabelStyle: LabelStyle {
-    private let make: (Configuration) -> AnyView
-    init<S: LabelStyle>(_ style: S) { make = { AnyView(S.makeBody(style)($0)) } }
-    func makeBody(configuration: Configuration) -> some View { make(configuration) }
-}
