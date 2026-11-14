@@ -57,6 +57,15 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.16.0**
+- **🤖 AI checks first** – with Protection on Ask, a program Hostwatch doesn't know is checked by your AI before you're
+  asked. A sure Safe goes on this time, with a glass notice. Shells and your secrets stay yours to decide.
+- **🛡️ Protection in its own tab** – overview charts for 24 hours, 7 days or 30 days on one honest scale, and a Found
+  list that clears itself.
+- **🗂️ Patterns that fit** – two-line rows, a sidebar that folds to icons, and a menu bar with every security switch.
+- **🚫 Fixes** – pausing the list no longer pauses detection, and one malicious file no longer flags all of GitHub or
+  Telegram.
+
 **0.15.0**
 - **🛡️ Protection** – launches and protected files (SSH keys, credentials, keychains, your own folders) decided like
   the firewall: Watch shows what would be stopped, Ask and Strict stop or pause it now. The firewall moved in beside.
@@ -65,17 +74,6 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 - **👀 Classify what you see** – the shown rows or your selection, with a live list of every answer as it lands.
 - **🪟 A calmer HUD and window** – exceptions first, repeats folded, glass questions that name who started a program.
 - **🚫 Fixes** – a threat-list block no longer says "Blocked by you", and Allow works on every connection.
-
-**0.14.0**
-- **🧬 Who really started it** – *Show Launch Chain* rebuilds a process's parents up to launchd from what was
-  recorded, so it works after they've exited, and names the origin: terminal, app, AI session. Ask AI gets it too.
-- **🚫 Block one domain for one app** – right-click a domain in the Network tab ▸ *Block for an App*, instead of
-  blocking an app's whole web access.
-- **⚡ A lighter Events list** – rebuilt on AppKit: a quarter of the CPU it took under a busy coding agent.
-- **🗂️ One list style** for Events, Patterns and Running Now, with a *Parent* column, hundredths of a second, and
-  group rows that read as headings.
-- **🛡️ Fixes** – Forget no longer lets a blocked destination through, and marking several events Safe marks them all.
-
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 
