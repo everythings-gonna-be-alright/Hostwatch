@@ -15,8 +15,17 @@
   window the charts grow into the spare height instead of leaving it empty, and the Overview's panels are Liquid
   Glass.
 
+- **A clearer menu bar.** Menus are named for what they act on: *History* (Time Travel, the list), *Selection* (Ask
+  AI, Watch Closely, Show Launch Chain, Mark As, Exclude) and a new *Protection* menu with every security switch:
+  whether you're protected, a timed pause, the mode of each area, holds and the collector. *File ▸ Export Events…*
+  saves the list or the selection as JSON lines. Filters in *View ▸ Show* are enabled only in the tab they apply to.
+  The menu bar icon says whether you're protected, opens Rules, and offers a timed *Pause Protection*.
+
 ### Fixes
 
+- **Pausing the list no longer pauses detection.** *Pause Live Stream* dropped every event while it was on, with no
+  time limit, so patterns, stories and threat lists stopped until someone resumed it. It is now *Pause List*: the list
+  stops so you can read it, detection goes on, and what arrived meanwhile appears on resume.
 - **Fewer false "known malware" alerts.** ThreatFox lists single malicious files on GitHub, Telegram, Discord, Steam,
   Dropbox and similar platforms, and Hostwatch flagged the whole platform. A platform anyone can publish to is no
   longer flagged by one file on it, nor is a host shared by three or more malware families. Earlier alerts for these

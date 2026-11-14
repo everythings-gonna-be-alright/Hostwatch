@@ -242,7 +242,7 @@ struct ActivityWindowView: View {
 
     private var subtitle: String {
         // Protection's state costs no toolbar room: "Live · Rehearsing", "Live · Protection paused".
-        let state = (model.paused ? "Paused" : model.connected ? "Live" : "Collector off")
+        let state = (model.connected ? (model.paused ? "List paused" : "Live") : "Collector off")
             + (model.protection?.state(network: firewall.mode).word.map { " · \($0)" } ?? "")
         if traveling {
             return "History · " + travel.playhead.formatted(.dateTime.weekday(.abbreviated).hour().minute())
@@ -291,7 +291,7 @@ struct ActivityWindowView: View {
             Button { model.paused.toggle() } label: {
                 Label(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play.fill" : "pause.fill")
             }
-            .help(model.paused ? "Resume the live stream" : "Pause the live stream")
+            .help(model.paused ? "Resume the list" : "Pause the list to read it. Detection keeps running.")
             .disabled(traveling || runningNow)
             Toggle(isOn: $model.overlayEnabled) {
                 Label("HUD", systemImage: "rectangle.inset.topright.filled")

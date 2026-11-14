@@ -229,7 +229,7 @@ struct HUDView: View {
             if !model.overlayClickThrough {
                 // One style for both: the same capsule, glyph size and weight.
                 HUDIconButton(symbol: model.paused ? "play.fill" : "pause.fill", s: s) { model.paused.toggle() }
-                    .help(model.paused ? "Resume the live stream" : "Pause the live stream")
+                    .help(model.paused ? "Resume the list" : "Pause the list to read it. Detection keeps running.")
                 HUDIconButton(symbol: "arrow.up.right", s: s, action: actions.openWindow)
                     .help("Open the Hostwatch window")
             }

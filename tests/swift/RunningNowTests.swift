@@ -56,6 +56,25 @@ import Testing
         #expect(got.map(\.pid) == [5, 6] && model.history.isEmpty)
     }
 
+    /// Pausing is for reading the list: detection goes on underneath, and the events show when it resumes.
+    @MainActor @Test func pausingTheListNeverPausesDetection() throws {
+        _ = TestEnv.ready
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-pause-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let signatures = SignatureStore(directory: dir)
+        let model = HUDModel(signatures: signatures, stories: StoryEngine(persistent: false),
+                             domains: DomainRegistry(replayLearningUntil: Date()))
+        var seen = 0
+        model.onEvent = { _ in seen += 1 }
+        model.paused = true
+        model.receive(Data((#"{"kind":"exec","time":"12:00:00","pid":42,"ppid":1,"name":"dropper","proc":"/tmp/dropper","target":"/tmp/dropper","extra":"","parent":"/bin/zsh"}"# + "\n").utf8))
+        #expect(seen == 1)                                   // detection handled it
+        #expect(signatures.total > 0)                        // and learned its pattern
+        #expect(model.history.isEmpty)                       // the list stayed still
+        model.paused = false
+        #expect(model.history.map(\.pid) == [42])           // and shows it on resume
+    }
+
     @Test func rowsKnowTheirParentAndMatchSearch() {
         let rows = RunningRow.rows([info(5, "zsh"), info(6, "vim", ppid: 5, args: "vim notes.txt"), info(7, "kernel_task", ppid: 0)])
         #expect(rows.first { $0.pid == 6 }?.parentName == "zsh")
