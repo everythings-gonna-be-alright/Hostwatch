@@ -12,6 +12,7 @@ struct NetworkMapInspector: View {
     var openStories: () -> Void
     var interfaceName: (String) -> String = { $0 }
     var actions = NetworkMapActions()
+    var showProcess: ((ActivityEvent) -> Void)? = nil
 
     private var node: MapNode? {
         state.selection.flatMap { id in graph.columns.joined().flatMap(\.nodes).first { $0.id == id } }
@@ -217,6 +218,10 @@ struct NetworkMapInspector: View {
                 row("Tries", n == 0 ? "None from other devices" : "\(n) from other devices")
             }
             listenerMore(l)
+            if let showProcess {
+                Button("Process Details") { showProcess(store.listenerEvent(l)) }.buttonStyle(.glass).controlSize(.small)
+                    .help("Its launch chain, status and actions, as under Events")
+            }
         }
     }
 
@@ -241,6 +246,10 @@ struct NetworkMapInspector: View {
         let byGroup = Dictionary(grouping: mine, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }, $0.value.contains(where: \.blocked)) }
             .sorted { $0.1 > $1.1 }
         header("app", node.title, node.ref, badge: node.badge)
+        if let showProcess, let event = store.lastEvent(program: node.ref) {
+            Button("Process Details") { showProcess(event) }.buttonStyle(.glass).controlSize(.small)
+                .help("Its launch chain, status and actions, as under Events")
+        }
         programMore(node, mine)
         Text("Went to \(byGroup.count == 1 ? "1 destination" : "\(byGroup.count) destinations").").font(.system(size: 12))
         VStack(alignment: .leading, spacing: 6) {

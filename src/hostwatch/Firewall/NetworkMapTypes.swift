@@ -77,6 +77,13 @@ struct MapConnection: Codable, Equatable, Identifiable {
     var network: String?
     /// Its connections' patterns, for blocking the program from the map.
     var keys: [String]?
+    /// The last connection's process and target, for the process details (its launch chain needs the pid).
+    var pid: Int?
+    var ppid: Int?
+    var parent: String?
+    var target: String?
+    var proto: String?
+    var host: String?
 
     var id: String { path + "|" + group + (network.map { "|" + $0 } ?? "") }
     func count(since: Date) -> Int { hours.reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }

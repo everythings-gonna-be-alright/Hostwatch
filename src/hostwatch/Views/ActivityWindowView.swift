@@ -200,7 +200,7 @@ struct ActivityWindowView: View {
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) },
-                                openStories: { model.windowTab = 2 })
+                                openStories: { model.windowTab = 2 }, hud: actions)
             default: patternsAndProtection(.protection)
             }
     }

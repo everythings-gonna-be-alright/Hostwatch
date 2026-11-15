@@ -177,6 +177,8 @@ struct NetworkView: View {
     var knownBad: (String) -> String? = { _ in nil }
     /// The Stories tab.
     var openStories: () -> Void = {}
+    /// The window's actions, for the map's process details.
+    var hud: HUDActions? = nil
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -190,7 +192,8 @@ struct NetworkView: View {
                 HStack(spacing: 12) { modeSwitch; Spacer() }
                     .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)
                 NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(state.mapState.range), interfaceName: state.interfaceName,
-                               openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions)
+                               openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions,
+                               hud: hud, signatures: signatures)
             }
         } else {
             list

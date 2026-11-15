@@ -619,7 +619,9 @@ the list can't show: who tried to reach this Mac.
     rules*, and devices, addresses and ports in *Blocked devices and addresses*, each with *Unblock*. *Block an
     Address…* there blocks one by typing it.
 - **Details:** the panel on the right shows, for a device, all its addresses, its status, the programs on this Mac
-  that connected to it and its tries by port. For a program, its connections, first and last seen and its way out.
+  that connected to it and its tries by port. For a program, its connections, first and last seen and its way out, and *Process Details*: the
+  panel Events shows (status, launch chain, Ask AI, Watch Closely), under the map. Right-click a program or a listening
+  program ▸ *Show Process Details* does the same.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.

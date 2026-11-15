@@ -17,7 +17,8 @@
 - **Block from the map.** Right-click a device, an address, a listening program's port, a program or a domain to
   block it. Devices and addresses are blocked both ways whatever the firewall's mode. The router can't be blocked.
   Every block is listed in Protection ▸ Network, with Unblock, and an address can be blocked there by typing it.
-- **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes.
+- **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes. A program's
+  *Process Details* opens the panel Events shows, with its launch chain, under the map.
 - **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
   doesn't mark everyone as new, and a different router at the same address is not a false alarm.
 - **Show more:** click any "and 12 more" and the map makes way for all of them in a table, with details and the same
