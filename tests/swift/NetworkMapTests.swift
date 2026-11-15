@@ -636,3 +636,26 @@ import Testing
         #expect(g.edges.contains { $0.to == "dst:cdn.tracker.example" && $0.style == .blocked })
     }
 }
+
+
+/// Selecting shows the whole flow, folded programs included.
+@Suite struct MapSelectionFlowTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func aDestinationShowsEveryProgramThatReachedIt() {
+        var out = (1...20).map { i in
+            MapOutgoing(program: "busy\(i)", path: "/bin/busy\(i)", group: "site\(i).example", ip: "93.184.216.\(i)", count: 100 + i,
+                        firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)
+        }
+        out.append(MapOutgoing(program: "quiet", path: "/bin/quiet", group: "site1.example", ip: "93.184.216.1", count: 1,
+                               firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false))
+        let plain = NetworkMapBuilder.build(.init(outgoing: out, now: now))
+        #expect(!(plain.columns[1].last?.nodes.contains { $0.ref == "/bin/quiet" } ?? true))     // folded away
+        let g = NetworkMapBuilder.build(.init(outgoing: out, now: now, selected: "dst:site1.example"))
+        #expect(g.columns[1].last?.nodes.contains { $0.ref == "/bin/quiet" } == true)
+        #expect(g.related?.isSuperset(of: ["prog:/bin/quiet", "prog:/bin/busy1", "dst:site1.example"]) == true)
+        #expect(g.edges.contains { $0.from == "prog:/bin/quiet" })
+        let p = NetworkMapBuilder.build(.init(outgoing: out, now: now, selected: "prog:/bin/busy3"))
+        #expect(p.columns[3][0].nodes.contains { $0.ref == "site3.example" })
+    }
+}

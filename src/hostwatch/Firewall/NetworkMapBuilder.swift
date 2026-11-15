@@ -34,6 +34,8 @@ enum NetworkMapBuilder {
         /// Watch): domains blocked for any program, programs whose connections you blocked.
         var blockedDomains: Set<String> = []
         var blockedPrograms: Set<String> = []
+        /// The selected node: what's on its flows is shown even when it would fold.
+        var selected: String?
     }
 
     /// A blocked domain covers its subdomains.
@@ -208,8 +210,21 @@ enum NetworkMapBuilder {
             return na != nb ? na > nb : a.key < b.key
         }
         let byDestination = Dictionary(grouping: out, by: \.group)
+        // The selection's flows: a destination's programs, a program's destinations, a way out's both.
+        var focus: [MapOutgoing] = []
+        if let sel = input.selected {
+            if sel.hasPrefix("dst:") { focus = out.filter { "dst:" + $0.group == sel } }
+            else if sel.hasPrefix("prog:") { focus = out.filter { "prog:" + $0.path == sel } }
+            else if sel.hasPrefix("way:") { focus = out.filter { wayOut($0) == sel } }
+        }
+        let pinnedPrograms = Set(focus.map(\.path)), pinnedDests = Set(focus.map(\.group))
+        if !focus.isEmpty {
+            graph.related = Set(focus.flatMap { ["prog:" + $0.path, wayOut($0), "dst:" + $0.group] }).union([input.selected!])
+        }
         if showOut {
-            let programs = byProgram.prefix(limit("programs", maxPrograms)).map { path, list in
+            let top = byProgram.prefix(limit("programs", maxPrograms))
+            let listed = Array(top) + byProgram.filter { pinnedPrograms.contains($0.key) && !top.map(\.key).contains($0.key) }
+            let programs = listed.map { path, list in
                 let first = list.map(\.firstSeen).min() ?? input.now
                 let blocked = input.blockedPrograms.contains(path)
                 return MapNode(id: "prog:" + path, kind: .program, title: list[0].program, count: list.reduce(0) { $0 + v($1) },
@@ -238,6 +253,7 @@ enum NetworkMapBuilder {
                 }
                 let most = limit("destinations", maxDestinations)
                 for d in ranked where picked.count < most && !picked.contains(d.group) { picked.append(d.group) }
+                for g in pinnedDests where !picked.contains(g) { picked.append(g) }
             }
             let shownDest = ranked.filter { picked.contains($0.group) }.sorted { $0.n != $1.n ? $0.n > $1.n : $0.group < $1.group }
             graph.columns[3].append(MapSection(key: "destinations", title: "", nodes: shownDest.map { d in

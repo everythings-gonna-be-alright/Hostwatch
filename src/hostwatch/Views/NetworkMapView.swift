@@ -97,7 +97,7 @@ struct NetworkMapView: View {
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
                                 measure: state.measure, window: state.travel,
                                 changedOnly: state.changedOnly, blockedDomains: actions.blockedDomains(),
-                                blockedPrograms: blockedPrograms, interfaceName: interfaceName)
+                                blockedPrograms: blockedPrograms, selected: state.selection, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -261,7 +261,10 @@ struct NetworkMapView: View {
 
     private func map(_ graph: NetworkGraph) -> some View {
         let shown = graph.columns.indices.filter { !graph.columns[$0].isEmpty }
-        let related = state.selection.map { id in Set(graph.edges.filter { $0.from == id || $0.to == id }.flatMap { [$0.from, $0.to] } + [id]) }
+        // The selection's whole flow when the builder knows it (a destination lights its programs), else its neighbours.
+        let related = graph.related ?? state.selection.map { id in
+            Set(graph.edges.filter { $0.from == id || $0.to == id }.flatMap { [$0.from, $0.to] } + [id])
+        }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 56) {
                 ForEach(shown, id: \.self) { c in
