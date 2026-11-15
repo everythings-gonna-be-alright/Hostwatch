@@ -18,7 +18,7 @@
   block it. Devices and addresses are blocked both ways whatever the firewall's mode. The router can't be blocked.
 - **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
   doesn't mark everyone as new, and a different router at the same address is not a false alarm.
-- **Show more:** every "and 12 more" can be opened to show them all.
+- **Show more:** click any "and 12 more" for all of them in a searchable list, with details and the same menu.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
   hardware address changing. Hostwatch only listens. It never scans your network.
 

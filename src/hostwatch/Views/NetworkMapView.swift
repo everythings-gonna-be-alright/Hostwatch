@@ -15,8 +15,9 @@ final class NetworkMapViewState: ObservableObject {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange") }
     }
     @Published var selection: String?
-    /// Sections shown whole ("devices", "destinations").
-    @Published var expanded: Set<String> = []
+    /// The section shown whole in its own sheet ("devices", "destinations"), nil when none.
+    @Published var allOf: String?
+    @Published var allSearch = ""
     @Published var renaming = ""
 }
 
@@ -44,8 +45,7 @@ struct NetworkMapView: View {
 
     var body: some View {
         let _ = store.revision
-        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, expanded: state.expanded,
-                                interfaceName: interfaceName)
+        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -73,6 +73,12 @@ struct NetworkMapView: View {
             .padding(.horizontal, 16)
             Divider()
             footer(graph)
+        }
+        .sheet(isPresented: Binding(get: { state.allOf != nil }, set: { if !$0 { state.allOf = nil } })) {
+            if let key = state.allOf {
+                NetworkMapAllView(store: store, state: state, key: key, outgoing: outgoing, interfaceName: interfaceName,
+                                  openDetails: openDetails, openStories: openStories, actions: actions)
+            }
         }
     }
 
@@ -182,14 +188,19 @@ struct NetworkMapView: View {
                         .contextMenu { NetworkMapMenu(node: node, store: store, actions: actions, select: { state.selection = node.id }) }
                         .anchorPreference(key: NodeFrames.self, value: .bounds) { [node.id: $0] }
                     }
-                    if !section.key.isEmpty, section.more > 0 || state.expanded.contains(section.key) {
-                        let open = state.expanded.contains(section.key)
-                        Button(open ? "Show Fewer" : "Show \(section.more) More \(section.moreNoun.capitalized)") {
-                            if open { state.expanded.remove(section.key) } else { state.expanded.insert(section.key) }
+                    if section.more > 0 {
+                        Button { state.allSearch = ""; state.allOf = section.key } label: {
+                            HStack(spacing: 3) {
+                                Text("and \(section.more) more \(section.moreNoun)")
+                                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                        .help(open ? "Back to the first few" : "Every one of them on the map")
+                        .buttonStyle(.plain)
+                        .disabled(section.key.isEmpty)
+                        .help("All \(section.moreNoun), in a list")
+                        .accessibilityLabel("Show all \(section.moreNoun)")
                     }
                 }
             }
