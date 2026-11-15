@@ -30,6 +30,15 @@ enum NetworkMapBuilder {
         var window: DateInterval?
         /// Only what wasn't there in the 7 days before: new devices, fresh connections, first tries.
         var changedOnly = false
+        /// Your blocks the map can't see in connections yet (the firewall stops them on its next try, or only would on
+        /// Watch): domains blocked for any program, programs whose connections you blocked.
+        var blockedDomains: Set<String> = []
+        var blockedPrograms: Set<String> = []
+    }
+
+    /// A blocked domain covers its subdomains.
+    static func isBlocked(domain group: String, in blocked: Set<String>) -> Bool {
+        blocked.contains(group) || blocked.contains { group.hasSuffix("." + $0) }
     }
 
     /// What matches a search: a device by any of its names, model, maker or address, a try by its address or port, a
@@ -202,14 +211,17 @@ enum NetworkMapBuilder {
         if showOut {
             let programs = byProgram.prefix(limit("programs", maxPrograms)).map { path, list in
                 let first = list.map(\.firstSeen).min() ?? input.now
+                let blocked = input.blockedPrograms.contains(path)
                 return MapNode(id: "prog:" + path, kind: .program, title: list[0].program, count: list.reduce(0) { $0 + v($1) },
-                               badge: input.now.timeIntervalSince(first) < NetworkMapPolicy.newFor ? .new : nil, ref: path, bytes: bytes)
+                               badge: blocked ? .blocked : input.now.timeIntervalSince(first) < NetworkMapPolicy.newFor ? .new : nil,
+                               ref: path, bytes: bytes)
             }
             graph.columns[1].append(MapSection(key: "programs", title: "Programs going out", nodes: programs,
                                                more: max(0, byProgram.count - programs.count), moreNoun: "programs"))
             // Blocked and new destinations, then each way out's busiest, then the busiest overall.
             let ranked = byDestination.map { group, list in
-                (group: group, n: list.reduce(0) { $0 + v($1) }, blocked: list.contains(where: \.blocked), isNew: list.contains(where: \.isNew))
+                (group: group, n: list.reduce(0) { $0 + v($1) },
+                 blocked: list.contains(where: \.blocked) || Self.isBlocked(domain: group, in: input.blockedDomains), isNew: list.contains(where: \.isNew))
             }.sorted { a, b in
                 let ra = (a.blocked ? 2 : 0) + (a.isNew ? 1 : 0), rb = (b.blocked ? 2 : 0) + (b.isNew ? 1 : 0)
                 return ra != rb ? ra > rb : a.n != b.n ? a.n > b.n : a.group < b.group
@@ -243,8 +255,9 @@ enum NetworkMapBuilder {
             for o in out {
                 let way = wayOut(o)
                 if !ways.contains(way) { ways.append(way) }
-                let style: MapEdgeStyle = o.blocked || input.blockedAddresses.contains(o.ip) || deviceFor[o.ip]?.blocked == true ? .blocked
-                    : o.isNew ? .new : .allowed
+                let yours = input.blockedAddresses.contains(o.ip) || deviceFor[o.ip]?.blocked == true
+                    || input.blockedPrograms.contains(o.path) || Self.isBlocked(domain: o.group, in: input.blockedDomains)
+                let style: MapEdgeStyle = o.blocked || yours ? .blocked : o.isNew ? .new : .allowed
                 if shownPrograms.contains("prog:" + o.path) { link("prog:" + o.path, way, v(o), style) }
                 if shownDests.contains("dst:" + o.group) { link(way, "dst:" + o.group, v(o), style) }
             }

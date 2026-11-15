@@ -616,3 +616,23 @@ import Testing
         #expect(NetworkProfile.defaultName(router: "", subnet: "10.0.0.0/24") == "Network 10.0.0.0/24")
     }
 }
+
+
+/// Your blocks show at once, before the firewall stops anything.
+@Suite struct MapBlocksShownTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func blockedDomainAndProgramAreRedAtOnce() {
+        let out = [MapOutgoing(program: "curl", path: "/usr/bin/curl", group: "example.com", ip: "93.184.216.34", count: 3,
+                               firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false),
+                   MapOutgoing(program: "Safari", path: "/s", group: "cdn.tracker.example", ip: "93.184.216.35", count: 3,
+                               firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)]
+        let g = NetworkMapBuilder.build(.init(outgoing: out, now: now, blockedDomains: ["tracker.example"], blockedPrograms: ["/usr/bin/curl"]))
+        let dest = g.columns[3][0].nodes
+        #expect(dest.first { $0.ref == "cdn.tracker.example" }?.badge == .blocked)    // a subdomain of what you blocked
+        #expect(dest.first { $0.ref == "example.com" }?.badge == nil)
+        #expect(g.columns[1].last?.nodes.first { $0.ref == "/usr/bin/curl" }?.badge == .blocked)
+        #expect(g.edges.contains { $0.from == "prog:/usr/bin/curl" && $0.style == .blocked })
+        #expect(g.edges.contains { $0.to == "dst:cdn.tracker.example" && $0.style == .blocked })
+    }
+}

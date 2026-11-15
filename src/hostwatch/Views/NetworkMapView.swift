@@ -91,10 +91,13 @@ struct NetworkMapView: View {
     var body: some View {
         let _ = store.revision
         // A whole section as a list in place of the map: the same page, the same details panel.
+        // Your blocks, red at once: a domain or a program is the firewall's to stop on its next try.
+        let blockedPrograms = Set(outgoing.map(\.path)).filter(actions.programBlocked)
         let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
                                 measure: state.measure, window: state.travel,
-                                changedOnly: state.changedOnly, interfaceName: interfaceName)
+                                changedOnly: state.changedOnly, blockedDomains: actions.blockedDomains(),
+                                blockedPrograms: blockedPrograms, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -403,7 +406,7 @@ struct MapNodeView: View {
                 if let symbol {
                     Image(systemName: symbol)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(node.badge == .new ? Color.orange : Color.secondary)
+                        .foregroundStyle(blocked ? Color.red : node.badge == .new ? Color.orange : Color.secondary)
                         .frame(width: 18)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -427,10 +430,13 @@ struct MapNodeView: View {
             }
             .padding(.horizontal, 10)
             .frame(minHeight: node.kind == .listener || node.kind == .program || node.kind == .closedPorts ? 32 : 40)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(blocked ? Color.red.opacity(0.08) : Color(nsColor: .controlBackgroundColor)))
             .overlay {
+                // Blocked: a red outline (the selection's own outline wins while selected).
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(selected ? Color.primary : Color.primary.opacity(0.1), lineWidth: selected ? 2 : 0.5)
+                    .strokeBorder(selected ? Color.primary : blocked ? Color.red.opacity(0.7) : Color.primary.opacity(0.1),
+                                  lineWidth: selected ? 2 : blocked ? 1.5 : 0.5)
             }
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -440,6 +446,8 @@ struct MapNodeView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .help(node.title + (node.subtitle.isEmpty ? "" : ", " + node.subtitle))
     }
+
+    private var blocked: Bool { node.badge == .blocked }
 
     private var symbol: String? {
         switch node.kind {
