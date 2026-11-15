@@ -88,6 +88,10 @@ Log*.
 - **To avoid this:** build with a stable identity:
   `CODESIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./scripts/build-app.sh`.
 
+**The welcome guide:** on a fresh install, after the Full Disk Access setup, five short pages say what Hostwatch
+does, what each tab is for, how decisions work, what the learning day is, and how Protection starts. It shows once.
+**Help ▸ Welcome Guide** opens it again at any time.
+
 **Running it by hand:** `./scripts/run-agent.sh` runs the collector from Terminal (`sudo Hostwatch --collector`).
 The app detects it and does not start a second one.
 

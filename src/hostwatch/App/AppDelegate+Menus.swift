@@ -220,6 +220,7 @@ extension AppDelegate {
         NSApp.windowsMenu = windowMenu
         let helpMenu = NSMenu(title: "Help")
         [item("Hostwatch Help", #selector(openHelp)),
+         item("Welcome Guide", #selector(showWelcomeGuide)),
          .separator(),
          item("Threat Model and Coverage", #selector(openThreatModel)),
          .separator(),
@@ -597,4 +598,48 @@ extension AppDelegate {
 
 extension NSMenuItem {
     func withTag(_ tag: Int) -> NSMenuItem { self.tag = tag; return self }
+}
+
+// MARK: Welcome guide
+
+extension AppDelegate {
+    static let welcomeShownKey = "welcomeGuideShown"
+
+    /// The first launch shows the guide once, after the Full Disk Access window closes when that is up.
+    func showWelcomeOnce() {
+        guard !UserDefaults.standard.bool(forKey: Self.welcomeShownKey) else { return }
+        if let accessWindow, accessWindow.isVisible {
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: accessWindow, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self?.showWelcomeOnce() } }
+            }
+            return
+        }
+        UserDefaults.standard.set(true, forKey: Self.welcomeShownKey)
+        showWelcomeGuide()
+    }
+
+    /// Help ▸ Welcome Guide: the five pages again.
+    @objc func showWelcomeGuide() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let welcomeWindow { welcomeWindow.makeKeyAndOrderFront(nil); return }
+        let days = baseline.duration / 86_400
+        let learning = days <= 1 ? "24 hours" : "\(Int(days.rounded())) days"
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
+                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.title = "Welcome to Hostwatch"
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        let close: () -> Void = { [weak window] in window?.close() }
+        window.contentView = NSHostingView(rootView: WelcomeGuideView(learning: learning, done: close))
+        window.center()
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.welcomeWindow = nil }
+        }
+        welcomeWindow = window
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
 }

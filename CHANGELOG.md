@@ -9,6 +9,8 @@
   and again is decided by the on-device AI, so few patterns are left for you to classify. One-offs wait, and shells,
   your sensitive files and anything unsigned, downloaded or high-risk are never learned. The menu bar shows how long
   is left, and *Extend by a Day*, *End Now* and *Learn This Mac Again* are in Settings.
+- **A welcome guide on the first launch.** Five short pages: what Hostwatch does, the five tabs, how your decisions
+  work, the learning day, and how Protection starts. *Help ▸ Welcome Guide* opens it again.
 
 ### New: Protection
 
