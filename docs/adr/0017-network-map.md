@@ -22,6 +22,16 @@ address changing (*Router changed*). Tries from the internet are shown, not rais
 address all day. A program listening on all networks is shown in orange with advice, not raised: developers start
 servers all the time.
 
+**Update: every connection out, and what devices are.** The first version took outgoing connections from the
+firewall's list, which keeps only what the firewall wouldn't simply allow (and nothing while it is off), so ordinary
+connections and everything to the local network were missing. The store now records every outgoing connection itself
+(`observeOutgoing`, by program and destination, counted by the hour), and a connection to a device on your network ends
+at that device. Devices are named by their maker (the first three bytes of the hardware address in IEEE's public
+registry, `assets/oui.tsv` from `scripts/make-oui.py`, shipped and never fetched) and by what they announce over Bonjour
+(AirPlay, companion link, device info, Cast, printers, HomeKit TXT records: model and name). Bonjour browsing sends
+multicast questions on the local network, once every 15 minutes for a minute. That is a small step from "only
+listens": the questions never leave the network, macOS asks the user first, and they are the ones the Finder sends.
+
 **Consequences.** A device that never answers ARP or neighbour discovery, and traffic on the network that doesn't
 involve this Mac, stay invisible. "Refused" means nothing listened on that port, so a try the system firewall dropped
 at a listening port counts as reached. Blocking a device is not part of this: it needs its own design in Protection.

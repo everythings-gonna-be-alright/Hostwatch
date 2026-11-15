@@ -9,6 +9,9 @@
   when anyone on a network can reach them) and the programs going out. On the right are the way out (the router or a
   VPN) and the destinations. Lines are thicker for more connections, red dashed when blocked or refused, orange when
   new. Select anything for its details, mark a device as yours, name it or forget it.
+- **Every device named.** Its maker comes from its hardware address (a registry shipped with Hostwatch, never looked
+  up online), and its model and name from what it announces on your network: iPhone, MacBook Pro, Apple TV, a printer
+  or a Chromecast.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
   hardware address changing. Hostwatch only listens. It never scans your network.
 

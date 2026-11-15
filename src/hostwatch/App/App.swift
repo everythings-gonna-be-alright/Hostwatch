@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     let stories = StoryEngine()
     /// Devices next to this Mac, who tried to reach it, listeners and routes: the Network tab's map.
     let networkMap = NetworkMapStore()
+    /// Names and models devices on your network announce (Bonjour), for the map.
+    let bonjour = BonjourDevices()
     let domains = DomainRegistry()
     let networkState = NetworkViewState()
     let rulesTab = RulesTabState()
@@ -141,7 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.onNetMap = { [weak self] m in self?.networkMap.apply(m) }
         networkMap.onAlert = { [weak self] alert in self?.raiseNetworkStory(alert) }
         networkState.map = networkMap
-        networkState.mapOutgoing = { [weak self] in self?.mapOutgoing() ?? [] }
+        networkMap.announced = { [bonjour] ip in bonjour.byAddress[ip] }
+        bonjour.onChange = { [weak self] in self?.networkMap.announcementsChanged() }
+        if !AppPaths.isDemo { bonjour.start() }
+        networkState.mapOutgoing = { [weak self] range in self?.mapOutgoing(range) ?? [] }
         networkState.interfaceName = { AppDelegate.interfaceName($0) }
         model.onProcessList = { [weak self] list in
             self?.running.receive(list)
@@ -165,7 +170,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         model.onEvent = { [weak self] event in
             guard let self else { return }
             if event.kind == .exec { self.vitals.noteLaunch(event) }
-            if event.kind == .net { self.firewall.observe(event, status: self.signatures.status(for: event)) }
+            if event.kind == .net {
+                let decision = self.firewall.observe(event, status: self.signatures.status(for: event))
+                // Blocked only where the firewall stops it (Watch only says what it would do).
+                let stops = self.firewall.mode == .ask || self.firewall.mode == .strict
+                self.networkMap.observeOutgoing(event, blocked: stops && decision?.verdict == .block)
+            }
         }
         model.intel = intel
         intel.seenDomains = { [weak self] in

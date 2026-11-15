@@ -18,13 +18,25 @@ struct MapDevice: Codable, Equatable, Identifiable {
     var mine = false
     /// Present when Hostwatch first looked: part of the network as it was, never new.
     var baseline = false
+    /// Its maker, from the hardware address (nil for a private one).
+    var maker: String?
+    /// What it announces itself as (Bonjour): a name and a model ("iPhone", "HP LaserJet M110").
+    var announcedName: String?
+    var model: String?
 
     var id: String { mac }
+    /// Your name, its own, its network name, its model, its maker's: the first that's known.
     var title: String {
         if !yourName.isEmpty { return yourName }
+        if let n = announcedName, !n.isEmpty { return n }
         if !name.isEmpty { return name.split(separator: ".").first.map(String.init) ?? name }
+        if let m = model, !m.isEmpty { return m }
+        if let m = maker, !m.isEmpty { return "\(m) device" }
         return "Unknown device"
     }
+    /// What it is, for its second line: "iPhone · Apple".
+    var kind: String { [model ?? "", maker ?? ""].filter { !$0.isEmpty && $0 != title }.joined(separator: " · ") }
+    var symbol: String { DeviceModels.symbol(model: model ?? "", maker: maker ?? "") }
     var ip: String { ips.first ?? "" }
 }
 
@@ -44,7 +56,23 @@ struct MapInbound: Codable, Equatable, Identifiable {
     func count(since: Date) -> Int { hours.reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
 }
 
-/// An outgoing connection as the map needs it (from the firewall's list).
+/// Every outgoing connection of one program to one destination, counted by the hour: the map's own record, since the
+/// firewall lists only what it wouldn't simply allow.
+struct MapConnection: Codable, Equatable, Identifiable {
+    var program: String
+    var path: String
+    var group: String
+    var ip: String
+    var firstSeen: Date
+    var lastSeen: Date
+    var blocked = false
+    var hours: [Int: Int] = [:]
+
+    var id: String { path + "|" + group }
+    func count(since: Date) -> Int { hours.reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
+}
+
+/// An outgoing connection as the builder needs it, its count within the range.
 struct MapOutgoing: Equatable {
     var program: String
     var path: String
@@ -91,6 +119,8 @@ struct MapNode: Identifiable, Equatable {
     var badge: MapBadge?
     /// What it stands for: a hardware address, an address, a program's path, a domain, an interface.
     var ref = ""
+    /// Its icon, when the kind alone doesn't say (a device: phone, printer, router).
+    var symbol: String?
 }
 
 struct MapSection: Equatable {
@@ -203,7 +233,9 @@ enum NetworkMapBuilder {
             let deviceNodes = ranked.prefix(maxDevices).map { d in
                 MapNode(id: "dev:" + d.mac, kind: .device, title: d.mac == gatewayMAC && d.yourName.isEmpty ? "Router" : d.title,
                         subtitle: d.ip, dataSubtitle: true,
-                        badge: d.mine ? .mine : NetworkMapPolicy.isNew(d, now: input.now) ? .new : nil, ref: d.mac)
+                        badge: d.mine ? .mine : NetworkMapPolicy.isNew(d, now: input.now) ? .new : nil, ref: d.mac,
+                        symbol: d.mac == gatewayMAC ? "wifi.router" : NetworkMapPolicy.isNew(d, now: input.now) && d.title == "Unknown device"
+                            ? "questionmark.circle" : d.symbol)
             }
             graph.columns[0].append(MapSection(title: "Your network", nodes: deviceNodes, more: max(0, ranked.count - maxDevices),
                                                moreNoun: "devices"))
@@ -249,7 +281,8 @@ enum NetworkMapBuilder {
         }
 
         // Going out: programs, the way out (the router or a VPN), destinations.
-        let out = input.outgoing.filter { $0.lastSeen >= since }
+        let out = input.outgoing.filter { $0.lastSeen >= since && $0.count > 0 }
+        let gatewayMACForOut = input.devices.first { $0.ips.contains(input.routes.gateway) }?.mac
         let byProgram = Dictionary(grouping: out, by: \.path).sorted { a, b in
             a.value.reduce(0) { $0 + $1.count } > b.value.reduce(0) { $0 + $1.count }
         }
@@ -272,9 +305,14 @@ enum NetworkMapBuilder {
             let urgent = ranked.filter { $0.blocked || $0.isNew }.prefix(3)
             let busiest = ranked.filter { !($0.blocked || $0.isNew) }.prefix(maxDestinations - urgent.count)
             let shownDest = (Array(busiest) + urgent).sorted { $0.n > $1.n }
-            graph.columns[3].append(MapSection(title: "", nodes: shownDest.map {
-                MapNode(id: "dst:" + $0.group, kind: .destination, title: $0.group, count: $0.n,
-                        badge: $0.blocked ? .blocked : $0.isNew ? .new : nil, ref: $0.group)
+            graph.columns[3].append(MapSection(title: "", nodes: shownDest.map { d in
+                // A device on your network is named as on the left: "iPhone", with its address.
+                let local = NetworkMapPolicy.isLocal(d.group)
+                let device = local ? deviceFor[d.group] : nil
+                return MapNode(id: "dst:" + d.group, kind: .destination,
+                               title: local ? (device?.mac == gatewayMACForOut ? "Router" : device?.title ?? "Device on your network") : d.group,
+                               subtitle: local ? d.group : "", dataSubtitle: local, count: d.n,
+                               badge: d.blocked ? .blocked : d.isNew ? .new : nil, ref: d.group)
             }, more: max(0, ranked.count - shownDest.count), moreNoun: "destinations"))
             let shownPrograms = Set(programs.map(\.id)), shownDests = Set(shownDest.map { "dst:" + $0.group })
             var ways: [String] = []

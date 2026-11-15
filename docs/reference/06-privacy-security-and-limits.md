@@ -8,6 +8,10 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
 
+On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
+and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
+Hostwatch may use the local network.
+
 Here is where everything lives:
 
 | Where | What |
@@ -18,6 +22,7 @@ Here is where everything lives:
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/tech.hostwatch.app.plist` | settings and exclusions (plain) |
+| `…/Hostwatch/network-map.json` | the network map's devices, incoming tries and outgoing connections (sealed) |
 | `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
 
 ### Encryption at rest

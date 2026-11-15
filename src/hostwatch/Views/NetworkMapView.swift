@@ -292,9 +292,7 @@ struct MapNodeView: View {
 
     private var symbol: String? {
         switch node.kind {
-        case .device:
-            if node.title == "Router" { return "wifi.router" }
-            return node.title == "Unknown device" ? "questionmark.circle" : "desktopcomputer"
+        case .device: return node.symbol ?? "desktopcomputer"
         case .internet: return "globe"
         case .listener: return "antenna.radiowaves.left.and.right"
         case .closedPorts: return "xmark.circle"
