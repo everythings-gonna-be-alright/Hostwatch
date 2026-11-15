@@ -167,7 +167,7 @@ used to compare security tools. This table maps the macOS techniques Hostwatch s
 | [T1095](https://attack.mitre.org/techniques/T1095/) Non-Application Layer Protocol | Partial | Raw-IP connections. The Claude Code guard blocks `/dev/tcp` and `nc -e`. UDP sent without connecting: gap. |
 | [T1568.002](https://attack.mitre.org/techniques/T1568/002/) Domain Generation Algorithms | Partial | Every never-seen domain is *New domain* after the learning period. No dedicated DGA check. |
 | [T1071.004](https://attack.mitre.org/techniques/T1071/004/) DNS | Partial | Known bad domains are caught. Data hidden inside DNS queries: gap. |
-| [T1041](https://attack.mitre.org/techniques/T1041/) Exfiltration Over C2 Channel | Can stop | The firewall blocks destinations you didn't allow. No check on how much is sent. |
+| [T1041](https://attack.mitre.org/techniques/T1041/) Exfiltration Over C2 Channel | Alerts, can stop | *Large upload*: 100 MB or more sent within an hour to a destination the program first reached today. The firewall blocks destinations you didn't allow. |
 | [T1567](https://attack.mitre.org/techniques/T1567/) Exfiltration Over Web Service | Partial | The Claude Code guard blocks secrets sent to paste and webhook sites. Elsewhere: new domains and the firewall only. |
 | [T1048](https://attack.mitre.org/techniques/T1048/) Exfiltration Over Alternative Protocol | Partial | `scp`, `sftp`, `ftp` are watched tools. |
 | [T1090](https://attack.mitre.org/techniques/T1090/) Proxy | Gap | Traffic through a proxy shows only the proxy. |

@@ -6,6 +6,8 @@ struct NetMapMessage: Decodable {
     var neighbors: [NetNeighbor]
     var routes: NetRoutes
     var inbound: [NetInbound]
+    /// Bytes per program and address since the last report (nil from a collector before the upload watch).
+    var traffic: [NetTraffic]?
 }
 
 /// What the network map raises as a story. Only what is rare and worth a look: scans and new devices reaching this
@@ -14,6 +16,7 @@ enum NetworkAlert: Equatable {
     case portScan(remote: String, device: String, ports: Int)
     case newDeviceReached(remote: String, device: String, port: Int)
     case routerChanged(ip: String, old: String, new: String)
+    case largeUpload(program: String, path: String, destination: String, bytes: Int64)
 }
 
 /// How many addresses tried to connect since you last looked or cleared: the Network tab's badge. Its own object, so
@@ -59,6 +62,7 @@ final class NetworkMapStore: ObservableObject {
         var blockedAddresses: [String]?
         var blockedPorts: [Int]?
         var seenUntil: Date?
+        var started: Date?
     }
 
     private let fileURL: URL?
@@ -74,6 +78,9 @@ final class NetworkMapStore: ObservableObject {
     private var dirty = false
     private var lastSave = Date.distantPast
     private var lastBlocks: ([String], [Int])?
+    /// When the map first recorded: its first day is the baseline for uploads.
+    private(set) var started = Date()
+    private var uploadAlerted: [String: Date] = [:]
 
     init(fileURL: URL? = AppPaths.support.appendingPathComponent("network-map.json")) {
         self.fileURL = fileURL
@@ -112,6 +119,7 @@ final class NetworkMapStore: ObservableObject {
         network = net
         if !net.isEmpty { learnedNetworks.insert(net) }
         if !m.neighbors.isEmpty { learned = true }
+        for t in m.traffic ?? [] { noteTraffic(t, now: now) }
         for t in m.inbound { noteTry(t, now: now) }
         for remote in Set(m.inbound.map(\.remote)) where NetworkMapPolicy.isYourNetwork(remote, routes: routes) {
             judge(remote, m.inbound, now: now)
@@ -213,16 +221,41 @@ final class NetworkMapStore: ObservableObject {
         dirty = true
     }
 
+    /// Bytes one program moved to one address, into the connection they belong to (made if the event isn't in yet).
+    func noteTraffic(_ t: NetTraffic, now: Date = Date()) {
+        guard !t.remote.hasPrefix("127."), t.remote != "::1", t.sent > 0 || t.received > 0 else { return }
+        let onNetwork = NetworkMapPolicy.isYourNetwork(t.remote, routes: routes)
+        let group = onNetwork ? t.remote : (DomainRegistry.registrable(t.host) ?? (t.host.isEmpty ? t.remote : t.host.lowercased()))
+        let path = t.proc.isEmpty ? t.name : t.proc
+        let name = t.name.isEmpty ? (path as NSString).lastPathComponent : t.name
+        let probe = MapConnection(program: SignatureBuilder.vmGateway(path) ?? name, path: path, group: group, ip: t.remote,
+                                  firstSeen: now, lastSeen: now, network: onNetwork && !network.isEmpty ? network : nil)
+        var c = outgoing[probe.id] ?? probe
+        c.lastSeen = now
+        let hour = MapTime.hour(now)
+        c.sentHours = (c.sentHours ?? [:]).merging([hour: t.sent], uniquingKeysWith: +)
+        c.receivedHours = (c.receivedHours ?? [:]).merging([hour: t.received], uniquingKeysWith: +)
+        outgoing[c.id] = c
+        let lastHour = c.sent(since: now.addingTimeInterval(-3600))
+        if NetworkMapPolicy.isLargeUpload(sentLastHour: lastHour, pairFirstSeen: c.firstSeen, mapStarted: started, now: now,
+                                          yourNetwork: onNetwork),
+           uploadAlerted[c.id].map({ now.timeIntervalSince($0) > 86400 }) ?? true {
+            uploadAlerted[c.id] = now
+            onAlert?(.largeUpload(program: c.program, path: c.path, destination: group, bytes: lastHour))
+        }
+        dirty = true
+    }
+
     /// Outgoing connections within a range, as the builder takes them.
     func outgoingList(_ range: MapRange, now: Date = Date(), isNew: (String) -> Bool = { _ in false }) -> [MapOutgoing] {
         let since = range.since(now)
         return outgoing.values.compactMap { c in
-            let n = c.count(since: since)
-            guard n > 0 else { return nil }
+            let n = c.count(since: since), sent = c.sent(since: since), received = c.received(since: since)
+            guard n > 0 || sent > 0 || received > 0 else { return nil }
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
                                lastSeen: c.lastSeen, blocked: c.blocked,
                                isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
-                               network: c.network)
+                               network: c.network, sent: sent, received: received)
         }
     }
 
@@ -261,10 +294,14 @@ final class NetworkMapStore: ObservableObject {
             r.hours = r.hours.filter { $0.key >= oldest }
             inbound[k] = r.hours.isEmpty ? nil : r
         }
-        for (k, var c) in outgoing where c.hours.keys.contains(where: { $0 < oldest }) {
+        for (k, var c) in outgoing where c.hours.keys.contains(where: { $0 < oldest })
+            || (c.sentHours ?? [:]).keys.contains(where: { $0 < oldest }) {
             c.hours = c.hours.filter { $0.key >= oldest }
-            outgoing[k] = c.hours.isEmpty ? nil : c
+            c.sentHours = c.sentHours?.filter { $0.key >= oldest }
+            c.receivedHours = c.receivedHours?.filter { $0.key >= oldest }
+            outgoing[k] = c.hours.isEmpty && (c.sentHours ?? [:]).isEmpty ? nil : c
         }
+        uploadAlerted = uploadAlerted.filter { now.timeIntervalSince($0.value) < 86400 }
         if outgoing.count > 10_000 {
             for k in outgoing.values.sorted(by: { $0.lastSeen < $1.lastSeen }).prefix(outgoing.count - 10_000).map(\.id) { outgoing[k] = nil }
         }
@@ -387,11 +424,11 @@ final class NetworkMapStore: ObservableObject {
     // MARK: Map
 
     func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
-               expanded: Set<String> = [], room: Int? = nil, interfaceName: @escaping (String) -> String) -> NetworkGraph {
+               expanded: Set<String> = [], room: Int? = nil, measure: MapMeasure = .connections, interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
                                       interfaceName: interfaceName, query: query, network: network, expanded: expanded,
-                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room))
+                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room, measure: measure))
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }
@@ -412,6 +449,7 @@ final class NetworkMapStore: ObservableObject {
         blockedAddresses = Set(s.blockedAddresses ?? [])
         blockedPorts = Set(s.blockedPorts ?? [])
         seenUntil = s.seenUntil ?? .distantPast
+        started = s.started ?? Date()
         updateBadge()
     }
 
@@ -422,7 +460,8 @@ final class NetworkMapStore: ObservableObject {
         encoder.dateEncodingStrategy = .secondsSince1970
         let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), outgoing: Array(outgoing.values),
                       routers: routers, learned: learned, networks: Array(learnedNetworks),
-                      blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts), seenUntil: seenUntil)
+                      blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts), seenUntil: seenUntil,
+                      started: started)
         if let data = try? encoder.encode(s) { try? Vault.shared.write(data, to: fileURL) }
     }
 }

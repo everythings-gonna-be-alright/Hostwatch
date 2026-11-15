@@ -84,6 +84,12 @@ struct MapConnection: Codable, Equatable, Identifiable {
     var target: String?
     var proto: String?
     var host: String?
+    /// Bytes sent and received, by the hour (macOS's connection statistics).
+    var sentHours: [Int: Int64]?
+    var receivedHours: [Int: Int64]?
+
+    func sent(since: Date) -> Int64 { (sentHours ?? [:]).reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
+    func received(since: Date) -> Int64 { (receivedHours ?? [:]).reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
 
     var id: String { path + "|" + group + (network.map { "|" + $0 } ?? "") }
     func count(since: Date) -> Int { hours.reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
@@ -101,7 +107,12 @@ struct MapOutgoing: Equatable {
     var blocked: Bool
     var isNew: Bool
     var network: String? = nil
+    var sent: Int64 = 0
+    var received: Int64 = 0
 }
+
+/// What the map's lines, counts and order measure.
+enum MapMeasure: String, CaseIterable { case connections, sent }
 
 enum MapTime {
     static func hour(_ d: Date) -> Int { Int(d.timeIntervalSince1970 / 3600) }
@@ -139,6 +150,8 @@ struct MapNode: Identifiable, Equatable {
     var ref = ""
     /// Its icon, when the kind alone doesn't say (a device: phone, printer, router).
     var symbol: String?
+    /// `count` is bytes (the map measures data sent).
+    var bytes = false
 }
 
 struct MapSection: Equatable {
@@ -177,6 +190,16 @@ enum NetworkMapPolicy {
 
     static func isNew(_ d: MapDevice, now: Date) -> Bool {
         !d.mine && !d.baseline && now.timeIntervalSince(d.firstSeen) < newFor
+    }
+
+    /// A large upload: at least this much sent within an hour to a destination the program first reached today.
+    static let largeUpload: Int64 = 100_000_000
+
+    /// Worth a story: a lot sent to somewhere new for this program, not on your network, and not part of what was
+    /// already there when the map started (its first day is the baseline, as for devices).
+    static func isLargeUpload(sentLastHour: Int64, pairFirstSeen: Date, mapStarted: Date, now: Date, yourNetwork: Bool) -> Bool {
+        !yourNetwork && sentLastHour >= largeUpload && now.timeIntervalSince(pairFirstSeen) < newFor
+            && pairFirstSeen.timeIntervalSince(mapStarted) >= newFor
     }
 
     static func isScan(_ tries: [(port: Int, at: Date)], now: Date) -> Bool {

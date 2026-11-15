@@ -248,8 +248,8 @@ struct NetworkMapInspector: View {
     @ViewBuilder private func program(_ node: MapNode) -> some View {
         let since = state.range.since(Date())
         let mine = outgoing.filter { $0.path == node.ref && $0.lastSeen >= since }
-        let byGroup = Dictionary(grouping: mine, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }, $0.value.contains(where: \.blocked)) }
-            .sorted { $0.1 > $1.1 }
+        let bytes = state.measure == .sent
+        let byGroup = Self.destinations(mine, bytes: bytes)
         header("app", node.title, node.ref, badge: node.badge)
         if let showProcess, let event = store.lastEvent(program: node.ref) {
             Button("Process Details") { showProcess(event) }.buttonStyle(.glass).controlSize(.small)
@@ -263,10 +263,22 @@ struct NetworkMapInspector: View {
                     Text(group).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     if blocked { MapBadgeView(badge: .blocked) }
-                    Text(n, format: .number).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    Text(bytes ? ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .file) : n.formatted())
+                        .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
         }
+    }
+
+    /// A program's destinations with their connections or bytes sent, and whether any was blocked.
+    static func destinations(_ list: [MapOutgoing], bytes: Bool) -> [(String, Int, Bool)] {
+        var out: [(String, Int, Bool)] = []
+        for (group, l) in Dictionary(grouping: list, by: \.group) {
+            var n = 0
+            for o in l { n += bytes ? Int(o.sent) : o.count }
+            if n > 0 { out.append((group, n, l.contains(where: \.blocked))) }
+        }
+        return out.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
     }
 
     @ViewBuilder private func wayOut(_ node: MapNode) -> some View {

@@ -15,6 +15,10 @@ final class NetworkMapViewState: ObservableObject {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange"); mapOrder = [:]; listOrder = [] }
     }
     @Published var selection: String?
+    /// Lines, counts and order by connections or by data sent.
+    @Published var measure = MapMeasure(rawValue: UserDefaults.standard.string(forKey: "networkMapMeasure") ?? "") ?? .connections {
+        didSet { UserDefaults.standard.set(measure.rawValue, forKey: "networkMapMeasure"); mapOrder = [:]; listOrder = [] }
+    }
     /// How many rows fit in a column of the map's area (the window's height), for showing more when there's room.
     @Published var room: Int?
     /// The section shown whole as a list in place of the map ("devices", "destinations"), nil for the map.
@@ -72,7 +76,7 @@ struct NetworkMapView: View {
         // A whole section as a list in place of the map: the same page, the same details panel.
         let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
-                                interfaceName: interfaceName)
+                                measure: state.measure, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -123,6 +127,11 @@ struct NetworkMapView: View {
                 .init(value: .goingOut, title: "Going Out", symbol: "arrow.up.right"),
                 .init(value: .comingIn, title: "Coming In", symbol: "arrow.down.left"),
                 .init(value: .yourNetwork, title: "Your Network", symbol: "house"),
+            ])
+            IconSegments(selection: $state.measure, items: [
+                .init(value: .connections, title: "Connections", symbol: "arrow.left.arrow.right",
+                      help: "Lines and counts by how many connections"),
+                .init(value: .sent, title: "Data Sent", symbol: "arrow.up.circle", help: "Lines and counts by how much was sent"),
             ])
             Spacer()
             triesMenu
@@ -178,7 +187,7 @@ struct NetworkMapView: View {
             LegendLine(style: .allowed, title: "Allowed")
             LegendLine(style: .blocked, title: "Blocked or refused")
             LegendLine(style: .new, title: "New in the last day")
-            LegendLine(style: .allowed, title: "More connections", width: 4)
+            LegendLine(style: .allowed, title: state.measure == .sent ? "More data sent" : "More connections", width: 4)
         }
         .fixedSize()
     }
@@ -215,7 +224,9 @@ struct NetworkMapView: View {
                         let mid = (start.x + end.x) / 2
                         path.addCurve(to: end, control1: CGPoint(x: mid, y: start.y), control2: CGPoint(x: mid, y: end.y))
                         let dim = related.map { !($0.contains(edge.from) && $0.contains(edge.to)) } ?? false
-                        let width = min(5, 1 + log2(Double(max(1, edge.weight))) / 2)
+                        // Bytes from 100 KB up, connections from one: both reach the widest line at about the same mass.
+                        let scaled = state.measure == .sent ? Double(edge.weight) / 100_000 : Double(edge.weight)
+                        let width = min(5, 1 + log2(max(1, scaled)) / 2)
                         context.stroke(path, with: .color(LegendLine.color(edge.style).opacity(dim ? 0.15 : edge.style == .allowed ? 0.55 : 0.9)),
                                        style: StrokeStyle(lineWidth: width, lineCap: .round,
                                                           dash: edge.style == .blocked ? [4, 3] : []))
@@ -354,7 +365,8 @@ struct MapNodeView: View {
                 Spacer(minLength: 4)
                 if let badge = node.badge, node.kind != .internet { MapBadgeView(badge: badge) }
                 else if let count = node.count, node.kind == .program || node.kind == .destination {
-                    Text(count, format: .number).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    Text(node.bytes ? ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file) : count.formatted())
+                        .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
             .padding(.horizontal, 10)

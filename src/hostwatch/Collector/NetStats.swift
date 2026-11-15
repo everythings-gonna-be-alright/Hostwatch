@@ -13,6 +13,9 @@ final class NetStats: @unchecked Sendable {
     /// Every socket as soon as it has a local port, connected or not (who owns a local port, for the firewall's
     /// relay when a socket closes before it can look). Called on the private queue; set before `start`.
     var onSocket: ((_ owner: RecentSockets.Owner, _ tcp: Bool, _ localPort: UInt16) -> Void)?
+    /// Bytes a connection sent and received since the last count (`queryCounts`): the network map's upload watch.
+    /// Called on the private queue; set before `start`.
+    var onCounts: ((_ flow: Flow, _ sent: Int64, _ received: Int64) -> Void)?
 
     private typealias Create = @convention(c) (CFAllocator?, DispatchQueue,
                                                @escaping @convention(block) (OpaquePointer?, OpaquePointer?) -> Void) -> OpaquePointer?
@@ -20,11 +23,14 @@ final class NetStats: @unchecked Sendable {
     private typealias SetDictBlock = @convention(c) (OpaquePointer?, @escaping @convention(block) (CFDictionary?) -> Void) -> Void
     private typealias SetVoidBlock = @convention(c) (OpaquePointer?, @escaping @convention(block) () -> Void) -> Void
     private typealias SourceCall = @convention(c) (OpaquePointer?) -> Void
+    private typealias QueryAll = @convention(c) (OpaquePointer?, @escaping @convention(block) () -> Void) -> Void
 
     private struct API {
         let create: Create, addTCP: ManagerCall, addUDP: ManagerCall, destroy: ManagerCall
         let setDescription: SetDictBlock, setRemoved: SetVoidBlock, queryDescription: SourceCall
         let pid: String, name: String, provider: String, local: String, remote: String
+        /// Byte counts: optional, the rest works without them.
+        var setCounts: SetDictBlock?, queryAll: QueryAll?, tx: String?, rx: String?
     }
 
     static let path = "/System/Library/PrivateFrameworks/NetworkStatistics.framework/NetworkStatistics"
@@ -34,6 +40,8 @@ final class NetStats: @unchecked Sendable {
     private var manager: OpaquePointer?
     /// Per source: what was last reported, so a description repeated on close isn't reported twice.
     private var reported: [Int: String] = [:]
+    /// Per source: its flow and the byte counts last seen, for the difference at the next count.
+    private var counted: [Int: (flow: Flow, tx: Int64, rx: Int64)] = [:]
     private var nextID = 0
 
     private init(api: API) { self.api = api }
@@ -57,7 +65,10 @@ final class NetStats: @unchecked Sendable {
               let remote = key("kNStatSrcKeyRemote") else { return nil }
         return NetStats(api: API(create: create, addTCP: addTCP, addUDP: addUDP, destroy: destroy,
                                  setDescription: setDescription, setRemoved: setRemoved, queryDescription: queryDescription,
-                                 pid: pid, name: name, provider: provider, local: local, remote: remote))
+                                 pid: pid, name: name, provider: provider, local: local, remote: remote,
+                                 setCounts: fn("NStatSourceSetCountsBlock", SetDictBlock.self),
+                                 queryAll: fn("NStatManagerQueryAllSources", QueryAll.self),
+                                 tx: key("kNStatSrcKeyTxBytes"), rx: key("kNStatSrcKeyRxBytes")))
     }
 
     /// Starts watching. `onFlow` is called (on a private queue) once per socket and remote end, as soon as the remote
@@ -78,11 +89,22 @@ final class NetStats: @unchecked Sendable {
                     onSocket(s.owner, s.tcp, s.port)
                 }
                 guard let flow = flow(dict) else { return }
+                if counted[id] == nil { counted[id] = (flow, 0, 0) }
                 guard reported[id] != flow.remote else { return }
                 reported[id] = flow.remote
                 onFlow(flow, existing)
             }
-            api.setRemoved(source) { [weak self] in self?.reported[id] = nil }
+            if let setCounts = api.setCounts, let txKey = api.tx, let rxKey = api.rx {
+                setCounts(source) { [weak self] dict in
+                    guard let self, let dict = dict as? [String: Any], var c = counted[id] else { return }
+                    let tx = (dict[txKey] as? NSNumber)?.int64Value ?? c.tx, rx = (dict[rxKey] as? NSNumber)?.int64Value ?? c.rx
+                    let sent = max(0, tx - c.tx), received = max(0, rx - c.rx)
+                    c.tx = tx; c.rx = rx
+                    counted[id] = c
+                    if sent > 0 || received > 0 { onCounts?(c.flow, sent, received) }
+                }
+            }
+            api.setRemoved(source) { [weak self] in self?.reported[id] = nil; self?.counted[id] = nil }
             api.queryDescription(source)
         }
         guard let created else { return }
@@ -91,8 +113,14 @@ final class NetStats: @unchecked Sendable {
         api.addUDP(created)
     }
 
+    /// Asks every connection for its byte counts now; the differences arrive through `onCounts`.
+    func queryCounts() {
+        guard let queryAll = api.queryAll, let m = queue.sync(execute: { manager }) else { return }
+        queryAll(m) {}
+    }
+
     func stop() {
-        let m: OpaquePointer? = queue.sync { defer { manager = nil; reported = [:] }; return manager }
+        let m: OpaquePointer? = queue.sync { defer { manager = nil; reported = [:]; counted = [:] }; return manager }
         if let m { api.destroy(m) }
     }
 

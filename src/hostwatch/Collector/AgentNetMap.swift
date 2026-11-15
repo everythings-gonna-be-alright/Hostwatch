@@ -70,6 +70,16 @@ struct NetRoutes: Codable, Equatable, Sendable {
     }
 }
 
+/// What one program sent to and received from one address since the last report.
+struct NetTraffic: Codable, Equatable, Sendable {
+    var proc: String
+    var name: String
+    var remote: String
+    var host = ""
+    var sent: Int64
+    var received: Int64
+}
+
 /// One remote address's tries at one local port since the last report.
 struct NetInbound: Codable, Equatable, Sendable {
     var remote: String
@@ -230,6 +240,26 @@ final class NetMapState: @unchecked Sendable {
     private var inbound: [String: NetInbound] = [:]
     private var names: [String: (name: String, at: TimeInterval)] = [:]
     private var own: Set<String> = []
+    private var traffic: [String: (pid: Int, name: String, remote: String, sent: Int64, received: Int64)] = [:]
+
+    /// Bytes counted on a connection (macOS's statistics). This Mac talking to itself isn't traffic.
+    func addTraffic(pid: Int, name: String, remote: String, sent: Int64, received: Int64) {
+        guard !NetAddress.isLocalOnly(remote) else { return }
+        let ip = AgentParse.stripHost(remote)
+        let key = "\(pid)|\(ip)"
+        lock.lock(); defer { lock.unlock() }
+        guard traffic.count < 5_000 || traffic[key] != nil else { return }
+        var t = traffic[key] ?? (pid, name, ip, 0, 0)
+        t.sent += sent; t.received += received
+        traffic[key] = t
+    }
+
+    func drainTraffic() -> [(pid: Int, name: String, remote: String, sent: Int64, received: Int64)] {
+        lock.lock(); defer { lock.unlock() }
+        let out = Array(traffic.values)
+        traffic.removeAll()
+        return out
+    }
 
     func setOwn(_ addresses: Set<String>) { lock.lock(); own = addresses; lock.unlock() }
 
@@ -353,6 +383,10 @@ extension Agent {
                     }
                 }
                 tick += 1
+                // Byte counts: ask, give the answers a moment on the statistics queue, then take what arrived.
+                netStats?.queryCounts()
+                usleep(300_000)
+                let traffic = trafficReport(netMap.drainTraffic())
                 let listeners = SocketOwner.listeners()
                 let open = Set(listeners.filter { $0.scope != .local }.map(\.port))
                 let inbound = netMap.drain().map { i -> NetInbound in
@@ -361,13 +395,31 @@ extension Agent {
                     i.name = listeners.first { $0.port == i.port && $0.scope != .local }?.name ?? ""
                     return i
                 }
-                publish(Self.netMapEvent(listeners: listeners, neighbors: neighbors, routes: routes, inbound: inbound))
+                publish(Self.netMapEvent(listeners: listeners, neighbors: neighbors, routes: routes, inbound: inbound, traffic: traffic))
             }
             if wait(interval) { return }
         }
     }
 
-    static func netMapEvent(listeners: [NetListener], neighbors: [NetNeighbor], routes: NetRoutes, inbound: [NetInbound]) -> AgentEvent {
+    /// Per program and address, with the program's path and the name it asked DNS for (already known, no lookups).
+    /// The busiest 400: a report stays small however busy the Mac is.
+    func trafficReport(_ raw: [(pid: Int, name: String, remote: String, sent: Int64, received: Int64)]) -> [NetTraffic] {
+        var merged: [String: NetTraffic] = [:]
+        for t in raw where !isOurs(t.pid) {
+            let proc = pidPath(t.pid)
+            let key = (proc.isEmpty ? t.name : proc) + "|" + t.remote
+            var m = merged[key] ?? NetTraffic(proc: proc, name: t.name, remote: t.remote, sent: 0, received: 0)
+            m.sent += t.sent; m.received += t.received
+            merged[key] = m
+        }
+        dnsLock.lock()
+        for (k, var m) in merged { m.host = dnsNames[m.remote] ?? ""; merged[k] = m }
+        dnsLock.unlock()
+        return Array(merged.values.sorted { $0.sent + $0.received > $1.sent + $1.received }.prefix(400))
+    }
+
+    static func netMapEvent(listeners: [NetListener], neighbors: [NetNeighbor], routes: NetRoutes, inbound: [NetInbound],
+                            traffic: [NetTraffic] = []) -> AgentEvent {
         AgentEvent([
             ("kind", .str("netmap")),
             ("listeners", .array(listeners.map {
@@ -382,6 +434,10 @@ extension Agent {
                                 ("vpns", .array(routes.vpns.map {
                                     .object([("iface", .str($0.iface)), ("routes", .array($0.routes.map { .str($0) })), ("full", .bool($0.full))])
                                 }))])),
+            ("traffic", .array(traffic.map {
+                .object([("proc", .str($0.proc)), ("name", .str($0.name)), ("remote", .str($0.remote)), ("host", .str($0.host)),
+                         ("sent", .int(Int($0.sent))), ("received", .int(Int($0.received)))])
+            })),
             ("inbound", .array(inbound.prefix(500).map {
                 .object([("remote", .str($0.remote)), ("port", .int($0.port)), ("count", .int($0.count)),
                          ("listening", .bool($0.listening)), ("name", .str($0.name))])

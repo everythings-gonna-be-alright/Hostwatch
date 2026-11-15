@@ -13,7 +13,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
     case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
     case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad
     // The network map's: someone on your network trying this Mac (ADR 0017).
-    case portScan, newDevice, routerChanged
+    case portScan, newDevice, routerChanged, largeUpload
 
     static func < (a: StoryStage, b: StoryStage) -> Bool {
         allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -24,7 +24,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .drop, .lolbin, .network, .newDevice: return 1
         case .runFromDrop, .newDomain, .rawIP: return 2
         case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted: return 3
-        case .persistence, .portScan, .routerChanged: return 4
+        case .persistence, .portScan, .routerChanged, .largeUpload: return 4
         case .swappedBinary: return 5
         case .knownBad: return 8
         }
@@ -57,6 +57,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .portScan: return "Port scan"
         case .newDevice: return "New device reached this Mac"
         case .routerChanged: return "Router changed"
+        case .largeUpload: return "Large upload"
         }
     }
 
@@ -81,6 +82,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .portScan: return "dot.radiowaves.left.and.right"
         case .newDevice: return "questionmark.circle"
         case .routerChanged: return "wifi.exclamationmark"
+        case .largeUpload: return "arrow.up.circle"
         }
     }
 }

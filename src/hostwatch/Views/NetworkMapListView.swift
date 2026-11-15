@@ -42,8 +42,9 @@ struct NetworkMapListView: View {
                         .font(.system(size: 12, design: n.dataSubtitle || n.kind == .program ? .monospaced : .default))
                         .foregroundStyle(n.kind == .internet && n.badge == .refused ? Color.red : Color.secondary).lineLimit(1)
                 }
-                TableColumn("Connections") { n in
-                    Text(n.count.map { $0.formatted() } ?? "").monospacedDigit().foregroundStyle(.secondary)
+                TableColumn(state.measure == .sent ? "Sent" : "Connections") { n in
+                    Text(n.count.map { n.bytes ? ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) : $0.formatted() } ?? "")
+                        .monospacedDigit().foregroundStyle(.secondary)
                 }
                 .width(min: 60, ideal: 90, max: 110)
                 TableColumn("Status") { n in

@@ -34,6 +34,14 @@ extension NetworkMapInspector {
 
     var since: Date { state.range.since(Date()) }
 
+    func size(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+
+    /// "1.2 GB sent · 30 MB received", or nil when nothing was counted.
+    func traffic(_ list: [MapOutgoing]) -> String? {
+        let sent = list.reduce(Int64(0)) { $0 + $1.sent }, received = list.reduce(Int64(0)) { $0 + $1.received }
+        return sent + received == 0 ? nil : "\(size(sent)) sent · \(size(received)) received"
+    }
+
     func way(_ ip: String) -> String {
         NetworkMapBuilder.wayTitle(NetworkMapBuilder.wayOut(ip, routes: store.routes), routes: store.routes, interfaceName: interfaceName)
     }
@@ -54,6 +62,7 @@ extension NetworkMapInspector {
             }
         }
         let conns = outgoing.filter { $0.lastSeen >= since && ips.contains($0.ip) }
+        if let t = traffic(conns) { row("Data", t) }
         if !conns.isEmpty {
             let byProgram = Dictionary(grouping: conns, by: \.program).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }
                 .sorted { $0.1 > $1.1 }
@@ -120,6 +129,7 @@ extension NetworkMapInspector {
         let total = mine.reduce(0) { $0 + $1.count }
         VStack(alignment: .leading, spacing: 8) {
             row("Connections", "\(total.formatted()) in \(state.range.title.lowercased())")
+            if let t = traffic(mine) { row("Data", t) }
             if let first = mine.map(\.firstSeen).min() { row("First seen", when(first)) }
             if let last = mine.map(\.lastSeen).max() { row("Last seen", when(last)) }
             let ways = Set(mine.map { way($0.ip) }).sorted()
@@ -164,6 +174,7 @@ extension NetworkMapInspector {
         let ips = Array(Set(conns.map(\.ip))).sorted()
         VStack(alignment: .leading, spacing: 8) {
             row("Connections", "\(conns.reduce(0) { $0 + $1.count }.formatted()) in \(state.range.title.lowercased())")
+            if let t = traffic(conns) { row("Data", t) }
             if let first = conns.map(\.firstSeen).min() { row("First seen", when(first)) }
             if let last = conns.map(\.lastSeen).max() { row("Last seen", when(last)) }
             if let ip = ips.first { row("Goes out by", way(ip)) }

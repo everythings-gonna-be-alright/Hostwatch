@@ -44,6 +44,14 @@ removed by the same watchdog when the collector ends. A device is blocked by its
 domain's adds a blocked destination (0015): the firewall's, so Ask and Strict. Each way out keeps its two busiest
 destinations in view, and a section can be shown whole.
 
+**Update: upload watch.** macOS's connection statistics also give each connection's bytes sent and received
+(`NStatSourceSetCountsBlock`, refreshed for all with `NStatManagerQueryAllSources` before each report). The collector
+tallies the differences per process and address, adds the process's path and the DNS name it already knows, and
+sends the busiest 400 in the report. The app keeps them by the hour with the connection. *Large upload* fires once a
+day per program and destination: 100 MB within an hour, to a destination the program first reached in the last day,
+not on your network, and not during the map's own first day. A known destination getting a lot (backups, photo
+libraries) is shown, not raised: what matters is a lot going somewhere new.
+
 **Consequences.** A device that never answers ARP or neighbour discovery, and traffic on the network that doesn't
 involve this Mac, stay invisible. "Refused" means nothing listened on that port, so a try the system firewall dropped
 at a listening port counts as reached.
