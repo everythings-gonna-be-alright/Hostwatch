@@ -504,6 +504,20 @@ import Testing
         #expect(list.first?.sent == 180_000_000 && list.first?.received == 3_000)
     }
 
+    @Test func bytesTakeTheNameTheConnectionHad() {
+        let store = NetworkMapStore(fileURL: nil)
+        // Bytes first, with no DNS answer seen: recorded under the address.
+        store.noteTraffic(NetTraffic(proc: "/usr/bin/curl", name: "curl", remote: "93.184.216.34", sent: 5_000, received: 9_000), now: now)
+        // The connection event knew the name (TLS): the bytes join it, now and later.
+        store.observeOutgoing(ActivityEvent(kind: .net, time: "", pid: 1, ppid: 1, name: "curl", proc: "/usr/bin/curl",
+                                            target: "93.184.216.34:443", extra: "TCP", parent: "", host: "www.example.com",
+                                            hostSource: "dns"), blocked: false, now: now)
+        store.noteTraffic(NetTraffic(proc: "/usr/bin/curl", name: "curl", remote: "93.184.216.34", sent: 1_000, received: 0), now: now)
+        let list = store.outgoingList(.hour, now: now)
+        #expect(list.map(\.group) == ["example.com"])
+        #expect(list.first?.sent == 6_000 && list.first?.count == 1)
+    }
+
     @Test func dataSentMeasure() {
         let out = [MapOutgoing(program: "Safari", path: "/s", group: "busy.example", ip: "93.184.216.1", count: 500,
                                firstSeen: now, lastSeen: now, blocked: false, isNew: false, sent: 1_000),
@@ -515,5 +529,41 @@ import Testing
         #expect(g.columns[3][0].nodes.map(\.ref) == ["drop.example", "busy.example"])
         #expect(g.columns[3][0].nodes.first?.bytes == true && g.columns[3][0].nodes.first?.count == 2_000_000_000)
         #expect(g.summary.contains("sent 2"))
+    }
+}
+
+
+/// Replaying an hour, and keeping only what changed.
+@Suite @MainActor struct MapTimeTravelTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func net(_ proc: String, _ ip: String, _ host: String) -> ActivityEvent {
+        ActivityEvent(kind: .net, time: "", pid: 1, ppid: 1, name: (proc as NSString).lastPathComponent, proc: proc, target: ip + ":443",
+                      extra: "TCP", parent: "", host: host, hostSource: "dns")
+    }
+
+    @Test func anHourShowsOnlyWhatHappenedInIt() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34", "www.example.com"), blocked: false, now: now.addingTimeInterval(-5 * 3600))
+        store.observeOutgoing(net("/usr/bin/ssh", "198.51.100.4", "git.example.org"), blocked: false, now: now)
+        let earlier = DateInterval(start: MapTime.date(MapTime.hour(now) - 5), duration: 3600)
+        #expect(store.outgoingList(earlier).map(\.group) == ["example.com"])
+        let g = store.graph(outgoing: store.outgoingList(earlier), filter: .everything, range: .week, now: now, window: earlier,
+                            interfaceName: { $0 })
+        #expect(g.columns[3][0].nodes.map(\.ref) == ["example.com"])
+        #expect(store.activity(hours: 24, now: now).reduce(0, +) == 2)
+    }
+
+    @Test func whatChangedKeepsOnlyTheFresh() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34", "www.example.com"), blocked: false, now: now.addingTimeInterval(-2 * 86400))
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34", "www.example.com"), blocked: false, now: now)
+        store.observeOutgoing(net("/tmp/x", "198.51.100.9", "drop.example.net"), blocked: false, now: now)
+        let today = DateInterval(start: MapTime.date(MapTime.hour(now)), duration: 3600)
+        let list = store.outgoingList(today)
+        let g = store.graph(outgoing: list, filter: .everything, range: .hour, now: now, window: today, changedOnly: true,
+                            interfaceName: { $0 })
+        #expect(g.columns[3][0].nodes.map(\.ref) == ["example.net"])
+        #expect(g.summary.contains("what changed"))
     }
 }

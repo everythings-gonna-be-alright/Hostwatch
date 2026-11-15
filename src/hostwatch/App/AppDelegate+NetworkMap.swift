@@ -25,9 +25,9 @@ extension AppDelegate {
     }
 
     /// Every outgoing connection in the range, a destination marked new as the domain inventory says.
-    func mapOutgoing(_ range: MapRange) -> [MapOutgoing] {
+    func mapOutgoing(_ window: DateInterval) -> [MapOutgoing] {
         let now = Date()
-        return networkMap.outgoingList(range, now: now) { [domains] group in
+        return networkMap.outgoingList(window) { [domains] group in
             domains.records[group].map { domains.isNew($0, now: now) } ?? false
         }
     }

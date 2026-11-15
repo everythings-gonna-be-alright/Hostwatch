@@ -19,6 +19,8 @@
   Every block is listed in Protection ▸ Network, with Unblock, and an address can be blocked there by typing it.
 - **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes. A program's
   *Process Details* opens the panel Events shows, with its launch chain, under the map.
+- **Time travel on the map.** Click an hour of the last day to see the map as it was, replay the day, or keep only
+  what changed against the week before.
 - **Upload watch.** The map counts how much each program sends and where. *Data Sent* redraws it by bytes, and a
   **Large upload** story fires when a program sends 100 MB or more in an hour to somewhere it first reached today.
 - **Who tried to connect.** The Network tab shows how many addresses tried to connect to this Mac since you last

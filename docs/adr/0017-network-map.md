@@ -52,6 +52,12 @@ day per program and destination: 100 MB within an hour, to a destination the pro
 not on your network, and not during the map's own first day. A known destination getting a lot (backups, photo
 libraries) is shown, not raised: what matters is a lot going somewhere new.
 
+**Update: time travel.** Everything the map counts is kept by the hour, so an hour can be drawn on its own (the
+builder's `window`), and "only what changed" keeps what had nothing in the 7 days before it (`MapTime.fresh`). Devices
+are present in an hour when it falls between their first and last sighting, and the way out uses today's routes: no
+hourly history is kept for either. Byte counts are named by the domain a connection event had for their address
+(`groupForIP`), since the collector only knows the names it saw in DNS answers.
+
 **Consequences.** A device that never answers ARP or neighbour discovery, and traffic on the network that doesn't
 involve this Mac, stay invisible. "Refused" means nothing listened on that port, so a try the system firewall dropped
 at a listening port counts as reached.

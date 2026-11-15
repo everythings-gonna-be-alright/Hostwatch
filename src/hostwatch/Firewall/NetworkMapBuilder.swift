@@ -26,6 +26,10 @@ enum NetworkMapBuilder {
         var room: Int?
         /// What lines, counts and order measure: connections, or bytes sent.
         var measure: MapMeasure = .connections
+        /// An hour being replayed: only what happened in it (the range when nil).
+        var window: DateInterval?
+        /// Only what wasn't there in the 7 days before: new devices, fresh connections, first tries.
+        var changedOnly = false
     }
 
     /// What matches a search: a device by any of its names, model, maker or address, a try by its address or port, a
@@ -66,7 +70,10 @@ enum NetworkMapBuilder {
 
     static func build(_ input: Input) -> NetworkGraph {
         let input = matching(input)
-        let since = input.range.since(input.now)
+        let since = input.window?.start ?? input.range.since(input.now)
+        let until = input.window?.end ?? input.now.addingTimeInterval(3600)
+        let window = DateInterval(start: since, end: max(until, since.addingTimeInterval(1)))
+        let changed = input.changedOnly
         let showIn = input.filter != .goingOut
         let showOut = input.filter == .everything || input.filter == .goingOut
         // The fewest that always fit, more when the window is taller: the internet's few and the listeners stay as they
@@ -98,13 +105,19 @@ enum NetworkMapBuilder {
         // Incoming: devices on this network and addresses elsewhere, at listening programs or closed ports.
         let tries = input.inbound.compactMap { i -> (MapInbound, Int)? in
             guard i.network == nil || input.network.isEmpty || i.network == input.network else { return nil }
-            let n = i.count(since: since)
+            guard !changed || MapTime.fresh(i.hours, before: since) else { return nil }
+            let n = i.count(in: window)
             return n > 0 ? (i, n) : nil
         }
-        let reachable = input.listeners.filter { $0.scope != .local }.sorted { ($0.port, $0.name) < ($1.port, $1.name) }
+        let triedPorts = Set(tries.map(\.0.port))
+        let reachable = input.listeners.filter { $0.scope != .local && (!changed || triedPorts.contains($0.port)) }
+            .sorted { ($0.port, $0.name) < ($1.port, $1.name) }
         var newDevices = 0, refusedFromElsewhere = 0
         if showIn {
-            var devices = here.filter { d in d.lastSeen >= since || tries.contains { d.ips.contains($0.0.remote) } }
+            var devices = here.filter { d in
+                let present = (d.lastSeen >= since && d.firstSeen < until) || tries.contains { d.ips.contains($0.0.remote) }
+                return present && (!changed || d.firstSeen >= since.addingTimeInterval(-3600) || tries.contains { d.ips.contains($0.0.remote) })
+            }
             // An address on this network that isn't in the neighbour tables (a device gone quiet).
             for (t, _) in tries where local(t.remote) && deviceFor[t.remote] == nil && !devices.contains(where: { $0.ips.contains(t.remote) }) {
                 devices.append(MapDevice(mac: "ip:" + t.remote, ips: [t.remote], iface: "", firstSeen: t.firstSeen, lastSeen: t.lastSeen,
@@ -176,6 +189,7 @@ enum NetworkMapBuilder {
         func v(_ o: MapOutgoing) -> Int { bytes ? Int(o.sent) : o.count }
         let out = input.outgoing.filter {
             $0.lastSeen >= since && v($0) > 0 && ($0.network == nil || input.network.isEmpty || $0.network == input.network)
+                && (!changed || $0.fresh)
         }
         let totalSent = out.reduce(Int64(0)) { $0 + $1.sent }
         func wayOut(_ o: MapOutgoing) -> String { "way:" + Self.wayOut(o.ip, routes: input.routes) }
@@ -258,7 +272,12 @@ enum NetworkMapBuilder {
             if newDevices > 0 { parts.append("\(newDevices) new \(newDevices == 1 ? "device" : "devices") on your network.") }
             if refusedFromElsewhere > 0 { parts.append("\(refusedFromElsewhere) refused tries from other networks.") }
         }
-        graph.summary = parts.isEmpty ? "" : "\(input.range.phrase): " + parts.joined(separator: " ")
+        let when = input.window.map { w in
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return "\(f.string(from: w.start))–\(f.string(from: w.end))"
+        } ?? input.range.phrase
+        graph.summary = parts.isEmpty ? "" : "\(when)\(changed ? ", what changed" : ""): " + parts.joined(separator: " ")
         return graph
     }
 }

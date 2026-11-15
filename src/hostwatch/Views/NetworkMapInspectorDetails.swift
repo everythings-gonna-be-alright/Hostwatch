@@ -32,7 +32,7 @@ extension NetworkMapInspector {
         }
     }
 
-    var since: Date { state.range.since(Date()) }
+    var since: Date { state.window().start }
 
     func size(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
 
@@ -92,7 +92,7 @@ extension NetworkMapInspector {
     func portRows(_ list: [MapInbound]) -> [PortRow] {
         var out: [PortRow] = []
         for (port, l) in Dictionary(grouping: list, by: \.port) {
-            let n = l.reduce(0) { $0 + $1.count(since: since) }
+            let n = l.reduce(0) { $0 + $1.count(in: state.window()) }
             let refused = l.allSatisfy { $0.refused >= $0.count }
             let listener = l.first { !$0.listener.isEmpty }?.listener ?? "reached"
             let last = when(l.map(\.lastSeen).max() ?? .distantPast)
@@ -110,8 +110,8 @@ extension NetworkMapInspector {
             row("Listens on", l.scope == .all ? "All networks" : l.scope == .network ? "One network" : "This Mac only")
             row("Status", store.blockedPorts.contains(l.port) ? "Other machines blocked" : "Open to other machines")
         }
-        let who = store.inbound.values.filter { $0.port == l.port && $0.count(since: since) > 0 }
-            .map { ($0.remote, $0.count(since: since)) }.sorted { $0.1 > $1.1 }
+        let who = store.inbound.values.filter { $0.port == l.port && $0.count(in: state.window()) > 0 }
+            .map { ($0.remote, $0.count(in: state.window())) }.sorted { $0.1 > $1.1 }
         if !who.isEmpty {
             section("Who tried") {
                 ForEach(who.prefix(10), id: \.0) { remote, n in
@@ -128,7 +128,7 @@ extension NetworkMapInspector {
     @ViewBuilder func programMore(_ node: MapNode, _ mine: [MapOutgoing]) -> some View {
         let total = mine.reduce(0) { $0 + $1.count }
         VStack(alignment: .leading, spacing: 8) {
-            row("Connections", "\(total.formatted()) in \(state.range.title.lowercased())")
+            row("Connections", "\(total.formatted()) in \(state.windowPhrase)")
             if let t = traffic(mine) { row("Data", t) }
             if let first = mine.map(\.firstSeen).min() { row("First seen", when(first)) }
             if let last = mine.map(\.lastSeen).max() { row("Last seen", when(last)) }
@@ -173,7 +173,7 @@ extension NetworkMapInspector {
     @ViewBuilder func destinationMore(_ node: MapNode, _ conns: [MapOutgoing]) -> some View {
         let ips = Array(Set(conns.map(\.ip))).sorted()
         VStack(alignment: .leading, spacing: 8) {
-            row("Connections", "\(conns.reduce(0) { $0 + $1.count }.formatted()) in \(state.range.title.lowercased())")
+            row("Connections", "\(conns.reduce(0) { $0 + $1.count }.formatted()) in \(state.windowPhrase)")
             if let t = traffic(conns) { row("Data", t) }
             if let first = conns.map(\.firstSeen).min() { row("First seen", when(first)) }
             if let last = conns.map(\.lastSeen).max() { row("Last seen", when(last)) }

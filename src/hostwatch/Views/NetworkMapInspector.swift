@@ -82,20 +82,20 @@ struct NetworkMapInspector: View {
     func when(_ d: Date) -> String { d.formatted(.relative(presentation: .named)) }
 
     func tries(from ips: [String]) -> [MapInbound] {
-        let since = state.range.since(Date())
-        return store.inbound.values.filter { ips.contains($0.remote) && $0.count(since: since) > 0 }.sorted { $0.port < $1.port }
+        let since = state.window().start
+        return store.inbound.values.filter { ips.contains($0.remote) && $0.count(in: state.window()) > 0 }.sorted { $0.port < $1.port }
     }
 
     /// "Tried 40 ports on this Mac. 38 were refused. It reached Python on port 8000."
     private func triesText(_ list: [MapInbound]) -> String {
-        let since = state.range.since(Date())
+        let since = state.window().start
         let ports = Set(list.map(\.port)).count
         let refused = list.filter { $0.refused >= $0.count }.count
         var text = "Tried \(ports == 1 ? "1 port" : "\(ports) ports") on this Mac."
         if refused > 0 { text += refused == list.count ? " All were refused." : " \(refused) were refused." }
         let reached = list.filter { $0.refused < $0.count }
         if let r = reached.first {
-            let n = r.count(since: since)
+            let n = r.count(in: state.window())
             text += " It reached \(r.listener.isEmpty ? "a program" : r.listener) on port \(r.port)\(n > 1 ? " \(n) times" : "")."
         }
         return text
@@ -211,8 +211,8 @@ struct NetworkMapInspector: View {
                  ? "Anyone on a network this Mac joins can reach it on port \(port). If you only use it on this Mac, it can listen on this Mac alone."
                  : "Devices on your network can reach it on port \(port).")
                 .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-            let since = state.range.since(Date())
-            let n = store.inbound.values.filter { $0.port == port }.reduce(0) { $0 + $1.count(since: since) }
+            let since = state.window().start
+            let n = store.inbound.values.filter { $0.port == port }.reduce(0) { $0 + $1.count(in: state.window()) }
             VStack(alignment: .leading, spacing: 8) {
                 row("Port", ":\(port)", data: true)
                 row("Tries", n == 0 ? "None from other devices" : "\(n) from other devices")
@@ -226,9 +226,9 @@ struct NetworkMapInspector: View {
     }
 
     private var closedPorts: some View {
-        let since = state.range.since(Date())
-        let list = store.inbound.values.filter { $0.refused >= $0.count && $0.count(since: since) > 0 }
-        let ports = Dictionary(grouping: list, by: \.port).map { ($0.key, $0.value.reduce(0) { $0 + $1.count(since: since) }) }
+        let since = state.window().start
+        let list = store.inbound.values.filter { $0.refused >= $0.count && $0.count(in: state.window()) > 0 }
+        let ports = Dictionary(grouping: list, by: \.port).map { ($0.key, $0.value.reduce(0) { $0 + $1.count(in: state.window()) }) }
             .sorted { $0.1 > $1.1 }
         return VStack(alignment: .leading, spacing: 12) {
             header("xmark.circle", "Closed ports", "", badge: .refused)
@@ -246,7 +246,7 @@ struct NetworkMapInspector: View {
     }
 
     @ViewBuilder private func program(_ node: MapNode) -> some View {
-        let since = state.range.since(Date())
+        let since = state.window().start
         let mine = outgoing.filter { $0.path == node.ref && $0.lastSeen >= since }
         let bytes = state.measure == .sent
         let byGroup = Self.destinations(mine, bytes: bytes)
@@ -301,7 +301,7 @@ struct NetworkMapInspector: View {
     }
 
     @ViewBuilder private func destination(_ node: MapNode) -> some View {
-        let since = state.range.since(Date())
+        let since = state.window().start
         let conns = outgoing.filter { $0.group == node.ref && $0.lastSeen >= since }
         let programs = Dictionary(grouping: conns, by: \.program).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }.sorted { $0.1 > $1.1 }
         header(node.symbol ?? "globe", node.title, node.subtitle, badge: node.badge,

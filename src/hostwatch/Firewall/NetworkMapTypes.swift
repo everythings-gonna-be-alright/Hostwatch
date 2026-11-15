@@ -60,6 +60,7 @@ struct MapInbound: Codable, Equatable, Identifiable {
 
     var id: String { (network.map { $0 + "|" } ?? "") + "\(remote)|\(port)" }
     func count(since: Date) -> Int { hours.reduce(0) { $1.key >= MapTime.hour(since) ? $0 + $1.value : $0 } }
+    func count(in w: DateInterval) -> Int { MapTime.sum(hours, w) }
 }
 
 /// Every outgoing connection of one program to one destination, counted by the hour: the map's own record, since the
@@ -109,6 +110,8 @@ struct MapOutgoing: Equatable {
     var network: String? = nil
     var sent: Int64 = 0
     var received: Int64 = 0
+    /// Nothing between this program and destination in the 7 days before the window: what "What Changed" keeps.
+    var fresh = false
 }
 
 /// What the map's lines, counts and order measure.
@@ -116,6 +119,19 @@ enum MapMeasure: String, CaseIterable { case connections, sent }
 
 enum MapTime {
     static func hour(_ d: Date) -> Int { Int(d.timeIntervalSince1970 / 3600) }
+    static func date(_ hour: Int) -> Date { Date(timeIntervalSince1970: TimeInterval(hour) * 3600) }
+
+    /// The hourly buckets that fall in a window.
+    static func sum<V: AdditiveArithmetic>(_ hours: [Int: V], _ w: DateInterval) -> V {
+        let a = hour(w.start), b = hour(w.end)
+        return hours.reduce(V.zero) { $1.key >= a && $1.key < max(b, a + 1) ? $0 + $1.value : $0 }
+    }
+
+    /// Nothing in the 7 days before `start`: new, or back after a week away.
+    static func fresh<V>(_ hours: [Int: V], before start: Date) -> Bool {
+        let s = hour(start)
+        return !hours.keys.contains { $0 < s && $0 >= s - 168 }
+    }
 }
 
 enum MapFilter: String, CaseIterable { case everything, goingOut, comingIn, yourNetwork }
