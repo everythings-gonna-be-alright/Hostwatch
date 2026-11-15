@@ -36,6 +36,19 @@ struct NetRoutes: Codable, Equatable, Sendable {
     var gateway = ""
     var iface = ""
     var vpns: [VPN] = []
+    /// The networks this Mac is on ("192.168.1.0/24", "10.20.0.0/16"), from its own addresses: what "your
+    /// network" means here, whatever its range. VPN interfaces are left out.
+    var subnets: [String] = []
+
+    /// In one of the networks this Mac is on.
+    func onLink(_ ip: String) -> Bool {
+        guard let addr = NetMapParse.ipv4(ip) else { return false }
+        return subnets.contains { s in
+            guard let (base, bits) = NetMapParse.prefix(s) else { return false }
+            let mask: UInt32 = bits == 0 ? 0 : ~UInt32(0) << (32 - bits)
+            return addr & mask == base & mask
+        }
+    }
 
     /// Which interface an IPv4 destination leaves by: the VPN with the longest matching route, else the default.
     func iface(for ip: String) -> String { vpnIface(for: ip) ?? iface }
@@ -270,6 +283,30 @@ extension SocketOwner {
 }
 
 extension NetAddress {
+    /// The IPv4 networks this Mac is on, from its addresses and netmasks: "192.168.1.0/24". Loopback, link-local
+    /// and VPN interfaces are left out.
+    static func subnets() -> [String] {
+        var out: [String] = []
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0 else { return out }
+        defer { freeifaddrs(list) }
+        var p = list
+        while let a = p {
+            defer { p = a.pointee.ifa_next }
+            let name = String(cString: a.pointee.ifa_name)
+            guard let sa = a.pointee.ifa_addr, let nm = a.pointee.ifa_netmask, Int32(sa.pointee.sa_family) == AF_INET,
+                  !name.hasPrefix("lo"), !NetMapParse.vpnPrefixes.contains(where: name.hasPrefix) else { continue }
+            let addr = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
+            let mask = nm.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
+            let bits = mask.nonzeroBitCount
+            guard bits >= 8, bits < 32, addr >> 16 != 0xA9FE else { continue }       // not 169.254 (no DHCP answer)
+            let net = addr & mask
+            let text = "\(net >> 24).\((net >> 16) & 0xff).\((net >> 8) & 0xff).\(net & 0xff)/\(bits)"
+            if !out.contains(text) { out.append(text) }
+        }
+        return out
+    }
+
     /// This Mac's own addresses, on every interface.
     static func own() -> Set<String> {
         var out: Set<String> = []
@@ -305,6 +342,7 @@ extension Agent {
                                                   NetMapParse.ndp(text("/usr/sbin/ndp", ["-an"])))
                     routes = NetMapParse.routes(text("/usr/sbin/netstat", ["-rn", "-f", "inet"])
                                                 + "\n" + text("/usr/sbin/netstat", ["-rn", "-f", "inet6"]))
+                    routes.subnets = NetAddress.subnets()
                     let now = ProcessInfo.processInfo.systemUptime
                     for i in neighbors.indices {
                         guard let ip = neighbors[i].ips.first(where: { !$0.contains(":") }) else { continue }
@@ -340,6 +378,7 @@ extension Agent {
                 .object([("mac", .str($0.mac)), ("ips", .array($0.ips.map { .str($0) })), ("iface", .str($0.iface)), ("name", .str($0.name))])
             })),
             ("routes", .object([("gateway", .str(routes.gateway)), ("iface", .str(routes.iface)),
+                                ("subnets", .array(routes.subnets.map { .str($0) })),
                                 ("vpns", .array(routes.vpns.map {
                                     .object([("iface", .str($0.iface)), ("routes", .array($0.routes.map { .str($0) })), ("full", .bool($0.full))])
                                 }))])),

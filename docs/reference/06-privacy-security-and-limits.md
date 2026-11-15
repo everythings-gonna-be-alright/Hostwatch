@@ -12,6 +12,10 @@ On your own network, the network map asks devices to announce themselves (Bonjou
 and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
 Hostwatch may use the local network.
 
+Devices, addresses and ports you block on the network map are pf rules the collector loads in an anchor of its own
+(`com.apple/hostwatch-block`). They are removed when the collector stops, however it stops, and loaded again when the
+app connects.
+
 Here is where everything lives:
 
 | Where | What |

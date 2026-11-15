@@ -153,6 +153,7 @@ final class NetworkViewState: ObservableObject {
     let mapState = NetworkMapViewState()
     var mapOutgoing: (MapRange) -> [MapOutgoing] = { _ in [] }
     var interfaceName: (String) -> String = { $0 }
+    var mapActions = NetworkMapActions()
     @Published var order: [KeyPathComparator<NetworkRow>] =
         SortMemory.load(key: "networkTableSort", columns: NetworkRow.sortColumns,
                         fallback: KeyPathComparator(\.lastSeen, order: .reverse)) {
@@ -189,7 +190,7 @@ struct NetworkView: View {
                 HStack(spacing: 12) { modeSwitch; Spacer() }
                     .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)
                 NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(state.mapState.range), interfaceName: state.interfaceName,
-                               openDetails: openDetails, openStories: openStories, search: search)
+                               openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions)
             }
         } else {
             list

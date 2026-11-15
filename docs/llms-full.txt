@@ -1180,6 +1180,23 @@ the list can't show: who tried to reach this Mac.
   was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
+- **Show more:** a column shows its first few, and *Show 12 More Devices* (or programs, destinations, addresses) shows
+  all of them. *Show Fewer* folds it again. Each way out always keeps its busiest destinations in view, so a VPN's
+  few connections never hide behind the Wi-Fi's many.
+- **Home and work:** a network is known by its router. When the Mac moves, the map shows the devices of the network
+  it is on now, whatever its range (10.x, 172.16.x, 192.168.x or a company's own). The first look at a network is its
+  baseline, so arriving somewhere new doesn't mark everyone there as new, and a different router at the same address
+  (192.168.1.1 at home and at work) is not a *Router changed* story. That story needs the devices around the router
+  to be the same ones.
+- **Block from the map:** right-click anything.
+  - **A device or an address:** *Block This Device* stops everything from it and to it, whatever the firewall's mode.
+    A device is blocked by whatever address it has on the network it's on. The router can't be blocked: that would cut
+    this Mac off.
+  - **A listening program:** *Block Other Machines from Port 8000*. This Mac can still reach it.
+  - **A program:** *Block Safari's Connections* marks its connections' patterns blocked, as Block does in the list.
+  - **A domain:** *Block example.com* adds it to your destinations in Protection, blocked for any program.
+  - Program and domain blocks are the firewall's, so they stop connections on Ask or Strict. On Watch the map says
+    it will only show what it would block.
 - **Search:** the window's search field filters the map by name. A program, a domain, a device's name, model or maker,
   an address or a port keeps what matches and what it connects to.
 
@@ -2260,6 +2277,10 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three
 On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
 and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
 Hostwatch may use the local network.
+
+Devices, addresses and ports you block on the network map are pf rules the collector loads in an anchor of its own
+(`com.apple/hostwatch-block`). They are removed when the collector stops, however it stops, and loaded again when the
+app connects.
 
 Here is where everything lives:
 

@@ -16,8 +16,9 @@ enum NetworkAlert: Equatable {
     case routerChanged(ip: String, old: String, new: String)
 }
 
-/// Devices next to this Mac and who tried to reach it, kept sealed (`network-map.json`), with the latest listeners
-/// and routes. Owned by AppDelegate, fed by the collector.
+/// Devices next to this Mac (on each network it joins), who tried to reach it, where it connects, and what you
+/// blocked, kept sealed (`network-map.json`), with the latest listeners and routes. Owned by AppDelegate, fed by the
+/// collector and the event stream.
 @MainActor
 final class NetworkMapStore: ObservableObject {
     @Published private(set) var devices: [String: MapDevice] = [:]
@@ -25,7 +26,14 @@ final class NetworkMapStore: ObservableObject {
     @Published private(set) var listeners: [NetListener] = []
     @Published private(set) var routes = NetRoutes()
     @Published private(set) var revision = 0
+    /// The network this Mac is on now: its router's hardware address ("" until known).
+    @Published private(set) var network = ""
+    /// Addresses (other networks' and devices' you blocked by address) and ports you blocked.
+    @Published private(set) var blockedAddresses: Set<String> = []
+    @Published private(set) var blockedPorts: Set<Int> = []
     var onAlert: ((NetworkAlert) -> Void)?
+    /// The full block list changed: the collector gets it (addresses both ways, ports incoming).
+    var onBlocks: (([String], [Int]) -> Void)?
     /// A hardware address's maker (the shipped IEEE table; tests give their own).
     var makerFor: (String) -> String? = { MakerTable.shared.maker(for: $0) }
     /// What devices announce about themselves, by address (Bonjour).
@@ -37,6 +45,9 @@ final class NetworkMapStore: ObservableObject {
         var outgoing: [MapConnection]?
         var routers: [String: String]
         var learned: Bool
+        var networks: [String]?
+        var blockedAddresses: [String]?
+        var blockedPorts: [Int]?
     }
 
     private let fileURL: URL?
@@ -44,12 +55,14 @@ final class NetworkMapStore: ObservableObject {
     private(set) var outgoing: [String: MapConnection] = [:]
     /// Router address -> hardware address last seen.
     private var routers: [String: String] = [:]
-    /// The first report teaches the network as it is: nothing in it is new.
+    /// Networks whose first report was learned: what was there then is never new. (`learned`: from before networks.)
+    private var learnedNetworks: Set<String> = []
     private var learned = false
     private var recent: [String: [(port: Int, at: Date)]] = [:]
     private var alerted: [String: Date] = [:]
     private var dirty = false
     private var lastSave = Date.distantPast
+    private var lastBlocks: ([String], [Int])?
 
     init(fileURL: URL? = AppPaths.support.appendingPathComponent("network-map.json")) {
         self.fileURL = fileURL
@@ -60,15 +73,21 @@ final class NetworkMapStore: ObservableObject {
 
     func apply(_ m: NetMapMessage, now: Date = Date()) {
         listeners = m.listeners
+        let previous = routes
         routes = m.routes
+        let net = Self.networkID(m.neighbors, routes: m.routes)
+        // The first report on a network is the network as it was. An install from before networks learned its one.
+        let firstLook = !net.isEmpty && !learnedNetworks.contains(net) && !(learned && learnedNetworks.isEmpty)
+        if !net.isEmpty, learned, learnedNetworks.isEmpty { learnedNetworks.insert(net) }
         for n in m.neighbors {
             if var d = devices[n.mac] {
                 d.ips = n.ips; d.iface = n.iface; d.lastSeen = now
                 if !n.name.isEmpty { d.name = n.name }
+                if !net.isEmpty, !(d.networks ?? []).contains(net) { d.networks = (d.networks ?? []) + [net] }
                 devices[n.mac] = d
             } else {
                 devices[n.mac] = MapDevice(mac: n.mac, ips: n.ips, iface: n.iface, name: n.name, firstSeen: now, lastSeen: now,
-                                           baseline: !learned)
+                                           baseline: firstLook || (net.isEmpty && !learned), networks: net.isEmpty ? nil : [net])
             }
         }
         // An address that moved to another device is that device's now.
@@ -78,14 +97,26 @@ final class NetworkMapStore: ObservableObject {
             }
         }
         for (mac, d) in devices { identify(mac, d) }
-        checkRouter(m.neighbors, now: now)
-        for t in m.inbound { noteTry(t, now: now) }
-        for remote in Set(m.inbound.map(\.remote)) where NetworkMapPolicy.isLocal(remote) { judge(remote, m.inbound, now: now) }
+        checkRouter(m.neighbors, network: net, previous: previous)
+        network = net
+        if !net.isEmpty { learnedNetworks.insert(net) }
         if !m.neighbors.isEmpty { learned = true }
+        for t in m.inbound { noteTry(t, now: now) }
+        for remote in Set(m.inbound.map(\.remote)) where NetworkMapPolicy.isYourNetwork(remote, routes: routes) {
+            judge(remote, m.inbound, now: now)
+        }
         trim(now: now)
+        sendBlocks()
         dirty = true
         revision += 1
         if now.timeIntervalSince(lastSave) > 60 { save(); lastSave = now }
+    }
+
+    /// A network is known by its router's hardware address (two homes can both use 192.168.1.1), else by the router's
+    /// address and interface until its hardware address is seen.
+    static func networkID(_ neighbors: [NetNeighbor], routes: NetRoutes) -> String {
+        guard !routes.gateway.isEmpty else { return "" }
+        return neighbors.first { $0.ips.contains(routes.gateway) }?.mac ?? "gw:\(routes.gateway)@\(routes.iface)"
     }
 
     /// Its maker from the hardware address, its name and model from what it announces.
@@ -106,28 +137,36 @@ final class NetworkMapStore: ObservableObject {
         dirty = true
     }
 
-    private func checkRouter(_ neighbors: [NetNeighbor], now: Date) {
+    /// The router's address answering from another hardware address is a story only on the same network: most of the
+    /// other devices are the ones known there. Arriving at work (another router, maybe at the same 192.168.1.1) or
+    /// back home is not.
+    private func checkRouter(_ neighbors: [NetNeighbor], network net: String, previous: NetRoutes) {
         guard !routes.gateway.isEmpty, let mac = neighbors.first(where: { $0.ips.contains(routes.gateway) })?.mac else { return }
-        if let old = routers[routes.gateway], old != mac, learned { onAlert?(.routerChanged(ip: routes.gateway, old: old, new: mac)) }
-        routers[routes.gateway] = mac
+        defer { routers[routes.gateway] = mac }
+        guard let old = routers[routes.gateway], old != mac, learned, !learnedNetworks.contains(mac) else { return }
+        let others = neighbors.filter { $0.mac != mac && $0.mac != old }
+        let fromOld = others.filter { devices[$0.mac]?.networks?.contains(old) == true }
+        guard fromOld.count >= 2, fromOld.count * 2 >= others.count else { return }
+        onAlert?(.routerChanged(ip: routes.gateway, old: old, new: mac))
     }
 
     private func noteTry(_ t: NetInbound, now: Date) {
-        let key = "\(t.remote)|\(t.port)"
-        var r = inbound[key] ?? MapInbound(remote: t.remote, port: t.port, firstSeen: now, lastSeen: now)
+        let onNetwork = NetworkMapPolicy.isYourNetwork(t.remote, routes: routes) && !network.isEmpty ? network : nil
+        let probe = MapInbound(remote: t.remote, port: t.port, firstSeen: now, lastSeen: now, network: onNetwork)
+        var r = inbound[probe.id] ?? probe
         r.count += t.count
         if !t.listening { r.refused += t.count }
         r.lastSeen = now
         if !t.name.isEmpty { r.listener = t.name }
         r.hours[MapTime.hour(now), default: 0] += t.count
-        inbound[key] = r
-        if NetworkMapPolicy.isLocal(t.remote) { recent[t.remote, default: []].append((t.port, now)) }
+        inbound[r.id] = r
+        if onNetwork != nil || NetworkMapPolicy.isYourNetwork(t.remote, routes: routes) { recent[t.remote, default: []].append((t.port, now)) }
     }
 
-    /// A report's tries from one address on your network (the internet scans everyone: shown, not raised).
+    /// A report's tries from one address on your network (other networks scan everyone: shown, not raised).
     private func judge(_ remote: String, _ tries: [NetInbound], now: Date) {
         recent[remote]?.removeAll { now.timeIntervalSince($0.at) > NetworkMapPolicy.scanWindow }
-        let device = devices.values.first { $0.ips.contains(remote) }
+        let device = devices.values.first { $0.ips.contains(remote) && $0.isOn(network) }
         let name = device?.title ?? "Unknown device"
         if NetworkMapPolicy.isScan(recent[remote] ?? [], now: now) {
             if mayAlert("scan|" + remote, now: now) {
@@ -143,18 +182,21 @@ final class NetworkMapStore: ObservableObject {
     func observeOutgoing(_ e: ActivityEvent, blocked: Bool, now: Date = Date()) {
         guard e.kind == .net, let raw = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), !raw.isEmpty, raw != "?",
               !raw.hasPrefix("127."), raw != "::1", !raw.lowercased().hasPrefix("fe80:"), raw != "0.0.0.0" else { return }
-        // A device on your network by its address, anything else (a VPN's 10.x included) by its domain.
-        let group = NetworkMapPolicy.isYourNetwork(raw, routes: routes) ? raw
-            : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
+        // A device on your network by its address (on this network), anything else (a VPN's 10.x included) by domain.
+        let onNetwork = NetworkMapPolicy.isYourNetwork(raw, routes: routes)
+        let group = onNetwork ? raw : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
         let base = e.name.isEmpty || e.name == "?" ? (e.proc as NSString).lastPathComponent : e.name
         let program = SignatureBuilder.vmGateway(e.proc) ?? (base.isEmpty ? "Unknown program" : base)
-        let key = e.proc + "|" + group
-        var c = outgoing[key] ?? MapConnection(program: program, path: e.proc, group: group, ip: raw, firstSeen: now, lastSeen: now)
+        let probe = MapConnection(program: program, path: e.proc, group: group, ip: raw, firstSeen: now, lastSeen: now,
+                                  network: onNetwork && !network.isEmpty ? network : nil)
+        var c = outgoing[probe.id] ?? probe
         c.ip = raw
         c.lastSeen = now
         c.blocked = blocked
         c.hours[MapTime.hour(now), default: 0] += 1
-        outgoing[key] = c
+        let key = e.signatureKey
+        if !key.isEmpty, !(c.keys ?? []).contains(key), (c.keys?.count ?? 0) < 20 { c.keys = (c.keys ?? []) + [key] }
+        outgoing[c.id] = c
         dirty = true
     }
 
@@ -166,8 +208,14 @@ final class NetworkMapStore: ObservableObject {
             guard n > 0 else { return nil }
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
                                lastSeen: c.lastSeen, blocked: c.blocked,
-                               isNew: !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group))
+                               isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
+                               network: c.network)
         }
+    }
+
+    /// The patterns of a program's connections, for blocking or allowing it from the map.
+    func patternKeys(program path: String) -> [String] {
+        Array(Set(outgoing.values.filter { $0.path == path }.flatMap { $0.keys ?? [] }))
     }
 
     /// Once an hour per address and kind.
@@ -177,10 +225,10 @@ final class NetworkMapStore: ObservableObject {
         return true
     }
 
-    /// Tries kept 7 days, devices 30 (yours always).
+    /// Tries and connections kept 7 days, devices 30 (yours and blocked ones always).
     private func trim(now: Date) {
         let oldest = MapTime.hour(now.addingTimeInterval(-7 * 86400))
-        for (k, var r) in inbound {
+        for (k, var r) in inbound where r.hours.keys.contains(where: { $0 < oldest }) {
             r.hours = r.hours.filter { $0.key >= oldest }
             inbound[k] = r.hours.isEmpty ? nil : r
         }
@@ -194,7 +242,7 @@ final class NetworkMapStore: ObservableObject {
         if inbound.count > 5_000 {
             for k in inbound.values.sorted(by: { $0.lastSeen < $1.lastSeen }).prefix(inbound.count - 5_000).map(\.id) { inbound[k] = nil }
         }
-        devices = devices.filter { $0.value.mine || now.timeIntervalSince($0.value.lastSeen) < 30 * 86400 }
+        devices = devices.filter { $0.value.mine || $0.value.blocked == true || now.timeIntervalSince($0.value.lastSeen) < 30 * 86400 }
         alerted = alerted.filter { now.timeIntervalSince($0.value) < 3600 }
         recent = recent.filter { $0.value.contains { now.timeIntervalSince($0.at) <= NetworkMapPolicy.scanWindow } }
     }
@@ -224,22 +272,72 @@ final class NetworkMapStore: ObservableObject {
         changed()
     }
 
+    // MARK: Blocks
+
+    /// Why this device can't be blocked, nil when it can: the router carries everything this Mac sends.
+    func blockRefusal(device mac: String) -> String? {
+        if let d = devices[mac], d.ips.contains(routes.gateway) { return "Blocking the router would cut this Mac off the network." }
+        return nil
+    }
+
+    /// A device, by its hardware address: whatever address it has on the network it's on now. An address-only one
+    /// ("ip:…") is blocked by that address.
+    func setBlocked(device mac: String, _ on: Bool) {
+        if mac.hasPrefix("ip:") { setBlocked(address: String(mac.dropFirst(3)), on); return }
+        guard !on || blockRefusal(device: mac) == nil else { return }
+        devices[mac]?.blocked = on ? true : nil
+        changed()
+    }
+
+    func setBlocked(address: String, _ on: Bool) {
+        guard !on || address != routes.gateway else { return }
+        if on { blockedAddresses.insert(address) } else { blockedAddresses.remove(address) }
+        changed()
+    }
+
+    /// Incoming connections to a port, from other machines.
+    func setBlocked(port: Int, _ on: Bool) {
+        if on { blockedPorts.insert(port) } else { blockedPorts.remove(port) }
+        changed()
+    }
+
+    func isBlocked(device mac: String) -> Bool {
+        mac.hasPrefix("ip:") ? blockedAddresses.contains(String(mac.dropFirst(3))) : devices[mac]?.blocked == true
+    }
+
+    /// What the collector blocks now: blocked devices' addresses on this network (an address elsewhere may be
+    /// another device), the addresses and the ports.
+    var blockList: (addresses: [String], ports: [Int]) {
+        let fromDevices = devices.values.filter { $0.blocked == true && $0.isOn(network) }.flatMap(\.ips)
+        return (Array(Set(fromDevices).union(blockedAddresses)).sorted(), blockedPorts.sorted())
+    }
+
+    /// Sends the block list when it changed (a blocked device's address can change too).
+    func sendBlocks(force: Bool = false) {
+        let list = blockList
+        if !force, let last = lastBlocks, last.0 == list.addresses, last.1 == list.ports { return }
+        lastBlocks = (list.addresses, list.ports)
+        onBlocks?(list.addresses, list.ports)
+    }
+
     private func changed() {
         revision += 1
         dirty = true
+        sendBlocks()
         save()
     }
 
     // MARK: Map
 
     func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
-               interfaceName: @escaping (String) -> String) -> NetworkGraph {
+               expanded: Set<String> = [], interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
-                                      interfaceName: interfaceName, query: query))
+                                      interfaceName: interfaceName, query: query, network: network, expanded: expanded,
+                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts))
     }
 
-    func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) } }
+    func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }
 
     // MARK: Storage
 
@@ -253,6 +351,9 @@ final class NetworkMapStore: ObservableObject {
         outgoing = Dictionary((s.outgoing ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         routers = s.routers
         learned = s.learned
+        learnedNetworks = Set(s.networks ?? [])
+        blockedAddresses = Set(s.blockedAddresses ?? [])
+        blockedPorts = Set(s.blockedPorts ?? [])
     }
 
     func save() {
@@ -261,7 +362,8 @@ final class NetworkMapStore: ObservableObject {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
         let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), outgoing: Array(outgoing.values),
-                      routers: routers, learned: learned)
+                      routers: routers, learned: learned, networks: Array(learnedNetworks),
+                      blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts))
         if let data = try? encoder.encode(s) { try? Vault.shared.write(data, to: fileURL) }
     }
 }

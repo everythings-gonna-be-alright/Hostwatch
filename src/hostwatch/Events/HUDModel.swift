@@ -420,6 +420,7 @@ final class HUDModel: ObservableObject {
         send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue), "top": true])
         sendFirewall()
         sendGuard()
+        sendBlocks()
     }
 
     func sendFirewall(flush: Bool = false) {
@@ -440,6 +441,10 @@ final class HUDModel: ObservableObject {
         send(["processes": true])
         return true
     }
+
+    /// What you blocked on the network map: addresses (both ways) and ports (incoming). Sent again on every connect.
+    var blocks: (addresses: [String], ports: [Int]) = ([], []) { didSet { sendBlocks() } }
+    func sendBlocks() { send(["block": ["addresses": blocks.addresses, "ports": blocks.ports]]) }
 
     func sendGuard() {
         guard !guardConfig.isEmpty else { return }

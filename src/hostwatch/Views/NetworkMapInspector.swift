@@ -150,6 +150,11 @@ struct NetworkMapInspector: View {
                 .accessibilityLabel("Your name for this device")
             HStack {
                 Spacer()
+                if store.blockRefusal(device: d.mac) == nil {
+                    Button(store.isBlocked(device: d.mac) ? "Unblock" : "Block") { store.setBlocked(device: d.mac, !store.isBlocked(device: d.mac)) }
+                        .buttonStyle(.glass)
+                        .help("Blocked: nothing from it reaches this Mac, and nothing goes to it")
+                }
                 Button("Forget") { store.forget(d.mac); state.selection = nil }
                     .buttonStyle(.glass)
                     .help("Forgets this device and its tries. If it is seen again, it comes back as new.")

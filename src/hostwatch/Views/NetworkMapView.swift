@@ -15,6 +15,8 @@ final class NetworkMapViewState: ObservableObject {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange") }
     }
     @Published var selection: String?
+    /// Sections shown whole ("devices", "destinations").
+    @Published var expanded: Set<String> = []
     @Published var renaming = ""
 }
 
@@ -36,12 +38,14 @@ struct NetworkMapView: View {
     var openStories: () -> Void = {}
     /// The window's search field.
     var search = ""
+    var actions = NetworkMapActions()
 
     private static let headers = ["Reaching this Mac", "This Mac", "Way out", "Destinations"]
 
     var body: some View {
         let _ = store.revision
-        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, interfaceName: interfaceName)
+        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, expanded: state.expanded,
+                                interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -175,10 +179,17 @@ struct NetworkMapView: View {
                                     dimmed: related.map { !$0.contains(node.id) } ?? false) {
                             state.selection = state.selection == node.id ? nil : node.id
                         }
+                        .contextMenu { NetworkMapMenu(node: node, store: store, actions: actions, select: { state.selection = node.id }) }
                         .anchorPreference(key: NodeFrames.self, value: .bounds) { [node.id: $0] }
                     }
-                    if section.more > 0 {
-                        Text("and \(section.more) more \(section.moreNoun)").font(.caption).foregroundStyle(.secondary)
+                    if !section.key.isEmpty, section.more > 0 || state.expanded.contains(section.key) {
+                        let open = state.expanded.contains(section.key)
+                        Button(open ? "Show Fewer" : "Show \(section.more) More \(section.moreNoun.capitalized)") {
+                            if open { state.expanded.remove(section.key) } else { state.expanded.insert(section.key) }
+                        }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .help(open ? "Back to the first few" : "Every one of them on the map")
                     }
                 }
             }

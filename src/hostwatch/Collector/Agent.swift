@@ -311,6 +311,8 @@ final class Agent: @unchecked Sendable {
     init() { ignoredPids = [selfPid] }
     /// The network map's incoming tries between reports (`runNetMap`).
     let netMap = NetMapState()
+    /// Addresses and ports you blocked on the network map.
+    let blocks = AddressBlock()
 
     // MARK: Lifecycle
 
