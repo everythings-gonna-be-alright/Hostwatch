@@ -116,7 +116,12 @@ struct NetworkMapView: View {
                                  + "It updates every 10 seconds.")
                         }
                     } else {
-                        ScrollView { map(graph).padding(.vertical, 12) }
+                        ScrollView {
+                            map(graph).padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                // A click on an empty spot clears the selection.
+                                .background(Color.clear.contentShape(Rectangle()).onTapGesture { state.selection = nil })
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -273,7 +278,8 @@ struct NetworkMapView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            HStack(alignment: .center, spacing: 56) {
+            // Top-aligned: a tall column (a browser's many destinations) never pushes the others out of view.
+            HStack(alignment: .top, spacing: 56) {
                 ForEach(shown, id: \.self) { c in
                     column(graph.columns[c], index: c, related: related)
                         .frame(maxWidth: .infinity, alignment: .leading)

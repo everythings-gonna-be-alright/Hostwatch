@@ -217,13 +217,21 @@ enum NetworkMapBuilder {
             else if sel.hasPrefix("prog:") { focus = out.filter { "prog:" + $0.path == sel } }
             else if sel.hasPrefix("way:") { focus = out.filter { wayOut($0) == sel } }
         }
-        let pinnedPrograms = Set(focus.map(\.path)), pinnedDests = Set(focus.map(\.group))
+        // A destination selected: the programs column shows its programs. A program: the destinations column shows
+        // its destinations. A way out: both. The busiest that fit, the rest folded, so a browser with 74 destinations
+        // doesn't stretch the map out of the window.
+        let sel = input.selected ?? ""
+        let focusPrograms = !focus.isEmpty && (sel.hasPrefix("dst:") || sel.hasPrefix("way:"))
+        let focusDests = !focus.isEmpty && (sel.hasPrefix("prog:") || sel.hasPrefix("way:"))
         if !focus.isEmpty {
             graph.related = Set(focus.flatMap { ["prog:" + $0.path, wayOut($0), "dst:" + $0.group] }).union([input.selected!])
         }
         if showOut {
-            let top = byProgram.prefix(limit("programs", maxPrograms))
-            let listed = Array(top) + byProgram.filter { pinnedPrograms.contains($0.key) && !top.map(\.key).contains($0.key) }
+            let candidates = focusPrograms ? byProgram.filter { p in focus.contains { $0.path == p.key } } : byProgram
+            var listed = Array(candidates.prefix(limit("programs", maxPrograms)))
+            // The selected program itself stays in view, wherever it ranks.
+            if sel.hasPrefix("prog:"), !listed.contains(where: { "prog:" + $0.key == sel }),
+               let me = byProgram.first(where: { "prog:" + $0.key == sel }) { listed.append(me) }
             let programs = listed.map { path, list in
                 let first = list.map(\.firstSeen).min() ?? input.now
                 let blocked = input.blockedPrograms.contains(path)
@@ -232,7 +240,7 @@ enum NetworkMapBuilder {
                                ref: path, bytes: bytes)
             }
             graph.columns[1].append(MapSection(key: "programs", title: "Programs going out", nodes: programs,
-                                               more: max(0, byProgram.count - programs.count), moreNoun: "programs"))
+                                               more: max(0, candidates.count - programs.count), moreNoun: "programs"))
             // Blocked and new destinations, then each way out's busiest, then the busiest overall.
             let ranked = byDestination.map { group, list in
                 (group: group, n: list.reduce(0) { $0 + v($1) },
@@ -242,7 +250,10 @@ enum NetworkMapBuilder {
                 return ra != rb ? ra > rb : a.n != b.n ? a.n > b.n : a.group < b.group
             }
             var picked: [String] = []
-            if input.expanded.contains("destinations") {
+            let focusGroups = Set(focus.map(\.group))
+            if focusDests {
+                picked = ranked.filter { focusGroups.contains($0.group) }.prefix(limit("destinations", maxDestinations)).map(\.group)
+            } else if input.expanded.contains("destinations") {
                 picked = ranked.map(\.group)
             } else {
                 for d in ranked where (d.blocked || d.isNew) && picked.count < 3 { picked.append(d.group) }
@@ -253,7 +264,8 @@ enum NetworkMapBuilder {
                 }
                 let most = limit("destinations", maxDestinations)
                 for d in ranked where picked.count < most && !picked.contains(d.group) { picked.append(d.group) }
-                for g in pinnedDests where !picked.contains(g) { picked.append(g) }
+                // The selected destination stays in view.
+                if sel.hasPrefix("dst:"), !picked.contains(String(sel.dropFirst(4))) { picked.append(String(sel.dropFirst(4))) }
             }
             let shownDest = ranked.filter { picked.contains($0.group) }.sorted { $0.n != $1.n ? $0.n > $1.n : $0.group < $1.group }
             graph.columns[3].append(MapSection(key: "destinations", title: "", nodes: shownDest.map { d in
@@ -265,7 +277,7 @@ enum NetworkMapBuilder {
                                title: isLocal ? (device?.mac == gatewayMAC ? "Router" : device?.title ?? "Device on your network") : d.group,
                                subtitle: isLocal ? d.group : "", dataSubtitle: isLocal, count: d.n,
                                badge: blocked ? .blocked : d.isNew ? .new : nil, ref: d.group, symbol: device?.symbol, bytes: bytes)
-            }, more: max(0, ranked.count - shownDest.count), moreNoun: "destinations"))
+            }, more: max(0, (focusDests ? focusGroups.count : ranked.count) - shownDest.count), moreNoun: "destinations"))
             let shownPrograms = Set(programs.map(\.id)), shownDests = Set(shownDest.map { "dst:" + $0.group })
             var ways: [String] = []
             for o in out {
