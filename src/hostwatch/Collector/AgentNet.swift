@@ -324,6 +324,9 @@ extension Agent {
         }
         let sockets = recentSockets
         stats.onSocket = { owner, tcp, port in sockets.note(owner, tcp: tcp, port: port) }
+        let tally = netMap
+        stats.onCounts = { flow, sent, received in tally.addTraffic(pid: flow.pid, name: flow.name, remote: flow.remote, sent: sent, received: received) }
+        netStats = stats
         stats.start { [self] flow, existing in
             // Sockets open before we started were baseline; this Mac talking to itself isn't a destination.
             guard !existing, !NetAddress.isLocalOnly(flow.remote), !isOurs(flow.pid) else { return }

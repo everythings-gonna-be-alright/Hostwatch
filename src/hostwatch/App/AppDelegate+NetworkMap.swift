@@ -13,6 +13,10 @@ extension AppDelegate {
         case let .newDeviceReached(remote, device, port):
             stories.raise(.newDevice, origin: "\(device) (\(remote))",
                           note: "a device first seen today connected to port \(port) on this Mac", target: "\(remote):\(port)")
+        case let .largeUpload(program, _, destination, bytes):
+            let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            stories.raise(.largeUpload, origin: program,
+                          note: "sent \(size) within an hour to \(destination), which it first reached today", target: destination)
         case let .routerChanged(ip, old, new):
             stories.raise(.routerChanged, origin: "Router (\(ip))",
                           note: "the router's hardware address changed from \(old) to \(new). A new router does this, and so "

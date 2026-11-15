@@ -468,3 +468,52 @@ import Testing
         #expect(all.columns[3][0].nodes.count == 13 && all.columns[3][0].more == 0)
     }
 }
+
+
+/// The upload watch: bytes into connections, the large-upload story, and the Data Sent measure.
+@Suite @MainActor struct UploadWatchTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func largeUploadRule() {
+        let started = now.addingTimeInterval(-10 * 86400)
+        // 150 MB in the last hour to a destination first reached an hour ago: a story.
+        #expect(NetworkMapPolicy.isLargeUpload(sentLastHour: 150_000_000, pairFirstSeen: now.addingTimeInterval(-3600),
+                                               mapStarted: started, now: now, yourNetwork: false))
+        // Too little, an old destination, the map's own first day, or a device at home: not.
+        #expect(!NetworkMapPolicy.isLargeUpload(sentLastHour: 50_000_000, pairFirstSeen: now.addingTimeInterval(-3600),
+                                                mapStarted: started, now: now, yourNetwork: false))
+        #expect(!NetworkMapPolicy.isLargeUpload(sentLastHour: 150_000_000, pairFirstSeen: now.addingTimeInterval(-3 * 86400),
+                                                mapStarted: started, now: now, yourNetwork: false))
+        #expect(!NetworkMapPolicy.isLargeUpload(sentLastHour: 150_000_000, pairFirstSeen: now.addingTimeInterval(-3600),
+                                                mapStarted: now.addingTimeInterval(-7200), now: now, yourNetwork: false))
+        #expect(!NetworkMapPolicy.isLargeUpload(sentLastHour: 150_000_000, pairFirstSeen: now.addingTimeInterval(-3600),
+                                                mapStarted: started, now: now, yourNetwork: true))
+    }
+
+    @Test func trafficIsCountedAndRaisedOnce() {
+        let store = NetworkMapStore(fileURL: nil)      // started now (real time), long before the test's clock
+        var alerts: [NetworkAlert] = []
+        store.onAlert = { alerts.append($0) }
+        let chunk = NetTraffic(proc: "/tmp/x", name: "x", remote: "198.51.100.9", host: "drop.example.net", sent: 60_000_000, received: 1_000)
+        store.noteTraffic(chunk, now: now)
+        #expect(alerts.isEmpty)
+        store.noteTraffic(chunk, now: now.addingTimeInterval(10))
+        store.noteTraffic(chunk, now: now.addingTimeInterval(20))
+        #expect(alerts == [.largeUpload(program: "x", path: "/tmp/x", destination: "example.net", bytes: 120_000_000)])
+        let list = store.outgoingList(.hour, now: now.addingTimeInterval(30))
+        #expect(list.first?.sent == 180_000_000 && list.first?.received == 3_000)
+    }
+
+    @Test func dataSentMeasure() {
+        let out = [MapOutgoing(program: "Safari", path: "/s", group: "busy.example", ip: "93.184.216.1", count: 500,
+                               firstSeen: now, lastSeen: now, blocked: false, isNew: false, sent: 1_000),
+                   MapOutgoing(program: "x", path: "/tmp/x", group: "drop.example", ip: "93.184.216.2", count: 2,
+                               firstSeen: now, lastSeen: now, blocked: false, isNew: false, sent: 2_000_000_000),
+                   MapOutgoing(program: "y", path: "/y", group: "quiet.example", ip: "93.184.216.3", count: 9,
+                               firstSeen: now, lastSeen: now, blocked: false, isNew: false)]
+        let g = NetworkMapBuilder.build(.init(outgoing: out, now: now, measure: .sent))
+        #expect(g.columns[3][0].nodes.map(\.ref) == ["drop.example", "busy.example"])
+        #expect(g.columns[3][0].nodes.first?.bytes == true && g.columns[3][0].nodes.first?.count == 2_000_000_000)
+        #expect(g.summary.contains("sent 2"))
+    }
+}

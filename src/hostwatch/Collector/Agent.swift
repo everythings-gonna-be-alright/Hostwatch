@@ -313,6 +313,8 @@ final class Agent: @unchecked Sendable {
     let netMap = NetMapState()
     /// Addresses and ports you blocked on the network map.
     let blocks = AddressBlock()
+    /// macOS's connection statistics, when available: the map asks it for byte counts every report.
+    var netStats: NetStats?
 
     // MARK: Lifecycle
 

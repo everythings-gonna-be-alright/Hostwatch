@@ -1208,6 +1208,11 @@ the list can't show: who tried to reach this Mac.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.
+- **Upload watch:** the map counts the bytes each program sends and receives, per destination (macOS's own
+  connection statistics, every 10 seconds). *Connections | Data Sent* at the top switches what lines, counts and
+  order measure. The details panel shows each program's, destination's and device's data sent and received.
+  **Large upload** is a story: 100 MB or more sent within an hour to a destination that program first reached today.
+  Uploads to devices on your network are shown but not raised, and the map's first day is its baseline.
 - **Who tried to connect:** the Network tab (and Network in the menu bar menu) shows an orange count of the addresses
   that tried to connect to this Mac since you last looked. The map's *Tried to Connect* menu has *Mark as Seen* (keeps
   the tries, clears the count), *Clear Refused Tries* and *Clear All Incoming Tries*. Right-click a device, an address
@@ -2763,7 +2768,7 @@ used to compare security tools. This table maps the macOS techniques Hostwatch s
 | [T1095](https://attack.mitre.org/techniques/T1095/) Non-Application Layer Protocol | Partial | Raw-IP connections. The Claude Code guard blocks `/dev/tcp` and `nc -e`. UDP sent without connecting: gap. |
 | [T1568.002](https://attack.mitre.org/techniques/T1568/002/) Domain Generation Algorithms | Partial | Every never-seen domain is *New domain* after the learning period. No dedicated DGA check. |
 | [T1071.004](https://attack.mitre.org/techniques/T1071/004/) DNS | Partial | Known bad domains are caught. Data hidden inside DNS queries: gap. |
-| [T1041](https://attack.mitre.org/techniques/T1041/) Exfiltration Over C2 Channel | Can stop | The firewall blocks destinations you didn't allow. No check on how much is sent. |
+| [T1041](https://attack.mitre.org/techniques/T1041/) Exfiltration Over C2 Channel | Alerts, can stop | *Large upload*: 100 MB or more sent within an hour to a destination the program first reached today. The firewall blocks destinations you didn't allow. |
 | [T1567](https://attack.mitre.org/techniques/T1567/) Exfiltration Over Web Service | Partial | The Claude Code guard blocks secrets sent to paste and webhook sites. Elsewhere: new domains and the firewall only. |
 | [T1048](https://attack.mitre.org/techniques/T1048/) Exfiltration Over Alternative Protocol | Partial | `scp`, `sftp`, `ftp` are watched tools. |
 | [T1090](https://attack.mitre.org/techniques/T1090/) Proxy | Gap | Traffic through a proxy shows only the proxy. |

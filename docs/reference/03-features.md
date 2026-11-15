@@ -625,6 +625,11 @@ the list can't show: who tried to reach this Mac.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.
+- **Upload watch:** the map counts the bytes each program sends and receives, per destination (macOS's own
+  connection statistics, every 10 seconds). *Connections | Data Sent* at the top switches what lines, counts and
+  order measure. The details panel shows each program's, destination's and device's data sent and received.
+  **Large upload** is a story: 100 MB or more sent within an hour to a destination that program first reached today.
+  Uploads to devices on your network are shown but not raised, and the map's first day is its baseline.
 - **Who tried to connect:** the Network tab (and Network in the menu bar menu) shows an orange count of the addresses
   that tried to connect to this Mac since you last looked. The map's *Tried to Connect* menu has *Mark as Seen* (keeps
   the tries, clears the count), *Clear Refused Tries* and *Clear All Incoming Tries*. Right-click a device, an address

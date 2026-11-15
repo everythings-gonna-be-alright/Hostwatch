@@ -24,6 +24,8 @@ enum NetworkMapBuilder {
         var blockedPorts: Set<Int> = []
         /// How many 48-point rows fit in a column of the window, nil for the fewest: a taller window shows more.
         var room: Int?
+        /// What lines, counts and order measure: connections, or bytes sent.
+        var measure: MapMeasure = .connections
     }
 
     /// What matches a search: a device by any of its names, model, maker or address, a try by its address or port, a
@@ -169,27 +171,31 @@ enum NetworkMapBuilder {
         }
 
         // Going out: programs, the way out (the router or a VPN), destinations.
+        // Data Sent: only what sent something, measured in bytes.
+        let bytes = input.measure == .sent
+        func v(_ o: MapOutgoing) -> Int { bytes ? Int(o.sent) : o.count }
         let out = input.outgoing.filter {
-            $0.lastSeen >= since && $0.count > 0 && ($0.network == nil || input.network.isEmpty || $0.network == input.network)
+            $0.lastSeen >= since && v($0) > 0 && ($0.network == nil || input.network.isEmpty || $0.network == input.network)
         }
+        let totalSent = out.reduce(Int64(0)) { $0 + $1.sent }
         func wayOut(_ o: MapOutgoing) -> String { "way:" + Self.wayOut(o.ip, routes: input.routes) }
         // Ties by name: a dictionary's order changes on every redraw, and the list would jump.
         let byProgram = Dictionary(grouping: out, by: \.path).sorted { a, b in
-            let na = a.value.reduce(0) { $0 + $1.count }, nb = b.value.reduce(0) { $0 + $1.count }
+            let na = a.value.reduce(0) { $0 + v($1) }, nb = b.value.reduce(0) { $0 + v($1) }
             return na != nb ? na > nb : a.key < b.key
         }
         let byDestination = Dictionary(grouping: out, by: \.group)
         if showOut {
             let programs = byProgram.prefix(limit("programs", maxPrograms)).map { path, list in
                 let first = list.map(\.firstSeen).min() ?? input.now
-                return MapNode(id: "prog:" + path, kind: .program, title: list[0].program, count: list.reduce(0) { $0 + $1.count },
-                               badge: input.now.timeIntervalSince(first) < NetworkMapPolicy.newFor ? .new : nil, ref: path)
+                return MapNode(id: "prog:" + path, kind: .program, title: list[0].program, count: list.reduce(0) { $0 + v($1) },
+                               badge: input.now.timeIntervalSince(first) < NetworkMapPolicy.newFor ? .new : nil, ref: path, bytes: bytes)
             }
             graph.columns[1].append(MapSection(key: "programs", title: "Programs going out", nodes: programs,
                                                more: max(0, byProgram.count - programs.count), moreNoun: "programs"))
             // Blocked and new destinations, then each way out's busiest, then the busiest overall.
             let ranked = byDestination.map { group, list in
-                (group: group, n: list.reduce(0) { $0 + $1.count }, blocked: list.contains(where: \.blocked), isNew: list.contains(where: \.isNew))
+                (group: group, n: list.reduce(0) { $0 + v($1) }, blocked: list.contains(where: \.blocked), isNew: list.contains(where: \.isNew))
             }.sorted { a, b in
                 let ra = (a.blocked ? 2 : 0) + (a.isNew ? 1 : 0), rb = (b.blocked ? 2 : 0) + (b.isNew ? 1 : 0)
                 return ra != rb ? ra > rb : a.n != b.n ? a.n > b.n : a.group < b.group
@@ -200,7 +206,7 @@ enum NetworkMapBuilder {
             } else {
                 for d in ranked where (d.blocked || d.isNew) && picked.count < 3 { picked.append(d.group) }
                 for (_, list) in Dictionary(grouping: out, by: wayOut).sorted(by: { $0.key < $1.key }) {
-                    let top = Dictionary(grouping: list, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }
+                    let top = Dictionary(grouping: list, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + v($1) }) }
                         .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }.prefix(perWayOut)
                     for (g, _) in top where !picked.contains(g) { picked.append(g) }
                 }
@@ -216,7 +222,7 @@ enum NetworkMapBuilder {
                 return MapNode(id: "dst:" + d.group, kind: .destination,
                                title: isLocal ? (device?.mac == gatewayMAC ? "Router" : device?.title ?? "Device on your network") : d.group,
                                subtitle: isLocal ? d.group : "", dataSubtitle: isLocal, count: d.n,
-                               badge: blocked ? .blocked : d.isNew ? .new : nil, ref: d.group, symbol: device?.symbol)
+                               badge: blocked ? .blocked : d.isNew ? .new : nil, ref: d.group, symbol: device?.symbol, bytes: bytes)
             }, more: max(0, ranked.count - shownDest.count), moreNoun: "destinations"))
             let shownPrograms = Set(programs.map(\.id)), shownDests = Set(shownDest.map { "dst:" + $0.group })
             var ways: [String] = []
@@ -225,8 +231,8 @@ enum NetworkMapBuilder {
                 if !ways.contains(way) { ways.append(way) }
                 let style: MapEdgeStyle = o.blocked || input.blockedAddresses.contains(o.ip) || deviceFor[o.ip]?.blocked == true ? .blocked
                     : o.isNew ? .new : .allowed
-                if shownPrograms.contains("prog:" + o.path) { link("prog:" + o.path, way, o.count, style) }
-                if shownDests.contains("dst:" + o.group) { link(way, "dst:" + o.group, o.count, style) }
+                if shownPrograms.contains("prog:" + o.path) { link("prog:" + o.path, way, v(o), style) }
+                if shownDests.contains("dst:" + o.group) { link(way, "dst:" + o.group, v(o), style) }
             }
             graph.columns[2].append(MapSection(title: "", nodes: ways.map { way in
                 let iface = String(way.dropFirst(4))
@@ -242,7 +248,10 @@ enum NetworkMapBuilder {
 
         // One line that agrees with the map: what it counts, before folding.
         var parts: [String] = []
-        if showOut { parts.append("\(byProgram.count) programs went out to \(byDestination.count) destinations.") }
+        if showOut {
+            let sent = totalSent > 0 ? " and sent \(ByteCountFormatter.string(fromByteCount: totalSent, countStyle: .file))" : ""
+            parts.append("\(byProgram.count) programs went out to \(byDestination.count) destinations\(sent).")
+        }
         if showIn {
             let wide = reachable.filter { $0.scope == .all }.count
             if wide > 0 { parts.append("\(wide) \(wide == 1 ? "program listens" : "programs listen") on all networks.") }
