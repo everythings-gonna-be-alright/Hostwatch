@@ -114,6 +114,27 @@ struct MapOutgoing: Equatable {
     var fresh = false
 }
 
+/// A network this Mac joins (known by its router), with how far you trust it. On one you don't trust, other
+/// machines can't reach programs that listen on all networks, and the firewall asks about new connections.
+struct NetworkProfile: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var trusted: Bool
+    /// You chose: until then a new network is treated as not trusted and the map asks.
+    var decided: Bool
+    var firstSeen: Date
+    var lastSeen: Date
+    var subnet = ""
+    var router = ""
+    var blockListeners = true
+    var firewallAsks = true
+
+    /// "Routerboard.com network" or "Network 192.168.1.0/24".
+    static func defaultName(router: String, subnet: String) -> String {
+        !router.isEmpty ? "\(router) network" : subnet.isEmpty ? "Network" : "Network \(subnet)"
+    }
+}
+
 /// What the map's lines, counts and order measure.
 enum MapMeasure: String, CaseIterable { case connections, sent }
 
@@ -149,7 +170,7 @@ enum MapRange: String, CaseIterable {
     }
 }
 
-enum MapBadge: Equatable { case new, blocked, refused, allNetworks, yourNetwork, mine }
+enum MapBadge: Equatable { case new, blocked, refused, allNetworks, yourNetwork, mine, trusted, untrusted }
 
 enum MapNodeKind: Equatable { case device, internet, listener, closedPorts, program, wayOut, destination }
 
