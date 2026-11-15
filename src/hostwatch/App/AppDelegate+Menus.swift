@@ -86,6 +86,11 @@ extension AppDelegate {
         menu.addItem(item("Protection", #selector(openProtectionOverview), symbol: "shield.lefthalf.filled"))
         let domainsItem = item("Network", #selector(openDomains), symbol: "network.badge.shield.half.filled")
         domainsItem.toolTip = "Firewall and domains"
+        // Someone tried to connect to this Mac: worth a look, as on the Network tab.
+        if networkMap.badge.count > 0 {
+            domainsItem.badge = NSMenuItemBadge(count: networkMap.badge.count)
+            domainsItem.toolTip = "\(networkMap.badge.count) addresses tried to connect to this Mac"
+        }
         menu.addItem(domainsItem)
         menu.addItem(.separator())
 

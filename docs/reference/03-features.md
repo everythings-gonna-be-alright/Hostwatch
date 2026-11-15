@@ -625,6 +625,10 @@ the list can't show: who tried to reach this Mac.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.
+- **Who tried to connect:** the Network tab (and Network in the menu bar menu) shows an orange count of the addresses
+  that tried to connect to this Mac since you last looked. The map's *Tried to Connect* menu has *Mark as Seen* (keeps
+  the tries, clears the count), *Clear Refused Tries* and *Clear All Incoming Tries*. Right-click a device, an address
+  or *Closed ports* ▸ *Clear Tries* for just those.
 - **Search:** the window's search field filters the map by name. A program, a domain, a device's name, model or maker,
   an address or a port keeps what matches and what it connects to.
 

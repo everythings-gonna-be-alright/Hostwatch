@@ -173,7 +173,7 @@ struct NetworkMapInspector: View {
         } else if !list.isEmpty {
             HStack {
                 Spacer()
-                Button("Forget Tries") { store.forgetTries(from: ips[0]); state.selection = nil }.buttonStyle(.glass).controlSize(.small)
+                Button("Clear Tries") { store.forgetTries(from: ips[0]); state.selection = nil }.buttonStyle(.glass).controlSize(.small)
             }
         }
     }
@@ -195,7 +195,7 @@ struct NetworkMapInspector: View {
         triesByPort(list)
         HStack {
             Spacer()
-            Button("Forget Tries") { store.forgetTries(from: node.ref); state.selection = nil }.buttonStyle(.glass).controlSize(.small)
+            Button("Clear Tries") { store.forgetTries(from: node.ref); state.selection = nil }.buttonStyle(.glass).controlSize(.small)
         }
     }
 
@@ -234,6 +234,11 @@ struct NetworkMapInspector: View {
             header("xmark.circle", "Closed ports", "", badge: .refused)
             Text("Tries at ports where nothing listens. This Mac refused them, so nothing happened.")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Clear Refused Tries") { store.clearTries(refusedOnly: true); state.selection = nil }
+                    .buttonStyle(.glass).controlSize(.small)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(ports.prefix(10), id: \.0) { port, n in row(":\(port)", "\(n) \(n == 1 ? "try" : "tries")", data: false) }
             }

@@ -412,6 +412,23 @@ import Testing
         #expect(store.blockList.addresses.isEmpty)
     }
 
+    @Test func badgeCountsWhoTriedUntilSeenOrCleared() {
+        let store = NetworkMapStore(fileURL: nil)
+        let tries = [NetInbound(remote: "192.168.1.30", port: 22, count: 3, listening: false),
+                     NetInbound(remote: "192.168.1.30", port: 8000, count: 1, listening: true),
+                     NetInbound(remote: "203.0.113.7", port: 22, count: 5, listening: false)]
+        store.apply(at([home, homePhone], inbound: tries), now: now)
+        #expect(store.badge.count == 2)
+        store.markTriesSeen(now: now.addingTimeInterval(1))
+        #expect(store.badge.count == 0 && store.inbound.count == 3)
+        store.apply(at([home, homePhone], inbound: [tries[2]]), now: now.addingTimeInterval(10))
+        #expect(store.badge.count == 1)
+        store.clearTries(refusedOnly: true, now: now.addingTimeInterval(11))
+        #expect(store.badge.count == 0 && store.inbound.values.map(\.port) == [8000])
+        store.clearTries(refusedOnly: false)
+        #expect(store.inbound.isEmpty)
+    }
+
     @Test func collectorRulesAreSafe() {
         #expect(AddressBlock.valid(["192.168.1.30", "nonsense", "127.0.0.1", "192.168.1.19", "::"], own: ["192.168.1.19"]) == ["192.168.1.30"])
         let rules = AddressBlock.rules(addresses: ["192.168.1.30"], ports: [8000])
