@@ -34,18 +34,22 @@ struct NetworkMapView: View {
     var interfaceName: (String) -> String = { $0 }
     var openDetails: (String) -> Void = { _ in }
     var openStories: () -> Void = {}
+    /// The window's search field.
+    var search = ""
 
     private static let headers = ["Reaching this Mac", "This Mac", "Way out", "Destinations"]
 
     var body: some View {
         let _ = store.revision
-        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, interfaceName: interfaceName)
+        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
             HStack(alignment: .top, spacing: 16) {
                 Group {
-                    if graph.isEmpty {
+                    if graph.isEmpty, !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                        ContentUnavailableView.search(text: search)
+                    } else if graph.isEmpty {
                         ContentUnavailableView {
                             Label("Nothing on the Map Yet", systemImage: "point.3.connected.trianglepath.dotted")
                         } description: {

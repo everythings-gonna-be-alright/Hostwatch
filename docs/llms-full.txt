@@ -1164,7 +1164,9 @@ the list can't show: who tried to reach this Mac.
     tried to connect.
   - **This Mac:** programs listening to the network, with *All networks* in orange when anyone on a network this Mac
     joins can reach them, then the programs going out.
-  - **Way out:** Wi-Fi or Ethernet through the router, a VPN, or your network directly.
+  - **Way out:** Wi-Fi or Ethernet through the router, a VPN, or your network directly. A VPN that carries only some
+    destinations (a split tunnel to a company's 10.x network) is its own way out, and those addresses are destinations
+    behind it, not devices on your network.
   - **Destinations:** grouped by domain, blocked and new ones always in view.
 - **Lines:** thicker for more connections. Grey is allowed, red dashed is blocked or refused, orange is new in the last
   day. Every state also has a word or badge.
@@ -1178,6 +1180,8 @@ the list can't show: who tried to reach this Mac.
   was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
+- **Search:** the window's search field filters the map by name. A program, a domain, a device's name, model or maker,
+  an address or a port keeps what matches and what it connects to.
 
 **Stories.** Three things raise a story: one address on your network trying ten ports within a minute (*Port scan*), a
 device first seen today reaching a program that listens (*New device reached this Mac*), and the router's hardware

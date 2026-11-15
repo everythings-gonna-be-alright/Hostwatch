@@ -163,6 +163,12 @@ enum NetworkMapPolicy {
         Set(tries.filter { now.timeIntervalSince($0.at) <= scanWindow }.map(\.port)).count >= scanPorts
     }
 
+    /// A private address that no VPN route carries: a device on your network. One a split tunnel carries (a company's
+    /// 10.x) is somewhere else, reached through the VPN.
+    static func isYourNetwork(_ ip: String, routes: NetRoutes) -> Bool {
+        isLocal(ip) && routes.vpnIface(for: ip, specificOnly: true) == nil
+    }
+
     /// Private, link-local and carrier-grade addresses: your network (or a VPN peer), not the internet.
     static func isLocal(_ ip: String) -> Bool {
         if ip.contains(":") {
@@ -188,11 +194,34 @@ enum NetworkMapBuilder {
         var now = Date()
         /// "en0" -> "Wi-Fi" (System Configuration in the app, a table in tests).
         var interfaceName: (String) -> String = { $0 }
+        /// The window's search: only what matches, with what it connects to.
+        var query = ""
+    }
+
+    /// What matches a search: a device by any of its names, model, maker or address, a try by its address or port, a
+    /// listener by name or port, a connection by its program, destination, address or the device it reached.
+    static func matching(_ input: Input) -> Input {
+        let q = input.query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return input }
+        var out = input
+        func has(_ s: String) -> Bool { s.lowercased().contains(q) }
+        func deviceMatches(_ d: MapDevice) -> Bool {
+            has(d.title) || has(d.name) || has(d.model ?? "") || has(d.maker ?? "") || has(d.mac) || d.ips.contains(where: has)
+        }
+        let devices = input.devices.filter(deviceMatches)
+        let deviceIPs = Set(devices.flatMap(\.ips))
+        out.devices = devices
+        out.listeners = input.listeners.filter { has($0.name) || has(":\($0.port)") || has($0.proc) }
+        let ports = Set(out.listeners.map(\.port))
+        out.inbound = input.inbound.filter { deviceIPs.contains($0.remote) || has($0.remote) || has($0.listener) || ports.contains($0.port) }
+        out.outgoing = input.outgoing.filter { has($0.program) || has($0.group) || has($0.ip) || deviceIPs.contains($0.ip) }
+        return out
     }
 
     static let maxDevices = 6, maxInternet = 4, maxListeners = 4, maxPrograms = 6, maxDestinations = 8
 
     static func build(_ input: Input) -> NetworkGraph {
+        let input = matching(input)
         let since = input.range.since(input.now)
         let showIn = input.filter != .goingOut
         let showOut = input.filter == .everything || input.filter == .goingOut
@@ -307,7 +336,7 @@ enum NetworkMapBuilder {
             let shownDest = (Array(busiest) + urgent).sorted { $0.n > $1.n }
             graph.columns[3].append(MapSection(title: "", nodes: shownDest.map { d in
                 // A device on your network is named as on the left: "iPhone", with its address.
-                let local = NetworkMapPolicy.isLocal(d.group)
+                let local = NetworkMapPolicy.isYourNetwork(d.group, routes: input.routes)
                 let device = local ? deviceFor[d.group] : nil
                 return MapNode(id: "dst:" + d.group, kind: .destination,
                                title: local ? (device?.mac == gatewayMACForOut ? "Router" : device?.title ?? "Device on your network") : d.group,
@@ -317,7 +346,9 @@ enum NetworkMapBuilder {
             let shownPrograms = Set(programs.map(\.id)), shownDests = Set(shownDest.map { "dst:" + $0.group })
             var ways: [String] = []
             for o in out {
-                let iface = NetworkMapPolicy.isLocal(o.ip) ? "local" : input.routes.iface(for: o.ip)
+                let iface = NetworkMapPolicy.isYourNetwork(o.ip, routes: input.routes) ? "local"
+                    : NetworkMapPolicy.isLocal(o.ip) ? (input.routes.vpnIface(for: o.ip, specificOnly: true) ?? "local")
+                    : input.routes.iface(for: o.ip)
                 let way = "way:" + iface
                 if !ways.contains(way) { ways.append(way) }
                 let style: MapEdgeStyle = o.blocked ? .blocked : o.isNew ? .new : .allowed
@@ -328,9 +359,10 @@ enum NetworkMapBuilder {
                 let iface = String(way.dropFirst(4))
                 let vpn = input.routes.vpns.contains { $0.iface == iface }
                 let title = iface == "local" ? "Your network" : iface.isEmpty ? "Internet" : vpn ? "VPN" : input.interfaceName(iface)
-                let subtitle = iface == "local" ? "directly" : vpn ? iface
+                let carries = input.routes.vpns.first { $0.iface == iface }.map { $0.full ? "everything" : "some destinations" } ?? ""
+                let subtitle = iface == "local" ? "directly" : vpn ? "\(iface), \(carries)"
                     : iface == input.routes.iface && !input.routes.gateway.isEmpty ? "via Router" : ""
-                return MapNode(id: way, kind: .wayOut, title: title, subtitle: subtitle, dataSubtitle: vpn, ref: iface)
+                return MapNode(id: way, kind: .wayOut, title: title, subtitle: subtitle, ref: iface)
             }.sorted { ($0.ref == "local" ? 1 : 0, $0.title) < ($1.ref == "local" ? 1 : 0, $1.title) }))
         }
         graph.edges = edges.values.sorted { $0.id < $1.id }

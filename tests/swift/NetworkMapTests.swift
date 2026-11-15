@@ -283,3 +283,59 @@ import Testing
         #expect(store.devices["36:48:71:1a:c0:f3"]?.symbol == "tv")
     }
 }
+
+/// A split-tunnel VPN as a way out of its own, and searching the map.
+@Suite @MainActor struct NetworkMapRoutesAndSearch {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    // The real split tunnel: company ranges through utun8, the rest through Wi-Fi.
+    let split = NetMapParse.routes("""
+    default            192.168.1.1        UGScg                 en0
+    10.1/16            100.96.1.145       UGSc                utun8
+    100.80/12          100.96.1.145       UGSc                utun8
+    79.127.241.165/32  192.168.1.1        UGSc                  en0
+    """)
+
+    func out(_ program: String, _ group: String, _ ip: String) -> MapOutgoing {
+        MapOutgoing(program: program, path: "/usr/bin/" + program, group: group, ip: ip, count: 3,
+                    firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)
+    }
+
+    @Test func splitTunnelIsItsOwnWayOut() {
+        #expect(!NetworkMapPolicy.isYourNetwork("10.1.4.20", routes: split))
+        #expect(NetworkMapPolicy.isYourNetwork("192.168.1.13", routes: split))
+        let g = NetworkMapBuilder.build(.init(routes: split, outgoing: [out("ssh", "git.corp.example", "10.1.4.20"),
+                                                                         out("ssh", "192.168.1.13", "192.168.1.13"),
+                                                                         out("curl", "example.com", "93.184.216.34")], now: now,
+                                              interfaceName: { _ in "Wi-Fi" }))
+        let ways = g.columns[2][0].nodes
+        #expect(Set(ways.map(\.id)) == ["way:utun8", "way:local", "way:en0"])
+        #expect(ways.first { $0.id == "way:utun8" }?.title == "VPN")
+        #expect(ways.first { $0.id == "way:utun8" }?.subtitle == "utun8, some destinations")
+        #expect(g.edges.contains { $0.from == "way:utun8" && $0.to == "dst:git.corp.example" })
+    }
+
+    @Test func fullTunnelLeavesYourNetworkDirect() {
+        let full = NetMapParse.routes("""
+        default            192.168.1.1        UGScg                 en0
+        0/1                10.8.0.1           UGSc                  utun4
+        128.0/1            10.8.0.1           UGSc                  utun4
+        """)
+        #expect(NetworkMapPolicy.isYourNetwork("192.168.1.13", routes: full))
+        #expect(full.iface(for: "93.184.216.34") == "utun4")
+    }
+
+    @Test func searchKeepsWhatMatchesAndItsLinks() {
+        let input = NetworkMapBuilder.Input(
+            devices: [MapDevice(mac: "c0:cd:d6:79:e7:a4", ips: ["192.168.1.13"], iface: "en0", name: "nas.lan", firstSeen: now, lastSeen: now)],
+            routes: split,
+            outgoing: [out("ssh", "192.168.1.13", "192.168.1.13"), out("curl", "example.com", "93.184.216.34")],
+            now: now, query: "nas")
+        let g = NetworkMapBuilder.build(input)
+        #expect(g.columns[0][0].nodes.map(\.title) == ["nas"])
+        #expect(g.columns[1].last?.nodes.map(\.title) == ["ssh"])
+        #expect(g.columns[3][0].nodes.map(\.ref) == ["192.168.1.13"])
+        var curl = input
+        curl.query = "CURL"
+        #expect(NetworkMapBuilder.build(curl).columns[3][0].nodes.map(\.title) == ["example.com"])
+    }
+}

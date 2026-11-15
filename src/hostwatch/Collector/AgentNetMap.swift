@@ -38,17 +38,22 @@ struct NetRoutes: Codable, Equatable, Sendable {
     var vpns: [VPN] = []
 
     /// Which interface an IPv4 destination leaves by: the VPN with the longest matching route, else the default.
-    func iface(for ip: String) -> String {
-        guard let addr = NetMapParse.ipv4(ip) else { return vpns.first(where: \.full)?.iface ?? iface }
+    func iface(for ip: String) -> String { vpnIface(for: ip) ?? iface }
+
+    /// The VPN that carries a destination, nil when none does. `specificOnly`: only a VPN's own routes (a split
+    /// tunnel's 10.1/16), not the catch-all halves of a full one, which would also cover addresses on your network
+    /// (their more specific route on the Wi-Fi isn't kept).
+    func vpnIface(for ip: String, specificOnly: Bool = false) -> String? {
+        guard let addr = NetMapParse.ipv4(ip) else { return specificOnly ? nil : vpns.first(where: \.full)?.iface }
         var best: (bits: Int, iface: String)?
         for v in vpns {
             for r in v.routes {
-                guard let (base, bits) = NetMapParse.prefix(r), bits > (best?.bits ?? -1) else { continue }
+                guard let (base, bits) = NetMapParse.prefix(r), bits > (best?.bits ?? -1), !specificOnly || bits > 1 else { continue }
                 let mask: UInt32 = bits == 0 ? 0 : ~UInt32(0) << (32 - bits)
                 if addr & mask == base & mask { best = (bits, v.iface) }
             }
         }
-        return best?.iface ?? iface
+        return best?.iface
     }
 }
 
