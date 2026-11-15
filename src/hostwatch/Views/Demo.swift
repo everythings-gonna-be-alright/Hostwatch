@@ -13,7 +13,7 @@ enum Demo {
     static let epoch = Date()
     static let flag = "--demo"
     static let home = "/Users/alex"
-    static let scenes = ["hud", "events", "live", "running", "patterns", "stories", "network", "firewall", "protection", "watch"]
+    static let scenes = ["hud", "events", "live", "running", "patterns", "stories", "network", "map", "firewall", "protection", "watch"]
 
     static func configure(_ args: [String]) {
         guard let i = args.firstIndex(of: flag) else { return }
@@ -190,6 +190,50 @@ enum Demo {
             o["time"] = f.string(from: date)
             return (try? JSONSerialization.data(withJSONObject: o)).map { $0 + Data("\n".utf8) }
         }
+    }
+
+    // MARK: The network map (made-up devices on a made-up home network)
+
+    static let router = NetNeighbor(mac: "00:15:6d:4a:20:01", ips: ["192.168.1.1"], iface: "en0")
+    static let neighbors = [
+        router,
+        NetNeighbor(mac: "00:11:32:7e:11:20", ips: ["192.168.1.20"], iface: "en0", name: "storage.lan"),
+        NetNeighbor(mac: "00:0e:58:aa:31:07", ips: ["192.168.1.31"], iface: "en0"),
+        NetNeighbor(mac: "00:01:e6:5c:40:12", ips: ["192.168.1.40"], iface: "en0"),
+        NetNeighbor(mac: "6a:2e:91:44:0b:3c", ips: ["192.168.1.14", "fe80::182c:4ff:fe21:9a10"], iface: "en0"),
+        NetNeighbor(mac: "28:cd:c1:0a:77:15", ips: ["192.168.1.15"], iface: "en0", name: "pi.lan"),
+    ]
+    /// A device that arrives later and tries the ports: the scan story.
+    static let stranger = NetNeighbor(mac: "3a:5f:12:c0:ee:9c", ips: ["192.168.1.23"], iface: "en0")
+
+    /// What they announce (Bonjour), by address.
+    static let announced: [String: AnnouncedDevice] = [
+        "192.168.1.14": AnnouncedDevice(name: "iPhone", model: "iPhone"),
+        "192.168.1.31": AnnouncedDevice(name: "Living Room", model: "Sonos One"),
+        "192.168.1.40": AnnouncedDevice(name: "", model: "HP LaserJet M110w"),
+    ]
+
+    /// The map's reports: first the network as it was, then the stranger scanning and the uploads.
+    static func netMap(late: Bool) -> NetMapMessage {
+        let routes = NetRoutes(gateway: "192.168.1.1", iface: "en0", subnets: ["192.168.1.0/24"])
+        let listeners = [NetListener(pid: 3420, name: "python3", proc: "/usr/bin/python3", port: 8000, scope: .all),
+                         NetListener(pid: 702, name: "ControlCenter", proc: "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+                                     port: 7000, scope: .all)]
+        guard late else { return NetMapMessage(listeners: listeners, neighbors: neighbors, routes: routes, inbound: []) }
+        let scan = [21, 22, 23, 80, 139, 443, 445, 3389, 5900, 8080, 8443].map {
+            NetInbound(remote: "192.168.1.23", port: $0, count: 1, listening: false)
+        } + [NetInbound(remote: "192.168.1.23", port: 8000, count: 2, listening: true, name: "python3"),
+             NetInbound(remote: "198.51.100.77", port: 22, count: 6, listening: false)]
+        let traffic = [
+            NetTraffic(proc: cleaner, name: "CleanMyDisk", remote: "45.33.12.7", host: "update.cleanmydisk-cdn.xyz",
+                       sent: 184_000_000, received: 410_000),
+            NetTraffic(proc: safari, name: "Safari", remote: "140.82.121.4", host: "github.com", sent: 2_400_000, received: 31_000_000),
+            NetTraffic(proc: music, name: "Music", remote: "17.253.83.201", host: "api.music.apple.com", sent: 900_000, received: 88_000_000),
+            NetTraffic(proc: mail, name: "Mail", remote: "17.42.251.41", host: "p71-imap.mail.me.com", sent: 1_200_000, received: 6_400_000),
+            NetTraffic(proc: "/usr/libexec/nsurlsessiond", name: "nsurlsessiond", remote: "17.248.211.70", host: "gateway.icloud.com",
+                       sent: 14_000_000, received: 2_100_000),
+        ]
+        return NetMapMessage(listeners: listeners, neighbors: neighbors + [stranger], routes: routes, inbound: scan, traffic: traffic)
     }
 
     // MARK: Live (for the website's video)

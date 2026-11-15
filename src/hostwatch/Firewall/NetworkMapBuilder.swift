@@ -168,7 +168,9 @@ enum NetworkMapBuilder {
             let blockedSources = Set(graph.columns[0].flatMap(\.nodes).filter { $0.badge == .blocked }.map(\.id))
             // This Mac: what listens where someone can reach it, and the closed ports they tried.
             let listenerNodes = reachable.prefix(limit("listeners", maxListeners)).map { l in
-                MapNode(id: "lis:\(l.proc)|\(l.port)", kind: .listener, title: l.name, subtitle: ":\(l.port)", dataSubtitle: true,
+                // How widely it listens goes on its second line ("All networks" in orange), so a narrow column keeps its name.
+                MapNode(id: "lis:\(l.proc)|\(l.port)", kind: .listener, title: l.name,
+                        subtitle: ":\(l.port) · " + (l.scope == .all ? "All networks" : "Your network"), dataSubtitle: false,
                         badge: input.blockedPorts.contains(l.port) ? .blocked : l.scope == .all ? .allNetworks : .yourNetwork, ref: l.proc)
             }
             var closed = 0

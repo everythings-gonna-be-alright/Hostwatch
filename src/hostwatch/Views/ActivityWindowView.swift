@@ -627,9 +627,12 @@ struct ActivityWindowView: View {
             HStack {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
                 Spacer(minLength: 12)
-                Button(history.statusText) { history.revealInFinder() }
-                    .buttonStyle(.glass).controlSize(.small)
-                    .help("Show history files in Finder")
+                // Quiet like the rest of the status bar: it's information, the click is a convenience.
+                Button { history.revealInFinder() } label: {
+                    Text(history.statusText).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                }
+                .buttonStyle(.plain)
+                .help("Show history files in Finder")
                 if traveling {
                     EventCountText(shown: Self.eventCount(rows), total: travel.listed.count, restored: 0, filtering: searchFiltering,
                                    always: true)

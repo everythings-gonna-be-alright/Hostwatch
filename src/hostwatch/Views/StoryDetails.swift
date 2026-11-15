@@ -169,12 +169,16 @@ struct StoryDetailView: View {
     }
 
     private var page: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            timeline
-            processCard
+        GlassEffectContainer(spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                timeline
+                processCard
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
         }
-        .padding(20)
     }
 
     // MARK: Header
@@ -208,6 +212,10 @@ struct StoryDetailView: View {
                 if story.dismissed { Chip(text: "Dismissed", symbol: "eye.slash", color: .secondary) }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Tinted with the story's severity: the one card whose colour carries state.
+        .protectionGlass(18, tint: story.severity.color.opacity(0.14))
     }
 
     // MARK: Timeline
@@ -217,17 +225,16 @@ struct StoryDetailView: View {
             HStack {
                 Label("The chain, event by event", systemImage: "point.3.connected.trianglepath.dotted").font(.headline)
                 Spacer()
-                Picker("", selection: Binding(get: { details.showAll }, set: { on in
+                IconSegments(selection: Binding(get: { details.showAll }, set: { on in
                     details.showAll = on
                     if on { details.loadContext() }
-                })) {
-                    Text("Suspicious steps").tag(false)
-                    Text(details.loaded ? "All activity (\(details.context.count))" : "All activity").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help("All activity: everything these processes did around the story (from history), dimmed")
+                }), items: [
+                    .init(value: false, title: "Suspicious Steps", symbol: "exclamationmark.triangle",
+                          help: "Only the steps that make this a story"),
+                    .init(value: true, title: details.loaded ? "All Activity  \(details.context.count)" : "All Activity",
+                          symbol: "list.bullet", help: "Everything these processes did around the story (from history), dimmed"),
+                ])
+                .controlSize(.small)
             }
             if details.showAll && details.loading {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading history…").foregroundStyle(.secondary) }
@@ -245,7 +252,7 @@ struct StoryDetailView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.secondary.opacity(0.07)))
+        .protectionGlass(16)
     }
 
     // MARK: Processes
@@ -285,9 +292,12 @@ struct StoryDetailView: View {
                 .help("Never alert again for \(story.originName) with these stages")
         }
         .controlSize(.regular)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
+        // A floating glass bar, as the AI bar in Watch Closely: the chain scrolls under it.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
 }
 

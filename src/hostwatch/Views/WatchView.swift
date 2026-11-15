@@ -93,7 +93,11 @@ struct WatchView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        GlassEffectContainer(spacing: 14) { stack }
+    }
+
+    private var stack: some View {
+        VStack(alignment: .leading, spacing: 14) {
             header
             if case .failed(let message) = session.state {
                 Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
@@ -110,7 +114,9 @@ struct WatchView: View {
             }
             if let analysis = session.analysis { AIEvidenceSection(analysis: analysis) }
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -131,6 +137,10 @@ struct WatchView: View {
                 status
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Recording: tinted red while it records, the one state worth colour here.
+        .protectionGlass(18, tint: session.isRecording ? Color.red.opacity(0.10) : nil)
     }
 
     @ViewBuilder private var controls: some View {
@@ -183,8 +193,8 @@ struct WatchView: View {
             Spacer()
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(16)
     }
 
     // MARK: What stands out
