@@ -216,6 +216,9 @@ struct NetworkGraph: Equatable {
     var columns: [[MapSection]] = [[], [], [], []]
     var edges: [MapEdge] = []
     var summary = ""
+    /// With a selection: every node on its real flows (a destination's programs, two steps away, included), so they
+    /// are drawn even when folded, and lit while the rest dims. Nil: the view lights direct neighbours.
+    var related: Set<String>?
     var isEmpty: Bool { columns.allSatisfy { $0.allSatisfy(\.nodes.isEmpty) } }
 }
 
