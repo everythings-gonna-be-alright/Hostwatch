@@ -144,6 +144,15 @@ final class NetworkViewState: ObservableObject {
         didSet { UserDefaults.standard.set(filter.rawValue, forKey: "networkFilter") }
     }
     @Published var selection = Set<String>()
+    enum Mode: String { case list, map }
+    @Published var mode = Mode(rawValue: UserDefaults.standard.string(forKey: "networkMode") ?? "") ?? .list {
+        didSet { UserDefaults.standard.set(mode.rawValue, forKey: "networkMode") }
+    }
+    /// The map's store, state and outgoing connections, set by AppDelegate.
+    var map: NetworkMapStore?
+    let mapState = NetworkMapViewState()
+    var mapOutgoing: () -> [MapOutgoing] = { [] }
+    var interfaceName: (String) -> String = { $0 }
     @Published var order: [KeyPathComparator<NetworkRow>] =
         SortMemory.load(key: "networkTableSort", columns: NetworkRow.sortColumns,
                         fallback: KeyPathComparator(\.lastSeen, order: .reverse)) {
@@ -165,6 +174,8 @@ struct NetworkView: View {
     var openFirewallSettings: () -> Void = {}
     /// On a threat list: the reason, else nil.
     var knownBad: (String) -> String? = { _ in nil }
+    /// The Stories tab.
+    var openStories: () -> Void = {}
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -173,6 +184,28 @@ struct NetworkView: View {
     }()
 
     var body: some View {
+        if state.mode == .map, let map = state.map {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) { modeSwitch; Spacer() }
+                    .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)
+                NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(), interfaceName: state.interfaceName,
+                               openDetails: openDetails, openStories: openStories)
+            }
+        } else {
+            list
+        }
+    }
+
+    /// List or Map.
+    private var modeSwitch: some View {
+        IconSegments(selection: $state.mode, items: [
+            .init(value: .list, title: "List", symbol: "list.bullet", help: "Every destination as a row"),
+            .init(value: .map, title: "Map", symbol: "point.3.connected.trianglepath.dotted",
+                  help: "Who reaches this Mac, what goes out, and where"),
+        ])
+    }
+
+    @ViewBuilder private var list: some View {
         let _ = domains.revision
         let all = allRows
         let rows = shown(all)
@@ -274,6 +307,7 @@ struct NetworkView: View {
 
     private var bar: some View {
         HStack(spacing: 12) {
+            modeSwitch
             Picker("Show", selection: $state.filter) {
                 ForEach(NetworkViewState.Filter.allCases, id: \.self) { Text($0.title).tag($0) }
             }

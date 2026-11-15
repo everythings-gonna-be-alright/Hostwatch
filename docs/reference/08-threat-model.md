@@ -155,6 +155,8 @@ used to compare security tools. This table maps the macOS techniques Hostwatch s
 | [T1056.002](https://attack.mitre.org/techniques/T1056/002/) GUI Input Capture | Flags | A fake password dialog needs `osascript`, a watched tool. |
 | [T1113](https://attack.mitre.org/techniques/T1113/) Screen Capture | Flags | `screencapture` is a watched tool. Capture through system frameworks: gap. |
 | [T1082](https://attack.mitre.org/techniques/T1082/) System Information Discovery, [T1057](https://attack.mitre.org/techniques/T1057/) Process Discovery | Recorded | |
+| [T1046](https://attack.mitre.org/techniques/T1046/) Network Service Discovery | Alerts | *Port scan*: one address on your network trying ten ports on this Mac within a minute. Scans from the internet are shown on the network map. |
+| [T1557.002](https://attack.mitre.org/techniques/T1557/002/) ARP Cache Poisoning | Alerts | *Router changed*: the router's address now answers from a different hardware address. |
 
 #### Calling home and sending data out
 

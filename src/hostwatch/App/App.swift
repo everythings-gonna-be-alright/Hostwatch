@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// The Full Disk Access setup window (one at a time); it notices the grant by itself.
     var accessWindow: NSWindow?
     let stories = StoryEngine()
+    /// Devices next to this Mac, who tried to reach it, listeners and routes: the Network tab's map.
+    let networkMap = NetworkMapStore()
     let domains = DomainRegistry()
     let networkState = NetworkViewState()
     let rulesTab = RulesTabState()
@@ -136,6 +138,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
         model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
+        model.onNetMap = { [weak self] m in self?.networkMap.apply(m) }
+        networkMap.onAlert = { [weak self] alert in self?.raiseNetworkStory(alert) }
+        networkState.map = networkMap
+        networkState.mapOutgoing = { [weak self] in self?.mapOutgoing() ?? [] }
+        networkState.interfaceName = { AppDelegate.interfaceName($0) }
         model.onProcessList = { [weak self] list in
             self?.running.receive(list)
             self?.processRecorder.receive(list)             // about once a minute, for Running Now in Time Travel

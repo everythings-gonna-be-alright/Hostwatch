@@ -491,6 +491,9 @@ final class HUDModel: ObservableObject {
     private static let guardMarker = Data(#""kind":"guard_"#.utf8)
     private static let processListMarker = Data(#""kind":"proc_list""#.utf8)
     private static let holdMarker = Data(#"{"kind":"hold_result""#.utf8)
+    private static let netMapMarker = Data(#"{"kind":"netmap""#.utf8)
+    /// The network map's report: listeners, neighbours, routes and incoming tries.
+    var onNetMap: ((NetMapMessage) -> Void)?
     /// The collector held a program (or couldn't): "task" (invisible), "signal" (SIGSTOP) or "none".
     var onHoldResult: ((Int, String) -> Void)?
     private struct TopMessage: Decodable {
@@ -545,6 +548,11 @@ final class HUDModel: ObservableObject {
                 if let obj = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any], let pid = obj["pid"] as? Int {
                     onHoldResult?(pid, obj["method"] as? String ?? "none")
                 }
+                continue
+            }
+            // The network map's report, at the start of the line (the collector's own, never an event's text).
+            if line.prefix(20).range(of: Self.netMapMarker) != nil {
+                if let m = try? decoder.decode(NetMapMessage.self, from: Data(line)) { onNetMap?(m) }
                 continue
             }
             // A watch is reported even while paused: you asked for it.

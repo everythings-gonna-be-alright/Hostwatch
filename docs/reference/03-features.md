@@ -571,6 +571,35 @@ again too.
 **Testing.** Run a replay to list the domains that would be flagged after that much learning:
 `REPLAY_LEARN_MINUTES=30 Hostwatch --story-replay <history.jsonl>`.
 
+#### Network map: who reaches this Mac
+
+The Network tab's **Map** (the *List | Map* switch at the top left) draws the same connections as a picture, with what
+the list can't show: who tried to reach this Mac.
+
+- **Four columns, left to right:**
+  - **Reaching this Mac:** devices on your network (the router, phones, computers) and addresses on the internet that
+    tried to connect.
+  - **This Mac:** programs listening to the network, with *All networks* in orange when anyone on a network this Mac
+    joins can reach them, then the programs going out.
+  - **Way out:** Wi-Fi or Ethernet through the router, a VPN, or your network directly.
+  - **Destinations:** grouped by domain, blocked and new ones always in view.
+- **Lines:** thicker for more connections. Grey is allowed, red dashed is blocked or refused, orange is new in the last
+  day. Every state also has a word or badge.
+- **Select anything** to dim the rest and see its details on the right: a device's addresses, when it was first seen,
+  whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
+  field lets you name it, and *Forget* forgets it and its tries.
+- **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
+
+**Stories.** Three things raise a story: one address on your network trying ten ports within a minute (*Port scan*), a
+device first seen today reaching a program that listens (*New device reached this Mac*), and the router's hardware
+address changing (*Router changed*: a new router does this, and so does someone posing as it). Tries from the internet
+are shown on the map but raise nothing, since scanners try every public address all day.
+
+**Passive only.** Hostwatch never scans your network. It reads what macOS already knows (the neighbour and route tables,
+listening sockets) and counts incoming connection attempts in the packet capture it already runs. The devices and tries
+are kept encrypted in `network-map.json`: tries for 7 days, devices for 30, yours always. Devices present when
+Hostwatch first looked are never shown as new.
+
 #### Domain details and risk score
 
 Open a domain to see who contacted it and when, with a simple risk score and the reasons behind it.
