@@ -9,6 +9,8 @@ extension AppDelegate {
     /// Fills the app with Demo's made-up activity and opens the scene asked for.
     func runDemo() {
         #if DEMO
+        // The scene decides the look, not what was clicked in an earlier demo run: newest events on top.
+        model.eventOrder = [KeyPathComparator(\.seq, order: .reverse)]
         model.demoConnect()
         domains.endLearning()
         firewall.mode = .ask
