@@ -534,12 +534,13 @@ final class NetworkMapStore: ObservableObject {
 
     func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
                expanded: Set<String> = [], room: Int? = nil, measure: MapMeasure = .connections, window: DateInterval? = nil,
-               changedOnly: Bool = false, interfaceName: @escaping (String) -> String) -> NetworkGraph {
+               changedOnly: Bool = false, blockedDomains: Set<String> = [], blockedPrograms: Set<String> = [], interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
                                       interfaceName: interfaceName, query: query, network: network, expanded: expanded,
                                       blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room, measure: measure,
-                                      window: window, changedOnly: changedOnly))
+                                      window: window, changedOnly: changedOnly, blockedDomains: blockedDomains,
+                                      blockedPrograms: blockedPrograms))
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }

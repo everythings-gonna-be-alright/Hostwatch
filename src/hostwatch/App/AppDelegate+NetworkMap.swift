@@ -77,6 +77,8 @@ struct NetworkMapActions {
     var programBlocked: (String) -> Bool = { _ in false }
     var blockDomain: (String, Bool) -> Void = { _, _ in }
     var domainBlocked: (String) -> Bool = { _ in false }
+    /// Every domain blocked for any program (your destinations), for drawing them red at once.
+    var blockedDomains: () -> Set<String> = { [] }
     /// The firewall stops connections (Ask or Strict): a program's or domain's block needs it, the map's own don't.
     var firewallStops: () -> Bool = { false }
 }
@@ -109,6 +111,9 @@ extension AppDelegate {
             },
             domainBlocked: { [weak self] domain in
                 self?.protection.destinations.contains { $0.target == domain && $0.on && $0.others == .block } ?? false
+            },
+            blockedDomains: { [weak self] in
+                Set(self?.protection.destinations.filter { $0.on && $0.others == .block }.map(\.target) ?? [])
             },
             firewallStops: { [weak self] in self?.firewall.mode == .ask || self?.firewall.mode == .strict })
     }
