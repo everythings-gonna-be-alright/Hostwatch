@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### New: the network map
+
+- **See who reaches this Mac.** The Network tab has a Map. On the left are the devices on your network and the
+  addresses on the internet that tried to connect. In the middle are the programs listening to the network (orange
+  when anyone on a network can reach them) and the programs going out. On the right are the way out (the router or a
+  VPN) and the destinations. Lines are thicker for more connections, red dashed when blocked or refused, orange when
+  new. Select anything for its details, mark a device as yours, name it or forget it.
+- **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
+  hardware address changing. Hostwatch only listens. It never scans your network.
+
 ## 0.16.0 – A learning day, AI that checks first, and a window that fits
 
 ### New: the learning day

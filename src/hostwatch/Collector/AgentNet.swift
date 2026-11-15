@@ -289,8 +289,10 @@ extension Agent {
                     unparsedLogged += 1
                     Agent.log("packet capture: unattributed SYN; header=\(header.prefix(300)) line=\(line.prefix(200))")
                 }
-                if let syn, syn.outgoing {                   // incoming is left to the socket list
+                if let syn, syn.outgoing {
                     publishConnection(pid: syn.pid, remote: syn.remote, proto: "TCP", nameHint: syn.hint)
+                } else if line.contains("Flags [S]"), let try_ = NetMapParse.inbound(line, header: header) {
+                    netMap.note(remote: try_.remote, port: try_.port)   // the map's incoming tries
                 }
                 return true
             }
@@ -559,6 +561,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
         Thread.detachNewThread { agent.runPacketSniffer() }
         Thread.detachNewThread { agent.runConnectionStats() }
         Thread.detachNewThread { agent.pollNetwork(interval: netInterval) }
+        Thread.detachNewThread { agent.runNetMap() }
     }
     Agent.log("Hostwatch agent listening on \(socketPath) for \(ownerPid > 0 ? "pid \(ownerPid)" : "uid \(clientUID ?? 0)") "
               + "(\(kinds.sorted().joined(separator: ", ")))")

@@ -62,7 +62,7 @@ enum SocketOwner {
     }
 
     /// Calls `body` for every IPv4/IPv6 TCP or UDP socket of every process but `skip`, until it returns false.
-    private static func forEachSocket(skip: Int32, _ body: (Int32, socket_info) -> Bool) {
+    static func forEachSocket(skip: Int32, _ body: (Int32, socket_info) -> Bool) {
         let count = proc_listallpids(nil, 0)
         guard count > 0 else { return }
         var pids = [pid_t](repeating: 0, count: Int(count) + 64)

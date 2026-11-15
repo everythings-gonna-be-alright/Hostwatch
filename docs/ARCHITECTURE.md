@@ -60,7 +60,9 @@ disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 00
   the Claude Code hook: judge a tool call before it runs.
 
 **`Firewall/`** — `Firewall.swift` (modes, what it would do), `FirewallRelay.swift` (the relay), `PFRedirect.swift`
-(pf rules), `SocketOwner.swift`, `FirewallProbe.swift`, `FirewallRelayTest.swift` (the `sudo` self-checks).
+(pf rules), `SocketOwner.swift`, `FirewallProbe.swift`, `FirewallRelayTest.swift` (the `sudo` self-checks),
+`NetworkMap.swift` (devices and incoming tries, the map's stories) and `NetworkMapBuilder.swift` (the map's columns
+and edges: pure, ADR 0017). The map is `Views/NetworkMapView.swift` with `NetworkMapInspector.swift`.
 
 **`Protection/`** — `ProtectionPolicy.swift` (modes, protected-file cards, what a launch or file access gets: pure),
 `ProtectionMonitor.swift` (the Watch rehearsal on the live feed, findings, the collector's settings and questions,
@@ -72,7 +74,8 @@ written, crash safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryA
 `TimeTravel.swift` (state), `ProcessHistory.swift`, `Metrics.swift`, `ProcessVitals.swift`.
 
 **`Collector/`** (runs as root, no UI) — `Agent.swift` (loop, sources, JSON out), `AgentNet.swift` (parsers, pure),
-`AgentSystem.swift` (libproc), `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`;
+`AgentSystem.swift` (libproc), `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`,
+`AgentNetMap.swift` (the network map's facts: incoming tries, listeners, neighbours, routes);
 `Collector.swift` (start and stop from the app), `CollectorDaemon.swift` (the background service: `SMAppService`
 registration and status), `CollectorLauncher.swift`, `CollectorSocket.swift`.
 

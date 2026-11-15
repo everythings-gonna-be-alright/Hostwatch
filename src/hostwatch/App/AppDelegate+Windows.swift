@@ -167,6 +167,7 @@ extension AppDelegate {
         signatures.save(sync: true)
         stories.save()
         domains.save()
+        networkMap.save()
         firewall.save()
         protection.save()
         // A background service keeps running after the app quits: nothing to stop.

@@ -199,7 +199,8 @@ struct ActivityWindowView: View {
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
                                 openDetails: actions.openDomain,
-                                openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) })
+                                openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) },
+                                openStories: { model.windowTab = 2 })
             default: patternsAndProtection(.protection)
             }
     }

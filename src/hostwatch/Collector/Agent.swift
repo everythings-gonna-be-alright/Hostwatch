@@ -197,6 +197,7 @@ final class AgentClient: @unchecked Sendable {
 
     func wants(_ ev: AgentEvent, now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
         if ev.kind == "top" { return top }
+        if ev.kind == "netmap" { return kinds.contains("net") }
         guard kinds.contains(ev.kind), !Agent.isExcluded(rules, ev) else { return false }
         if ev.kind == "file" && rateLimit {
             let second = Int(now)
@@ -308,6 +309,8 @@ final class Agent: @unchecked Sendable {
     lazy var watch = AgentWatch(agent: self)
 
     init() { ignoredPids = [selfPid] }
+    /// The network map's incoming tries between reports (`runNetMap`).
+    let netMap = NetMapState()
 
     // MARK: Lifecycle
 

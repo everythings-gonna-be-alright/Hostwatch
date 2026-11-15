@@ -12,6 +12,8 @@ import Foundation
 enum StoryStage: String, Codable, CaseIterable, Comparable {
     case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
     case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad
+    // The network map's: someone on your network trying this Mac (ADR 0017).
+    case portScan, newDevice, routerChanged
 
     static func < (a: StoryStage, b: StoryStage) -> Bool {
         allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -19,10 +21,10 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 
     var weight: Int {
         switch self {
-        case .drop, .lolbin, .network: return 1
+        case .drop, .lolbin, .network, .newDevice: return 1
         case .runFromDrop, .newDomain, .rawIP: return 2
         case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted: return 3
-        case .persistence: return 4
+        case .persistence, .portScan, .routerChanged: return 4
         case .swappedBinary: return 5
         case .knownBad: return 8
         }
@@ -52,6 +54,9 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .rawIP: return "Raw-IP connection"
         case .heavyUntrusted: return "Heavy untrusted process"
         case .knownBad: return "Known malware"
+        case .portScan: return "Port scan"
+        case .newDevice: return "New device reached this Mac"
+        case .routerChanged: return "Router changed"
         }
     }
 
@@ -73,6 +78,9 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .rawIP: return "number"
         case .heavyUntrusted: return "flame"
         case .knownBad: return "xmark.octagon"
+        case .portScan: return "dot.radiowaves.left.and.right"
+        case .newDevice: return "questionmark.circle"
+        case .routerChanged: return "wifi.exclamationmark"
         }
     }
 }
@@ -841,6 +849,23 @@ final class StoryEngine: ObservableObject {
         stories.removeAll { $0.id == id }
         working[id] = nil
         linkable.removeAll { $0.story == id }
+        dirty = true; revision += 1
+    }
+
+    /// A story of one step that isn't a process tree's (the network map's): fired at once, unless you ignored the
+    /// same one (same origin and stage) before.
+    func raise(_ stage: StoryStage, origin: String, note: String, target: String, severity: SignatureStatus = .suspicious,
+               at date: Date = Date()) {
+        let event = ActivityEvent(kind: .net, time: Agent.nowHMS(), pid: 0, ppid: 0, name: origin, proc: "", target: target,
+                                  extra: "TCP", parent: "", host: "", hostSource: "")
+        var story = Story(rootPid: 0, originName: origin, originPath: "network:" + origin, origin: .background,
+                          steps: [StoryStep(event, stage: stage, note: note, date: date)], firstSeen: date, lastSeen: date)
+        guard !ignored.contains(story.signature) else { return }
+        story.fired = true
+        story.severity = severity
+        stories.insert(story, at: 0)
+        if persistent { NSSound(named: "Funk")?.play() }
+        onFired?(story)
         dirty = true; revision += 1
     }
 
