@@ -22,6 +22,8 @@ enum NetworkMapBuilder {
         /// Internet addresses and ports you blocked.
         var blockedAddresses: Set<String> = []
         var blockedPorts: Set<Int> = []
+        /// How many 48-point rows fit in a column of the window, nil for the fewest: a taller window shows more.
+        var room: Int?
     }
 
     /// What matches a search: a device by any of its names, model, maker or address, a try by its address or port, a
@@ -65,7 +67,18 @@ enum NetworkMapBuilder {
         let since = input.range.since(input.now)
         let showIn = input.filter != .goingOut
         let showOut = input.filter == .everything || input.filter == .goingOut
-        func limit(_ key: String, _ n: Int) -> Int { input.expanded.contains(key) ? .max : n }
+        // The fewest that always fit, more when the window is taller: the internet's few and the listeners stay as they
+        // are, devices, programs (shorter rows) and destinations take the rest of their column.
+        func limit(_ key: String, _ n: Int) -> Int {
+            if input.expanded.contains(key) { return .max }
+            guard let room = input.room else { return n }
+            switch key {
+            case "devices": return max(n, room - maxInternet - 3)
+            case "programs": return max(n, room * 6 / 5 - maxListeners - 3)
+            case "destinations": return max(n, room - 1)
+            default: return n
+            }
+        }
         var graph = NetworkGraph()
         var edges: [String: MapEdge] = [:]
         func link(_ from: String, _ to: String, _ weight: Int, _ style: MapEdgeStyle) {
@@ -86,7 +99,7 @@ enum NetworkMapBuilder {
             let n = i.count(since: since)
             return n > 0 ? (i, n) : nil
         }
-        let reachable = input.listeners.filter { $0.scope != .local }
+        let reachable = input.listeners.filter { $0.scope != .local }.sorted { ($0.port, $0.name) < ($1.port, $1.name) }
         var newDevices = 0, refusedFromElsewhere = 0
         if showIn {
             var devices = here.filter { d in d.lastSeen >= since || tries.contains { d.ips.contains($0.0.remote) } }
@@ -115,7 +128,7 @@ enum NetworkMapBuilder {
             if input.filter != .yourNetwork {
                 let elsewhere = Dictionary(grouping: tries.filter { !local($0.0.remote) }, by: { $0.0.remote })
                     .map { (ip: $0.key, n: $0.value.reduce(0) { $0 + $1.1 }, refused: $0.value.allSatisfy { $0.0.refused >= $0.0.count }) }
-                    .sorted { $0.n > $1.n }
+                    .sorted { $0.n != $1.n ? $0.n > $1.n : $0.ip < $1.ip }
                 refusedFromElsewhere = elsewhere.filter(\.refused).reduce(0) { $0 + $1.n }
                 let nodes = elsewhere.prefix(limit("internet", maxInternet)).map {
                     MapNode(id: "net:" + $0.ip, kind: .internet, title: $0.ip,
@@ -160,8 +173,10 @@ enum NetworkMapBuilder {
             $0.lastSeen >= since && $0.count > 0 && ($0.network == nil || input.network.isEmpty || $0.network == input.network)
         }
         func wayOut(_ o: MapOutgoing) -> String { "way:" + Self.wayOut(o.ip, routes: input.routes) }
+        // Ties by name: a dictionary's order changes on every redraw, and the list would jump.
         let byProgram = Dictionary(grouping: out, by: \.path).sorted { a, b in
-            a.value.reduce(0) { $0 + $1.count } > b.value.reduce(0) { $0 + $1.count }
+            let na = a.value.reduce(0) { $0 + $1.count }, nb = b.value.reduce(0) { $0 + $1.count }
+            return na != nb ? na > nb : a.key < b.key
         }
         let byDestination = Dictionary(grouping: out, by: \.group)
         if showOut {
@@ -177,21 +192,22 @@ enum NetworkMapBuilder {
                 (group: group, n: list.reduce(0) { $0 + $1.count }, blocked: list.contains(where: \.blocked), isNew: list.contains(where: \.isNew))
             }.sorted { a, b in
                 let ra = (a.blocked ? 2 : 0) + (a.isNew ? 1 : 0), rb = (b.blocked ? 2 : 0) + (b.isNew ? 1 : 0)
-                return ra != rb ? ra > rb : a.n > b.n
+                return ra != rb ? ra > rb : a.n != b.n ? a.n > b.n : a.group < b.group
             }
             var picked: [String] = []
             if input.expanded.contains("destinations") {
                 picked = ranked.map(\.group)
             } else {
                 for d in ranked where (d.blocked || d.isNew) && picked.count < 3 { picked.append(d.group) }
-                for (_, list) in Dictionary(grouping: out, by: wayOut) {
+                for (_, list) in Dictionary(grouping: out, by: wayOut).sorted(by: { $0.key < $1.key }) {
                     let top = Dictionary(grouping: list, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }
-                        .sorted { $0.1 > $1.1 }.prefix(perWayOut)
+                        .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }.prefix(perWayOut)
                     for (g, _) in top where !picked.contains(g) { picked.append(g) }
                 }
-                for d in ranked where picked.count < maxDestinations && !picked.contains(d.group) { picked.append(d.group) }
+                let most = limit("destinations", maxDestinations)
+                for d in ranked where picked.count < most && !picked.contains(d.group) { picked.append(d.group) }
             }
-            let shownDest = ranked.filter { picked.contains($0.group) }.sorted { $0.n > $1.n }
+            let shownDest = ranked.filter { picked.contains($0.group) }.sorted { $0.n != $1.n ? $0.n > $1.n : $0.group < $1.group }
             graph.columns[3].append(MapSection(key: "destinations", title: "", nodes: shownDest.map { d in
                 // A device on your network is named as on the left: "iPhone", with its address.
                 let isLocal = local(d.group)

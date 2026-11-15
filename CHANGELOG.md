@@ -23,6 +23,8 @@
   looked. Mark them as seen, or clear the refused tries or all of them.
 - **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
   doesn't mark everyone as new, and a different router at the same address is not a false alarm.
+- **Steady and roomy.** Nothing on the map or in its lists jumps when you select it or when counts change, new items
+  join at the end. A taller window shows more in each column.
 - **Show more:** click any "and 12 more" and the map makes way for all of them in a table, with details and the same
   menu. *Map* goes back.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
