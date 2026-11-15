@@ -12,6 +12,8 @@
 - **Every device named.** Its maker comes from its hardware address (a registry shipped with Hostwatch, never looked
   up online), and its model and name from what it announces on your network: iPhone, MacBook Pro, Apple TV, a printer
   or a Chromecast.
+- **Search the map** with the window's search field: a program, a domain, a device or an address keeps what matches
+  and what it connects to. A split-tunnel VPN shows as its own way out.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
   hardware address changing. Hostwatch only listens. It never scans your network.
 

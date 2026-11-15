@@ -279,7 +279,7 @@ struct NetworkMapInspector: View {
                 }
             }
         }
-        if !NetworkMapPolicy.isLocal(node.ref) {
+        if !NetworkMapPolicy.isYourNetwork(node.ref, routes: store.routes) {
             HStack {
                 Spacer()
                 Button("Details…") { openDetails(node.ref) }.buttonStyle(.glass).controlSize(.small)

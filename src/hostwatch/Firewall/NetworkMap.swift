@@ -143,7 +143,9 @@ final class NetworkMapStore: ObservableObject {
     func observeOutgoing(_ e: ActivityEvent, blocked: Bool, now: Date = Date()) {
         guard e.kind == .net, let raw = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), !raw.isEmpty, raw != "?",
               !raw.hasPrefix("127."), raw != "::1", !raw.lowercased().hasPrefix("fe80:"), raw != "0.0.0.0" else { return }
-        let group = NetworkMapPolicy.isLocal(raw) ? raw : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
+        // A device on your network by its address, anything else (a VPN's 10.x included) by its domain.
+        let group = NetworkMapPolicy.isYourNetwork(raw, routes: routes) ? raw
+            : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
         let base = e.name.isEmpty || e.name == "?" ? (e.proc as NSString).lastPathComponent : e.name
         let program = SignatureBuilder.vmGateway(e.proc) ?? (base.isEmpty ? "Unknown program" : base)
         let key = e.proc + "|" + group
@@ -163,7 +165,8 @@ final class NetworkMapStore: ObservableObject {
             let n = c.count(since: since)
             guard n > 0 else { return nil }
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
-                               lastSeen: c.lastSeen, blocked: c.blocked, isNew: !NetworkMapPolicy.isLocal(c.group) && isNew(c.group))
+                               lastSeen: c.lastSeen, blocked: c.blocked,
+                               isNew: !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group))
         }
     }
 
@@ -229,11 +232,11 @@ final class NetworkMapStore: ObservableObject {
 
     // MARK: Map
 
-    func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(),
+    func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
                interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
-                                      interfaceName: interfaceName))
+                                      interfaceName: interfaceName, query: query))
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) } }
