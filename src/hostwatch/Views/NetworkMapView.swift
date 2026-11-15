@@ -142,6 +142,17 @@ struct NetworkMapView: View {
 
     // MARK: Controls
 
+    /// How many items the map holds with each Show choice (what the buttons count).
+    private var counts: (all: Int, new: Int) {
+        func items(_ changed: Bool) -> Int {
+            store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, window: state.travel,
+                        changedOnly: changed, interfaceName: interfaceName)
+                .columns.enumerated().filter { $0.offset != 2 }.flatMap(\.element)
+                .reduce(0) { $0 + $1.nodes.filter { $0.kind != .closedPorts }.count + $1.more }
+        }
+        return (items(false), items(true))
+    }
+
     private var controls: some View {
         HStack(spacing: 12) {
             IconSegments(selection: $state.filter, items: [
@@ -155,9 +166,13 @@ struct NetworkMapView: View {
                       help: "Lines and counts by how many connections"),
                 .init(value: .sent, title: "Data Sent", symbol: "arrow.up.circle", help: "Lines and counts by how much was sent"),
             ])
-            Toggle("Only What Changed", isOn: $state.changedOnly)
-                .toggleStyle(.switch)
-                .help("Only connections, devices and tries that weren't there in the 7 days before")
+            Divider().frame(height: 16)
+            Text("Show").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+            ShowButtons(selection: $state.changedOnly, items: [
+                .init(value: false, title: "All", symbol: "square.stack", help: "Everything in this time", count: counts.all),
+                .init(value: true, title: "New", symbol: "sparkles",
+                      help: "Only connections, devices and tries that weren't there in the 7 days before", count: counts.new),
+            ])
             Spacer()
             triesMenu
             if let travel = state.travel {
