@@ -10,15 +10,22 @@ struct NetworkMapMenu: View {
     let select: () -> Void
     /// Opens the process details panel (as under Events); nil where there's none to open.
     var showProcess: ((ActivityEvent) -> Void)? = nil
+    /// Off in the full list: clicking a row already shows its details.
+    var showDetailsItem = true
 
     var body: some View {
-        Button("Show Details") { select() }
+        if showDetailsItem { Button("Show Details") { select() } }
         if let showProcess, let event = processEvent {
             Button("Show Process Details") { select(); showProcess(event) }
         }
-        if node.kind != .wayOut && node.kind != .closedPorts { Divider() }
+        if node.kind != .wayOut && node.kind != .closedPorts && (showDetailsItem || processEvent != nil) { Divider() }
         switch node.kind {
         case .device:
+            if let d = store.devices[node.ref] ?? (node.ref.hasPrefix("ip:") ? MapDevice(mac: node.ref, ips: [String(node.ref.dropFirst(3))],
+                                                                                           iface: "", firstSeen: Date(), lastSeen: Date()) : nil),
+               store.inbound.values.contains(where: { d.ips.contains($0.remote) }) {
+                Button("Clear Tries") { d.ips.forEach(store.forgetTries) }
+            }
             if let why = store.blockRefusal(device: node.ref) {
                 Button("Block This Device") {}.disabled(true)
                 Text(why)
@@ -29,6 +36,7 @@ struct NetworkMapMenu: View {
                 Text("Nothing from it reaches this Mac, and nothing goes to it")
             }
         case .internet:
+            Button("Clear Tries") { store.forgetTries(from: node.ref) }
             if store.blockedAddresses.contains(node.ref) {
                 Button("Unblock \(node.ref)") { store.setBlocked(address: node.ref, false) }
             } else {
@@ -69,7 +77,9 @@ struct NetworkMapMenu: View {
                 Button("Block \(node.ref)") { actions.blockDomain(node.ref, true) }
                 firewallNote
             }
-        case .wayOut, .closedPorts:
+        case .closedPorts:
+            Button("Clear Refused Tries") { store.clearTries(refusedOnly: true) }
+        case .wayOut:
             EmptyView()
         }
     }

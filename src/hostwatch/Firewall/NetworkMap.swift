@@ -16,6 +16,13 @@ enum NetworkAlert: Equatable {
     case routerChanged(ip: String, old: String, new: String)
 }
 
+/// How many addresses tried to connect since you last looked or cleared: the Network tab's badge. Its own object, so
+/// the window redraws when the count changes, not on every 10 s report.
+@MainActor
+final class IncomingBadge: ObservableObject {
+    @Published var count = 0
+}
+
 /// Devices next to this Mac (on each network it joins), who tried to reach it, where it connects, and what you
 /// blocked, kept sealed (`network-map.json`), with the latest listeners and routes. Owned by AppDelegate, fed by the
 /// collector and the event stream.
@@ -31,6 +38,9 @@ final class NetworkMapStore: ObservableObject {
     /// Addresses (other networks' and devices' you blocked by address) and ports you blocked.
     @Published private(set) var blockedAddresses: Set<String> = []
     @Published private(set) var blockedPorts: Set<Int> = []
+    let badge = IncomingBadge()
+    /// Tries before this were seen (Mark as Seen, or cleared).
+    private(set) var seenUntil = Date.distantPast
     var onAlert: ((NetworkAlert) -> Void)?
     /// The full block list changed: the collector gets it (addresses both ways, ports incoming).
     var onBlocks: (([String], [Int]) -> Void)?
@@ -48,6 +58,7 @@ final class NetworkMapStore: ObservableObject {
         var networks: [String]?
         var blockedAddresses: [String]?
         var blockedPorts: [Int]?
+        var seenUntil: Date?
     }
 
     private let fileURL: URL?
@@ -106,6 +117,7 @@ final class NetworkMapStore: ObservableObject {
             judge(remote, m.inbound, now: now)
         }
         trim(now: now)
+        updateBadge()
         sendBlocks()
         dirty = true
         revision += 1
@@ -289,6 +301,33 @@ final class NetworkMapStore: ObservableObject {
         changed()
     }
 
+    // MARK: Incoming tries
+
+    /// Addresses that tried since you last looked: on this network, or from anywhere else.
+    var unseenSources: Int {
+        Set(inbound.values.filter { $0.lastSeen > seenUntil && ($0.network == nil || network.isEmpty || $0.network == network) }
+            .map(\.remote)).count
+    }
+
+    /// Keeps the tries, clears the badge.
+    func markTriesSeen(now: Date = Date()) {
+        seenUntil = now
+        changed()
+    }
+
+    /// Forgets incoming tries: the refused ones only (nothing listened), or all. The badge clears.
+    func clearTries(refusedOnly: Bool, now: Date = Date()) {
+        inbound = refusedOnly ? inbound.filter { $0.value.refused < $0.value.count } : [:]
+        recent = [:]
+        seenUntil = now
+        changed()
+    }
+
+    private func updateBadge() {
+        let n = unseenSources
+        if badge.count != n { badge.count = n }
+    }
+
     // MARK: Blocks
 
     /// Why this device can't be blocked, nil when it can: the router carries everything this Mac sends.
@@ -338,6 +377,7 @@ final class NetworkMapStore: ObservableObject {
     }
 
     private func changed() {
+        updateBadge()
         revision += 1
         dirty = true
         sendBlocks()
@@ -371,6 +411,8 @@ final class NetworkMapStore: ObservableObject {
         learnedNetworks = Set(s.networks ?? [])
         blockedAddresses = Set(s.blockedAddresses ?? [])
         blockedPorts = Set(s.blockedPorts ?? [])
+        seenUntil = s.seenUntil ?? .distantPast
+        updateBadge()
     }
 
     func save() {
@@ -380,7 +422,7 @@ final class NetworkMapStore: ObservableObject {
         encoder.dateEncodingStrategy = .secondsSince1970
         let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), outgoing: Array(outgoing.values),
                       routers: routers, learned: learned, networks: Array(learnedNetworks),
-                      blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts))
+                      blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts), seenUntil: seenUntil)
         if let data = try? encoder.encode(s) { try? Vault.shared.write(data, to: fileURL) }
     }
 }

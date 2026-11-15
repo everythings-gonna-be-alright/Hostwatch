@@ -67,6 +67,8 @@ struct ActivityWindowView: View {
     @ObservedObject var stories: StoryEngine
     @ObservedObject var domains: DomainRegistry
     @ObservedObject var networkState: NetworkViewState
+    /// Addresses that tried to connect since you last looked: the Network tab's badge.
+    @ObservedObject var incoming: IncomingBadge
     @ObservedObject var firewall: FirewallMonitor
     let rulesTab: RulesTabState
     @ObservedObject var vitals: ProcessVitals
@@ -292,8 +294,10 @@ struct ActivityWindowView: View {
             .init(id: 4, title: "Protection", symbol: "shield.lefthalf.filled"),
             .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
                   badge: dangerous > 0 ? "\(dangerous)" : nil, badgeTint: .red),
+            // Waiting connections first (your answer), else who tried to connect to this Mac (attention).
             .init(id: 3, title: "Network", symbol: "network.badge.shield.half.filled",
-                  badge: firewall.prompts.isEmpty ? nil : "\(firewall.prompts.count)", badgeTint: .accentColor),
+                  badge: !firewall.prompts.isEmpty ? "\(firewall.prompts.count)" : incoming.count > 0 ? "\(incoming.count)" : nil,
+                  badgeTint: firewall.prompts.isEmpty ? .orange : .accentColor),
         ]
     }
 

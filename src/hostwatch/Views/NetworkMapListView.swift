@@ -54,7 +54,7 @@ struct NetworkMapListView: View {
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first, let node = rows.first(where: { $0.id == id }) {
                     NetworkMapMenu(node: node, store: store, actions: actions, select: { state.selection = id },
-                                   showProcess: { state.process = $0 })
+                                   showProcess: { state.process = $0 }, showDetailsItem: false)
                 }
             }
             .overlay {

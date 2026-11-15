@@ -101,6 +101,7 @@ struct NetworkMapView: View {
                 .init(value: .yourNetwork, title: "Your Network", symbol: "house"),
             ])
             Spacer()
+            triesMenu
             Picker("Range", selection: $state.range) {
                 ForEach(MapRange.allCases, id: \.self) { Text($0.title).tag($0) }
             }
@@ -112,6 +113,27 @@ struct NetworkMapView: View {
         .controlSize(.small)
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
+    }
+
+    /// Who tried to reach this Mac: Mark as Seen (the badge), or clear the refused tries or all of them.
+    @ViewBuilder private var triesMenu: some View {
+        let unseen = store.badge.count
+        if !store.inbound.isEmpty {
+            Menu {
+                Button("Mark as Seen") { store.markTriesSeen() }.disabled(unseen == 0)
+                Divider()
+                Button("Clear Refused Tries") { store.clearTries(refusedOnly: true) }
+                Button("Clear All Incoming Tries") { store.clearTries(refusedOnly: false) }
+            } label: {
+                Label(unseen > 0 ? "\(unseen) Tried to Connect" : "Incoming Tries",
+                      systemImage: unseen > 0 ? "exclamationmark.circle" : "arrow.down.left.circle")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .tint(unseen > 0 ? .orange : nil)
+            .fixedSize()
+            .help(unseen > 0 ? "\(unseen) addresses tried to connect to this Mac since you last looked" : "Clear the tries the map remembers")
+        }
     }
 
     private func footer(_ graph: NetworkGraph) -> some View {
