@@ -144,6 +144,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         networkMap.onAlert = { [weak self] alert in self?.raiseNetworkStory(alert) }
         networkState.map = networkMap
         networkMap.announced = { [bonjour] ip in bonjour.byAddress[ip] }
+        networkMap.onBlocks = { [weak self] addresses, ports in self?.model.blocks = (addresses, ports) }
+        networkMap.sendBlocks(force: true)
+        networkState.mapActions = mapActions()
         bonjour.onChange = { [weak self] in self?.networkMap.announcementsChanged() }
         if !AppPaths.isDemo { bonjour.start() }
         networkState.mapOutgoing = { [weak self] range in self?.mapOutgoing(range) ?? [] }

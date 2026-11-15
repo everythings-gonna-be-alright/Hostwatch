@@ -37,3 +37,49 @@ extension AppDelegate {
         return bsd
     }
 }
+
+// MARK: Blocking from the map
+
+/// What the map's right-click menu does beyond the map's own blocks (devices, addresses, ports): a program's
+/// connections through their patterns, a domain through your destinations in Protection.
+struct NetworkMapActions {
+    var blockProgram: (String, Bool) -> Void = { _, _ in }
+    var programBlocked: (String) -> Bool = { _ in false }
+    var blockDomain: (String, Bool) -> Void = { _, _ in }
+    var domainBlocked: (String) -> Bool = { _ in false }
+    /// The firewall stops connections (Ask or Strict): a program's or domain's block needs it, the map's own don't.
+    var firewallStops: () -> Bool = { false }
+}
+
+extension AppDelegate {
+    func mapActions() -> NetworkMapActions {
+        NetworkMapActions(
+            blockProgram: { [weak self] path, on in
+                guard let self else { return }
+                let keys = self.networkMap.patternKeys(program: path)
+                self.firewall.mark(on ? .suspicious : .safe, keys: keys, in: self.signatures,
+                                   note: on ? "blocked on the network map" : "allowed on the network map")
+            },
+            programBlocked: { [weak self] path in
+                guard let self else { return false }
+                let keys = self.networkMap.patternKeys(program: path)
+                return !keys.isEmpty && keys.allSatisfy { [.suspicious, .dangerous].contains(self.signatures.status(forKey: $0)) }
+            },
+            blockDomain: { [weak self] domain, on in
+                guard let self else { return }
+                var list = self.protection.destinations
+                if let i = list.firstIndex(where: { $0.target == domain }) {
+                    list[i].others = on ? .block : .firewall
+                    list[i].on = true
+                    if !on, list[i].exceptions.allowed.isEmpty, list[i].exceptions.blocked.isEmpty { list.remove(at: i) }
+                } else if on {
+                    list.append(Destination(target: domain, others: .block))
+                }
+                self.protection.destinations = list
+            },
+            domainBlocked: { [weak self] domain in
+                self?.protection.destinations.contains { $0.target == domain && $0.on && $0.others == .block } ?? false
+            },
+            firewallStops: { [weak self] in self?.firewall.mode == .ask || self?.firewall.mode == .strict })
+    }
+}

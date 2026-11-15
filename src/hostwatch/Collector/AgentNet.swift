@@ -524,6 +524,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
     }
     agent.onShutdown { unlink(socketPath) }
     PFRedirect.clearStale()                                  // a firewall redirect left by a crashed collector
+    PFRedirect.clearStale(anchor: AddressBlock.anchor)       // and blocks from the network map
     Agent.stopStrayNettop()                                  // and its nettop, from versions before 0.9
     agent.onShutdown { agent.firewall.shutdown() }
     Thread.detachNewThread { agent.acceptClients(server, ownerPid: ownerPid, clientUID: clientUID, socketPath: socketPath) }

@@ -363,6 +363,7 @@ extension Agent {
                 }
                 if let fw = cfg["firewall"] as? [String: Any] { firewall.configure(fw, from: client) }
                 if let answer = cfg["fw_answer"] as? [String: Any] { firewall.answer(answer) }
+                if let b = cfg["block"] as? [String: Any] { blocks.set(b); return }
                 if let h = cfg["hold"] as? [String: Any] { hold.hold(h, from: client); return }
                 if let r = cfg["release"] as? [String: Any] { hold.release(r, from: client); return }
                 if let w = cfg["watch"] as? [String: Any] { watch.handle(w, from: client) }

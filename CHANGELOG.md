@@ -14,6 +14,11 @@
   or a Chromecast.
 - **Search the map** with the window's search field: a program, a domain, a device or an address keeps what matches
   and what it connects to. A split-tunnel VPN shows as its own way out.
+- **Block from the map.** Right-click a device, an address, a listening program's port, a program or a domain to
+  block it. Devices and addresses are blocked both ways whatever the firewall's mode. The router can't be blocked.
+- **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
+  doesn't mark everyone as new, and a different router at the same address is not a false alarm.
+- **Show more:** every "and 12 more" can be opened to show them all.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
   hardware address changing. Hostwatch only listens. It never scans your network.
 

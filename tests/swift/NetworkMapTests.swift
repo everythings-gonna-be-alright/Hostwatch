@@ -162,9 +162,13 @@ import Testing
         var alerts: [NetworkAlert] = []
         store.onAlert = { alerts.append($0) }
         store.apply(message(neighbors: [router]), now: now)
+        let phone = NetNeighbor(mac: "aa:00:00:00:00:01", ips: ["192.168.1.30"], iface: "en0")
+        let tv = NetNeighbor(mac: "aa:00:00:00:00:02", ips: ["192.168.1.31"], iface: "en0")
+        store.apply(message(neighbors: [router, phone, tv]), now: now.addingTimeInterval(5))
         var impostor = router
         impostor.mac = "de:ad:be:ef:00:01"
-        store.apply(message(neighbors: [impostor]), now: now.addingTimeInterval(10))
+        // The same phone and TV around the router's address, now answering from another hardware address.
+        store.apply(message(neighbors: [impostor, phone, tv]), now: now.addingTimeInterval(10))
         #expect(alerts == [.routerChanged(ip: "192.168.1.1", old: router.mac, new: "de:ad:be:ef:00:01")])
     }
 
@@ -337,5 +341,91 @@ import Testing
         var curl = input
         curl.query = "CURL"
         #expect(NetworkMapBuilder.build(curl).columns[3][0].nodes.map(\.title) == ["example.com"])
+    }
+}
+
+
+/// Moving between networks, blocking from the map, and showing a whole section.
+@Suite @MainActor struct NetworkMapNetworksAndBlocks {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let home = NetNeighbor(mac: "cc:2d:e0:c5:1a:05", ips: ["192.168.1.1"], iface: "en0")
+    let homePhone = NetNeighbor(mac: "aa:00:00:00:00:01", ips: ["192.168.1.30"], iface: "en0")
+    // Work's router at the same address, another hardware address, another subnet size.
+    let work = NetNeighbor(mac: "00:11:22:33:44:55", ips: ["192.168.1.1"], iface: "en0")
+    let workPrinter = NetNeighbor(mac: "00:11:22:33:44:66", ips: ["192.168.1.30"], iface: "en0")
+
+    func at(_ neighbors: [NetNeighbor], subnet: String = "192.168.1.0/24", inbound: [NetInbound] = []) -> NetMapMessage {
+        NetMapMessage(listeners: [], neighbors: neighbors,
+                      routes: NetRoutes(gateway: "192.168.1.1", iface: "en0", subnets: [subnet]), inbound: inbound)
+    }
+
+    @Test func goingToWorkIsNotARouterChangeAndShowsWorksDevices() {
+        let store = NetworkMapStore(fileURL: nil)
+        var alerts: [NetworkAlert] = []
+        store.onAlert = { alerts.append($0) }
+        store.apply(at([home, homePhone]), now: now)
+        store.apply(at([work, workPrinter]), now: now.addingTimeInterval(3600))
+        #expect(alerts.isEmpty)
+        #expect(store.network == work.mac)
+        // Work's first look is its baseline: nothing there is new.
+        #expect(store.devices[workPrinter.mac]?.baseline == true)
+        let g = store.graph(outgoing: [], filter: .everything, range: .week, now: now.addingTimeInterval(3600), interfaceName: { $0 })
+        #expect(Set(g.columns[0][0].nodes.map(\.ref)) == [work.mac, workPrinter.mac])
+        store.apply(at([home, homePhone]), now: now.addingTimeInterval(7200))
+        #expect(alerts.isEmpty && store.network == home.mac)
+    }
+
+    @Test func anyPrivateRangeIsYourNetworkWhenThisMacIsOnIt() {
+        let r = NetRoutes(gateway: "10.20.0.1", iface: "en0", subnets: ["10.20.0.0/16"])
+        #expect(NetworkMapPolicy.isYourNetwork("10.20.5.6", routes: r))
+        #expect(!NetworkMapPolicy.isYourNetwork("192.168.1.30", routes: r))      // private, but not here
+        let company = NetRoutes(gateway: "130.10.0.1", iface: "en0", subnets: ["130.10.0.0/16"])
+        #expect(NetworkMapPolicy.isYourNetwork("130.10.4.4", routes: company))  // a public range used as the office LAN
+    }
+
+    @Test func blockingADeviceFollowsItsAddressAndNeverTheRouter() {
+        let store = NetworkMapStore(fileURL: nil)
+        var sent: [([String], [Int])] = []
+        store.onBlocks = { sent.append(($0, $1)) }
+        store.apply(at([home, homePhone]), now: now)
+        store.setBlocked(device: home.mac, true)
+        #expect(store.blockList.addresses.isEmpty)
+        store.setBlocked(device: homePhone.mac, true)
+        store.setBlocked(port: 8000, true)
+        #expect(store.blockList.addresses == ["192.168.1.30"] && store.blockList.ports == [8000])
+        var moved = homePhone
+        moved.ips = ["192.168.1.44"]
+        store.apply(at([home, moved]), now: now.addingTimeInterval(10))
+        #expect(sent.last?.0 == ["192.168.1.44"])
+        // At work the home phone's old address is someone else's: not blocked there.
+        store.apply(at([work, workPrinter]), now: now.addingTimeInterval(20))
+        #expect(store.blockList.addresses.isEmpty)
+    }
+
+    @Test func collectorRulesAreSafe() {
+        #expect(AddressBlock.valid(["192.168.1.30", "nonsense", "127.0.0.1", "192.168.1.19", "::"], own: ["192.168.1.19"]) == ["192.168.1.30"])
+        let rules = AddressBlock.rules(addresses: ["192.168.1.30"], ports: [8000])
+        #expect(rules.contains("block drop in quick from <hw_blocked>"))
+        #expect(rules.contains("block drop out quick from any to <hw_blocked>"))
+        #expect(rules.contains("on ! lo0") && rules.contains("port { 8000 }"))
+        #expect(AddressBlock.rules(addresses: [], ports: []).isEmpty)
+    }
+
+    @Test func showAllAndEachWayOutKeepsItsDestinations() {
+        let routes = NetMapParse.routes("""
+        default            192.168.1.1        UGScg                 en0
+        10.1/16            100.96.1.145       UGSc                utun8
+        """)
+        var out = (1...12).map { i in
+            MapOutgoing(program: "Safari", path: "/Applications/Safari.app", group: "site\(i).example", ip: "93.184.216.\(i)", count: 100 + i,
+                        firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)
+        }
+        out.append(MapOutgoing(program: "Chrome", path: "/Applications/Chrome.app", group: "wiki.corp.example", ip: "10.1.2.3", count: 1,
+                               firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false))
+        let folded = NetworkMapBuilder.build(.init(routes: routes, outgoing: out, now: now))
+        #expect(folded.columns[3][0].nodes.contains { $0.ref == "wiki.corp.example" })     // the VPN's one, despite its 1
+        #expect(folded.columns[3][0].more > 0)
+        let all = NetworkMapBuilder.build(.init(routes: routes, outgoing: out, now: now, expanded: ["destinations"]))
+        #expect(all.columns[3][0].nodes.count == 13 && all.columns[3][0].more == 0)
     }
 }

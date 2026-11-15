@@ -32,7 +32,19 @@ registry, `assets/oui.tsv` from `scripts/make-oui.py`, shipped and never fetched
 multicast questions on the local network, once every 15 minutes for a minute. That is a small step from "only
 listens": the questions never leave the network, macOS asks the user first, and they are the ones the Finder sends.
 
+**Update: networks, any range, blocking.** "Your network" is the subnets this Mac is on now (from its own addresses
+and netmasks), not the private ranges, so an office on 10.20.0.0/16 or a public range counts, and a private address
+elsewhere doesn't. A network is known by its router's hardware address: devices, tries and connections to devices
+remember the network they were on, the map shows the current one, and a network's first report is its baseline.
+*Router changed* needs the same network: at least two of the other devices, and half of them, known on the old
+router. Otherwise it is a move (home to work, both on 192.168.1.1). Blocking from the map: devices and addresses
+both ways and ports incoming are pf rules in their own anchor (`AddressBlock`), held whatever the firewall's mode and
+removed by the same watchdog when the collector ends. A device is blocked by its addresses on the current network
+(they follow it when they change), and the router never. A program's block marks its connections' patterns, a
+domain's adds a blocked destination (0015): the firewall's, so Ask and Strict. Each way out keeps its two busiest
+destinations in view, and a section can be shown whole.
+
 **Consequences.** A device that never answers ARP or neighbour discovery, and traffic on the network that doesn't
 involve this Mac, stay invisible. "Refused" means nothing listened on that port, so a try the system firewall dropped
-at a listening port counts as reached. Blocking a device is not part of this: it needs its own design in Protection.
+at a listening port counts as reached.
 Location and owner lookups for addresses would send them off the Mac and are left out.
