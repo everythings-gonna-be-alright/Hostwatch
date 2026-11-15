@@ -15,6 +15,46 @@ final class NetworkMapViewState: ObservableObject {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange"); mapOrder = [:]; listOrder = [] }
     }
     @Published var selection: String?
+    /// The hour being replayed (hours since 1970), nil for live.
+    @Published var hour: Int? { didSet { if hour != oldValue { mapOrder = [:] } } }
+    /// Only what wasn't there in the 7 days before.
+    @Published var changedOnly = false { didSet { mapOrder = [:]; listOrder = [] } }
+    @Published private(set) var playing = false
+    private var timer: Timer?
+
+    /// The time the map shows: the replayed hour, else the range up to now.
+    func window(now: Date = Date()) -> DateInterval {
+        if let hour { return DateInterval(start: MapTime.date(hour), end: MapTime.date(hour + 1)) }
+        return DateInterval(start: range.since(now), end: now.addingTimeInterval(3600))
+    }
+
+    /// "14:00–15:00" or "Last hour", for the details panel's sentences.
+    var windowPhrase: String {
+        guard let hour else { return range.title.lowercased() }
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return "\(f.string(from: MapTime.date(hour)))–\(f.string(from: MapTime.date(hour + 1)))"
+    }
+
+    /// Replays the last 24 hours, an hour a second, and ends live.
+    func play(now: Date = Date()) {
+        let last = MapTime.hour(now)
+        if hour == nil || hour! >= last { hour = last - 23 }
+        playing = true
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let h = self.hour else { return }
+                if h >= MapTime.hour(Date()) { self.stop(); self.hour = nil } else { self.hour = h + 1 }
+            }
+        }
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        playing = false
+    }
     /// Lines, counts and order by connections or by data sent.
     @Published var measure = MapMeasure(rawValue: UserDefaults.standard.string(forKey: "networkMapMeasure") ?? "") ?? .connections {
         didSet { UserDefaults.standard.set(measure.rawValue, forKey: "networkMapMeasure"); mapOrder = [:]; listOrder = [] }
@@ -76,9 +116,11 @@ struct NetworkMapView: View {
         // A whole section as a list in place of the map: the same page, the same details panel.
         let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
-                                measure: state.measure, interfaceName: interfaceName)
+                                measure: state.measure, window: state.hour == nil ? nil : state.window(),
+                                changedOnly: state.changedOnly, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
+            if state.allOf == nil { NetworkMapTimeline(store: store, state: state) }
             Divider()
             HStack(alignment: .top, spacing: 16) {
                 Group {

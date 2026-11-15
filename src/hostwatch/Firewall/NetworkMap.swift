@@ -81,6 +81,9 @@ final class NetworkMapStore: ObservableObject {
     /// When the map first recorded: its first day is the baseline for uploads.
     private(set) var started = Date()
     private var uploadAlerted: [String: Date] = [:]
+    /// Address -> the domain a connection event named for it (TLS name or lookup). Byte counts only know the names
+    /// the collector saw in DNS answers, so this names the rest, and the two land on one destination.
+    private var groupForIP: [String: String] = [:]
 
     init(fileURL: URL? = AppPaths.support.appendingPathComponent("network-map.json")) {
         self.fileURL = fileURL
@@ -204,7 +207,8 @@ final class NetworkMapStore: ObservableObject {
               !raw.hasPrefix("127."), raw != "::1", !raw.lowercased().hasPrefix("fe80:"), raw != "0.0.0.0" else { return }
         // A device on your network by its address (on this network), anything else (a VPN's 10.x included) by domain.
         let onNetwork = NetworkMapPolicy.isYourNetwork(raw, routes: routes)
-        let group = onNetwork ? raw : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
+        let group = onNetwork ? raw : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? groupForIP[raw] ?? raw : e.host.lowercased()))
+        if group != raw, groupForIP.count < 50_000 { groupForIP[raw] = group }
         let base = e.name.isEmpty || e.name == "?" ? (e.proc as NSString).lastPathComponent : e.name
         let program = SignatureBuilder.vmGateway(e.proc) ?? (base.isEmpty ? "Unknown program" : base)
         let probe = MapConnection(program: program, path: e.proc, group: group, ip: raw, firstSeen: now, lastSeen: now,
@@ -225,7 +229,9 @@ final class NetworkMapStore: ObservableObject {
     func noteTraffic(_ t: NetTraffic, now: Date = Date()) {
         guard !t.remote.hasPrefix("127."), t.remote != "::1", t.sent > 0 || t.received > 0 else { return }
         let onNetwork = NetworkMapPolicy.isYourNetwork(t.remote, routes: routes)
-        let group = onNetwork ? t.remote : (DomainRegistry.registrable(t.host) ?? (t.host.isEmpty ? t.remote : t.host.lowercased()))
+        let named = DomainRegistry.registrable(t.host) ?? (t.host.isEmpty ? nil : t.host.lowercased())
+        let group = onNetwork ? t.remote : (named ?? groupForIP[t.remote] ?? t.remote)
+        if !onNetwork, let named, groupForIP.count < 50_000 { groupForIP[t.remote] = named }
         let path = t.proc.isEmpty ? t.name : t.proc
         let name = t.name.isEmpty ? (path as NSString).lastPathComponent : t.name
         let probe = MapConnection(program: SignatureBuilder.vmGateway(path) ?? name, path: path, group: group, ip: t.remote,
@@ -248,15 +254,52 @@ final class NetworkMapStore: ObservableObject {
 
     /// Outgoing connections within a range, as the builder takes them.
     func outgoingList(_ range: MapRange, now: Date = Date(), isNew: (String) -> Bool = { _ in false }) -> [MapOutgoing] {
-        let since = range.since(now)
+        outgoingList(DateInterval(start: range.since(now), end: now.addingTimeInterval(3600)), isNew: isNew)
+    }
+
+    /// Outgoing connections within a window (an hour of the day when replaying), with whether each is fresh.
+    func outgoingList(_ w: DateInterval, isNew: (String) -> Bool = { _ in false }) -> [MapOutgoing] {
+        regroupByName()
         return outgoing.values.compactMap { c in
-            let n = c.count(since: since), sent = c.sent(since: since), received = c.received(since: since)
+            let n = MapTime.sum(c.hours, w), sent = MapTime.sum(c.sentHours ?? [:], w), received = MapTime.sum(c.receivedHours ?? [:], w)
             guard n > 0 || sent > 0 || received > 0 else { return nil }
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
                                lastSeen: c.lastSeen, blocked: c.blocked,
                                isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
-                               network: c.network, sent: sent, received: received)
+                               network: c.network, sent: sent, received: received, fresh: MapTime.fresh(c.hours, before: w.start))
         }
+    }
+
+    /// Byte counts recorded under a bare address before its name was known join the named destination.
+    private func regroupByName() {
+        let strays = outgoing.values.filter { $0.group == $0.ip && $0.network == nil && groupForIP[$0.ip] != nil }
+        for var c in strays {
+            outgoing[c.id] = nil
+            c.group = groupForIP[c.ip]!
+            if var into = outgoing[c.id] {
+                into.hours.merge(c.hours, uniquingKeysWith: +)
+                into.sentHours = (into.sentHours ?? [:]).merging(c.sentHours ?? [:], uniquingKeysWith: +)
+                into.receivedHours = (into.receivedHours ?? [:]).merging(c.receivedHours ?? [:], uniquingKeysWith: +)
+                into.firstSeen = min(into.firstSeen, c.firstSeen)
+                into.lastSeen = max(into.lastSeen, c.lastSeen)
+                outgoing[c.id] = into
+            } else {
+                outgoing[c.id] = c
+            }
+            dirty = true
+        }
+    }
+
+    /// Connections out and tries in, hour by hour: the time travel's activity bars.
+    func activity(hours: Int = 24, now: Date = Date()) -> [Int] {
+        let last = MapTime.hour(now)
+        var out = [Int](repeating: 0, count: hours)
+        func add(_ h: [Int: Int]) {
+            for (hour, n) in h where hour > last - hours && hour <= last { out[hour - (last - hours + 1)] += n }
+        }
+        outgoing.values.forEach { add($0.hours) }
+        inbound.values.filter { $0.network == nil || network.isEmpty || $0.network == network }.forEach { add($0.hours) }
+        return out
     }
 
     /// A program's latest connection as an event, for the process details panel Events shows.
@@ -424,11 +467,13 @@ final class NetworkMapStore: ObservableObject {
     // MARK: Map
 
     func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
-               expanded: Set<String> = [], room: Int? = nil, measure: MapMeasure = .connections, interfaceName: @escaping (String) -> String) -> NetworkGraph {
+               expanded: Set<String> = [], room: Int? = nil, measure: MapMeasure = .connections, window: DateInterval? = nil,
+               changedOnly: Bool = false, interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
                                       interfaceName: interfaceName, query: query, network: network, expanded: expanded,
-                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room, measure: measure))
+                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room, measure: measure,
+                                      window: window, changedOnly: changedOnly))
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }
@@ -443,6 +488,7 @@ final class NetworkMapStore: ObservableObject {
         devices = Dictionary(s.devices.map { ($0.mac, $0) }, uniquingKeysWith: { a, _ in a })
         inbound = Dictionary(s.inbound.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         outgoing = Dictionary((s.outgoing ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for c in outgoing.values where c.group != c.ip && c.network == nil { groupForIP[c.ip] = c.group }
         routers = s.routers
         learned = s.learned
         learnedNetworks = Set(s.networks ?? [])

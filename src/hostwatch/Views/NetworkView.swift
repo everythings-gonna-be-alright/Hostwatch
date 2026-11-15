@@ -151,7 +151,7 @@ final class NetworkViewState: ObservableObject {
     /// The map's store, state and outgoing connections, set by AppDelegate.
     var map: NetworkMapStore?
     let mapState = NetworkMapViewState()
-    var mapOutgoing: (MapRange) -> [MapOutgoing] = { _ in [] }
+    var mapOutgoing: (DateInterval) -> [MapOutgoing] = { _ in [] }
     var interfaceName: (String) -> String = { $0 }
     var mapActions = NetworkMapActions()
     @Published var order: [KeyPathComparator<NetworkRow>] =
@@ -191,7 +191,7 @@ struct NetworkView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) { modeSwitch; Spacer() }
                     .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)
-                NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(state.mapState.range), interfaceName: state.interfaceName,
+                NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(state.mapState.window()), interfaceName: state.interfaceName,
                                openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions,
                                hud: hud, signatures: signatures)
             }

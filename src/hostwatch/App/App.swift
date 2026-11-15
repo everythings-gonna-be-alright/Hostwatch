@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         networkState.mapActions = mapActions()
         bonjour.onChange = { [weak self] in self?.networkMap.announcementsChanged() }
         if !AppPaths.isDemo { bonjour.start() }
-        networkState.mapOutgoing = { [weak self] range in self?.mapOutgoing(range) ?? [] }
+        networkState.mapOutgoing = { [weak self] window in self?.mapOutgoing(window) ?? [] }
         networkState.interfaceName = { AppDelegate.interfaceName($0) }
         model.onProcessList = { [weak self] list in
             self?.running.receive(list)

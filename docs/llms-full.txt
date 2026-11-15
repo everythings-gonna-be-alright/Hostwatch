@@ -1208,8 +1208,12 @@ the list can't show: who tried to reach this Mac.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.
+- **Time travel:** under the controls, the last 24 hours as bars (connections and tries per hour). Click a bar to see
+  the map as it was in that hour, *Replay Day* steps through them an hour a second, and *Live* comes back. *Only What
+  Changed* keeps what wasn't there in the 7 days before: new devices, fresh connections and first tries. The way out
+  is drawn with today's routes.
 - **Upload watch:** the map counts the bytes each program sends and receives, per destination (macOS's own
-  connection statistics, every 10 seconds). *Connections | Data Sent* at the top switches what lines, counts and
+  connection statistics, every 10 seconds), named by the domain the connection had. *Connections | Data Sent* at the top switches what lines, counts and
   order measure. The details panel shows each program's, destination's and device's data sent and received.
   **Large upload** is a story: 100 MB or more sent within an hour to a destination that program first reached today.
   Uploads to devices on your network are shown but not raised, and the map's first day is its baseline.
