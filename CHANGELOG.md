@@ -20,7 +20,7 @@
 - **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes. A program's
   *Process Details* opens the panel Events shows, with its launch chain, under the map.
 - **Time travel on the map.** The toolbar's Time Travel works on the Network tab: the map follows the playhead.
-  *Only What Changed* keeps what wasn't there the week before.
+  *Show: New* keeps what wasn't there the week before.
 - **Networks you trust.** Name each network and say whether you trust it. On one you don't (a café, an airport), other
   machines can't reach programs listening on all networks, the firewall asks about new connections, and anyone trying
   to connect raises a story. A new network is not trusted until you decide.

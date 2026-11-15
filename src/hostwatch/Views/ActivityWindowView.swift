@@ -29,18 +29,40 @@ struct ShowFilterPicker: View {
     }
 
     private func bar(_ counts: [SignatureFilter: Int], icons: Bool) -> some View {
+        ShowButtons(selection: $filter, items: SignatureFilter.allCases.map {
+            .init(value: $0, title: $0.short, symbol: $0.symbol, help: $0.explanation, count: counts[$0])
+        }, icons: icons)
+    }
+}
+
+/// The Events tab's Show buttons: a capsule per choice with its icon, a short name and how many it shows. Shared, so
+/// every Show row (Events, Patterns, the network map) looks and works the same.
+struct ShowButtons<Value: Hashable>: View {
+    struct Item {
+        let value: Value
+        let title: String
+        let symbol: String
+        var help = ""
+        var count: Int? = nil
+    }
+
+    @Binding var selection: Value
+    let items: [Item]
+    var icons = true
+
+    var body: some View {
         HStack(spacing: 4) {
-            ForEach(SignatureFilter.allCases, id: \.self) { option in
-                let selected = filter == option
-                Button { filter = option } label: {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                let selected = selection == item.value
+                Button { selection = item.value } label: {
                     HStack(spacing: 5) {
                         if icons {
-                            Image(systemName: option.symbol)
+                            Image(systemName: item.symbol)
                                 .symbolVariant(selected ? .fill : .none)
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        Text(option.short).font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        if let n = counts[option] {
+                        Text(item.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        if let n = item.count {
                             Text(n.formatted())
                                 .font(.system(size: 11).monospacedDigit())
                                 .foregroundStyle(selected ? Color.accentColor.opacity(0.85) : Color.secondary)
@@ -53,8 +75,8 @@ struct ShowFilterPicker: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help(option.explanation)
-                .accessibilityLabel("\(option.short)\(counts[option].map { ", \($0)" } ?? "")")
+                .help(item.help)
+                .accessibilityLabel("\(item.title)\(item.count.map { ", \($0)" } ?? "")")
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }

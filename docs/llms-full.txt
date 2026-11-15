@@ -1210,7 +1210,7 @@ the list can't show: who tried to reach this Mac.
   who tried to reach it.
 - **Time travel:** the toolbar's *Time Travel* (⌥⌘T) works on the Network tab too. It opens the same timeline at the
   bottom of the window, and the map follows the playhead: it shows the hours around the moment you picked, by the
-  hour. The way out is drawn with today's routes. *Only What Changed* (live or in Time Travel) keeps what wasn't there
+  hour. The way out is drawn with today's routes. *Show: New* (live or in Time Travel, next to *Show: All*, each with its count, as on the Events tab) keeps what wasn't there
   in the 7 days before: new devices, fresh connections and first tries.
 - **Networks you trust:** every network gets a profile in Protection ▸ Network ▸ *Networks*, named after its router
   (rename it "Home" or "Office"). The network Hostwatch first learned on is trusted. A new one is treated as not
