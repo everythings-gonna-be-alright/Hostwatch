@@ -854,7 +854,13 @@
   // The version pill shows the latest release on GitHub (read once an hour per visit; the page's own text is the fallback).
   (async () => {
     const pill = document.querySelector("a.pill"); if (!pill) return;
-    const KEY = "hw-latest-release-2", now = Date.now();
+    const KEY = "hw-latest-release-3", now = Date.now();
+    // Never older than the version this page was published with: a GitHub answer remembered from before a release
+    // (or a stale one from GitHub's cache) must not turn 0.17.0 back into 0.16.0.
+    const own = pill.querySelector("b").textContent.trim();
+    const older = v => { const a = v.split(".").map(Number), b = own.split(".").map(Number);
+      for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d < 0; }
+      return false; };
     let rel = null;
     try { const c = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (c && now - c.t < 36e5) rel = c.r; } catch {}
     if (!rel) {
@@ -869,7 +875,7 @@
       } catch { return; }
     }
     const ver = String(rel.tag || "").replace(/^v/, "");
-    if (!/^\d+(\.\d+){1,3}$/.test(ver)) return;
+    if (!/^\d+(\.\d+){1,3}$/.test(ver) || older(ver)) return;
     // "Hostwatch 0.13.0 – No password at launch": the title is what follows the dash.
     const title = (String(rel.name).split(/\s+[–—-]\s+/)[1] || "What's new").trim().slice(0, 40);
     pill.querySelector("b").textContent = ver;
