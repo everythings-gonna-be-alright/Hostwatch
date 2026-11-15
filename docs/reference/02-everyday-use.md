@@ -41,7 +41,7 @@ glance and quick actions.
 | *Selection* | Ask AI… (⌘↩), Watch Closely… (⌥⌘W), Show Launch Chain (⌥⌘L), Mark As ▸ Safe / Suspicious / Dangerous / Unclassified, Exclude… |
 | *Protection* | Whether you're protected, Pause Protection ▸ 15 Minutes / 1 Hour / Until Tomorrow, Resume Protection, the mode of Launches, Files and Network, Hold Suspicious Processes, Start/Stop Collector, Protection Overview |
 | *Window* | Hostwatch (⌘0), Held Processes |
-| *Help* | **Hostwatch Help** (these docs), Threat Model and Coverage, Collector Log, Full Disk Access Settings |
+| *Help* | **Hostwatch Help** (these docs), Welcome Guide, Threat Model and Coverage, Collector Log, Full Disk Access Settings |
 
 **Pausing the list never pauses detection.** *Pause List*, the pause button in the window and the HUD's pause
 button stop the list scrolling so you can read it. Patterns, stories, threat lists, holds and protection go on, and

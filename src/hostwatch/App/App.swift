@@ -26,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Launch and file protection: Watch rehearses on the live feed, Ask and Strict need Endpoint Security.
     let protection = ProtectionMonitor()
     var protectionPanel: NSPanel?
+    /// The welcome guide's window, while it's open.
+    var welcomeWindow: NSWindow?
+    /// A fresh install (nothing learned yet), noted at launch: the welcome guide shows once then.
+    var firstRun = false
     /// The question the panel shows: a refresh of the same question doesn't sound again.
     var protectionPanelAskID: Int?
     /// "Checking … with AI": shown while the AI looks at a paused launch or file access.
@@ -112,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             exit(1)
         }
         NSApp.setActivationPolicy(.accessory)
+        firstRun = signatures.total == 0
         collector.onNeedsFullDiskAccess = { [weak self] in self?.showFullDiskAccessAlert(afterFailure: true) }
         setUpPanel()
         setUpStatusItem()
@@ -121,7 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
-        if !AppPaths.isDemo { baseline.schedule() }               // first run: waves at 5, 15 and 60 minutes
+        if !AppPaths.isDemo { baseline.schedule() }               // first run: the learning day's waves
+        // The welcome guide, once, on a fresh install: after the Full Disk Access window if that's showing.
+        if firstRun, !AppPaths.isDemo { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.showWelcomeOnce() } }
         // Only draw events while the window or the HUD is actually on screen.
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
                                                object: nil, queue: .main) { [weak self] _ in
