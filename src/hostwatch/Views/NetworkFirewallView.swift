@@ -23,7 +23,10 @@ struct NetworkFirewallPage: View {
                 if !firewall.prompts.isEmpty { waiting }
                 FirewallRulesSection(firewall: firewall, signatures: signatures)
                 if let protection { DestinationsSection(protection: protection) }
-                if let networkMap { BlockedDevicesSection(store: networkMap, showNetwork: showNetwork) }
+                if let networkMap {
+                    NetworksSection(store: networkMap)
+                    BlockedDevicesSection(store: networkMap, showNetwork: showNetwork)
+                }
                 findings(found)
                 howItDecides
             }

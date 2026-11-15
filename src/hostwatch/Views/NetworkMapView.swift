@@ -15,45 +15,22 @@ final class NetworkMapViewState: ObservableObject {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange"); mapOrder = [:]; listOrder = [] }
     }
     @Published var selection: String?
-    /// The hour being replayed (hours since 1970), nil for live.
-    @Published var hour: Int? { didSet { if hour != oldValue { mapOrder = [:] } } }
+    /// The moment Time Travel shows (the window's own Time Travel, on the Network tab), nil for live.
+    var travel: DateInterval?
     /// Only what wasn't there in the 7 days before.
     @Published var changedOnly = false { didSet { mapOrder = [:]; listOrder = [] } }
-    @Published private(set) var playing = false
-    private var timer: Timer?
 
-    /// The time the map shows: the replayed hour, else the range up to now.
+    /// The time the map shows: Time Travel's moment, else the range up to now.
     func window(now: Date = Date()) -> DateInterval {
-        if let hour { return DateInterval(start: MapTime.date(hour), end: MapTime.date(hour + 1)) }
-        return DateInterval(start: range.since(now), end: now.addingTimeInterval(3600))
+        travel ?? DateInterval(start: range.since(now), end: now.addingTimeInterval(3600))
     }
 
-    /// "14:00–15:00" or "Last hour", for the details panel's sentences.
+    /// "14:00–15:00" or "last hour", for the details panel's sentences.
     var windowPhrase: String {
-        guard let hour else { return range.title.lowercased() }
+        guard let travel else { return range.title.lowercased() }
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
-        return "\(f.string(from: MapTime.date(hour)))–\(f.string(from: MapTime.date(hour + 1)))"
-    }
-
-    /// Replays the last 24 hours, an hour a second, and ends live.
-    func play(now: Date = Date()) {
-        let last = MapTime.hour(now)
-        if hour == nil || hour! >= last { hour = last - 23 }
-        playing = true
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let h = self.hour else { return }
-                if h >= MapTime.hour(Date()) { self.stop(); self.hour = nil } else { self.hour = h + 1 }
-            }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        playing = false
+        return "\(f.string(from: travel.start))–\(f.string(from: travel.end))"
     }
     /// Lines, counts and order by connections or by data sent.
     @Published var measure = MapMeasure(rawValue: UserDefaults.standard.string(forKey: "networkMapMeasure") ?? "") ?? .connections {
@@ -116,12 +93,12 @@ struct NetworkMapView: View {
         // A whole section as a list in place of the map: the same page, the same details panel.
         let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
-                                measure: state.measure, window: state.hour == nil ? nil : state.window(),
+                                measure: state.measure, window: state.travel,
                                 changedOnly: state.changedOnly, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
-            if state.allOf == nil { NetworkMapTimeline(store: store, state: state) }
             Divider()
+            if let p = store.profile, !p.decided { newNetworkBanner(p) }
             HStack(alignment: .top, spacing: 16) {
                 Group {
                     if let key = state.allOf {
@@ -175,19 +152,47 @@ struct NetworkMapView: View {
                       help: "Lines and counts by how many connections"),
                 .init(value: .sent, title: "Data Sent", symbol: "arrow.up.circle", help: "Lines and counts by how much was sent"),
             ])
+            Toggle("Only What Changed", isOn: $state.changedOnly)
+                .toggleStyle(.switch)
+                .help("Only connections, devices and tries that weren't there in the 7 days before")
             Spacer()
             triesMenu
-            Picker("Range", selection: $state.range) {
-                ForEach(MapRange.allCases, id: \.self) { Text($0.title).tag($0) }
+            if let travel = state.travel {
+                Label(state.windowPhrase, systemImage: "clock.arrow.circlepath")
+                    .foregroundStyle(.tint)
+                    .help("Time Travel: the map as it was around \(travel.end.formatted(date: .abbreviated, time: .shortened))")
+            } else {
+                Picker("Range", selection: $state.range) {
+                    ForEach(MapRange.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help("How far back the map looks")
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
-            .help("How far back the map looks")
         }
         .controlSize(.small)
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
+    }
+
+    /// A network Hostwatch hasn't seen before: treated as not trusted until you say.
+    private func newNetworkBanner(_ p: NetworkProfile) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("A new network: \(p.name)").font(.system(size: 13, weight: .semibold))
+                Text("Hostwatch treats it as not trusted until you decide: other machines are kept away from this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Keep Not Trusted") { store.setTrusted(p.id, false) }.buttonStyle(.glass)
+            Button("Trust It") { store.setTrusted(p.id, true) }.buttonStyle(.glassProminent)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08))
+        .accessibilityElement(children: .contain)
     }
 
     /// Who tried to reach this Mac: Mark as Seen (the badge), or clear the refused tries or all of them.
@@ -284,7 +289,14 @@ struct NetworkMapView: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 if !section.nodes.isEmpty || section.more > 0 {
-                    if !section.title.isEmpty {
+                    if section.key == "devices", let p = store.profile {
+                        // Your network by its name and trust: "Home · Trusted".
+                        HStack(spacing: 6) {
+                            Text(p.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            MapBadgeView(badge: p.trusted ? .trusted : .untrusted)
+                        }
+                        .padding(.top, 4)
+                    } else if !section.title.isEmpty {
                         Text(section.title).font(.caption).foregroundStyle(.secondary).padding(.top, 4)
                     }
                     ForEach(state.stable(section.nodes, section: section.key.isEmpty ? "\(index)|\(section.title)" : section.key)) { node in
@@ -366,6 +378,8 @@ struct MapBadgeView: View {
             case .allNetworks: return ("All networks", .orange)
             case .yourNetwork: return ("Your network", .secondary)
             case .mine: return ("Yours", .secondary)
+            case .trusted: return ("Trusted", .green)
+            case .untrusted: return ("Not trusted", .orange)
             }
         }()
         Text(text)

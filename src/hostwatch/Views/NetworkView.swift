@@ -179,6 +179,8 @@ struct NetworkView: View {
     var openStories: () -> Void = {}
     /// The window's actions, for the map's process details.
     var hud: HUDActions? = nil
+    /// Time Travel's moment while it's on (the map follows the playhead), nil for live.
+    var travelWindow: DateInterval? = nil
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -187,7 +189,9 @@ struct NetworkView: View {
     }()
 
     var body: some View {
-        if state.mode == .map, let map = state.map {
+        // Time Travel shows the map: the list has no history of its own.
+        if state.mode == .map || travelWindow != nil, let map = state.map {
+            let _ = { state.mapState.travel = travelWindow }()
             VStack(spacing: 0) {
                 HStack(spacing: 12) { modeSwitch; Spacer() }
                     .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)

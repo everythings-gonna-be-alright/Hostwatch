@@ -17,6 +17,10 @@ extension AppDelegate {
             let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
             stories.raise(.largeUpload, origin: program,
                           note: "sent \(size) within an hour to \(destination), which it first reached today", target: destination)
+        case let .untrustedTry(remote, device, port, network):
+            stories.raise(.newDevice, origin: "\(device) (\(remote))",
+                          note: "tried to connect to port \(port) on this Mac, on \(network), a network you don't trust",
+                          target: "\(remote):\(port)")
         case let .routerChanged(ip, old, new):
             stories.raise(.routerChanged, origin: "Router (\(ip))",
                           note: "the router's hardware address changed from \(old) to \(new). A new router does this, and so "
@@ -39,6 +43,28 @@ extension AppDelegate {
             if let name = SCNetworkInterfaceGetLocalizedDisplayName(i) as String? { return name }
         }
         return bsd
+    }
+}
+
+// MARK: Network profiles
+
+extension AppDelegate {
+    static let restoreModeKey = "untrustedNetworkRestoreMode"
+
+    /// On a network you don't trust (and asked for it), the firewall asks about new connections. Off or Watch go back
+    /// to how they were when the Mac is on another network, or you trust this one. A mode you set yourself in the
+    /// meantime (Strict) is left alone.
+    func applyNetworkProfile(_ p: NetworkProfile?) {
+        let defaults = UserDefaults.standard
+        if let p, !p.trusted, p.firewallAsks {
+            if firewall.mode == .off || firewall.mode == .watch {
+                defaults.set(firewall.mode.rawValue, forKey: Self.restoreModeKey)
+                firewall.mode = .ask
+            }
+        } else if let raw = defaults.string(forKey: Self.restoreModeKey), let mode = FirewallMode(rawValue: raw) {
+            defaults.removeObject(forKey: Self.restoreModeKey)
+            if firewall.mode == .ask { firewall.mode = mode }
+        }
     }
 }
 

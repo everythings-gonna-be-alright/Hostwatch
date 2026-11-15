@@ -17,6 +17,7 @@ enum NetworkAlert: Equatable {
     case newDeviceReached(remote: String, device: String, port: Int)
     case routerChanged(ip: String, old: String, new: String)
     case largeUpload(program: String, path: String, destination: String, bytes: Int64)
+    case untrustedTry(remote: String, device: String, port: Int, network: String)
 }
 
 /// How many addresses tried to connect since you last looked or cleared: the Network tab's badge. Its own object, so
@@ -41,6 +42,10 @@ final class NetworkMapStore: ObservableObject {
     /// Addresses (other networks' and devices' you blocked by address) and ports you blocked.
     @Published private(set) var blockedAddresses: Set<String> = []
     @Published private(set) var blockedPorts: Set<Int> = []
+    /// Every network this Mac joined, by its router: name and trust.
+    @Published private(set) var profiles: [String: NetworkProfile] = [:]
+    /// The network changed, or its trust did: the app turns the firewall's Ask on or back.
+    var onProfile: ((NetworkProfile?) -> Void)?
     let badge = IncomingBadge()
     /// Tries before this were seen (Mark as Seen, or cleared).
     private(set) var seenUntil = Date.distantPast
@@ -63,6 +68,7 @@ final class NetworkMapStore: ObservableObject {
         var blockedPorts: [Int]?
         var seenUntil: Date?
         var started: Date?
+        var profiles: [NetworkProfile]?
     }
 
     private let fileURL: URL?
@@ -119,7 +125,9 @@ final class NetworkMapStore: ObservableObject {
         }
         for (mac, d) in devices { identify(mac, d) }
         checkRouter(m.neighbors, network: net, previous: previous)
+        let moved = network != net
         network = net
+        noteProfile(now: now, moved: moved)
         if !net.isEmpty { learnedNetworks.insert(net) }
         if !m.neighbors.isEmpty { learned = true }
         for t in m.traffic ?? [] { noteTraffic(t, now: now) }
@@ -140,6 +148,60 @@ final class NetworkMapStore: ObservableObject {
     static func networkID(_ neighbors: [NetNeighbor], routes: NetRoutes) -> String {
         guard !routes.gateway.isEmpty else { return "" }
         return neighbors.first { $0.ips.contains(routes.gateway) }?.mac ?? "gw:\(routes.gateway)@\(routes.iface)"
+    }
+
+    /// The current network's profile: made on the first visit (the first network ever is trusted, a later one waits
+    /// for you, treated as not trusted), kept up to date, and announced when the Mac moved.
+    private func noteProfile(now: Date, moved: Bool) {
+        guard !network.isEmpty else { if moved { onProfile?(nil) }; return }
+        let router = devices[network]?.maker ?? ""
+        let subnet = routes.subnets.first ?? ""
+        if var p = profiles[network] {
+            p.lastSeen = now
+            if p.subnet.isEmpty { p.subnet = subnet }
+            if p.router.isEmpty { p.router = router }
+            profiles[network] = p
+        } else {
+            let first = profiles.isEmpty
+            profiles[network] = NetworkProfile(id: network, name: NetworkProfile.defaultName(router: router, subnet: subnet),
+                                               trusted: first, decided: first, firstSeen: now, lastSeen: now, subnet: subnet, router: router)
+        }
+        if moved { onProfile?(profiles[network]) }
+    }
+
+    var profile: NetworkProfile? { profiles[network] }
+
+    func setTrusted(_ id: String, _ trusted: Bool) {
+        profiles[id]?.trusted = trusted
+        profiles[id]?.decided = true
+        changed()
+        if id == network { onProfile?(profiles[id]) }
+    }
+
+    func renameNetwork(_ id: String, _ name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { return }
+        profiles[id]?.name = n
+        changed()
+    }
+
+    func setProtections(_ id: String, blockListeners: Bool? = nil, firewallAsks: Bool? = nil) {
+        if let blockListeners { profiles[id]?.blockListeners = blockListeners }
+        if let firewallAsks { profiles[id]?.firewallAsks = firewallAsks }
+        changed()
+        if id == network { onProfile?(profiles[id]) }
+    }
+
+    func forgetNetwork(_ id: String) {
+        guard id != network else { return }
+        profiles[id] = nil
+        changed()
+    }
+
+    /// Not trusted here and asked to: programs listening on all networks refuse other machines.
+    private var untrustedPorts: Set<Int> {
+        guard let p = profile, !p.trusted, p.blockListeners else { return [] }
+        return Set(listeners.filter { $0.scope != .local }.map(\.port))
     }
 
     /// Its maker from the hardware address, its name and model from what it announces.
@@ -195,6 +257,10 @@ final class NetworkMapStore: ObservableObject {
             if mayAlert("scan|" + remote, now: now) {
                 onAlert?(.portScan(remote: remote, device: name, ports: Set(recent[remote]!.map(\.port)).count))
             }
+        } else if let p = profile, !p.trusted, let tried = tries.first(where: { $0.remote == remote }),
+                  mayAlert("untrusted|" + remote, now: now) {
+            // On a network you don't trust, anyone trying to reach this Mac is worth a look.
+            onAlert?(.untrustedTry(remote: remote, device: name, port: tried.port, network: p.name))
         } else if let device, NetworkMapPolicy.isNew(device, now: now),
                   let reached = tries.first(where: { $0.remote == remote && $0.listening }), mayAlert("new|" + remote, now: now) {
             onAlert?(.newDeviceReached(remote: remote, device: name, port: reached.port))
@@ -445,7 +511,7 @@ final class NetworkMapStore: ObservableObject {
     /// another device), the addresses and the ports.
     var blockList: (addresses: [String], ports: [Int]) {
         let fromDevices = devices.values.filter { $0.blocked == true && $0.isOn(network) }.flatMap(\.ips)
-        return (Array(Set(fromDevices).union(blockedAddresses)).sorted(), blockedPorts.sorted())
+        return (Array(Set(fromDevices).union(blockedAddresses)).sorted(), blockedPorts.union(untrustedPorts).sorted())
     }
 
     /// Sends the block list when it changed (a blocked device's address can change too).
@@ -496,6 +562,7 @@ final class NetworkMapStore: ObservableObject {
         blockedPorts = Set(s.blockedPorts ?? [])
         seenUntil = s.seenUntil ?? .distantPast
         started = s.started ?? Date()
+        profiles = Dictionary((s.profiles ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         updateBadge()
     }
 
@@ -507,7 +574,7 @@ final class NetworkMapStore: ObservableObject {
         let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), outgoing: Array(outgoing.values),
                       routers: routers, learned: learned, networks: Array(learnedNetworks),
                       blockedAddresses: Array(blockedAddresses), blockedPorts: Array(blockedPorts), seenUntil: seenUntil,
-                      started: started)
+                      started: started, profiles: Array(profiles.values))
         if let data = try? encoder.encode(s) { try? Vault.shared.write(data, to: fileURL) }
     }
 }

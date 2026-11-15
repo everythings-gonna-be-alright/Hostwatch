@@ -53,10 +53,18 @@ not on your network, and not during the map's own first day. A known destination
 libraries) is shown, not raised: what matters is a lot going somewhere new.
 
 **Update: time travel.** Everything the map counts is kept by the hour, so an hour can be drawn on its own (the
-builder's `window`), and "only what changed" keeps what had nothing in the 7 days before it (`MapTime.fresh`). Devices
+builder's `window`). The map follows the app's own Time Travel on the Network tab (the playhead's hours, from its
+span), rather than a timeline of its own, and "only what changed" keeps what had nothing in the 7 days before it (`MapTime.fresh`). Devices
 are present in an hour when it falls between their first and last sighting, and the way out uses today's routes: no
 hourly history is kept for either. Byte counts are named by the domain a connection event had for their address
 (`groupForIP`), since the collector only knows the names it saw in DNS answers.
+
+**Update: network profiles.** Each network (its router's hardware address) has a profile: a name, trusted or not, and
+two protections for an untrusted one. Other machines are blocked from programs listening on all networks (their
+ports join the collector's block list while the Mac is there), and the firewall goes to Ask from Off or Watch, back
+when the Mac leaves or the network is trusted (a mode set in between, Strict, is left alone). The first network is
+trusted, later ones start untrusted and undecided, and the map asks. On an untrusted network any try from a device
+there is a story.
 
 **Consequences.** A device that never answers ARP or neighbour discovery, and traffic on the network that doesn't
 involve this Mac, stay invisible. "Refused" means nothing listened on that port, so a try the system firewall dropped

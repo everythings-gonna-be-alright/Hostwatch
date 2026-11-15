@@ -1208,10 +1208,17 @@ the list can't show: who tried to reach this Mac.
   For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
   through it. For a destination, its connections, addresses and way out. For a listening program, its process and
   who tried to reach it.
-- **Time travel:** under the controls, the last 24 hours as bars (connections and tries per hour). Click a bar to see
-  the map as it was in that hour, *Replay Day* steps through them an hour a second, and *Live* comes back. *Only What
-  Changed* keeps what wasn't there in the 7 days before: new devices, fresh connections and first tries. The way out
-  is drawn with today's routes.
+- **Time travel:** the toolbar's *Time Travel* (⌥⌘T) works on the Network tab too. It opens the same timeline at the
+  bottom of the window, and the map follows the playhead: it shows the hours around the moment you picked, by the
+  hour. The way out is drawn with today's routes. *Only What Changed* (live or in Time Travel) keeps what wasn't there
+  in the 7 days before: new devices, fresh connections and first tries.
+- **Networks you trust:** every network gets a profile in Protection ▸ Network ▸ *Networks*, named after its router
+  (rename it "Home" or "Office"). The network Hostwatch first learned on is trusted. A new one is treated as not
+  trusted, and the map asks *Trust It* or *Keep Not Trusted*. On a network you don't trust:
+  - other machines can't reach programs listening on all networks (a dev server, file sharing)
+  - the firewall asks about new connections, and goes back to Off or Watch when you leave or trust the network
+  - any device that tries to connect raises a story
+  Each can be turned off per network.
 - **Upload watch:** the map counts the bytes each program sends and receives, per destination (macOS's own
   connection statistics, every 10 seconds), named by the domain the connection had. *Connections | Data Sent* at the top switches what lines, counts and
   order measure. The details panel shows each program's, destination's and device's data sent and received.

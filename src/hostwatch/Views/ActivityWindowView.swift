@@ -87,6 +87,15 @@ struct ActivityWindowView: View {
     let actions: HUDActions
 
     var traveling: Bool { travel.active && model.windowTab == 0 }
+    /// Time Travel on the Network tab: the map follows the playhead.
+    var mapTraveling: Bool { travel.active && model.windowTab == 3 }
+
+    /// The hours around the playhead, as the map counts them: from the hour the window starts to the playhead's.
+    static func mapWindow(_ travel: TimeTravel) -> DateInterval {
+        let end = MapTime.date(MapTime.hour(travel.playhead) + 1)
+        let start = MapTime.date(MapTime.hour(travel.playhead.addingTimeInterval(-travel.span)))
+        return DateInterval(start: start, end: end)
+    }
     /// Time Travel rows, derived only when the events or a filter change (not on every playhead or hover update).
     @StateObject private var travelRows = TravelRowsCache()
     /// The live list's rows, remade only when the list or a filter changed (not on every redraw: 5,000 status
@@ -163,9 +172,9 @@ struct ActivityWindowView: View {
         }
         .sheet(isPresented: $sheets.showVulns) { VulnerabilityList(intel: intel, close: { sheets.showVulns = false }) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if traveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
+            if traveling || mapTraveling { TimelineBar(travel: travel).transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
-        .animation(.smooth(duration: 0.25), value: traveling)
+        .animation(.smooth(duration: 0.25), value: traveling || mapTraveling)
         // Time Travel searches all recorded history (scope All History), in the background.
         .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
         .onChange(of: traveling) { _, on in
@@ -202,7 +211,8 @@ struct ActivityWindowView: View {
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) },
-                                openStories: { model.windowTab = 2 }, hud: actions)
+                                openStories: { model.windowTab = 2 }, hud: actions,
+                                travelWindow: mapTraveling ? Self.mapWindow(travel) : nil)
             default: patternsAndProtection(.protection)
             }
     }
@@ -309,7 +319,8 @@ struct ActivityWindowView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
                 // Running Now stays on: in Time Travel it shows what was running at the playhead.
-                if on { model.windowTab = 0; travel.enter() } else { travel.exit() }
+                // The Network tab travels in place (its map follows the playhead), every other tab goes to Events.
+                if on { if model.windowTab != 3 { model.windowTab = 0 }; travel.enter() } else { travel.exit() }
             })) {
                 Label("Time Travel", systemImage: "clock.arrow.circlepath")
             }

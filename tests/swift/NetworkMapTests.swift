@@ -567,3 +567,52 @@ import Testing
         #expect(g.summary.contains("what changed"))
     }
 }
+
+
+/// Network profiles: trust per network, and what not trusting one changes.
+@Suite @MainActor struct NetworkProfileTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let home = NetNeighbor(mac: "cc:2d:e0:c5:1a:05", ips: ["192.168.1.1"], iface: "en0")
+    let cafe = NetNeighbor(mac: "00:11:22:33:44:55", ips: ["10.0.0.1"], iface: "en0")
+    let stranger = NetNeighbor(mac: "00:11:22:33:44:66", ips: ["10.0.0.23"], iface: "en0")
+    let server = NetListener(pid: 7, name: "Python", proc: "/usr/bin/python3", port: 8000, scope: .all)
+
+    func at(_ router: NetNeighbor, _ others: [NetNeighbor] = [], subnet: String, inbound: [NetInbound] = []) -> NetMapMessage {
+        NetMapMessage(listeners: [server], neighbors: [router] + others,
+                      routes: NetRoutes(gateway: router.ips[0], iface: "en0", subnets: [subnet]), inbound: inbound)
+    }
+
+    @Test func firstNetworkTrustedNewOnesWait() {
+        let store = NetworkMapStore(fileURL: nil)
+        var changes: [NetworkProfile?] = []
+        store.onProfile = { changes.append($0) }
+        store.apply(at(home, subnet: "192.168.1.0/24"), now: now)
+        #expect(store.profile?.trusted == true && store.profile?.decided == true)
+        #expect(store.blockList.ports.isEmpty)
+        store.apply(at(cafe, subnet: "10.0.0.0/24"), now: now.addingTimeInterval(3600))
+        #expect(store.profile?.trusted == false && store.profile?.decided == false)
+        #expect(store.blockList.ports == [8000])                // the server listening on all networks is kept away
+        #expect(changes.count == 2 && changes.last??.id == cafe.mac)
+        store.setTrusted(cafe.mac, true)
+        #expect(store.blockList.ports.isEmpty && store.profile?.decided == true)
+        store.setTrusted(cafe.mac, false)
+        store.setProtections(cafe.mac, blockListeners: false)
+        #expect(store.blockList.ports.isEmpty)
+    }
+
+    @Test func aTryOnAnUntrustedNetworkIsAStory() {
+        let store = NetworkMapStore(fileURL: nil)
+        var alerts: [NetworkAlert] = []
+        store.onAlert = { alerts.append($0) }
+        store.apply(at(home, subnet: "192.168.1.0/24"), now: now)
+        store.apply(at(cafe, [stranger], subnet: "10.0.0.0/24"), now: now.addingTimeInterval(3600))
+        store.apply(at(cafe, [stranger], subnet: "10.0.0.0/24",
+                       inbound: [NetInbound(remote: "10.0.0.23", port: 22, count: 1, listening: false)]), now: now.addingTimeInterval(3610))
+        #expect(alerts.contains { if case .untrustedTry(let r, _, let port, _) = $0 { return r == "10.0.0.23" && port == 22 }; return false })
+    }
+
+    @Test func defaultNames() {
+        #expect(NetworkProfile.defaultName(router: "Routerboard.com", subnet: "192.168.1.0/24") == "Routerboard.com network")
+        #expect(NetworkProfile.defaultName(router: "", subnet: "10.0.0.0/24") == "Network 10.0.0.0/24")
+    }
+}

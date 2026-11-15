@@ -370,7 +370,8 @@ extension AppDelegate {
 
     @objc func toggleTimeTravel() {
         if travel.active { travel.exit(); return }
-        model.windowTab = 0                   // Running Now stays: it then shows the playhead's moment
+        // Running Now stays: it then shows the playhead's moment. The Network tab travels in place (its map).
+        if model.windowTab != 3 || activityWindow?.isVisible != true { model.windowTab = 0 }
         openActivityWindow(fullScreen: false)
         travel.enter()
     }
