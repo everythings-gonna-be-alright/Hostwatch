@@ -9,15 +9,14 @@ import SwiftUI
 @MainActor
 final class NetworkMapViewState: ObservableObject {
     @Published var filter = MapFilter(rawValue: UserDefaults.standard.string(forKey: "networkMapFilter") ?? "") ?? .everything {
-        didSet { UserDefaults.standard.set(filter.rawValue, forKey: "networkMapFilter") }
+        didSet { UserDefaults.standard.set(filter.rawValue, forKey: "networkMapFilter"); allOf = nil }
     }
     @Published var range = MapRange(rawValue: UserDefaults.standard.string(forKey: "networkMapRange") ?? "") ?? .hour {
         didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange") }
     }
     @Published var selection: String?
-    /// The section shown whole in its own sheet ("devices", "destinations"), nil when none.
+    /// The section shown whole as a list in place of the map ("devices", "destinations"), nil for the map.
     @Published var allOf: String?
-    @Published var allSearch = ""
     @Published var renaming = ""
 }
 
@@ -45,13 +44,17 @@ struct NetworkMapView: View {
 
     var body: some View {
         let _ = store.revision
-        let graph = store.graph(outgoing: outgoing, filter: state.filter, range: state.range, query: search, interfaceName: interfaceName)
+        // A whole section as a list in place of the map: the same page, the same details panel.
+        let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
+                                query: search, expanded: state.allOf.map { [$0] } ?? [], interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
             HStack(alignment: .top, spacing: 16) {
                 Group {
-                    if graph.isEmpty, !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                    if let key = state.allOf {
+                        NetworkMapListView(store: store, state: state, key: key, graph: graph, search: search, actions: actions)
+                    } else if graph.isEmpty, !search.trimmingCharacters(in: .whitespaces).isEmpty {
                         ContentUnavailableView.search(text: search)
                     } else if graph.isEmpty {
                         ContentUnavailableView {
@@ -66,19 +69,13 @@ struct NetworkMapView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
-                                    openStories: openStories)
+                                    openStories: openStories, interfaceName: interfaceName, actions: actions)
                     .frame(width: 300)
                     .padding(.vertical, 12)
             }
             .padding(.horizontal, 16)
             Divider()
             footer(graph)
-        }
-        .sheet(isPresented: Binding(get: { state.allOf != nil }, set: { if !$0 { state.allOf = nil } })) {
-            if let key = state.allOf {
-                NetworkMapAllView(store: store, state: state, key: key, outgoing: outgoing, interfaceName: interfaceName,
-                                  openDetails: openDetails, openStories: openStories, actions: actions)
-            }
         }
     }
 
@@ -189,7 +186,7 @@ struct NetworkMapView: View {
                         .anchorPreference(key: NodeFrames.self, value: .bounds) { [node.id: $0] }
                     }
                     if section.more > 0 {
-                        Button { state.allSearch = ""; state.allOf = section.key } label: {
+                        Button { state.selection = nil; state.allOf = section.key } label: {
                             HStack(spacing: 3) {
                                 Text("and \(section.more) more \(section.moreNoun)")
                                 Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))

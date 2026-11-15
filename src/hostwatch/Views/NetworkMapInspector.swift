@@ -10,6 +10,8 @@ struct NetworkMapInspector: View {
     let outgoing: [MapOutgoing]
     var openDetails: (String) -> Void
     var openStories: () -> Void
+    var interfaceName: (String) -> String = { $0 }
+    var actions = NetworkMapActions()
 
     private var node: MapNode? {
         state.selection.flatMap { id in graph.columns.joined().flatMap(\.nodes).first { $0.id == id } }
@@ -66,7 +68,7 @@ struct NetworkMapInspector: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func row(_ label: String, _ value: String, data: Bool = false) -> some View {
+    func row(_ label: String, _ value: String, data: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label).foregroundStyle(.secondary).frame(width: 96, alignment: .leading)
             Text(value).font(.system(size: 12, design: data ? .monospaced : .default)).textSelection(.enabled)
@@ -76,9 +78,9 @@ struct NetworkMapInspector: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func when(_ d: Date) -> String { d.formatted(.relative(presentation: .named)) }
+    func when(_ d: Date) -> String { d.formatted(.relative(presentation: .named)) }
 
-    private func tries(from ips: [String]) -> [MapInbound] {
+    func tries(from ips: [String]) -> [MapInbound] {
         let since = state.range.since(Date())
         return store.inbound.values.filter { ips.contains($0.remote) && $0.count(since: since) > 0 }.sorted { $0.port < $1.port }
     }
@@ -141,6 +143,7 @@ struct NetworkMapInspector: View {
             }
             if !list.isEmpty { row("Ports tried", list.prefix(12).map { ":\($0.port)" }.joined(separator: " "), data: true) }
         }
+        deviceMore(d, ips: ips, tries: list)
         if let d {
             Divider()
             TextField("Your name for it", text: Binding(get: { state.renaming.isEmpty ? d.yourName : state.renaming },
@@ -186,8 +189,9 @@ struct NetworkMapInspector: View {
         VStack(alignment: .leading, spacing: 8) {
             if let first = list.map(\.firstSeen).min() { row("First try", when(first)) }
             if let last = list.map(\.lastSeen).max() { row("Last try", when(last)) }
-            row("Ports tried", list.prefix(12).map { ":\($0.port)" }.joined(separator: " "), data: true)
+            row("Status", store.blockedAddresses.contains(node.ref) ? "Blocked by you, both ways" : "Not blocked")
         }
+        triesByPort(list)
         HStack {
             Spacer()
             Button("Forget Tries") { store.forgetTries(from: node.ref); state.selection = nil }.buttonStyle(.glass).controlSize(.small)
@@ -212,6 +216,7 @@ struct NetworkMapInspector: View {
                 row("Port", ":\(port)", data: true)
                 row("Tries", n == 0 ? "None from other devices" : "\(n) from other devices")
             }
+            listenerMore(l)
         }
     }
 
@@ -236,6 +241,7 @@ struct NetworkMapInspector: View {
         let byGroup = Dictionary(grouping: mine, by: \.group).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }, $0.value.contains(where: \.blocked)) }
             .sorted { $0.1 > $1.1 }
         header("app", node.title, node.ref, badge: node.badge)
+        programMore(node, mine)
         Text("Went to \(byGroup.count == 1 ? "1 destination" : "\(byGroup.count) destinations").").font(.system(size: 12))
         VStack(alignment: .leading, spacing: 6) {
             ForEach(byGroup.prefix(10), id: \.0) { group, n, blocked in
@@ -252,6 +258,7 @@ struct NetworkMapInspector: View {
     @ViewBuilder private func wayOut(_ node: MapNode) -> some View {
         let vpn = store.routes.vpns.first { $0.iface == node.ref }
         header(node.title == "VPN" ? "lock.shield" : node.ref == "local" ? "house" : "wifi", node.title, node.ref == "local" ? "" : node.ref)
+        wayOutMore(node)
         VStack(alignment: .leading, spacing: 8) {
             if let vpn {
                 row("Carries", vpn.full ? "Everything" : "Some destinations")
@@ -271,7 +278,9 @@ struct NetworkMapInspector: View {
         let since = state.range.since(Date())
         let conns = outgoing.filter { $0.group == node.ref && $0.lastSeen >= since }
         let programs = Dictionary(grouping: conns, by: \.program).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }.sorted { $0.1 > $1.1 }
-        header("globe", node.title, "", badge: node.badge, tint: node.badge == .blocked ? .red : node.badge == .new ? .orange : .secondary)
+        header(node.symbol ?? "globe", node.title, node.subtitle, badge: node.badge,
+               tint: node.badge == .blocked ? .red : node.badge == .new ? .orange : .secondary)
+        destinationMore(node, conns)
         if node.badge == .new {
             Text("No program on this Mac had contacted it before.").font(.system(size: 12)).foregroundStyle(.secondary)
         }
