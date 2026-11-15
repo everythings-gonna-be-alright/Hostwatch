@@ -593,9 +593,10 @@ the list can't show: who tried to reach this Mac.
   Hostwatch, never looked up online) and its model and name from what it announces on your network (Bonjour: "iPhone",
   "MacBook Pro", "Apple TV", a printer's model, a Chromecast). Phones use a private, made-up hardware address per
   network, which has no maker. Their announcement still names them.
-- **Select anything** to dim the rest and light its whole flow: a destination lights every program that reached it
-  and the way out each used, even programs folded into "and 18 more" (they're drawn while it's selected). A program
-  lights all its destinations, a way out its programs and destinations. Its details are on the right: a device's model, maker, addresses, when it
+- **Select anything** to dim the rest and follow its flow: a destination shows the programs that reached it (even ones
+  folded into "and 18 more") and the way out each used. A program shows its own destinations, a way out its programs
+  and destinations. Only the busiest that fit are drawn, the rest fold into "and N more", and the details panel lists
+  them all. Click an empty spot to clear the selection. Its details are on the right: a device's model, maker, addresses, when it
   was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.

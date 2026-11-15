@@ -656,6 +656,17 @@ import Testing
         #expect(g.related?.isSuperset(of: ["prog:/bin/quiet", "prog:/bin/busy1", "dst:site1.example"]) == true)
         #expect(g.edges.contains { $0.from == "prog:/bin/quiet" })
         let p = NetworkMapBuilder.build(.init(outgoing: out, now: now, selected: "prog:/bin/busy3"))
-        #expect(p.columns[3][0].nodes.contains { $0.ref == "site3.example" })
+        #expect(p.columns[3][0].nodes.map(\.ref) == ["site3.example"])            // only its own destinations
+    }
+
+    @Test func aProgramWithManyDestinationsShowsWhatFits() {
+        let many = (1...74).map { i in
+            MapOutgoing(program: "Chrome Helper", path: "/chrome", group: "site\(i).example", ip: "93.184.216.\(i)", count: i,
+                        firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)
+        }
+        let g = NetworkMapBuilder.build(.init(outgoing: many, now: now, selected: "prog:/chrome"))
+        #expect(g.columns[3][0].nodes.count == 8 && g.columns[3][0].more == 66)
+        #expect(g.columns[3][0].nodes.first?.ref == "site74.example")              // the busiest first
+        #expect(g.columns[1].last?.nodes.map(\.ref) == ["/chrome"])
     }
 }
