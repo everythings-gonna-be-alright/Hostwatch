@@ -1168,8 +1168,14 @@ the list can't show: who tried to reach this Mac.
   - **Destinations:** grouped by domain, blocked and new ones always in view.
 - **Lines:** thicker for more connections. Grey is allowed, red dashed is blocked or refused, orange is new in the last
   day. Every state also has a word or badge.
-- **Select anything** to dim the rest and see its details on the right: a device's addresses, when it was first seen,
-  whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
+- **Every connection out** is drawn, allowed or not: a connection to a device on your network (`ssh` to a server at
+  home) ends at that device, by name and address.
+- **What each device is:** its maker from the first half of its hardware address (IEEE's public registry, shipped with
+  Hostwatch, never looked up online) and its model and name from what it announces on your network (Bonjour: "iPhone",
+  "MacBook Pro", "Apple TV", a printer's model, a Chromecast). Phones use a private, made-up hardware address per
+  network, which has no maker. Their announcement still names them.
+- **Select anything** to dim the rest and see its details on the right: a device's model, maker, addresses, when it
+  was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
 
@@ -1179,7 +1185,8 @@ address changing (*Router changed*: a new router does this, and so does someone 
 are shown on the map but raise nothing, since scanners try every public address all day.
 
 **Passive only.** Hostwatch never scans your network. It reads what macOS already knows (the neighbour and route tables,
-listening sockets) and counts incoming connection attempts in the packet capture it already runs. The devices and tries
+listening sockets), counts incoming connection attempts in the packet capture it already runs, and listens to what
+devices announce (it asks for announcements every 15 minutes, on your network only). The devices and tries
 are kept encrypted in `network-map.json`: tries for 7 days, devices for 30, yours always. Devices present when
 Hostwatch first looked are never shown as new.
 
@@ -2246,6 +2253,10 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
 
+On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
+and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
+Hostwatch may use the local network.
+
 Here is where everything lives:
 
 | Where | What |
@@ -2256,6 +2267,7 @@ Here is where everything lives:
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/tech.hostwatch.app.plist` | settings and exclusions (plain) |
+| `…/Hostwatch/network-map.json` | the network map's devices, incoming tries and outgoing connections (sealed) |
 | `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
 
 ### Encryption at rest

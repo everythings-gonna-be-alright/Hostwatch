@@ -20,16 +20,11 @@ extension AppDelegate {
         }
     }
 
-    /// The firewall's connections as the map draws them.
-    func mapOutgoing() -> [MapOutgoing] {
+    /// Every outgoing connection in the range, a destination marked new as the domain inventory says.
+    func mapOutgoing(_ range: MapRange) -> [MapOutgoing] {
         let now = Date()
-        return firewall.list(status: { [signatures] in signatures.status(forKey: $0) }).map { e, d in
-            let group = NetworkMapPolicy.isLocal(e.facts.ip) ? "Your network" : NetworkRow.group(e.facts)
-            let name = e.name.isEmpty || e.name == "?" ? (e.facts.program as NSString).lastPathComponent : e.name
-            let isNew = domains.records[group].map { domains.isNew($0, now: now) } ?? false
-            return MapOutgoing(program: SignatureBuilder.vmGateway(e.facts.program) ?? (name.isEmpty ? "Unknown program" : name),
-                               path: e.facts.program, group: group, ip: e.facts.ip, count: e.count, firstSeen: e.firstSeen,
-                               lastSeen: e.lastSeen, blocked: d.verdict == .block, isNew: isNew)
+        return networkMap.outgoingList(range, now: now) { [domains] group in
+            domains.records[group].map { domains.isNew($0, now: now) } ?? false
         }
     }
 

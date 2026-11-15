@@ -205,8 +205,81 @@ import Testing
         #expect(!comingIn.columns[0].isEmpty && comingIn.columns[3].isEmpty)
     }
 
+    @Test func everyOutgoingConnectionIsRecorded() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.apply(message(neighbors: [router, NetNeighbor(mac: "c0:cd:d6:79:e7:a4", ips: ["192.168.1.13"], iface: "en0", name: "nas.lan")]),
+                    now: now)
+        func net(_ proc: String, _ target: String, host: String = "") -> ActivityEvent {
+            ActivityEvent(kind: .net, time: "", pid: 1, ppid: 1, name: (proc as NSString).lastPathComponent, proc: proc, target: target,
+                          extra: "TCP", parent: "", host: host, hostSource: host.isEmpty ? "" : "dns")
+        }
+        store.observeOutgoing(net("/usr/bin/ssh", "192.168.1.13:22"), blocked: false, now: now)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34:443", host: "www.example.com"), blocked: false, now: now)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34:443", host: "www.example.com"), blocked: false, now: now)
+        store.observeOutgoing(net("/usr/bin/curl", "127.0.0.1:8080"), blocked: false, now: now)
+        let list = store.outgoingList(.hour, now: now)
+        #expect(Set(list.map(\.group)) == ["192.168.1.13", "example.com"])
+        #expect(list.first { $0.group == "example.com" }?.count == 2)
+        let g = NetworkMapBuilder.build(.init(devices: Array(store.devices.values), routes: store.routes, outgoing: list, now: now))
+        let nas = g.columns[3][0].nodes.first { $0.ref == "192.168.1.13" }
+        #expect(nas?.title == "nas" && nas?.subtitle == "192.168.1.13")
+        #expect(g.edges.contains { $0.from == "prog:/usr/bin/ssh" && $0.to == "way:local" })
+    }
+
     @Test func localAddresses() {
         #expect(NetworkMapPolicy.isLocal("192.168.1.23") && NetworkMapPolicy.isLocal("100.100.1.1") && NetworkMapPolicy.isLocal("fe80::1"))
         #expect(!NetworkMapPolicy.isLocal("203.0.113.7") && !NetworkMapPolicy.isLocal("2a00::1"))
+    }
+}
+
+/// Naming devices: the maker table, announced models, and what the map calls them.
+@Suite @MainActor struct DeviceIdentityTests {
+    @Test func makerFromHardwareAddress() {
+        let table = MakerTable(text: "a4c361\tApple\ncc2de0\tRouterboard.com\n")
+        #expect(table.maker(for: "a4:c3:61:12:34:56") == "Apple")
+        #expect(table.maker(for: "36:48:71:1a:c0:f3") == nil)         // private: made up, no maker
+        #expect(table.maker(for: "00:11:22:33:44:55") == nil)
+    }
+
+    @Test func shippedTableIsReadable() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../assets/oui.tsv")
+        #expect(MakerTable(url: url).maker(for: "cc:2d:e0:c5:1a:05") == "Routerboard.com")
+    }
+
+    @Test func announcedModels() {
+        #expect(DeviceModels.friendly("iPhone15,2") == "iPhone")
+        #expect(DeviceModels.friendly("MacBookPro18,3") == "MacBook Pro")
+        #expect(DeviceModels.friendly("AudioAccessory5,1") == "HomePod")
+        #expect(DeviceModels.friendly("Macmini9,1") == "Mac mini")
+        #expect(DeviceModels.model(txt: ["md": "Chromecast Ultra", "fn": "Living Room TV"]) == "Chromecast Ultra")
+        #expect(DeviceModels.model(txt: ["ty": "HP LaserJet M110w"]) == "HP LaserJet M110w")
+        #expect(DeviceModels.name(service: "A1B2C3D4E5F6@Kitchen", txt: [:]) == "Kitchen")
+        #expect(DeviceModels.symbol(model: "iPhone", maker: "") == "iphone")
+        #expect(DeviceModels.symbol(model: "HP LaserJet M110w", maker: "") == "printer")
+    }
+
+    @Test func titleUsesWhatIsKnown() {
+        let now = Date()
+        var d = MapDevice(mac: "a4:c3:61:12:34:56", ips: ["192.168.1.30"], iface: "en0", firstSeen: now, lastSeen: now)
+        #expect(d.title == "Unknown device")
+        d.maker = "Apple"
+        #expect(d.title == "Apple device")
+        d.model = "iPhone"
+        #expect(d.title == "iPhone" && d.kind == "Apple" && d.symbol == "iphone")
+        d.announcedName = "Kitchen iPad"
+        #expect(d.title == "Kitchen iPad" && d.kind == "iPhone · Apple")
+    }
+
+    @Test func storeIdentifiesDevices() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.makerFor = { $0.hasPrefix("cc:2d:e0") ? "Routerboard.com" : nil }
+        store.announced = { $0 == "192.168.1.9" ? AnnouncedDevice(name: "Living Room", model: "Apple TV") : nil }
+        store.apply(NetMapMessage(listeners: [], neighbors: [
+            NetNeighbor(mac: "cc:2d:e0:c5:1a:05", ips: ["192.168.1.1"], iface: "en0"),
+            NetNeighbor(mac: "36:48:71:1a:c0:f3", ips: ["192.168.1.9"], iface: "en0"),
+        ], routes: NetRoutes(), inbound: []))
+        #expect(store.devices["cc:2d:e0:c5:1a:05"]?.maker == "Routerboard.com")
+        #expect(store.devices["36:48:71:1a:c0:f3"]?.title == "Living Room")
+        #expect(store.devices["36:48:71:1a:c0:f3"]?.symbol == "tv")
     }
 }

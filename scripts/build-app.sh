@@ -31,6 +31,7 @@ strip -S -x "$APP/Contents/MacOS/Hostwatch"
 # Icon: regenerate with `swift scripts/make-icon.swift` after changing the design.
 [ -f assets/AppIcon.icns ] || swift scripts/make-icon.swift
 cp "assets/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp "assets/oui.tsv" "$APP/Contents/Resources/oui.tsv"        # hardware-address makers (scripts/make-oui.py)
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -48,6 +49,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
+  <key>NSLocalNetworkUsageDescription</key><string>Hostwatch names the devices on your network map by what they announce about themselves, such as iPhone or a printer model. Nothing leaves your network.</string>
+  <key>NSBonjourServices</key><array><string>_airplay._tcp</string><string>_companion-link._tcp</string><string>_device-info._tcp</string><string>_raop._tcp</string><string>_googlecast._tcp</string><string>_ipp._tcp</string><string>_printer._tcp</string><string>_hap._tcp</string></array>
 </dict>
 </plist>
 PLIST

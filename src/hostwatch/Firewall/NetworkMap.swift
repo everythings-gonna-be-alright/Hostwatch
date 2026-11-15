@@ -26,15 +26,22 @@ final class NetworkMapStore: ObservableObject {
     @Published private(set) var routes = NetRoutes()
     @Published private(set) var revision = 0
     var onAlert: ((NetworkAlert) -> Void)?
+    /// A hardware address's maker (the shipped IEEE table; tests give their own).
+    var makerFor: (String) -> String? = { MakerTable.shared.maker(for: $0) }
+    /// What devices announce about themselves, by address (Bonjour).
+    var announced: (String) -> AnnouncedDevice? = { _ in nil }
 
     private struct Saved: Codable {
         var devices: [MapDevice]
         var inbound: [MapInbound]
+        var outgoing: [MapConnection]?
         var routers: [String: String]
         var learned: Bool
     }
 
     private let fileURL: URL?
+    /// Every outgoing connection, by program and destination. Not published: the 10 s report redraws the map.
+    private(set) var outgoing: [String: MapConnection] = [:]
     /// Router address -> hardware address last seen.
     private var routers: [String: String] = [:]
     /// The first report teaches the network as it is: nothing in it is new.
@@ -70,6 +77,7 @@ final class NetworkMapStore: ObservableObject {
                 devices[mac]?.ips.removeAll(where: n.ips.contains)
             }
         }
+        for (mac, d) in devices { identify(mac, d) }
         checkRouter(m.neighbors, now: now)
         for t in m.inbound { noteTry(t, now: now) }
         for remote in Set(m.inbound.map(\.remote)) where NetworkMapPolicy.isLocal(remote) { judge(remote, m.inbound, now: now) }
@@ -78,6 +86,24 @@ final class NetworkMapStore: ObservableObject {
         dirty = true
         revision += 1
         if now.timeIntervalSince(lastSave) > 60 { save(); lastSave = now }
+    }
+
+    /// Its maker from the hardware address, its name and model from what it announces.
+    private func identify(_ mac: String, _ d: MapDevice) {
+        var d = d
+        if d.maker == nil, !mac.hasPrefix("ip:") { d.maker = makerFor(mac) }
+        if let a = d.ips.lazy.compactMap(announced).first {
+            if !a.name.isEmpty { d.announcedName = a.name }
+            if !a.model.isEmpty { d.model = a.model }
+        }
+        if d != devices[mac] { devices[mac] = d }
+    }
+
+    /// Bonjour heard more: names and models are filled in at once.
+    func announcementsChanged() {
+        for (mac, d) in devices { identify(mac, d) }
+        revision += 1
+        dirty = true
     }
 
     private func checkRouter(_ neighbors: [NetNeighbor], now: Date) {
@@ -113,6 +139,34 @@ final class NetworkMapStore: ObservableObject {
         }
     }
 
+    /// A connection out (every one the collector reports, allowed or not). This Mac talking to itself isn't drawn.
+    func observeOutgoing(_ e: ActivityEvent, blocked: Bool, now: Date = Date()) {
+        guard e.kind == .net, let raw = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), !raw.isEmpty, raw != "?",
+              !raw.hasPrefix("127."), raw != "::1", !raw.lowercased().hasPrefix("fe80:"), raw != "0.0.0.0" else { return }
+        let group = NetworkMapPolicy.isLocal(raw) ? raw : (DomainRegistry.registrable(e.host) ?? (e.host.isEmpty ? raw : e.host.lowercased()))
+        let base = e.name.isEmpty || e.name == "?" ? (e.proc as NSString).lastPathComponent : e.name
+        let program = SignatureBuilder.vmGateway(e.proc) ?? (base.isEmpty ? "Unknown program" : base)
+        let key = e.proc + "|" + group
+        var c = outgoing[key] ?? MapConnection(program: program, path: e.proc, group: group, ip: raw, firstSeen: now, lastSeen: now)
+        c.ip = raw
+        c.lastSeen = now
+        c.blocked = blocked
+        c.hours[MapTime.hour(now), default: 0] += 1
+        outgoing[key] = c
+        dirty = true
+    }
+
+    /// Outgoing connections within a range, as the builder takes them.
+    func outgoingList(_ range: MapRange, now: Date = Date(), isNew: (String) -> Bool = { _ in false }) -> [MapOutgoing] {
+        let since = range.since(now)
+        return outgoing.values.compactMap { c in
+            let n = c.count(since: since)
+            guard n > 0 else { return nil }
+            return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
+                               lastSeen: c.lastSeen, blocked: c.blocked, isNew: !NetworkMapPolicy.isLocal(c.group) && isNew(c.group))
+        }
+    }
+
     /// Once an hour per address and kind.
     private func mayAlert(_ key: String, now: Date) -> Bool {
         if let last = alerted[key], now.timeIntervalSince(last) < 3600 { return false }
@@ -126,6 +180,13 @@ final class NetworkMapStore: ObservableObject {
         for (k, var r) in inbound {
             r.hours = r.hours.filter { $0.key >= oldest }
             inbound[k] = r.hours.isEmpty ? nil : r
+        }
+        for (k, var c) in outgoing where c.hours.keys.contains(where: { $0 < oldest }) {
+            c.hours = c.hours.filter { $0.key >= oldest }
+            outgoing[k] = c.hours.isEmpty ? nil : c
+        }
+        if outgoing.count > 10_000 {
+            for k in outgoing.values.sorted(by: { $0.lastSeen < $1.lastSeen }).prefix(outgoing.count - 10_000).map(\.id) { outgoing[k] = nil }
         }
         if inbound.count > 5_000 {
             for k in inbound.values.sorted(by: { $0.lastSeen < $1.lastSeen }).prefix(inbound.count - 5_000).map(\.id) { inbound[k] = nil }
@@ -186,6 +247,7 @@ final class NetworkMapStore: ObservableObject {
         guard let s = try? decoder.decode(Saved.self, from: data) else { return }
         devices = Dictionary(s.devices.map { ($0.mac, $0) }, uniquingKeysWith: { a, _ in a })
         inbound = Dictionary(s.inbound.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        outgoing = Dictionary((s.outgoing ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         routers = s.routers
         learned = s.learned
     }
@@ -195,7 +257,8 @@ final class NetworkMapStore: ObservableObject {
         dirty = false
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), routers: routers, learned: learned)
+        let s = Saved(devices: Array(devices.values), inbound: Array(inbound.values), outgoing: Array(outgoing.values),
+                      routers: routers, learned: learned)
         if let data = try? encoder.encode(s) { try? Vault.shared.write(data, to: fileURL) }
     }
 }

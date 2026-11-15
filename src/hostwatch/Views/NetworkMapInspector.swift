@@ -120,7 +120,7 @@ struct NetworkMapInspector: View {
         let ips = d?.ips ?? [String(node.ref.dropFirst(3))]
         let list = tries(from: ips)
         let isNew = d.map { NetworkMapPolicy.isNew($0, now: Date()) } ?? true
-        header(node.title == "Router" ? "wifi.router" : isNew ? "questionmark.circle" : "desktopcomputer", node.title,
+        header(node.symbol ?? "desktopcomputer", node.title,
                ([ips.first ?? ""] + (d.map { [$0.mac] } ?? [])).joined(separator: " · "), badge: node.badge,
                tint: isNew ? .orange : .secondary)
         if !list.isEmpty {
@@ -131,7 +131,9 @@ struct NetworkMapInspector: View {
             if let d {
                 row("First seen", d.baseline ? "Before Hostwatch looked" : when(d.firstSeen))
                 row("Last seen", when(d.lastSeen))
-                row("Name", d.name.isEmpty ? "Doesn't announce one" : d.name)
+                row("Model", d.model ?? "Doesn't announce one")
+                row("Maker", d.maker ?? (NetMapParse.isRandom(d.mac) ? "Hidden by a private address" : "Not in the registry"))
+                row("Name", [d.announcedName ?? "", d.name].first { !$0.isEmpty } ?? "Doesn't announce one")
                 row("Address", NetMapParse.isRandom(d.mac) ? "Private, made up by the device" : "Fixed, set by its maker")
                 if !d.iface.isEmpty { row("Interface", d.iface, data: true) }
             } else {
@@ -277,7 +279,7 @@ struct NetworkMapInspector: View {
                 }
             }
         }
-        if node.ref != "Your network" {
+        if !NetworkMapPolicy.isLocal(node.ref) {
             HStack {
                 Spacer()
                 Button("Details…") { openDetails(node.ref) }.buttonStyle(.glass).controlSize(.small)
