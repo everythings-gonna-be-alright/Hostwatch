@@ -15,7 +15,7 @@ struct NetworkMapListView: View {
                          "destinations": "Destinations"]
 
     var body: some View {
-        let rows = graph.columns.joined().first { $0.key == key }?.nodes ?? []
+        let rows = stable(graph.columns.joined().first { $0.key == key }?.nodes ?? [])
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Button { state.selection = nil; state.allOf = nil } label: { Label("Map", systemImage: "chevron.left") }
@@ -62,5 +62,16 @@ struct NetworkMapListView: View {
             }
         }
         .padding(.vertical, 12)
+    }
+
+    /// The order the list opened with, kept: a row never moves under the pointer because its count grew. Rows that
+    /// appear later go to the end, in the map's order.
+    private func stable(_ nodes: [MapNode]) -> [MapNode] {
+        if state.listOrder.isEmpty { state.listOrder = nodes.map(\.id) }
+        let index = Dictionary(state.listOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let known = nodes.filter { index[$0.id] != nil }.sorted { index[$0.id]! < index[$1.id]! }
+        let fresh = nodes.filter { index[$0.id] == nil }
+        if !fresh.isEmpty { state.listOrder += fresh.map(\.id) }
+        return known + fresh
     }
 }

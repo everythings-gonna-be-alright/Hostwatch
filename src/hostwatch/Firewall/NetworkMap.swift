@@ -387,11 +387,11 @@ final class NetworkMapStore: ObservableObject {
     // MARK: Map
 
     func graph(outgoing: [MapOutgoing], filter: MapFilter, range: MapRange, now: Date = Date(), query: String = "",
-               expanded: Set<String> = [], interfaceName: @escaping (String) -> String) -> NetworkGraph {
+               expanded: Set<String> = [], room: Int? = nil, interfaceName: @escaping (String) -> String) -> NetworkGraph {
         NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
                                       interfaceName: interfaceName, query: query, network: network, expanded: expanded,
-                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts))
+                                      blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room))
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }

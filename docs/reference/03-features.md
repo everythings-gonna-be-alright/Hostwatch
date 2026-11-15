@@ -597,7 +597,7 @@ the list can't show: who tried to reach this Mac.
   was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
-- **Show more:** a column shows its first few. Click *and 12 more devices* (or programs, destinations, addresses) and
+- **Show more:** a column shows its first few, and more when the window is taller. Click *and 12 more devices* (or programs, destinations, addresses) and
   the map makes way for all of them in a table, with each one's address, connections and status, the details panel
   beside it and the same right-click menu. The window's search filters it, and *Map* goes back. Each way out always keeps its busiest destinations in view, so a VPN's
   few connections never hide behind the Wi-Fi's many.

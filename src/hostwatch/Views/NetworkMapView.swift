@@ -9,14 +9,34 @@ import SwiftUI
 @MainActor
 final class NetworkMapViewState: ObservableObject {
     @Published var filter = MapFilter(rawValue: UserDefaults.standard.string(forKey: "networkMapFilter") ?? "") ?? .everything {
-        didSet { UserDefaults.standard.set(filter.rawValue, forKey: "networkMapFilter"); allOf = nil }
+        didSet { UserDefaults.standard.set(filter.rawValue, forKey: "networkMapFilter"); allOf = nil; mapOrder = [:] }
     }
     @Published var range = MapRange(rawValue: UserDefaults.standard.string(forKey: "networkMapRange") ?? "") ?? .hour {
-        didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange") }
+        didSet { UserDefaults.standard.set(range.rawValue, forKey: "networkMapRange"); mapOrder = [:]; listOrder = [] }
     }
     @Published var selection: String?
+    /// How many rows fit in a column of the map's area (the window's height), for showing more when there's room.
+    @Published var room: Int?
     /// The section shown whole as a list in place of the map ("devices", "destinations"), nil for the map.
-    @Published var allOf: String?
+    @Published var allOf: String? { didSet { if allOf != oldValue { listOrder = [] } } }
+    /// Each map section's order when first drawn, the same way: nodes keep their place as counts change.
+    var mapOrder: [String: [String]] = [:]
+
+    /// Nodes in the order this section first showed them, newcomers at the end.
+    func stable(_ nodes: [MapNode], section: String) -> [MapNode] {
+        var order = mapOrder[section] ?? []
+        let present = Set(nodes.map(\.id))
+        if order.count > 200 { order.removeAll { !present.contains($0) } }
+        let index = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let known = nodes.filter { index[$0.id] != nil }.sorted { index[$0.id]! < index[$1.id]! }
+        let fresh = nodes.filter { index[$0.id] == nil }
+        order += fresh.map(\.id)
+        mapOrder[section] = order
+        return known + fresh
+    }
+
+    /// The full list's order when it opened: rows keep their place while counts change, new ones go to the end.
+    var listOrder: [String] = []
     /// The process whose details show under the map, as under Events.
     @Published var process: ActivityEvent?
     @Published var renaming = ""
@@ -51,7 +71,8 @@ struct NetworkMapView: View {
         let _ = store.revision
         // A whole section as a list in place of the map: the same page, the same details panel.
         let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
-                                query: search, expanded: state.allOf.map { [$0] } ?? [], interfaceName: interfaceName)
+                                query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
+                                interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -73,6 +94,9 @@ struct NetworkMapView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: Int.self) { max(1, Int(($0.size.height - 70) / 48)) } action: { rows in
+                    if state.room != rows { state.room = rows }
+                }
                 NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
                                     openStories: openStories, interfaceName: interfaceName, actions: actions,
                                     showProcess: hud == nil ? nil : { state.process = $0 })
@@ -210,7 +234,7 @@ struct NetworkMapView: View {
                     if !section.title.isEmpty {
                         Text(section.title).font(.caption).foregroundStyle(.secondary).padding(.top, 4)
                     }
-                    ForEach(section.nodes) { node in
+                    ForEach(state.stable(section.nodes, section: section.key.isEmpty ? "\(index)|\(section.title)" : section.key)) { node in
                         MapNodeView(node: node, selected: state.selection == node.id,
                                     dimmed: related.map { !$0.contains(node.id) } ?? false) {
                             state.selection = state.selection == node.id ? nil : node.id

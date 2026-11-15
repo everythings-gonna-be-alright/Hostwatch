@@ -429,6 +429,18 @@ import Testing
         #expect(store.inbound.isEmpty)
     }
 
+    @Test func aTallerWindowShowsMore() {
+        let out = (1...30).map { i in
+            MapOutgoing(program: "p\(i)", path: "/bin/p\(i)", group: "site\(i).example", ip: "93.184.216.\(i)", count: i,
+                        firstSeen: now.addingTimeInterval(-9 * 86400), lastSeen: now, blocked: false, isNew: false)
+        }
+        let small = NetworkMapBuilder.build(.init(outgoing: out, now: now))
+        let tall = NetworkMapBuilder.build(.init(outgoing: out, now: now, room: 16))
+        #expect(small.columns[3][0].nodes.count == 8 && tall.columns[3][0].nodes.count == 15)
+        #expect(small.columns[1].last?.nodes.count == 6 && tall.columns[1].last?.nodes.count == 12)
+        #expect(NetworkMapBuilder.build(.init(outgoing: out, now: now, room: 3)).columns[3][0].nodes.count == 8)
+    }
+
     @Test func collectorRulesAreSafe() {
         #expect(AddressBlock.valid(["192.168.1.30", "nonsense", "127.0.0.1", "192.168.1.19", "::"], own: ["192.168.1.19"]) == ["192.168.1.30"])
         let rules = AddressBlock.rules(addresses: ["192.168.1.30"], ports: [8000])
