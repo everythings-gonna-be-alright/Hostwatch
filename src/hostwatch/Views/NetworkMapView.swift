@@ -17,6 +17,8 @@ final class NetworkMapViewState: ObservableObject {
     @Published var selection: String?
     /// The section shown whole as a list in place of the map ("devices", "destinations"), nil for the map.
     @Published var allOf: String?
+    /// The process whose details show under the map, as under Events.
+    @Published var process: ActivityEvent?
     @Published var renaming = ""
 }
 
@@ -39,6 +41,9 @@ struct NetworkMapView: View {
     /// The window's search field.
     var search = ""
     var actions = NetworkMapActions()
+    /// The window's actions and the patterns, for the process details panel.
+    var hud: HUDActions?
+    var signatures: SignatureStore?
 
     private static let headers = ["Reaching this Mac", "This Mac", "Way out", "Destinations"]
 
@@ -69,11 +74,17 @@ struct NetworkMapView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
-                                    openStories: openStories, interfaceName: interfaceName, actions: actions)
+                                    openStories: openStories, interfaceName: interfaceName, actions: actions,
+                                    showProcess: hud == nil ? nil : { state.process = $0 })
                     .frame(width: 300)
                     .padding(.vertical, 12)
             }
             .padding(.horizontal, 16)
+            if let event = state.process, let hud, let signatures {
+                Divider()
+                EventDetailPanel(event: event, signatures: signatures, actions: hud) { state.process = nil }
+                    .frame(maxHeight: 280)
+            }
             Divider()
             footer(graph)
         }
@@ -182,7 +193,10 @@ struct NetworkMapView: View {
                                     dimmed: related.map { !$0.contains(node.id) } ?? false) {
                             state.selection = state.selection == node.id ? nil : node.id
                         }
-                        .contextMenu { NetworkMapMenu(node: node, store: store, actions: actions, select: { state.selection = node.id }) }
+                        .contextMenu {
+                            NetworkMapMenu(node: node, store: store, actions: actions, select: { state.selection = node.id },
+                                           showProcess: hud == nil ? nil : { state.process = $0 })
+                        }
                         .anchorPreference(key: NodeFrames.self, value: .bounds) { [node.id: $0] }
                     }
                     if section.more > 0 {

@@ -230,6 +230,16 @@ import Testing
         #expect(g.edges.contains { $0.from == "prog:/usr/bin/ssh" && $0.to == "way:local" })
     }
 
+    @Test func programsLastConnectionForItsProcessDetails() throws {
+        let store = NetworkMapStore(fileURL: nil)
+        let e = ActivityEvent(kind: .net, time: "", pid: 4242, ppid: 1, name: "curl", proc: "/usr/bin/curl", target: "93.184.216.34:443",
+                              extra: "TCP", parent: "/bin/zsh", host: "www.example.com", hostSource: "dns")
+        store.observeOutgoing(e, blocked: false, now: now)
+        let last = try #require(store.lastEvent(program: "/usr/bin/curl"))
+        #expect(last.pid == 4242 && last.ppid == 1 && last.parent == "/bin/zsh" && last.host == "www.example.com" && last.kind == .net)
+        #expect(store.lastEvent(program: "/usr/bin/none") == nil)
+    }
+
     @Test func localAddresses() {
         #expect(NetworkMapPolicy.isLocal("192.168.1.23") && NetworkMapPolicy.isLocal("100.100.1.1") && NetworkMapPolicy.isLocal("fe80::1"))
         #expect(!NetworkMapPolicy.isLocal("203.0.113.7") && !NetworkMapPolicy.isLocal("2a00::1"))

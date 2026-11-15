@@ -194,6 +194,7 @@ final class NetworkMapStore: ObservableObject {
         c.lastSeen = now
         c.blocked = blocked
         c.hours[MapTime.hour(now), default: 0] += 1
+        c.pid = e.pid; c.ppid = e.ppid; c.parent = e.parent; c.target = e.target; c.proto = e.extra; c.host = e.host
         let key = e.signatureKey
         if !key.isEmpty, !(c.keys ?? []).contains(key), (c.keys?.count ?? 0) < 20 { c.keys = (c.keys ?? []) + [key] }
         outgoing[c.id] = c
@@ -211,6 +212,22 @@ final class NetworkMapStore: ObservableObject {
                                isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
                                network: c.network)
         }
+    }
+
+    /// A program's latest connection as an event, for the process details panel Events shows.
+    func lastEvent(program path: String) -> ActivityEvent? {
+        guard let c = outgoing.values.filter({ $0.path == path }).max(by: { $0.lastSeen < $1.lastSeen }) else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return ActivityEvent(kind: .net, time: f.string(from: c.lastSeen), pid: c.pid ?? 0, ppid: c.ppid ?? 0, name: c.program,
+                             proc: c.path, target: c.target ?? c.ip, extra: c.proto ?? "TCP", parent: c.parent ?? "",
+                             host: c.host ?? "", hostSource: (c.host ?? "").isEmpty ? "" : "dns")
+    }
+
+    /// A listening program as an event: its process, waiting on its port.
+    func listenerEvent(_ l: NetListener) -> ActivityEvent {
+        ActivityEvent(kind: .net, time: "", pid: l.pid, ppid: 0, name: l.name, proc: l.proc, target: "*:\(l.port)", extra: "TCP",
+                      parent: "")
     }
 
     /// The patterns of a program's connections, for blocking or allowing it from the map.

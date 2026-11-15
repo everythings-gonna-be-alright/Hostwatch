@@ -8,9 +8,15 @@ struct NetworkMapMenu: View {
     @ObservedObject var store: NetworkMapStore
     let actions: NetworkMapActions
     let select: () -> Void
+    /// Opens the process details panel (as under Events); nil where there's none to open.
+    var showProcess: ((ActivityEvent) -> Void)? = nil
 
     var body: some View {
         Button("Show Details") { select() }
+        if let showProcess, let event = processEvent {
+            Button("Show Process Details") { select(); showProcess(event) }
+        }
+        if node.kind != .wayOut && node.kind != .closedPorts { Divider() }
         switch node.kind {
         case .device:
             if let why = store.blockRefusal(device: node.ref) {
@@ -65,6 +71,15 @@ struct NetworkMapMenu: View {
             }
         case .wayOut, .closedPorts:
             EmptyView()
+        }
+    }
+
+    /// The process behind a program or a listening program.
+    private var processEvent: ActivityEvent? {
+        switch node.kind {
+        case .program: return store.lastEvent(program: node.ref)
+        case .listener: return store.listeners.first { "lis:\($0.proc)|\($0.port)" == node.id }.map(store.listenerEvent)
+        default: return nil
         }
     }
 
