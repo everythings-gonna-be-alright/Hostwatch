@@ -11,6 +11,8 @@ struct NetworkFirewallPage: View {
     var openFound: () -> Void = {}
     /// Where your Allow and Block rules live (the network ones are shown here).
     var protection: ProtectionMonitor? = nil
+    /// Devices, addresses and ports blocked from the network map.
+    var networkMap: NetworkMapStore? = nil
 
     var body: some View {
         let found = firewall.list(status: { signatures.status(forKey: $0) })
@@ -21,6 +23,7 @@ struct NetworkFirewallPage: View {
                 if !firewall.prompts.isEmpty { waiting }
                 FirewallRulesSection(firewall: firewall, signatures: signatures)
                 if let protection { DestinationsSection(protection: protection) }
+                if let networkMap { BlockedDevicesSection(store: networkMap, showNetwork: showNetwork) }
                 findings(found)
                 howItDecides
             }

@@ -44,6 +44,18 @@ enum NetworkMapBuilder {
         return out
     }
 
+    /// The interface a destination leaves by ("en0", "utun8"), or "local" for a device on your network.
+    static func wayOut(_ ip: String, routes: NetRoutes) -> String {
+        if NetworkMapPolicy.isYourNetwork(ip, routes: routes) { return "local" }
+        if let vpn = routes.vpnIface(for: ip, specificOnly: NetworkMapPolicy.isLocal(ip)) { return vpn }
+        return NetworkMapPolicy.isLocal(ip) ? routes.iface : routes.iface(for: ip)
+    }
+
+    /// How a way out is named: "Your network", "VPN", or the interface's name ("Wi-Fi").
+    static func wayTitle(_ iface: String, routes: NetRoutes, interfaceName: (String) -> String) -> String {
+        iface == "local" ? "Your network" : iface.isEmpty ? "Internet" : routes.vpns.contains { $0.iface == iface } ? "VPN" : interfaceName(iface)
+    }
+
     static let maxDevices = 6, maxInternet = 4, maxListeners = 4, maxPrograms = 6, maxDestinations = 8
     /// Each way out keeps its busiest destinations in view, so a VPN's few never fold away behind the Wi-Fi's many.
     static let perWayOut = 2
@@ -147,11 +159,7 @@ enum NetworkMapBuilder {
         let out = input.outgoing.filter {
             $0.lastSeen >= since && $0.count > 0 && ($0.network == nil || input.network.isEmpty || $0.network == input.network)
         }
-        func wayOut(_ o: MapOutgoing) -> String {
-            if local(o.ip) { return "way:local" }
-            if let vpn = input.routes.vpnIface(for: o.ip, specificOnly: NetworkMapPolicy.isLocal(o.ip)) { return "way:" + vpn }
-            return "way:" + (NetworkMapPolicy.isLocal(o.ip) ? input.routes.iface : input.routes.iface(for: o.ip))
-        }
+        func wayOut(_ o: MapOutgoing) -> String { "way:" + Self.wayOut(o.ip, routes: input.routes) }
         let byProgram = Dictionary(grouping: out, by: \.path).sorted { a, b in
             a.value.reduce(0) { $0 + $1.count } > b.value.reduce(0) { $0 + $1.count }
         }

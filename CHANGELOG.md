@@ -16,9 +16,12 @@
   and what it connects to. A split-tunnel VPN shows as its own way out.
 - **Block from the map.** Right-click a device, an address, a listening program's port, a program or a domain to
   block it. Devices and addresses are blocked both ways whatever the firewall's mode. The router can't be blocked.
+  Every block is listed in Protection ▸ Network, with Unblock, and an address can be blocked there by typing it.
+- **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes.
 - **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
   doesn't mark everyone as new, and a different router at the same address is not a false alarm.
-- **Show more:** click any "and 12 more" for all of them in a searchable list, with details and the same menu.
+- **Show more:** click any "and 12 more" and the map makes way for all of them in a table, with details and the same
+  menu. *Map* goes back.
 - **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
   hardware address changing. Hostwatch only listens. It never scans your network.
 

@@ -214,7 +214,7 @@ struct ActivityWindowView: View {
                                                                           actions: actions, filter: $model.signatureFilter,
                                                                           list: patternList, active: model.windowTab == 1
                                                                           )) : nil,
-                  protection: model.protection, firewall: firewall,
+                  protection: model.protection, networkMap: networkState.map, firewall: firewall,
                   showPatterns: { app in
                       signatures.scope = nil
                       signatures.search = app

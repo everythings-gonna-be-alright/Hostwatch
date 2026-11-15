@@ -52,6 +52,8 @@ struct RulesView: View {
     var allPatterns: AnyView? = nil
     /// Launch and file protection (its own segment: the toolbar has no room, and these are rules too).
     var protection: ProtectionMonitor? = nil
+    /// The network map's blocks, listed on Protection ▸ Network with the firewall's.
+    var networkMap: NetworkMapStore? = nil
     /// The network firewall's settings: protection for connections, next to launches and files.
     var firewall: FirewallMonitor? = nil
     /// Opens Patterns filtered to an app.
@@ -168,7 +170,8 @@ struct RulesView: View {
                     case .firewall:
                         if let firewall {
                             NetworkFirewallPage(firewall: firewall, signatures: signatures, showNetwork: showNetwork,
-                                               openFound: { tab.open(.protectionFound) }, protection: protection)
+                                               openFound: { tab.open(.protectionFound) }, protection: protection,
+                                               networkMap: networkMap)
                         }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {

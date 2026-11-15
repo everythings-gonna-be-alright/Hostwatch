@@ -597,9 +597,9 @@ the list can't show: who tried to reach this Mac.
   was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
   field lets you name it, and *Forget* forgets it and its tries.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
-- **Show more:** a column shows its first few. Click *and 12 more devices* (or programs, destinations, addresses) for
-  all of them in a list: search, a table with each one's address, count and status, the selected one's details
-  beside it, and the same right-click menu. Each way out always keeps its busiest destinations in view, so a VPN's
+- **Show more:** a column shows its first few. Click *and 12 more devices* (or programs, destinations, addresses) and
+  the map makes way for all of them in a table, with each one's address, connections and status, the details panel
+  beside it and the same right-click menu. The window's search filters it, and *Map* goes back. Each way out always keeps its busiest destinations in view, so a VPN's
   few connections never hide behind the Wi-Fi's many.
 - **Home and work:** a network is known by its router. When the Mac moves, the map shows the devices of the network
   it is on now, whatever its range (10.x, 172.16.x, 192.168.x or a company's own). The first look at a network is its
@@ -615,6 +615,14 @@ the list can't show: who tried to reach this Mac.
   - **A domain:** *Block example.com* adds it to your destinations in Protection, blocked for any program.
   - Program and domain blocks are the firewall's, so they stop connections on Ask or Strict. On Watch the map says
     it will only show what it would block.
+  - **Everything you blocked is listed in Protection ▸ Network:** domains in *Your destinations*, programs in *Your
+    rules*, and devices, addresses and ports in *Blocked devices and addresses*, each with *Unblock*. *Block an
+    Address…* there blocks one by typing it.
+- **Details:** the panel on the right shows, for a device, all its addresses, its status, the programs on this Mac
+  that connected to it and its tries by port. For a program, its connections, first and last seen and its way out.
+  For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
+  through it. For a destination, its connections, addresses and way out. For a listening program, its process and
+  who tried to reach it.
 - **Search:** the window's search field filters the map by name. A program, a domain, a device's name, model or maker,
   an address or a port keeps what matches and what it connects to.
 
