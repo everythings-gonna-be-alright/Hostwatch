@@ -75,8 +75,11 @@ extension AppDelegate {
                                    seconds: seconds)
         session.send = AppPaths.isDemo ? { _ in true } : { [weak self] watch in self?.model.sendWatch(watch) ?? false }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 860),
-                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Watch Closely: \(event.name)"
+        // Liquid Glass: the content runs under a clear title bar (the title stays for the Window menu).
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: WatchView(session: session))
         window.center()

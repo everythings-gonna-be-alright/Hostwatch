@@ -51,6 +51,18 @@ extension AppDelegate {
                 model.windowTab = 2
                 if let story = stories.stories.first { openStoryDetails(story) }
             case "network": model.windowTab = 3
+            case "map":
+                // HOSTWATCH_DEMO_MEASURE=sent: the map by data sent, CleanMyDisk selected.
+                networkMap.announced = { Demo.announced[$0] }
+                networkMap.apply(Demo.netMap(late: false), now: Date().addingTimeInterval(-3 * 86400))
+                networkMap.apply(Demo.netMap(late: true))
+                networkMap.demoAge(keepingNew: [Demo.cleaner, "/usr/bin/curl"])
+                domains.setKnown(domains.records.keys.filter { !$0.contains("cleanmydisk") }, true)
+                networkState.mode = .map
+                let sent = ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_MEASURE"] == "sent"
+                networkState.mapState.measure = sent ? .sent : .connections
+                networkState.mapState.selection = sent ? "prog:" + Demo.cleaner : "dev:" + Demo.stranger.mac
+                model.windowTab = 3
             case "firewall":
                 model.windowTab = 3
                 let ask = ActivityEvent(kind: .net, time: "", pid: 4471, ppid: 3306, name: "node",

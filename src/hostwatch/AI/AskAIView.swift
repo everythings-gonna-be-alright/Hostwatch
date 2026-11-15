@@ -269,8 +269,8 @@ struct AIVerdictCard: View {
                 Spacer()
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .protectionGlass(16)
         } else {
             let verdict = analysis.verdict ?? .unknown
             VStack(alignment: .leading, spacing: 10) {
@@ -304,7 +304,8 @@ struct AIVerdictCard: View {
                 }
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(verdict.color.opacity(analysis.verdict == nil ? 0.05 : 0.10)))
+            // Tinted with the verdict: glass carries state here.
+            .protectionGlass(16, tint: analysis.verdict == nil ? nil : verdict.color.opacity(0.18))
             .overlay(alignment: .leading) {
                 UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
                     .fill(analysis.verdict == nil ? Color.secondary.opacity(0.4) : verdict.color)
@@ -479,7 +480,8 @@ struct Card<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.secondary.opacity(0.07)))
+        // A content card the way macOS draws widgets (DESIGN.md: Liquid Glass).
+        .protectionGlass(16)
     }
 }
 

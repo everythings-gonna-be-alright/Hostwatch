@@ -432,8 +432,11 @@ extension AppDelegate {
     func openStoryDetails(_ story: Story) {
         let details = StoryDetails(story: story, historyDirectory: history.directory, live: model.history)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 760),
-                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Story: \(story.title)"
+        // Liquid Glass: the content runs under a clear title bar (the title stays for the Window menu).
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: StoryDetailView(
             details: details, actions: actions,

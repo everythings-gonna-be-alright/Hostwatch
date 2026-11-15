@@ -271,7 +271,7 @@ struct NetworkMapView: View {
             Set(graph.edges.filter { $0.from == id || $0.to == id }.flatMap { [$0.from, $0.to] } + [id])
         }
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 56) {
+            HStack(alignment: .top, spacing: 40) {
                 ForEach(shown, id: \.self) { c in
                     Text(Self.headers[c].uppercased())
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -279,7 +279,7 @@ struct NetworkMapView: View {
                 }
             }
             // Top-aligned: a tall column (a browser's many destinations) never pushes the others out of view.
-            HStack(alignment: .top, spacing: 56) {
+            HStack(alignment: .top, spacing: 40) {
                 ForEach(shown, id: \.self) { c in
                     column(graph.columns[c], index: c, related: related)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,12 +441,14 @@ struct MapNodeView: View {
                     if !node.subtitle.isEmpty {
                         Text(node.subtitle)
                             .font(.system(size: 11, design: node.dataSubtitle ? .monospaced : .default))
-                            .foregroundStyle(node.kind == .internet && node.badge == .refused ? Color.red : Color.secondary)
+                            .foregroundStyle(subtitleColor)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
-                if let badge = node.badge, node.kind != .internet { MapBadgeView(badge: badge) }
+                // Listeners and closed ports say it on their second line, in colour: the name keeps the width.
+                if let badge = node.badge, node.kind != .internet, !(node.kind == .listener && badge != .blocked),
+                   node.kind != .closedPorts { MapBadgeView(badge: badge) }
                 else if let count = node.count, node.kind == .program || node.kind == .destination {
                     Text(node.bytes ? ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file) : count.formatted())
                         .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
@@ -472,6 +474,14 @@ struct MapNodeView: View {
     }
 
     private var blocked: Bool { node.badge == .blocked }
+
+    private var subtitleColor: Color {
+        switch (node.kind, node.badge) {
+        case (.internet, .refused?), (.closedPorts, _): return .red
+        case (.listener, .allNetworks?): return .orange
+        default: return .secondary
+        }
+    }
 
     private var symbol: String? {
         switch node.kind {

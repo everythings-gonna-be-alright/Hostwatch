@@ -384,6 +384,14 @@ final class NetworkMapStore: ObservableObject {
                       parent: "")
     }
 
+    #if DEMO
+    /// The demo's history is minutes old: everything but the programs named looks as if seen for days.
+    func demoAge(keepingNew paths: Set<String>, now: Date = Date()) {
+        for (k, var c) in outgoing where !paths.contains(c.path) { c.firstSeen = now.addingTimeInterval(-9 * 86400); outgoing[k] = c }
+        revision += 1
+    }
+    #endif
+
     /// The patterns of a program's connections, for blocking or allowing it from the map.
     func patternKeys(program path: String) -> [String] {
         Array(Set(outgoing.values.filter { $0.path == path }.flatMap { $0.keys ?? [] }))

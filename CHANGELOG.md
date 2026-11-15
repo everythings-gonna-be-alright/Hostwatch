@@ -1,41 +1,42 @@
 # Changelog
 
-## Unreleased
+## 0.17.0 – A network map: who reaches this Mac, what leaves, and where
 
 ### New: the network map
 
-- **See who reaches this Mac.** The Network tab has a Map. On the left are the devices on your network and the
-  addresses on the internet that tried to connect. In the middle are the programs listening to the network (orange
-  when anyone on a network can reach them) and the programs going out. On the right are the way out (the router or a
-  VPN) and the destinations. Lines are thicker for more connections, red dashed when blocked or refused, orange when
-  new. Select anything for its details, mark a device as yours, name it or forget it.
-- **Every device named.** Its maker comes from its hardware address (a registry shipped with Hostwatch, never looked
-  up online), and its model and name from what it announces on your network: iPhone, MacBook Pro, Apple TV, a printer
-  or a Chromecast.
-- **Search the map** with the window's search field: a program, a domain, a device or an address keeps what matches
-  and what it connects to. A split-tunnel VPN shows as its own way out.
-- **Block from the map.** Right-click a device, an address, a listening program's port, a program or a domain to
-  block it. Devices and addresses are blocked both ways whatever the firewall's mode. The router can't be blocked.
-  Every block is listed in Protection ▸ Network, with Unblock, and an address can be blocked there by typing it.
-- **More in the details panel:** addresses, who connected, tries by port, ways out, routers and VPN routes. A program's
-  *Process Details* opens the panel Events shows, with its launch chain, under the map.
-- **Time travel on the map.** The toolbar's Time Travel works on the Network tab: the map follows the playhead.
-  *Show: New* keeps what wasn't there the week before.
-- **Networks you trust.** Name each network and say whether you trust it. On one you don't (a café, an airport), other
-  machines can't reach programs listening on all networks, the firewall asks about new connections, and anyone trying
-  to connect raises a story. A new network is not trusted until you decide.
+- **See your network.** The Network tab has a Map. On the left, the devices on your network and the addresses that
+  tried to connect. In the middle, the programs listening to the network and the programs going out. On the right,
+  the way out (the router or a VPN, a split tunnel as its own) and the destinations. Lines are thicker for more,
+  red dashed when blocked or refused, orange when new. The map shows the network the Mac is on now, in any range.
+- **Every device named.** Its maker from its hardware address (a registry shipped with Hostwatch, never looked up
+  online), its model and name from what it announces: iPhone, MacBook Pro, Apple TV, a printer.
+- **Select anything** to follow its flow and see its details: a destination shows every program that reached it, a
+  program its destinations, a device its addresses and the ports it tried. *Process Details* opens the panel Events
+  shows. Click "and 12 more" for all of them in a table. The window's search filters the map.
+- **Block from the map.** Right-click a device, an address, a port, a program or a domain. Devices and addresses are
+  blocked both ways in every firewall mode, and the router never. What you block turns red at once, and every block
+  is listed in Protection ▸ Network.
 - **Upload watch.** The map counts how much each program sends and where. *Data Sent* redraws it by bytes, and a
   **Large upload** story fires when a program sends 100 MB or more in an hour to somewhere it first reached today.
-- **Who tried to connect.** The Network tab shows how many addresses tried to connect to this Mac since you last
-  looked. Mark them as seen, or clear the refused tries or all of them.
-- **Home and work.** The map shows the network the Mac is on now, in any address range. Arriving at a new network
-  doesn't mark everyone as new, and a different router at the same address is not a false alarm.
-- **Steady and roomy.** Nothing on the map or in its lists jumps when you select it or when counts change, new items
-  join at the end. A taller window shows more in each column.
-- **Show more:** click any "and 12 more" and the map makes way for all of them in a table, with details and the same
-  menu. *Map* goes back.
-- **New stories from your network:** a port scan, a device first seen today reaching this Mac, and the router's
-  hardware address changing. Hostwatch only listens. It never scans your network.
+- **Networks you trust.** Name each network and say whether you trust it. On one you don't, like a café, other
+  machines can't reach programs listening on all networks, the firewall asks, and anyone trying to connect raises a
+  story. A new network waits for your answer, and moving between home and work raises no false alarms.
+- **Who tried to connect.** The Network tab's badge counts the addresses that tried to reach this Mac since you last
+  looked. Mark them as seen or clear them.
+- **Time travel on the map.** The toolbar's Time Travel works on the Network tab, and *Show: New* keeps only what
+  wasn't there the week before.
+- **New stories:** a port scan from your network, a new device reaching this Mac, the router's hardware address
+  changing, a large upload. Hostwatch only listens. It never scans your network.
+
+### Design
+
+- **Stories and Watch Closely in Liquid Glass:** a clear title bar, glass cards (the story's tinted by its severity),
+  and a floating glass bar for the actions. Domain details and Ask AI share the same cards.
+- **A quieter status bar.** The History size at the bottom of Events is plain text, still a click away from Finder.
+
+### Fixes
+
+- **Steady lists.** Nothing on the map or in its lists jumps when you select it or when counts change.
 
 ## 0.16.0 – A learning day, AI that checks first, and a window that fits
 

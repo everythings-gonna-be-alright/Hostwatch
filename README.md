@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/site/network.png" alt="Hostwatch network map: who reaches this Mac, what goes out, the way out and the destinations">
+</p>
+
+<p align="center">
   <img src="docs/images/site/hud.png" width="360" alt="Hostwatch HUD: live processes, connections and file opens, with a story on top">
 </p>
 
@@ -57,6 +61,16 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.17.0**
+- **🗺️ A network map** – who reaches this Mac, what listens and goes out, the way out (router or VPN) and where it
+  goes. Every device named by its maker and model, a selection follows its whole flow, and Time Travel replays it.
+- **📤 Upload watch** – how much each program sends and where, and a story when 100 MB leaves in an hour for
+  somewhere new.
+- **☕ Networks you trust** – on a café's Wi-Fi other machines can't reach your dev servers and the firewall asks.
+  Home and work are told apart by their routers.
+- **🚫 Block from the map** – a device, an address, a port, a program or a domain, red at once and listed in
+  Protection ▸ Network.
+
 **0.16.0**
 - **📚 A learning day** – for its first 24 hours Hostwatch learns what's typical on your Mac, so on day two only a
   handful of patterns need you. Shells, your secrets and anything unsigned are never learned.
@@ -69,15 +83,6 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 - **🗂️ Patterns that fit** – two-line rows, a sidebar that folds to icons, and a menu bar with every security switch.
 - **🚫 Fixes** – pausing the list no longer pauses detection, a pause your terminal doesn't notice, one question at a
   time, and one malicious file no longer flags all of GitHub or Telegram.
-
-**0.15.0**
-- **🛡️ Protection** – launches and protected files (SSH keys, credentials, keychains, your own folders) decided like
-  the firewall: Watch shows what would be stopped, Ask and Strict stop or pause it now. The firewall moved in beside.
-- **🤖 The AI you choose** – Apple's on-device model, any OpenAI-compatible server such as Ollama, or the Claude model
-  you pick, with better evidence: who started it, where it lives, and warning signs a local model can't overrule.
-- **👀 Classify what you see** – the shown rows or your selection, with a live list of every answer as it lands.
-- **🪟 A calmer HUD and window** – exceptions first, repeats folded, glass questions that name who started a program.
-- **🚫 Fixes** – a threat-list block no longer says "Blocked by you", and Allow works on every connection.
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 
@@ -96,7 +101,9 @@ Earlier versions: see the [changelog](CHANGELOG.md).
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.
-- **Network tab** – hostnames, first-seen domains, beaconing, raw-IP connections, and the firewall's verdict for each.
+- **Network tab** – a map of who reaches this Mac and where it connects, with bytes sent, devices named by maker and
+  model, and networks you trust or not. The list shows hostnames, first-seen domains, beaconing, raw-IP connections and
+  the firewall's verdict for each.
 - **Known threats** – daily public threat lists matched on your Mac, plus exploited macOS flaws vs. your updates.
 
 **🛡️ Stop what you didn't allow** (off until you turn it on)
