@@ -63,7 +63,7 @@
       "name": "Hostwatch",
       "applicationCategory": "SecurityApplication",
       "operatingSystem": "macOS 26 or later",
-      "softwareVersion": "0.16.0",
+      "softwareVersion": "0.17.0",
       "description": "Hostwatch is intrusion detection for macOS, free for everyone. It learns what's normal on your Mac, flags what isn't, connects small signs into the story of an attack, and can stop unknown connections. AI-ready, on-device.",
       "url": "https://hostwatch.tech/",
       "downloadUrl": "https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest",
@@ -195,50 +195,81 @@
               -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent 8%, #000 46%), linear-gradient(180deg, #000 58%, transparent 95%);
               mask-composite: intersect; }
   .backdrop .win { position: absolute; left: 0; right: 0; top: 140px; height: 735px; transform-style: preserve-3d;
-                   transform: rotateY(-24deg) rotateX(10deg) rotateZ(-2deg);
-                   animation: hw-drift 22s ease-in-out -7s infinite alternate; }  /* already moving on the first frame */
+                   transform: rotateY(-24deg) rotateX(10deg) rotateZ(-2deg); }  /* still once it has landed: no sway */
   .backdrop .part { position: absolute; inset: 0; }
   .backdrop .part img { width: 100%; display: block; }
-  /* Insets are top right bottom left, in % of the screenshot (the window is 31-1768 x 22-1079 of 1800 x 1121).
+  /* Each lifted control is its own small image (cut from the screenshot at the same place, images/site/hero/),
+     rounded by a plain radius: the browser moves seven small layers, nothing is clipped again while they fly. */
+  .backdrop .part:not(.base) { right: auto; bottom: auto; border-radius: 999px; overflow: hidden; }  /* left and top: each its own */
+  .backdrop .part:not(.base) img { height: 100%; }
+  /* Insets are top right bottom left, in % of the screenshot (the window is 31-1768 x 22-1081 of 1800 x 1123).
      The window is one dimmed layer; where a control was lifted out it has a hole, filled with that bar's
      own grey (raw pixel values, as the browser draws them) at the same dimming, so nothing shows twice and no box appears. */
   .backdrop .base { clip-path: inset(1.96% 1.78% 3.75% 1.72% round 12px);
-                    background: linear-gradient(180deg, #2d2e2e 8.1%, #252626 8.1%); }
+                    background: linear-gradient(180deg, #2d2e2e 8.3%, #252626 8.3%); }
   /* The window itself is a recording of the app at work (made-up demo data): events keep arriving. It sits where the
      window is inside the screenshot the lifted controls come from, so they line up. */
-  .backdrop .base .screen { position: absolute; inset: 0; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.7%202.7H46.5V7.4H8.7ZM59.0%202.7H70.8V7.4H59.0ZM75.6%202.7H94.4V7.4H75.6ZM2.5%209.0H16.5V11.9H2.5ZM17.1%209.0H37.8V11.9H17.1Z%27/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.7%202.7H46.5V7.4H8.7ZM59.0%202.7H70.8V7.4H59.0ZM75.6%202.7H94.4V7.4H75.6ZM2.5%209.0H16.5V11.9H2.5ZM17.1%209.0H37.8V11.9H17.1Z%27/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; }
+  .backdrop .base .screen { position: absolute; inset: 0; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.89%202.67H45.44V7.48H8.89ZM66.0%202.67H77.5V7.48H66.0ZM77.89%202.67H97.78V7.48H77.89ZM2.72%208.99H18.0V12.56H2.72ZM29.89%209.08H45.44V12.47H29.89ZM22.67%209.08H29.28V12.47H22.67ZM50.39%208.99H75.72V12.56H50.39Z%27%2F%3E%3C%2Fsvg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20fill-rule%3D%27evenodd%27%20fill%3D%27black%27%20d%3D%27M0%200H100V100H0ZM8.89%202.67H45.44V7.48H8.89ZM66.0%202.67H77.5V7.48H66.0ZM77.89%202.67H97.78V7.48H77.89ZM2.72%208.99H18.0V12.56H2.72ZM29.89%209.08H45.44V12.47H29.89ZM22.67%209.08H29.28V12.47H22.67ZM50.39%208.99H75.72V12.56H50.39Z%27%2F%3E%3C%2Fsvg%3E") 0 0 / 100% 100% no-repeat; }
   .backdrop .base video { position: absolute; left: 1.72%; top: 1.96%; width: 96.56%; height: 94.38%; object-fit: fill; display: block; }
-  .backdrop .tabs { clip-path: inset(2.7% 53.5% 92.6% 8.7% round 999px); }
-  .backdrop .count { clip-path: inset(2.7% 29.2% 92.6% 59.0% round 999px); }
-  .backdrop .tools { clip-path: inset(2.7% 5.6% 92.6% 75.6% round 999px); }
-  .backdrop .seg { clip-path: inset(9.0% 83.5% 88.1% 2.5% round 6px); }
-  .backdrop .chips { clip-path: inset(9.0% 62.2% 88.1% 17.1% round 999px); }
+  .backdrop .tabs { left: 8.889%; top: 2.671%; width: 36.556%; height: 4.809%; }
+  .backdrop .count { left: 66.0%; top: 2.671%; width: 11.5%; height: 4.809%; }
+  .backdrop .tools { left: 77.889%; top: 2.671%; width: 19.889%; height: 4.809%; }
+  .backdrop .seg { left: 2.722%; top: 8.994%; width: 15.278%; height: 3.562%; }
+  .backdrop .chips { left: 29.889%; top: 9.083%; width: 15.556%; height: 3.384%; }
+  .backdrop .kinds { left: 22.667%; top: 9.083%; width: 6.611%; height: 3.384%; }
+  .backdrop .group { left: 50.389%; top: 8.994%; width: 25.333%; height: 3.562%; }
   /* Where everything rests: every control in its own place in the window, as on a Mac. */
   /* One brightness for the window and its controls, so at rest it reads as one window. */
   .backdrop .part { opacity: 0.4; }
   /* When the page opens (pure CSS, no script), in one smooth phase: the window fades in where it is and the
      controls drift down a short way into their places, one shortly after another. */
   .backdrop .base  { animation: hw-fade 1.4s ease-out both; }
-  .backdrop .tabs  { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .15s both; }
-  .backdrop .tools { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .25s both; }
-  .backdrop .count { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .35s both; }
-  .backdrop .chips { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .45s both; }
-  .backdrop .seg   { animation: hw-land 1.6s cubic-bezier(.22,.7,.2,1) .55s both; }
-  /* The whole window glides in at the same time (on the outer box, so the sway inside keeps running). */
-  .backdrop { animation: hw-enter 1.8s cubic-bezier(.22,.7,.2,1) both; }
+  /* Motion, after the classic principles (staging, arcs, weight, follow-through), kept small for a UI. The controls
+     start almost with the window and arrive in reading order in an even ripple. Each piece moves in one continuous
+     curve that only slows down, never reversing: across and down settle first, depth settles later (two long
+     ease-outs, so the path arcs). Nothing goes past its place: a reversal reads as a stutter at this size, and below
+     the window's surface a control would be drawn behind the dimmed window and flash as if inactive. Wide controls are a little heavier.
+     --dx/--dy: where it comes from (outward from the window's middle), --lift: how far above it starts. */
+  .backdrop .part:not(.base) { animation: hw-xy var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
+                                          hw-z  var(--t) var(--d) cubic-bezier(.16,1,.3,1) both,
+                                          hw-in calc(var(--t) * .55) var(--d) cubic-bezier(.33,0,.2,1) both;
+                               /* Ready on the GPU before the first frame: no repaint while they fly. */
+                               will-change: transform, translate, opacity; backface-visibility: hidden; }
+  .backdrop .tabs  { --lift: 150px; --dx: -14px; --dy: -20px; --t: 1.4s;  --d: .16s; }
+  .backdrop .count { --lift: 120px; --dx: 10px;  --dy: -18px; --t: 1.25s; --d: .24s; }
+  .backdrop .tools { --lift: 135px; --dx: 16px;  --dy: -22px; --t: 1.3s;  --d: .32s; }
+  .backdrop .seg   { --lift: 125px; --dx: -16px; --dy: -14px; --t: 1.3s;  --d: .4s; }
+  .backdrop .kinds { --lift: 95px;  --dx: -8px;  --dy: -12px; --t: 1.15s; --d: .48s; }
+  .backdrop .chips { --lift: 115px; --dx: -4px;  --dy: -16px; --t: 1.25s; --d: .56s; }
+  .backdrop .group { --lift: 140px; --dx: 12px;  --dy: -18px; --t: 1.45s; --d: .64s; }
+  /* The whole window glides in at the same time, then rests. */
+  .backdrop { animation: hw-enter 1.3s cubic-bezier(.25,1,.5,1) both; }
+  /* The window glides in and comes to rest in one ease: no overshoot, so nothing moves once it has arrived. */
   @keyframes hw-enter { from { transform: translate(90px, 40px) scale(0.94); } }
   @keyframes hw-fade { from { opacity: 0; } }
-  @keyframes hw-land { from { transform: translateZ(120px); opacity: 0; } }
-  /* Then a slow, endless sway: two positions, eased both ways, so it never jerks. Starts where the window rests. */
-  @keyframes hw-drift { from { transform: rotateY(-24deg) rotateX(10deg) rotateZ(-2deg); }
-                        to   { transform: rotateY(-20.5deg) rotateX(8.5deg) rotateZ(-1.4deg) translateY(-5px); } }
-  @media (prefers-reduced-motion: reduce) { .backdrop, .backdrop .win { animation: none; } }
+  /* The landing's three strands, each on its own easing (see the animation above). Opacity reaches the controls'
+     resting 0.4 by the middle of the move, softly, so nothing pops or ghosts in late. */
+  @keyframes hw-xy { from { translate: calc(var(--dx, 0px) * var(--k, 1)) calc(var(--dy, -16px) * var(--k, 1)); } }
+  @keyframes hw-z  { from { transform: translateZ(calc(var(--lift, 120px) * var(--k, 1))); } }
+  @keyframes hw-in { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .backdrop, .backdrop .win, .backdrop .part, .backdrop .part:not(.base) { animation: none; } }
   .hero-shot { display: none; }
+  /* Narrow screens (phones, small tablets): the same live window and landing, under the headline instead of behind
+     it, at full width with a gentler tilt. Distances shrink with the window (--k), so the controls land as layers at
+     phone size rather than flying across it. Only the bottom fades: no text sits over it here. */
   @media (max-width: 900px) {
-    .backdrop { display: none; }
-    .hero { padding-bottom: 40px; }
-    .hero-shot { display: block; margin-top: 56px; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 95%); mask-image: linear-gradient(180deg, #000 55%, transparent 95%); }
+    .hero { padding-bottom: 40px; display: flex; flex-direction: column; }
+    .hero .wrap { order: 1; width: 100%; box-sizing: border-box; }  /* centred by auto margins, it would size to its text */
+    .backdrop { order: 2; position: relative; top: auto; left: auto; width: 108%; margin: 44px 0 0 -2%; height: auto;
+                perspective: 1100px; --k: .32;
+                -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 98%); mask-image: linear-gradient(180deg, #000 62%, transparent 98%);
+                -webkit-mask-composite: source-over; mask-composite: add; }
+    .backdrop .win { position: relative; top: 0; height: auto; aspect-ratio: 1800 / 1123;
+                     transform: rotateY(-14deg) rotateX(7deg) rotateZ(-1.2deg); }
+    .backdrop { animation-name: hw-enter-narrow; }
+    .hero-shot { display: none; }
   }
+  @keyframes hw-enter-narrow { from { transform: translate(28px, 18px) scale(0.95); } }
 
   .proof { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 0; position: relative; z-index: 2; background: var(--bg); }
   .proof .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -501,11 +532,13 @@
   <div class="backdrop" id="backdrop" aria-hidden="true">
     <div class="win">
       <div class="part base"><div class="screen"><video src="images/site/live.mp4" poster="images/site/live-poster.jpg" autoplay muted loop playsinline preload="auto"></video></div></div>
-      <div class="part seg"><img src="images/site/events.webp" alt=""></div>
-      <div class="part chips"><img src="images/site/events.webp" alt=""></div>
-      <div class="part tabs"><img src="images/site/events.webp" alt=""></div>
-      <div class="part tools"><img src="images/site/events.webp" alt=""></div>
-      <div class="part count"><img src="images/site/events.webp" alt=""></div>
+      <div class="part seg"><img src="images/site/hero/seg.webp" alt=""></div>
+      <div class="part chips"><img src="images/site/hero/chips.webp" alt=""></div>
+      <div class="part tabs"><img src="images/site/hero/tabs.webp" alt=""></div>
+      <div class="part tools"><img src="images/site/hero/tools.webp" alt=""></div>
+      <div class="part count"><img src="images/site/hero/count.webp" alt=""></div>
+      <div class="part kinds"><img src="images/site/hero/kinds.webp" alt=""></div>
+      <div class="part group"><img src="images/site/hero/group.webp" alt=""></div>
     </div>
   </div>
   <div class="wrap">
@@ -521,8 +554,8 @@
   <circle cx="4" cy="18.4" r="1.25" fill="#f7f8f8" fill-opacity="0.5"/>
   <rect x="7.5" y="17.50" width="7.6" height="1.8" rx="0.9" fill="#f7f8f8" fill-opacity="0.32"/>
 </svg></span><span>Host<span class="soft">watch</span></span></a>
-    <a class="pill" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/tag/v0.16.0" target="_blank" rel="noopener"
-       aria-label="Hostwatch 0.16.0: A learning day. Release notes on GitHub (opens in a new tab)"><b>0.16.0</b><span class="rt">A learning day</span><span class="sep"></span><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="rn">Release notes on GitHub</span><span class="ext">↗</span></a>
+    <a class="pill" href="https://github.com/everythings-gonna-be-alright/Hostwatch/releases/tag/v0.17.0" target="_blank" rel="noopener"
+       aria-label="Hostwatch 0.17.0: A map of your network. Release notes on GitHub (opens in a new tab)"><b>0.17.0</b><span class="rt">A map of your network</span><span class="sep"></span><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="rn">Release notes on GitHub</span><span class="ext">↗</span></a>
     <h1>Intrusion detection that <span class="quiet">understands your Mac</span></h1>
     <p class="sub">Learns what's normal on your Mac, flags what isn't, and <em>tells you the story.</em>
       <em>AI&#8209;ready</em>, <em>strict when you need it</em>, free at home and at work.</p>
