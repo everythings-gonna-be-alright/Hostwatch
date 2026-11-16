@@ -61,6 +61,9 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.17.1**
+- **🩹 Steadier with Claude Code** – resuming a Claude session (`claude --resume`) no longer quits Hostwatch.
+
 **0.17.0**
 - **🗺️ A network map** – who reaches this Mac, what listens and goes out, the way out (router or VPN) and where it
   goes. Every device named by its maker and model, a selection follows its whole flow, and Time Travel replays it.
