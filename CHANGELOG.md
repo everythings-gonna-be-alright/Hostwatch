@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.1 – Steadier with Claude Code
+## 0.17.1 – A map of your network
 
 ### Fixes
 
