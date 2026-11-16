@@ -108,6 +108,11 @@ Settings in `UserDefaults` (`tech.hostwatch.app`; `local.hostwatch.app` up to 0.
 `TimeTravel`, `MCPServer`, `PerformanceBudgetTests` (CPU, writes, memory against `tests/perf-baseline.json`, each
 alone in its own process). `./scripts/test.sh` is the gate; `--changed` and `--only` for the edit loop.
 
+## The demo film
+
+`scripts/demo-video/` draws the square 40 and 60 second films frame by frame from demo-build footage. `docs/VIDEO.md`
+says how to make them again, what each scene shows and the rules they follow.
+
 ## Decisions
 
 See `docs/adr/` for the decisions behind the shape: zone-based patterns, no blanket trust of interpreters,
