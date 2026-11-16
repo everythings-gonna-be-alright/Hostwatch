@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **No crash when an AI session resumes.** Starting `claude --resume` could quit Hostwatch: the new process sometimes
+  got the process number of an earlier Claude session it remembered, and two sessions with one number stopped the app.
+  Now the earlier one gives way, and a session seen twice is one session.
+
 ## 0.17.0 – A network map: who reaches this Mac, what leaves, and where
 
 ### New: the network map

@@ -286,6 +286,13 @@ final class AgentSessions: ObservableObject {
         if s.agent == .claude, s.title.isEmpty, let facts = Self.transcriptFacts(cwd: s.cwd, started: s.started) {
             s.title = facts.title ?? ""; s.firstPrompt = facts.firstPrompt ?? ""; s.branch = facts.branch ?? ""
         }
+        // An id is a pid, and pids come back: a session that ended long ago (kept for the MCP server) can hold the
+        // pid a new agent now has, and the process list can report an agent before its launch event does. Either
+        // way there is one session per id: a live one stays as it is, an ended one gives way to the new one.
+        if let old = index[s.id] {
+            if store[old].isLive && store[old].agent == s.agent { sessionOf[s.id] = s.id; return }
+            store.remove(at: old)
+        }
         store.insert(s, at: 0)
         sessionOf[s.id] = s.id
         reindex()
@@ -294,7 +301,8 @@ final class AgentSessions: ObservableObject {
     }
 
     private func reindex() {
-        index = Dictionary(uniqueKeysWithValues: store.enumerated().map { ($1.id, $0) })
+        // Never trap on a duplicate (a saved file from an older version may hold one): the newest, first, wins.
+        index = Dictionary(store.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func publish() { sessions = store }

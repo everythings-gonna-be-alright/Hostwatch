@@ -35,6 +35,31 @@ import Testing
         #expect(s.session(forPid: 102)?.id == 100 && s.session(forPid: 300) == nil)
     }
 
+    /// `claude --resume` crashed the app: a new agent got the pid of a session that had ended (pids come back), and
+    /// two sessions with one id trapped the index. Now the ended one gives way, and the index never traps.
+    @Test func aReusedPidReplacesTheEndedSession() throws {
+        let s = engine()
+        s.observe(exec(claude, pid: 100, ppid: 50, parent: zsh, args: "claude"))
+        alive.pids.remove(100)
+        s.checkEnded()
+        #expect(s.session(100)?.isLive == false)
+        alive.pids.insert(100)
+        #expect(s.observe(exec(claude, pid: 100, ppid: 51, parent: zsh, args: "claude --resume")) == 100)
+        let again = try #require(s.session(100))
+        #expect(again.isLive && again.events == 1)
+        #expect(s.sessions.filter { $0.id == 100 }.count <= 1)
+        alive.pids.remove(100)
+    }
+
+    /// The process list can report a running agent before its launch event arrives: one session, not two.
+    @Test func anAgentSeenTwiceIsOneSession() {
+        let s = engine()
+        s.learn([RunningProcessInfo(pid: 200, ppid: 1, start: 0, uid: 501, user: "me", name: "claude", path: claude,
+                                    args: "claude --resume", cpu: nil, cpuTime: 0, mem: 0, threads: 1)])
+        #expect(s.observe(exec(claude, pid: 200, ppid: 1, parent: "/sbin/launchd", args: "claude --resume")) == 200)
+        #expect(s.live.filter { $0.id == 200 }.count == 1)
+    }
+
     /// A child reparented to launchd (it daemonized) keeps its session: lineage is decided when it is born.
     @Test func reparentedChildrenStay() {
         let s = engine()
