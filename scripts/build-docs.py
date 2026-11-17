@@ -328,6 +328,51 @@ def kind_icons(html):
     return html
 
 
+# The threat model reads as a scorecard: each coverage word is a badge, ranked by strength, technique ids are chips,
+# and a bar above the tables counts the techniques by their strongest level.
+LEVELS = [("can stop", "Can stop"), ("alerts", "Alerts"), ("partial", "Partial"), ("flags", "Flags"),
+          ("recorded", "Recorded"), ("gap", "Gap")]
+SCOPE = {"yes": "alerts", "partly": "partial", "no": "gap"}
+
+
+def level_badge(word):
+    key = word.strip().lower()
+    label = dict(LEVELS).get(key, word.strip().capitalize())
+    return f'<span class="lvl lvl-{key.replace(" ", "-")}">{label}</span>'
+
+
+def threat_ui(html):
+    words = "|".join(k for k, _ in LEVELS)
+    cov = re.compile(rf'<td>((?:{words})(?:, (?:{words}))*)</td>', re.I)
+    html = cov.sub(lambda m: '<td class="cov">' + "".join(level_badge(w) for w in m.group(1).split(",")) + "</td>", html)
+    html = re.sub(r'<td>(Yes|Partly|No)\b[,:]?\s*', lambda m: f'<td class="scope"><span class="lvl lvl-{SCOPE[m.group(1).lower()]}">'
+                  f'{m.group(1)}</span> ', html)
+    html = re.sub(r'<a href="(https://attack\.mitre\.org/techniques/[^"]+)"([^>]*)>(T\d{4}(?:\.\d{3})?)</a>',
+                  r'<a class="tid" href="\1"\2>\3</a>', html)
+    for key, label in LEVELS[1:]:
+        html = html.replace(f"<li><b>{label}:</b>", f'<li class="lvl-def">{level_badge(key)}')
+    html = html.replace('<li><b>Can stop:</b>', f'<li class="lvl-def">{level_badge("can stop")}')
+    # Count each technique row once, at its strongest level.
+    counts = {k: 0 for k, _ in LEVELS}
+    for row in re.findall(r'<tr><td><a class="tid".*?</tr>', html):
+        found = re.findall(r'class="lvl lvl-([a-z-]+)"', row)
+        for k, _ in LEVELS:
+            if k.replace(" ", "-") in found:
+                counts[k] += 1
+                break
+    total = sum(counts.values())
+    if total:
+        segs = "".join(f'<span class="seg lvl-{k.replace(" ", "-")}" style="flex:{counts[k]}" title="{l}: {counts[k]}"></span>'
+                       for k, l in LEVELS if counts[k])
+        keys = "".join(f'<li>{level_badge(k)}<b>{counts[k]}</b></li>' for k, l in LEVELS if counts[k])
+        bar = (f'<div class="covbar" role="img" aria-label="{total} techniques: ' +
+               ", ".join(f"{counts[k]} {l.lower()}" for k, l in LEVELS if counts[k]) +
+               f'"><div class="covbar-track">{segs}</div><ul class="covbar-key" aria-hidden="true">{keys}'
+               f'<li class="covbar-total">{total} techniques</li></ul></div>')
+        html = re.sub(r'(<h4 id="execution-and-getting-in")', bar + r'\1', html, count=1)
+    return html
+
+
 def fold_details(chapter):
     """Features read as a short tour: each section shows its heading and lead, the rest folds under Details."""
     parts = re.split(r'(?=<h[34] id=")', chapter)
@@ -576,6 +621,38 @@ PAGE = """<!doctype html>
   @media (prefers-reduced-motion: reduce) {{ .docmark .bits {{ animation: none; }} }}
   .shelf {{ font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
             margin: 44px 0 14px; display: flex; gap: 12px; align-items: center; }}
+  .shelf-note {{ margin: -6px 0 16px; font-size: 14px; color: var(--muted); }}
+  .shelf-note a {{ color: var(--text); }}
+  /* Threat model: coverage badges from strongest (filled) to a gap (dashed), the same shades in the bar. */
+  .lvl {{ display: inline-block; font: 500 11.5px/18px var(--mono); padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+          border: 1px solid var(--line-strong); color: var(--muted); margin: 0 6px 4px 0; }}
+  .lvl-can-stop {{ background: var(--text); border-color: var(--text); color: var(--bg); }}
+  .lvl-alerts {{ border-color: rgba(255,255,255,0.55); color: var(--text); }}
+  .lvl-partial {{ background: linear-gradient(90deg, rgba(255,255,255,0.14) 50%, transparent 50%); color: #c9ccd1; }}
+  .lvl-flags {{ color: #c9ccd1; }}
+  .lvl-recorded {{ border-color: var(--line); color: var(--dim); }}
+  .lvl-gap {{ border-style: dashed; color: var(--dim); }}
+  td.cov {{ white-space: nowrap; padding-top: 8px; }}
+  td.scope .lvl {{ margin-bottom: 0; }}
+  a.tid {{ font: 500 12.5px var(--mono); white-space: nowrap; color: var(--text); text-decoration: none;
+           border-bottom: 1px solid var(--line-strong); }}
+  a.tid:hover {{ border-bottom-color: var(--text); }}
+  li.lvl-def {{ list-style: none; margin-left: -1.2em; }}
+  li.lvl-def .lvl {{ min-width: 88px; text-align: center; margin-right: 10px; }}
+  .covbar {{ margin: 26px 0 8px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); max-width: 76ch; }}
+  .covbar-track {{ display: flex; gap: 3px; height: 10px; }}
+  .covbar-track .seg {{ border-radius: 3px; border: 0; }}
+  .seg.lvl-can-stop {{ background: var(--text); }}
+  .seg.lvl-alerts {{ background: rgba(255,255,255,0.55); }}
+  .seg.lvl-partial {{ background: rgba(255,255,255,0.32); }}
+  .seg.lvl-flags {{ background: rgba(255,255,255,0.20); }}
+  .seg.lvl-recorded {{ background: rgba(255,255,255,0.11); }}
+  .seg.lvl-gap {{ background: transparent; outline: 1px dashed var(--line-strong); outline-offset: -1px; }}
+  .covbar-key {{ list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }}
+  .covbar-key li {{ margin: 0; display: flex; align-items: center; color: var(--text); font-size: 14px; }}
+  .covbar-key .lvl {{ margin: 0 8px 0 0; }}
+  .covbar-key b {{ font-weight: 500; }}
+  .covbar-key .covbar-total {{ margin-left: auto; color: var(--muted); }}
   .shelf::after {{ content: ""; flex: 1; height: 1px; background: var(--line); }}
   .steps {{ list-style: none; counter-reset: step; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px; padding: 0; margin: 0; position: relative; }}
@@ -1081,6 +1158,8 @@ def main():
         body = heading_icons(kind_icons(body))
         title = next(t for lvl, _, t in toc if lvl == 2)
         sid = next(i for lvl, i, _ in toc if lvl == 2)
+        if sid == "threat-model-and-attack-coverage":
+            body = threat_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
     ids = {i: ch["page"] for ch in chapters for _, i, _ in ch["toc"]}
@@ -1122,7 +1201,9 @@ def main():
     step_icons = {"download": '<path d="M8 2.5v7.5M4.8 7l3.2 3.2L11.2 7M3 13.5h10"/>',
                   "learn": '<path d="M2.5 3.5h4a1.5 1.5 0 0 1 1.5 1.5v8a1.2 1.2 0 0 0-1.2-1.2H2.5zM13.5 3.5h-4A1.5 1.5 0 0 0 8 5v8a1.2 1.2 0 0 1 1.2-1.2h4.3z"/>',
                   "shield": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/>'}
-    start = ('<h2 class="shelf">Start here</h2><ol class="steps">' + "".join(
+    start = ('<h2 class="shelf">Start here</h2>'
+             f'<p class="shelf-note">Your first day with Hostwatch. All of it is in <a href="{first}">Getting started</a>.</p>'
+             '<ol class="steps">' + "".join(
         f'<li><a href="{href}"><span class="step-icon"><svg class="gicon" viewBox="0 0 16 16" aria-hidden="true">{step_icons[k]}</svg></span>'
         f'<b>{t}</b><span>{d}</span></a></li>' for k, t, d, href in steps) + "</ol>")
     # What it does: the six feature groups, their icons and first sentence, each into Features.
