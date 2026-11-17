@@ -2,17 +2,19 @@
 
 ### Files Hostwatch writes
 
-Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three exceptions:
+Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these exceptions:
 
 - what you send to an AI you chose: Claude, or a custom AI server that isn't on this Mac
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
+- the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
+  lets connections through
 
 On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
 and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
 Hostwatch may use the local network.
 
-Devices, addresses and ports you block on the network map are pf rules the collector loads in an anchor of its own
+Devices, addresses and ports you block on the network map are rules in macOS's packet filter, in a section of its own
 (`com.apple/hostwatch-block`). They are removed when the collector stops, however it stops, and loaded again when the
 app connects.
 
@@ -24,7 +26,7 @@ Here is where everything lives:
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
-| `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
+| `~/Library/Logs/Hostwatch/` | `agent.log` (the collector's log when it was started with an admin password prompt instead of as a background service) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/tech.hostwatch.app.plist` | settings and exclusions (plain) |
 | `…/Hostwatch/network-map.json` | the network map's devices, incoming tries and outgoing connections (sealed) |
 | `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
@@ -36,17 +38,15 @@ sessions, rules, signing facts, the firewall and Claude Code guard logs, the MCP
 whole activity history (each compressed block sealed on its own, day files line by line). The point is *where the
 key lives*: another process running as you, an AI agent included, can't fetch it silently.
 
-- **Keychain** (today): the data key is a login-keychain item whose access list names only Hostwatch's code. Any
+- **Keychain:** the data key is a login-keychain item whose access list names only Hostwatch's code. Any
   other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
-- **Secure Enclave** (when the build can use it): the data key is wrapped by a key that never leaves the Enclave.
-  The wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
-  signed code, and the keychain item goes. Enclave keys need an entitlement that only a provisioned build carries, so
-  released builds use the keychain until that is in place. The code moves the key over by itself when it can.
-- **What it looks like:** a sealed file starts with `HWV1`, a sealed line with `HWV1:`. Files from earlier versions
-  are plain and still read. They're rewritten sealed the next time they're saved (history blocks when their file
-  is finished or scrubbed).
-- **Reading it yourself:** `zcat` and `zgrep` no longer work on the history files. Use
-  `Hostwatch --export-history [file or folder]`, which prints plain JSON lines through the key, and pipe it to `jq`.
+- **Secure Enclave:** on a build that can use it, the data key is wrapped by a key that never leaves the Enclave.
+  The wrapped key is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
+  signed code, and the keychain item is removed. Hostwatch moves the key there by itself when it can.
+- **What it looks like:** a sealed file starts with `HWV1`, a sealed line with `HWV1:`.
+- **Reading it yourself:** `zcat` and `zgrep` don't work on the history files. Use
+  `Hostwatch --export-history [file or folder]`, which prints plain JSON lines, and pipe it to `jq` (see
+  [Activity history](04-settings.md#activity-history)).
 - **Settings ▸ General ▸ Permissions ▸ Data on disk** shows the state and where the key is.
 - **If the key is lost** (the keychain item removed, the Enclave key gone): the sealed files can't be read. Hostwatch
   says so in Settings, starts a new key and begins again. A backup of the files is only useful together with your
@@ -64,15 +64,12 @@ For what Hostwatch defends against, its known weaknesses and its coverage of att
 **Who runs with which rights**
 
 - **The HUD:** runs as the logged-in user. Only the collector is elevated.
-- **The collector:** it is the app's own binary, run as root (`--collector-launcher … --collector`). Keep the app
+- **The collector:** it is the app's own binary, run as root. Keep the app
   somewhere only you can write to, for example `/Applications`. Otherwise anything that can modify it gains root on
   the next start.
-- **Hardened runtime:** the app is signed with `--options runtime`. Ad-hoc builds are too, and `build-app.sh` refuses
-  to finish without it.
-  - macOS then ignores `DYLD_INSERT_LIBRARIES` and similar variables, and loads only Apple-signed libraries into
-    Hostwatch.
-  - So code can't be injected into the app, the root collector or the MCP server.
-  - Verified: a test library injected into a build without the flag ran. With the flag, it doesn't.
+- **Hardened runtime:** the app is signed with the hardened runtime. macOS then ignores `DYLD_INSERT_LIBRARIES` and
+  similar variables, and loads only Apple-signed libraries into Hostwatch. So code can't be injected into the app, the
+  root collector or the MCP server. This was verified with a test library.
 
 **The collector channel**
 
@@ -82,14 +79,13 @@ Unix socket is a local file-like connection point that only processes on this Ma
 - **The folder:** root creates it with mode 0755. The collector refuses a folder it doesn't own, so no other process
   can create or replace the socket. A leftover socket is replaced. Any other file is not.
 - **The socket:** it belongs to the client user, with mode 0600. Other users cannot connect.
-- **Every connection is checked:** the collector asks the kernel who is connecting (peer credentials,
-  `LOCAL_PEERPID` and `LOCAL_PEERCRED`).
+- **Every connection is checked:** the collector asks the kernel which process and user are connecting.
   - When the app launched it, only that app process and user are accepted.
   - As a background service, only the user logged in at the Mac is accepted (the socket follows a user switch).
   - When started by hand, only the `sudo` user is accepted.
   - **And only Hostwatch's own code.** On the real socket the collector also asks the kernel for the peer's audit
     token and checks, through macOS code signing, that the process satisfies the collector's own designated
-    requirement: the same Team ID and bundle identifier (or, for an ad-hoc build, the very same binary). Being the
+    requirement: the same Team ID and bundle identifier. Being the
     right user isn't enough: another program of yours can't read the stream, answer firewall questions or change
     exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
@@ -106,7 +102,7 @@ Unix socket is a local file-like connection point that only processes on this Ma
 **Secrets in command lines**
 
 New-process events carry the **command line**. It is forwarded to the app, shown, given to Claude and **written to
-history**. So Hostwatch masks secrets first, with one rule set (`Secrets`). It masks:
+history**. So Hostwatch masks secrets first, with one set of rules. It masks:
 
 - Authorization and API-key headers, and cookies
 - `name=value` and `--name value` for password, token, secret, API/access/private key, auth, session and signature,
@@ -121,8 +117,6 @@ History shows a masked secret as `***`. AI prompts show `[REDACTED]`.
 - **Nothing unmasked goes to an AI:** every prompt is masked again right before it's sent, whatever built it. This
   covers Ask AI, pattern suggestions, rule proposals and domain details, on-device or Claude. MCP output is masked
   too.
-- **Older history is masked too:** once, in the background, finished history files are re-masked. Compressed ones are
-  rewritten with a new index. Every file is also masked again before it's compressed.
 - **Limits:** a secret in a shape no rule knows can still slip through. Environment variables are never forwarded.
 
 **What the collector can and can't do**
@@ -138,7 +132,7 @@ erase:
 
 - **Patterns, decisions and baseline:** `~/Library/Application Support/Hostwatch` and the baseline's state. That
   folder holds patterns, stories, domains, your rules, signing facts and the MCP token.
-- **Settings:** HUD, window, detection, AI, exclusions and history options (`tech.hostwatch.app` defaults).
+- **Settings:** HUD, window, detection, AI, exclusions and history options (`tech.hostwatch.app.plist`).
 - **Event history and logs:** `~/Library/Logs/Hostwatch`. In a custom history folder, only Hostwatch's `activity-*`,
   `metrics-*` and `processes-*` files are erased.
 
@@ -159,7 +153,7 @@ Full Disk Access stays granted.
 | What you see | What to do |
 |--------------|------------|
 | **Nothing appears / "Collector off"** | Start it from the menu bar icon. Check *Help ▸ Collector Log*. |
-| **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). Ad-hoc builds need the grant redone after every rebuild. |
+| **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). |
 | **The firewall turned itself to Watch** | Its web check through the relay failed twice. The status line in Protection ▸ Network Firewall says why. |
 
 ### Known limitations
@@ -167,10 +161,10 @@ Full Disk Access stays granted.
 - **Containers:** the firewall can't tell containers apart or name the program inside one. A container's connections
   are Docker's (or Podman's, OrbStack's…), judged per destination.
 - **Virtual machines:** VMs with bridged or NAT networking aren't covered at all.
-- **Very short connections:** they are caught by packet capture and by macOS's connection statistics. Only with the
-  `nettop` fallback, on a macOS without that framework, do they arrive ~2 s late, with a destination inferred from the
-  command line.
+- **Very short connections:** they are caught by packet capture and by macOS's connection statistics. On a macOS
+  without those statistics they arrive about 2 s late, with a destination guessed from the command line.
 - **Unconnected UDP:** UDP sent without connecting (`sendto`) has no destination to show.
 - **Listening sockets:** they aren't connections.
 - **File opens:** they are high volume. The rate cap drops excess file events, so add exclusions for noisy apps.
-- **`eslogger` output:** the JSON parser is defensive but may need updates across macOS releases.
+- **New macOS releases:** Hostwatch reads macOS's event monitor (`eslogger`), whose output can change between macOS
+  releases and may need a Hostwatch update.

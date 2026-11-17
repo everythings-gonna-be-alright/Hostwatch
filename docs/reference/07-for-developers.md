@@ -4,126 +4,123 @@
 
 - `CLAUDE.md` in the repository root: how to build, test and release, the git workflow, and the invariants that bite.
 - `docs/ARCHITECTURE.md`: the flow from the collector to the views and a map of every source file.
-- `docs/adr/`: the decisions behind the shape (one binary, patterns as decisions, no blanket trust of interpreters,
-  compressed history, signing, fewer patterns, one module with one-concept files).
+- `docs/DESIGN.md`: the rules for anything you can see, from Apple's guidelines to this app's words.
+- `docs/adr/`: the decisions behind the shape, one file each.
+
+`src/hostwatch` is the app and the collector, one binary. `tests/swift` holds the tests.
 
 ### Build & run
 
+You need macOS 26 and the Xcode 26 Command Line Tools, which bring Swift 6.2+ and the macOS 26 SDK:
+
 ```bash
-./scripts/build-app.sh
-open dist/Hostwatch.app      # a Developer ID build registers the collector service (one password); an ad-hoc build
-                             # starts the collector with an admin prompt each time
+xcode-select --install
+```
+
+```bash
+swift build                     # debug binary at .build/debug/Hostwatch (the command-line tools work from it)
+./scripts/build-app.sh          # dist/Hostwatch.app
+open dist/Hostwatch.app
+./scripts/package.sh            # a release: universal build, notarized, stapled and zipped
+```
+
+- **Signing:** `build-app.sh` signs with your Developer ID when the keychain has one. Such a build registers the
+  collector as a background service once (one password). A build without a Developer ID starts the collector with an
+  admin prompt each time it launches.
+- **Full Disk Access after a rebuild:** an ad-hoc signed build looks like a new app to macOS, so every rebuild needs
+  Full Disk Access granted again. Remove the old Hostwatch entry with − and add it again. To avoid this, build with a
+  stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./scripts/build-app.sh`.
+- **Running the collector by hand:** `./scripts/run-agent.sh` builds a release binary and runs
+  `sudo Hostwatch --collector` in Terminal, and the app connects to it instead of starting its own. Grant Full Disk
+  Access to Terminal for this. Options: `--no-files`, `--no-net`, `--net-interval <seconds>`, `--socket <path>`.
+  Started this way, the collector accepts connections only from the user who ran `sudo`.
+
+A quick check with the collector running:
+
+```bash
+/usr/bin/id                                # a process
+curl -sI https://example.com >/dev/null    # a process and a connection
+cat ~/.zshrc >/dev/null                    # a file
 ```
 
 ### Test
 
 ```bash
-./scripts/test.sh
-```
-
-This runs every automated test, in about 30 s. There are three suites.
-
-Only part of it, while working:
-
-```bash
+./scripts/test.sh                                 # everything, about 30 s, the same as the merge gate
 ./scripts/test.sh --changed                       # the suites that mention types declared in files changed since main
-./scripts/test.sh --only 'FewerPatterns|RuleText' # suites or tests matching a regex (swift test --filter)
+./scripts/test.sh --only 'FewerPatterns|RuleText' # suites or tests matching a regex
 ```
 
-`--changed` finds the types the changed source files declare and runs every suite whose file mentions one of them
-(a changed test file runs as itself). It is a shortcut for the edit loop. The merge gate still runs everything.
+- **Swift tests** (`tests/swift`, Swift Testing) cover patterns and risk, stories (attack chains must fire, everyday
+  dev work must stay quiet), code signing on real binaries made in a temp folder, domains, beaconing, the collector's
+  parsers, secret masking and the socket's checks. They use in-memory stores and a scratch signing database, so they
+  never touch your data.
+- **The demo build** is built and its tests run too.
+- **Performance budget** (`PerformanceBudgetTests.swift`) runs realistic workloads (the app's pipeline, the history
+  writer, the collector's reader, Time Travel) and compares CPU time, bytes written and memory with
+  `tests/perf-baseline.json`. A change fails when it writes more than +20%, keeps or peaks more than +30% memory, or
+  uses more than twice the CPU. After a change meant to cost more or less, record a new baseline on purpose and commit
+  it: `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Numbers depend on the Mac, so record one on yours if it is much
+  faster or slower.
+- **Merges are gated.** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and refuses the merge
+  if anything fails. Enable it after a fresh clone with `git config core.hooksPath scripts/hooks`.
 
-**Swift** (`tests/swift`, Swift Testing, `swift test`) covers:
+### Debug tools and environment variables
 
-- pattern grouping and risk rules
-- Stories: attack chains must fire as Dangerous, and everyday dev work and known false positives must stay quiet
-- code signing on real unsigned / ad-hoc / quarantined / replaced binaries made in a temp folder
-- new-domain baseline and badges
-- beaconing maths and rules, and raw-IP rules
-- Homebrew tools not trusted by signature, on a real Homebrew binary when one is installed
+Run each as `Hostwatch <flag>` from `.build/debug/Hostwatch` or from the app bundle. All of them only read, unless
+noted.
 
-Tests use in-memory engines and a scratch signing database, so they never touch your data.
+| Flag | What it does |
+|------|--------------|
+| `--signature-report <history.jsonl>` | How events group into patterns. `REPORT_NOSIGN=1` turns the signing rules off to measure their effect. |
+| `--regroup-report [folder]` | What the next launch's regrouping would do to the saved patterns. |
+| `--origin-report [history folder]` | How many kinds of origin each tool pattern has. `DAYS`, `HOURS`, `LEARN_DAYS` and `REPORT_TOP` shape it. |
+| `--story-replay <history.jsonl>` | Feeds recorded events through the story engine and prints the stories it would raise. `REPLAY_LEARN_MINUTES` sets the learning time (60 by default), `HOSTWATCH_OWN_BUNDLE` the app to treat as Hostwatch. |
+| `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
+| `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
+| `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
+| `--time-travel-probe [folder]` | Times reading and searching history for Time Travel. |
+| `--compress-history <folder>` | Compresses plain history files and prints sizes and timings. |
+| `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely (30 s by default) and prints the result. |
+| `sudo … --firewall-probe` | Checks that the firewall's relay works on this Mac, on two test destinations, for about 15 seconds. |
+| `sudo … --firewall-relay-test [seconds]` | Runs the relay and reports what passes through it. |
 
-**Collector** (`tests/swift/AgentTests.swift`) covers:
+The app starts these by itself: `--collector` (the collector, as root, with `--daemon`, `--owner-pid`, `--token-file`
+and `--socket`) and `--collector-launcher` (started by launchd, it spawns the collector).
 
-- DNS answers, pktap SYN and `nettop` parsing, with real lines captured on a Mac
-- destination inference
-- secret masking and exclusions
-- JSON output identical to the former Python collector
-- busiest processes and Hostwatch's own activity
-- the socket's permissions and peer checks
-- that helpers get a pipe as stdin and no inherited files
-
-**Performance budget** (`tests/swift/PerformanceBudgetTests.swift`) runs the same realistic workloads every time and
-measures CPU time, bytes written to disk and memory (kept and peak) against `tests/perf-baseline.json`. Each test runs
-alone, in its own process, after the rest, so other tests don't count.
-
-- **The workloads:** 40,000 events through the app's pipeline with a 15,000-pattern store saved on schedule, 100,000
-  events through the compressed history writer, 120,000 eslogger events through the collector's reader, and a Time
-  Travel page and a full search.
-- **The budget:** a change fails the tests when it writes more than +20%, keeps or peaks more than +30% memory, or uses
-  more than twice the CPU (plus small allowances, since CPU time depends on which cores macOS picks).
-- **What it catches:** the regressions found so far, such as the pattern store rewriting itself (87 MB written instead
-  of 4 MB), history written uncompressed (24 MB instead of 2 MB), and the collector's reader keeping what it read.
-- **A new baseline:** after a change meant to cost more (or less), record one on purpose and commit it:
-  `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Each workload runs 3 times and the highest figures are kept. Numbers are
-  from the debug build on the Mac they were recorded on. On a much faster or slower Mac, record a baseline there.
-
-**Local MRs are gated.** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and refuses the merge
-commit if anything fails.
-
-- **Enable it:** `git config core.hooksPath scripts/hooks`. It is already set in this repo. Run it again after a
-  fresh clone.
-- **Emergency bypass:** `git merge --no-verify`.
-
-Manual check with the collector running:
-
-```bash
-/usr/bin/id                          # ▶ process
-curl -sI https://example.com >/dev/null   # ▶ process + 🌐 connection
-cat ~/.zshrc >/dev/null              # 📄 file
-```
+| Variable | What it does |
+|----------|--------------|
+| `HOSTWATCH_SOCKET` | Points the app at another collector socket. Its folder then need not be root-owned. |
+| `HOSTWATCH_SIGNING_DB` | A scratch signing database, for tests and `--signing-check`. |
+| `HOSTWATCH_MCP_TOKEN` | The MCP server's access token, set by the registration command from Settings ▸ AI. |
+| `HOSTWATCH_PERF_RECORD=1` | Records a new performance baseline. |
+| `CLAUDE_PATH` | Where the `claude` command is, when it isn't in a usual place. |
+| `CODESIGN_IDENTITY` | The identity `build-app.sh` signs with. |
+| `DEMO=1`, `RELEASE=1` | `build-app.sh` makes the demo build, or keeps whole-module optimisation as releases do. |
 
 ### Demo mode (screenshots)
 
-Demo mode fills the app with made-up activity, for screenshots and the website. It exists only in the demo build. The
-normal build, and every release, has no demo code at all.
+Demo mode fills the app with made-up activity, for screenshots and the website. It exists only in the demo build.
+The normal build, and every release, has no demo code at all.
 
-**Build it:** `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app`. It uses the Swift flag `-DDEMO`, its
-own bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
+**Build it:** `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app`, with the Swift flag `-DDEMO`, its own
+bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
 
 **Run it:**
-`"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]`
+`"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|map|firewall|protection|watch]`
 
-- **What it shows:** the activity of a made-up user (`/Users/alex`). That is everyday work plus a fake download that
-  removes its quarantine, reads cookies and the keychain, adds a launch agent and calls home.
-- **Scene:** it opens the scene you asked for.
-- **`live`:** keeps adding events about once a second. This is for the website's background video, recorded with
-  `screencapture -v` and encoded with ffmpeg.
+- **What it shows:** a made-up user (`/Users/alex`) at everyday work, plus a fake download that removes its
+  quarantine, reads cookies and the keychain, adds a launch agent and calls home. It opens the scene you name.
+- **`live`** keeps adding events about once a second, for the website's background video.
 - **Isolation:** everything it keeps goes to `<folder>`. It never connects to the collector and starts nothing as
   root.
-- **Tests:** `./scripts/test.sh` also runs the demo tests against the demo build.
+- **Screenshot options:** `HOSTWATCH_DEMO_SIZE=full` fills the screen, `=fullscreen` enters full screen (the default
+  is 1280 × 780). `HOSTWATCH_DEMO_PAGE=files`, `found` or `firewall` opens another Protection page.
+  `HOSTWATCH_DEMO_MEASURE=sent` sizes the network map by data sent.
 
 ### Prototype notes
 
-Apple documents `eslogger` as a tool for exploring and prototyping, not an application API. Its JSON may change
-without notice.
-
-For a distributable tool, replace the collector with:
-
-- a native Endpoint Security system extension (`com.apple.developer.endpoint-security.client` entitlement)
-- a Network Extension for connections
-
-### Production architecture
-
-For production, implement a signed Endpoint Security system extension. Use XPC or a protected local IPC channel to
-communicate with this HUD.
-
-The system extension should:
-
-- subscribe only to the event types required
-- process callbacks quickly
-- avoid blocking ES callbacks on UI or disk I/O
-
-Apple's ES entitlement must be approved for the developer team. Do not disable SIP as a routine installation
-workaround.
+The collector reads Apple's `eslogger`, which Apple documents as a tool for exploring and prototyping, not an
+application API. Its output may change without notice. A production version would use a signed Endpoint Security
+system extension (it needs Apple's `com.apple.developer.endpoint-security.client` entitlement) and a Network
+Extension for connections, talking to the app over XPC. Don't disable SIP as a way around this.

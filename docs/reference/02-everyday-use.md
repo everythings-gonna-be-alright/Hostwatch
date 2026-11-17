@@ -2,8 +2,7 @@
 
 ### Controls at a glance
 
-Each kind of control has one home. Use this section as a map: it tells you where to find a command, and the sections
-below explain what each one does.
+Where to find each command. The sections below explain what they do.
 
 **Menu bar icon.** The icon is the app icon's list mark, tinted like your other menu bar icons. It is for a quick
 glance and quick actions.
@@ -71,8 +70,8 @@ history search, a double-click still opens that moment.
 
 **Events toolbar.** It holds the tab bar, Time Travel, Pause, **HUD** and search, in the same places on every tab.
 The row under it starts with one filter per event kind (launches, connections, files: click one to hide that kind,
-its tooltip has the count since launch), then Show and Group. Clear Events (⌘K) is in
-the Activity menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
+its tooltip has the count since launch), then Show and Group. Clear List (⌘K) is in
+the History menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
 patterns stay monospaced.
 
 ### HUD
@@ -110,11 +109,9 @@ Position and size are remembered. The HUD starts at 24 rows × 360 pt.
 
 **System row.** A row of CPU, memory, network and disk sits at the top unless you turn it off (Settings ▸ HUD).
 
-Quitting also stops the collector the app started.
-
 ### Window tabs
 
-The activity window has five tabs: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5. Network covers
+The activity window has five tabs: Events ⌘1 · Patterns ⌘2 · Protection ⌘3 · Stories ⌘4 · Network ⌘5. Network covers
 domains and the firewall.
 
 - **Badges:** a tab badges only what needs you. *Rules* counts what waits for your decision, *Network* the
@@ -187,18 +184,14 @@ takes the list recorded at or just before the playhead and rebuilds the moment b
 - "Running for" counts to the playhead.
 
 **How it is recorded for Time Travel.** Hostwatch records the list once a minute while the collector runs and history
-is on (Settings ▸ History). It goes into `History/processes-YYYYMMDD.jsonl`.
+is on (Settings ▸ History).
 
-- **What is stored:** every process each 30 minutes, and only what changed in between.
-- **Size:** a few tens of MB a day. The file is compressed when the day is over.
+- **Size:** a few tens of MB a day, compressed when the day is over.
 - **Limits and cleanup:** it is counted in the history size limit and removed together with the activity history.
-- **Gaps:** moments from before this recording started, or more than 3 minutes after the last list (Hostwatch closed),
+- **Gaps:** moments from before recording started, or more than 3 minutes after the last list (Hostwatch closed),
   say so.
 
-**How it works.** The app asks the collector for the list. The collector runs as root and reads every process with
-libproc (`proc_pid_rusage`, the task info and `KERN_PROCARGS2` for command lines). It answers with one list. CPU % is
-the difference between two lists. Nothing is asked while the list is closed or the window is hidden, except the
-once-a-minute list recorded for Time Travel.
+While the list is closed or the window is hidden, it isn't refreshed. Only the once-a-minute recording goes on.
 
 ### Heavy processes
 
@@ -230,21 +223,11 @@ already running when Hostwatch started aren't followed. Otherwise Xcode and brow
   The *Running Now* switch keeps a flame and the count while anything runs heavy. A process that calms down and
   turns heavy again shows again. In Time Travel and with Only These on, the banner stays.
 
-**Time Travel uses the same design.** The heavy list is recorded with each 5-second metrics sample, usually 0–3
-entries. At the playhead the banner reads *Running heavy at 14:32:05*. The launch rows carry the same badges as they
-did live, with the running time computed for that moment.
+**In Time Travel.** At the playhead the banner reads *Running heavy at 14:32:05*. The launch rows carry the same
+badges as they did live, with the running time computed for that moment.
 
 **Detection.** A heavy process that is unsigned, ad-hoc, quarantined or from a download/temp folder adds the story
 stage *Heavy untrusted process* (3 points, strong). This is the cryptominer pattern.
-
-**How it works.**
-
-- Every 5 s, the collector's existing sampler (libproc `proc_pid_rusage`, already used for the busiest processes) also
-  sends every process above a floor: ≥ 5% CPU or ≥ 300 MB, at most 50. Each comes with its start time.
-- Launch events carry the start time too (`pstart`). So a reused pid is never mistaken for the process that started.
-- Exits are checked with `kill(pid, 0)`.
-- Launches restored from history after a restart are followed too.
-- Nothing new is recorded, only numbers.
 
 ### Resource use (CPU, memory, network, disk)
 
@@ -278,24 +261,14 @@ deleted again count too.
 
 **Time Travel.** The timeline shows CPU (blue) and memory (green) lines under the activity bars, on the same time
 axis. The footer strip shows the slice around the playhead. The banner shows the values and the busiest process at
-the playhead. Times before this feature existed simply have no line.
+the playhead.
 
-**Recording.** Resource use is recorded while Hostwatch is open, one line per sample, in
-`History/metrics-YYYYMMDD.jsonl` (a few MB per day).
+**Recording.** Resource use is recorded while Hostwatch is open, a few MB per day. Past days are compressed, and they
+are deleted together with the activity history and by *Clear History*.
 
-- Past days are gzip-compressed.
-- Days older than the oldest activity history are deleted with it.
-- *Clear History* removes them too.
-
-**Sources.**
-
-- CPU, memory and network come from the kernel's counters. No special rights are needed.
-- The busiest processes and disk throughput come from the collector. As root it can see every user's processes
-  (`proc_pid_rusage`). The app alone can't see about a third of processes, all of them system ones.
-- The collector sends them every 5 s only to the live window, never into the event history.
-
-**Checking the numbers.** `Hostwatch --metrics-probe` prints three readings, for comparing with Activity Monitor or
-`top`.
+**Sources.** CPU, memory and network come from macOS's own counters. The busiest processes and disk throughput come
+from the collector, which can see every process (the app alone can't see about a third of processes, all of them system ones).
+They go only to the live window, never into the event history.
 
 ### Time Travel
 
@@ -340,12 +313,4 @@ everything recorded, not only the slice.
 - **Opening a match:** double-click it (or *Show in Timeline*) to open its moment, with it selected.
 - **Scope:** the scope bar switches between **All History** and **This Window** (only the shown slice).
 
-**How it reads history.** Only the slice you look at is loaded, so it stays fast.
-
-- In the plain (current) file, lines are in time order. So the offset of any moment is a binary search away.
-- Compressed files are found through their block index.
-- Bar heights come from byte counts (per-minute counts for compressed files).
-- Timings: the overview takes milliseconds, and a busy slice of ~20,000 events takes ≈0.3 s.
-- A search reads blocks newest first and parses only lines whose bytes contain the search text.
-
-`Hostwatch --time-travel-probe [dir]` prints these timings, searches included.
+Only the slice you look at is loaded, so Time Travel stays fast even with a large history.
