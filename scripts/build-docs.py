@@ -96,6 +96,21 @@ def convert(md, seen=None):
             out.append(f'<pre data-lang="{html.escape(lang)}"><code>' + html.escape("\n".join(code)) + "</code></pre>")
             i = j + 1
             continue
+        # GitHub's alerts, so they render the same there: "> [!NOTE]" (Info) and "> [!WARNING]", then "> " lines.
+        cm = re.match(r"^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$", line)
+        if cm:
+            flush()
+            kind = "warning" if cm.group(1) in ("WARNING", "CAUTION", "IMPORTANT") else "info"
+            j, body = i + 1, []
+            while j < n and lines[j].startswith(">"):
+                body.append(lines[j][1:].strip())
+                j += 1
+            paras = [" ".join(p.split("\n")) for p in "\n".join(body).split("\n\n") if p.strip()]
+            inner = "".join(f"<p>{inline(p)}</p>" for p in paras)
+            title = "Warning" if kind == "warning" else "Info"
+            out.append(f'<aside class="callout {kind}" role="note"><p class="callout-title">{title}</p>{inner}</aside>')
+            i = j
+            continue
         m = re.match(r"^(#{1,4})\s+(.*)$", line)
         if m:
             flush()
@@ -431,6 +446,19 @@ PAGE = """<!doctype html>
   .chapter > h4 {{ margin-top: 34px; }}
   /* A paragraph that opens with a bold label: the label on its own line, a small heading for what follows. */
   p.lead {{ margin-top: 28px; }}
+  /* Info and Warning boxes (GitHub's [!NOTE] and [!WARNING]): a tinted panel with a rule on the left and a
+     labelled title, so they stand out from the text without shouting. */
+  .callout {{ max-width: 76ch; margin: 22px 0; padding: 14px 18px 14px 46px; border-radius: 12px; position: relative;
+              border: 1px solid var(--line); background: rgba(255,255,255,0.035); }}
+  .callout p {{ margin: 6px 0 0; }}
+  .callout p:first-of-type + p {{ margin-top: 0; }}
+  .callout .callout-title {{ margin: 0 0 4px; font: 600 12px var(--mono); letter-spacing: .04em; text-transform: uppercase;
+                             color: var(--muted); }}
+  .callout::before {{ content: "i"; position: absolute; left: 16px; top: 15px; width: 18px; height: 18px; border-radius: 50%;
+                      font: 600 12px/18px var(--sans); text-align: center; color: var(--bg); background: var(--muted); }}
+  .callout.warning {{ border-color: rgba(255,159,10,0.35); background: rgba(255,159,10,0.07); }}
+  .callout.warning .callout-title {{ color: #ffb340; }}
+  .callout.warning::before {{ content: "!"; background: #ff9f0a; }}
   p.lead > b:first-child {{ display: block; font-size: 16px; margin-bottom: 6px; letter-spacing: -0.005em; }}
   p {{ line-height: 1.7; }}
   /* Lists stand apart from plain text: a clear round bullet, air between items. */

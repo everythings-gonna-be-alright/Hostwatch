@@ -693,6 +693,10 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
 - **Ask:** something new waits, with no time limit, while a window asks you **Allow / Block**.
 - **Strict:** something new is refused.
 
+> [!WARNING]
+> Strict refuses everything new that you haven't allowed, also while Hostwatch isn't open. Start with Watch to see
+> what it would block.
+
 **How a connection is judged.** Watch judges every TCP and UDP connection Hostwatch sees. The first rule that matches
 wins:
 
@@ -749,7 +753,9 @@ answers for you.
 - when a self-check of web access through the relay (every 30 s) fails twice. This also switches the firewall back
   to Watch.
 
-**Not covered:** programs running as root, macOS's DNS lookups, and the local network. Hostwatch itself always passes.
+> [!NOTE]
+> The firewall doesn't cover programs running as root, macOS's DNS lookups or the local network. Hostwatch itself
+> always passes.
 
 **Containers and virtual machines.** Docker Desktop runs containers in a Linux VM. On macOS, a container's connection
 is opened by Docker's backend (`com.docker.backend`), so the program inside (curl, pip…) can't be seen.
@@ -1275,6 +1281,10 @@ questions like what ran on your Mac yesterday, and it reads the answer from Host
    `claude mcp add --scope user hostwatch -e HOSTWATCH_MCP_TOKEN=<token> -- <path to Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`
    The command replaces any earlier `hostwatch` registration.
 3. The token is shown only once. Hostwatch keeps only a fingerprint of it (`mcp-token.sha256`), not the token itself.
+
+> [!WARNING]
+> The token is what keeps out MCP clients you didn't set up, so keep the command to yourself. If you think it leaked,
+> use *New Token…* in *Settings ▸ AI*: it invalidates earlier registrations.
 
 **What Claude Code can ask:**
 
