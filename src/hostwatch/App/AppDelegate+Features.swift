@@ -76,6 +76,10 @@ extension AppDelegate {
                 let pages: [String: RulesSegment] = ["files": .protectedFiles, "found": .protectionFound, "firewall": .firewall]
                 rulesTab.open(pages[ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? ""] ?? .protectionOverview)
                 model.windowTab = 4
+            case "welcome":
+                // HOSTWATCH_DEMO_PAGE=1…7: the welcome guide on that page, for screenshots.
+                activityWindow?.orderOut(nil)
+                openWelcomeGuide(start: (Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 1) - 1)
             case "watch":
                 if let e = cleanerLaunch {
                     openWatch(for: e)

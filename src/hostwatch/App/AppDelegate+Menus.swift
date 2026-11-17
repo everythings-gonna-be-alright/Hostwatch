@@ -627,13 +627,13 @@ extension AppDelegate {
         showWelcomeGuide()
     }
 
-    /// Help ▸ Welcome Guide: the five pages again.
-    @objc func showWelcomeGuide() {
+    /// Help ▸ Welcome Guide: the pages again, showing the settings as they are now.
+    @objc func showWelcomeGuide() { openWelcomeGuide(start: 0) }
+
+    func openWelcomeGuide(start: Int) {
         NSApp.activate(ignoringOtherApps: true)
         if let welcomeWindow { welcomeWindow.makeKeyAndOrderFront(nil); return }
-        let days = baseline.duration / 86_400
-        let learning = days <= 1 ? "24 hours" : "\(Int(days.rounded())) days"
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 600),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -642,7 +642,10 @@ extension AppDelegate {
         window.title = "Welcome to Hostwatch"
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         let close: () -> Void = { [weak window] in window?.close() }
-        window.contentView = NSHostingView(rootView: WelcomeGuideView(learning: learning, done: close))
+        window.contentView = NSHostingView(rootView: WelcomeGuideView(
+            context: WelcomeContext(baseline: baseline, classifier: classifier, claudeGuard: claudeGuard, intel: intel,
+                                    updates: updates, model: model),
+            start: start, done: close))
         window.center()
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.welcomeWindow = nil }

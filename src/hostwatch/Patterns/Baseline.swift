@@ -556,8 +556,25 @@ final class BaselineLearner: ObservableObject {
     /// One more day of learning.
     func extend() { setDuration(duration + 24 * 3600) }
 
+    static let offKey = "learningOff"
+
+    /// You turned learning off: nothing is learned for you, every new pattern waits for your decision.
+    var isOff: Bool { defaults.bool(forKey: Self.offKey) }
+
+    /// Turns the learning day off at once, without the last wave that would trust apps. The waves count is set far
+    /// past any length, so choosing a longer day later doesn't quietly resume it: Learn This Mac Again does.
+    func turnOff() {
+        defaults.set(true, forKey: Self.offKey)
+        if startedAt == nil { defaults.set(now(), forKey: "baselineStartedAt") }
+        defaults.set(100_000, forKey: "baselineWavesDone")
+        timer?.invalidate()
+        timer = nil
+        updatePhase()
+    }
+
     /// Learn this Mac again from now: for an install from before the learning day, or after big changes.
     func learnAgain() {
+        defaults.set(false, forKey: Self.offKey)
         defaults.set(now(), forKey: "baselineStartedAt")
         defaults.set(0, forKey: "baselineWavesDone")
         updatePhase()
@@ -666,6 +683,8 @@ final class BaselineLearner: ObservableObject {
             let left = max(0, (learningEnds ?? now()).timeIntervalSince(now()))
             let hours = Int((left / 3600).rounded(.up))
             return "Learning this Mac · \(hours >= 48 ? "\(hours / 24) days" : "\(hours) h") left · \(learnedCount) learned"
+        case .done where isOff && rules.isEmpty:
+            return "Learning is off · new patterns wait for you"
         case .done:
             let review = report?.reviewCount ?? 0
             return "\(rules.filter { !$0.paused }.count) rules trust \(trustedCount) patterns · \(review) to review"
