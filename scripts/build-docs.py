@@ -67,7 +67,16 @@ def convert(md, seen=None):
 
     def flush():
         if para:
-            out.append("<p>" + inline(" ".join(x.strip() for x in para)) + "</p>")
+            html = inline(" ".join(x.strip() for x in para))
+            # "**How it starts:** as a service…": the label becomes a small heading of its own line.
+            lead = re.match(r'<b>([^<]{1,60}?):</b>\s*', html)
+            if lead:
+                rest = html[lead.end():]
+                # It starts a line of its own now: a sentence. Only an all-lowercase first word (not macOS, iPhone).
+                if re.match(r'[a-z]+\b', rest): rest = rest[:1].upper() + rest[1:]
+                out.append(f'<p class="lead"><b>{lead.group(1)}</b>' + rest + "</p>")
+            else:
+                out.append("<p>" + html + "</p>")
             para.clear()
 
     def unique(s):
@@ -416,6 +425,14 @@ PAGE = """<!doctype html>
   ul, ol {{ padding-left: 22px; }}
   li {{ margin: 6px 0; }}
   li::marker {{ color: var(--dim); }}
+  /* Sections stand apart: a rule and air above each, as the Features groups have. */
+  .chapter > h3 {{ border-top: 1px solid var(--line); padding-top: 34px; margin-top: 56px; font-size: 22px; }}
+  .chapter > h1 + h3, .chapter > h2 + h3 {{ border-top: 0; padding-top: 0; margin-top: 28px; }}
+  .chapter > h4 {{ margin-top: 34px; }}
+  /* A paragraph that opens with a bold label: the label on its own line, a small heading for what follows. */
+  p.lead {{ margin-top: 28px; }}
+  p.lead > b:first-child {{ display: block; font-size: 16px; margin-bottom: 6px; letter-spacing: -0.005em; }}
+  p {{ line-height: 1.7; }}
   /* Lists stand apart from plain text: a clear round bullet, air between items. */
   main ul {{ list-style: none; padding-left: 0; margin: 16px 0; }}
   main ul > li {{ position: relative; padding-left: 22px; margin: 12px 0; }}
