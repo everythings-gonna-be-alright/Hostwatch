@@ -11,8 +11,7 @@
 1. Download `Hostwatch-<version>-macOS-universal.zip` from
    [Releases](https://github.com/everythings-gonna-be-alright/Hostwatch/releases/latest).
 2. Check the download: `shasum -a 256 Hostwatch-*.zip` must match the `.sha256` file next to it.
-3. Unzip and move `Hostwatch.app` to `/Applications`. Keep it somewhere only you can write to, because the collector
-   runs from it as root.
+3. Unzip and move `Hostwatch.app` to `/Applications`.
 4. Open it. It's signed with a Developer ID and notarized by Apple, so macOS opens it without a warning. To check:
    `spctl -a -vv /Applications/Hostwatch.app` says *Notarized Developer ID*.
 5. A setup window asks for **Full Disk Access**. Click *Open Settings…*, turn access on, then click **Quit & Reopen**.
@@ -21,6 +20,10 @@
    - *Later* / *Not Now* close the guide.
    - **Start Watching** continues once access is on.
 6. Enter your administrator password once. The collector starts and the learning day begins.
+
+> [!WARNING]
+> Keep Hostwatch.app in `/Applications`, or another folder only you can write to. The collector runs from it as root,
+> so anything able to change the app would get root rights the next time the collector starts.
 
 **The welcome guide:** on a fresh install, after the Full Disk Access setup, five short pages say what Hostwatch
 does, what each tab is for, how decisions work, what the learning day is, and how Protection starts. It shows once.
@@ -44,6 +47,10 @@ into the app, so there is nothing else to install.
    It stops and won't start at boot. You can turn off the registration at launch with *Register the collector when
    Hostwatch opens*.
 
+> [!NOTE]
+> To uninstall, first choose *Settings ▸ General ▸ Remove…*, so the collector stops and won't start at boot. Then
+> delete Hostwatch.app.
+
 **Where Full Disk Access goes:** macOS counts the collector's access as Hostwatch's, so Full Disk Access must be
 granted to **Hostwatch.app**. The app checks for it before asking for your password, and shows a guide if it's
 missing. If the collector log shows `ERR_NOT_PERMITTED`, use **Open Full Disk Access Settings**, enable Hostwatch,
@@ -63,8 +70,11 @@ Again* starts it over. The menu bar icon shows how long is left.
 
 During the learning day, what other signed programs do **again and again** (at least three times, over at least an
 hour) goes to the on-device AI, and its sure *Safe* is applied, recorded as the AI's decision ("learned during the
-learning day"). One-offs aren't typical, so they wait. What an AI may never allow alone (shells, interpreters, your
-sensitive files, high-risk patterns) is never learned. After the learning day, the AI's answers are suggestions again.
+learning day"). One-offs aren't typical, so they wait. After the learning day, the AI's answers are suggestions again.
+
+> [!NOTE]
+> Shells, interpreters, your sensitive files and high-risk patterns are never learned, not even during the learning
+> day. They wait for your own decision.
 
 Each wave sorts the New patterns seen so far into these groups:
 

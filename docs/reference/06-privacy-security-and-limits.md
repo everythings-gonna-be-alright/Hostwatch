@@ -138,6 +138,9 @@ erase:
 
 Reset also unregisters the collector service (your password), so the next launch starts as on a fresh install.
 
+> [!WARNING]
+> Reset can't be undone. What you choose to erase is deleted, your decisions and rules included.
+
 Then Hostwatch:
 
 1. stops the collector

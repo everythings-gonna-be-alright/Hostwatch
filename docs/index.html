@@ -200,8 +200,9 @@
   .backdrop .part img { width: 100%; display: block; }
   /* Each lifted control is its own small image (cut from the screenshot at the same place, images/site/hero/),
      rounded by a plain radius: the browser moves seven small layers, nothing is clipped again while they fly. */
-  .backdrop .part:not(.base) { right: auto; bottom: auto; border-radius: 999px; overflow: hidden; }  /* left and top: each its own */
-  .backdrop .part:not(.base) img { height: 100%; }
+  .backdrop .part:not(.base) { right: auto; bottom: auto; }  /* left and top: each its own */
+  /* Rounded on the image itself: a clipping parent (overflow hidden) on a moving 3D layer glitches in iOS Safari. */
+  .backdrop .part:not(.base) img { height: 100%; border-radius: 999px; }
   /* Insets are top right bottom left, in % of the screenshot (the window is 31-1768 x 22-1081 of 1800 x 1123).
      The window is one dimmed layer; where a control was lifted out it has a hole, filled with that bar's
      own grey (raw pixel values, as the browser draws them) at the same dimming, so nothing shows twice and no box appears. */
@@ -267,8 +268,19 @@
     .backdrop .win { position: relative; top: 0; height: auto; aspect-ratio: 1800 / 1123;
                      transform: rotateY(-14deg) rotateX(7deg) rotateZ(-1.2deg); }
     .backdrop { animation-name: hw-enter-narrow; }
+    /* Phones land the controls flat: a short slide and a small settle, no depth. Seven 3D layers over a video stutter
+       on a phone, and a control resting on the window's own plane flickers in iOS Safari (it can't tell which of two
+       layers on one plane is in front). The window keeps its gentle tilt. */
+    .backdrop .win { transform-style: flat; }
+    .backdrop .part:not(.base) { animation: hw-xy var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
+                                            hw-settle var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
+                                            hw-in calc(var(--t) * .55) var(--d) cubic-bezier(.33,0,.2,1) both;
+                                 will-change: translate, transform, opacity; }
     .hero-shot { display: none; }
   }
+  @keyframes hw-settle { from { transform: scale(1.04); } }
+  /* Again after the phone rules, so Reduce Motion stops the phone landing too. */
+  @media (prefers-reduced-motion: reduce) { .backdrop, .backdrop .win, .backdrop .part, .backdrop .part:not(.base) { animation: none; } }
   @keyframes hw-enter-narrow { from { transform: translate(28px, 18px) scale(0.95); } }
 
   .proof { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 0; position: relative; z-index: 2; background: var(--bg); }

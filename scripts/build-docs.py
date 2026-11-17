@@ -96,6 +96,21 @@ def convert(md, seen=None):
             out.append(f'<pre data-lang="{html.escape(lang)}"><code>' + html.escape("\n".join(code)) + "</code></pre>")
             i = j + 1
             continue
+        # GitHub's alerts, so they render the same there: "> [!NOTE]" (Info) and "> [!WARNING]", then "> " lines.
+        cm = re.match(r"^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$", line)
+        if cm:
+            flush()
+            kind = "warning" if cm.group(1) in ("WARNING", "CAUTION", "IMPORTANT") else "info"
+            j, body = i + 1, []
+            while j < n and lines[j].startswith(">"):
+                body.append(lines[j][1:].strip())
+                j += 1
+            paras = [" ".join(p.split("\n")) for p in "\n".join(body).split("\n\n") if p.strip()]
+            inner = "".join(f"<p>{inline(p)}</p>" for p in paras)
+            title = "Warning" if kind == "warning" else "Info"
+            out.append(f'<aside class="callout {kind}" role="note"><p class="callout-title">{title}</p>{inner}</aside>')
+            i = j
+            continue
         m = re.match(r"^(#{1,4})\s+(.*)$", line)
         if m:
             flush()
@@ -192,7 +207,7 @@ SECTION_ICONS = {
     "requirements": '<rect x="3.2" y="2.4" width="9.6" height="12" rx="1.6"/><path d="M6 1.6h4v1.8H6zM5.6 8.4l1.6 1.6 3.2-3.4"/>',
     "install": '<path d="M8 2.2v7.6M5 7l3 3 3-3"/><path d="M2.5 9.5v2.8c0 .8.6 1.4 1.4 1.4h8.2c.8 0 1.4-.6 1.4-1.4V9.5"/>',
     "built-in-collector": '<rect x="4" y="4" width="8" height="8" rx="1.4"/><path d="M6.4 1.8V4M9.6 1.8V4M6.4 12v2.2M9.6 12v2.2M1.8 6.4H4M1.8 9.6H4M12 6.4h2.2M12 9.6h2.2"/>',
-    "baseline-the-first-hour": '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/>',
+    "baseline-the-learning-day": '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/>',
     "after-a-restart": '<path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8"/><path d="M12 1.8v2.8H9.2"/>',
     # Everyday use
     "controls-at-a-glance": '<path d="M2 4.5h12M2 11.5h12"/><circle cx="5.5" cy="4.5" r="1.6" fill="var(--bg)"/><circle cx="10.5" cy="11.5" r="1.6" fill="var(--bg)"/>',
@@ -230,6 +245,24 @@ SECTION_ICONS = {
     "debug-tools-and-environment-variables": '<path d="M8 1.8l6.2 3.2L8 8.2 1.8 5z"/><path d="M1.8 8l6.2 3.2L14.2 8M1.8 11l6.2 3.2 6.2-3.2"/>',
 }
 GROUP_ICONS.update(SECTION_ICONS)
+
+# One per chapter, for the docs home's cards.
+CHAPTER_ICONS = {
+    "getting-started": '<circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.6l3.8 2.4-3.8 2.4z"/>',
+    "everyday-use": '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.2h12M4.4 4.6h.01M6 4.6h.01"/>',
+    "features": '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/>'
+                '<rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>',
+    "settings": '<path d="M2.5 5h11M2.5 11h11"/><circle cx="6" cy="5" r="1.7"/><circle cx="10" cy="11" r="1.7"/>',
+    "advanced-and-command-line": '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.6l2 1.6-2 1.6M8.6 10.4H11"/>',
+    "privacy-security-and-limits": '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>',
+    "for-developers": '<path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5"/>',
+    "threat-model-and-attack-coverage": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/><path d="M6 8l1.5 1.5L10.2 6.6"/>',
+}
+
+
+def chapter_icon(sid):
+    shape = CHAPTER_ICONS.get(sid)
+    return f'<svg class="gicon" viewBox="0 0 16 16" aria-hidden="true">{shape}</svg>' if shape else ""
 
 
 def group_icon(sid):
@@ -292,6 +325,51 @@ def kind_icons(html):
                 f'<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">{shape}</svg>'
                 f'<span class="sr">{label}</span></span>')
         html = html.replace(f"<td>{text}</td>", f"<td>{icon}</td>")
+    return html
+
+
+# The threat model reads as a scorecard: each coverage word is a badge, ranked by strength, technique ids are chips,
+# and a bar above the tables counts the techniques by their strongest level.
+LEVELS = [("can stop", "Can stop"), ("alerts", "Alerts"), ("partial", "Partial"), ("flags", "Flags"),
+          ("recorded", "Recorded"), ("gap", "Gap")]
+SCOPE = {"yes": "alerts", "partly": "partial", "no": "gap"}
+
+
+def level_badge(word):
+    key = word.strip().lower()
+    label = dict(LEVELS).get(key, word.strip().capitalize())
+    return f'<span class="lvl lvl-{key.replace(" ", "-")}">{label}</span>'
+
+
+def threat_ui(html):
+    words = "|".join(k for k, _ in LEVELS)
+    cov = re.compile(rf'<td>((?:{words})(?:, (?:{words}))*)</td>', re.I)
+    html = cov.sub(lambda m: '<td class="cov">' + "".join(level_badge(w) for w in m.group(1).split(",")) + "</td>", html)
+    html = re.sub(r'<td>(Yes|Partly|No)\b[,:]?\s*', lambda m: f'<td class="scope"><span class="lvl lvl-{SCOPE[m.group(1).lower()]}">'
+                  f'{m.group(1)}</span> ', html)
+    html = re.sub(r'<a href="(https://attack\.mitre\.org/techniques/[^"]+)"([^>]*)>(T\d{4}(?:\.\d{3})?)</a>',
+                  r'<a class="tid" href="\1"\2>\3</a>', html)
+    for key, label in LEVELS[1:]:
+        html = html.replace(f"<li><b>{label}:</b>", f'<li class="lvl-def">{level_badge(key)}')
+    html = html.replace('<li><b>Can stop:</b>', f'<li class="lvl-def">{level_badge("can stop")}')
+    # Count each technique row once, at its strongest level.
+    counts = {k: 0 for k, _ in LEVELS}
+    for row in re.findall(r'<tr><td><a class="tid".*?</tr>', html):
+        found = re.findall(r'class="lvl lvl-([a-z-]+)"', row)
+        for k, _ in LEVELS:
+            if k.replace(" ", "-") in found:
+                counts[k] += 1
+                break
+    total = sum(counts.values())
+    if total:
+        segs = "".join(f'<span class="seg lvl-{k.replace(" ", "-")}" style="flex:{counts[k]}" title="{l}: {counts[k]}"></span>'
+                       for k, l in LEVELS if counts[k])
+        keys = "".join(f'<li>{level_badge(k)}<b>{counts[k]}</b></li>' for k, l in LEVELS if counts[k])
+        bar = (f'<div class="covbar" role="img" aria-label="{total} techniques: ' +
+               ", ".join(f"{counts[k]} {l.lower()}" for k, l in LEVELS if counts[k]) +
+               f'"><div class="covbar-track">{segs}</div><ul class="covbar-key" aria-hidden="true">{keys}'
+               f'<li class="covbar-total">{total} techniques</li></ul></div>')
+        html = re.sub(r'(<h4 id="execution-and-getting-in")', bar + r'\1', html, count=1)
     return html
 
 
@@ -431,6 +509,19 @@ PAGE = """<!doctype html>
   .chapter > h4 {{ margin-top: 34px; }}
   /* A paragraph that opens with a bold label: the label on its own line, a small heading for what follows. */
   p.lead {{ margin-top: 28px; }}
+  /* Info and Warning boxes (GitHub's [!NOTE] and [!WARNING]): a tinted panel with a rule on the left and a
+     labelled title, so they stand out from the text without shouting. */
+  .callout {{ max-width: 76ch; margin: 22px 0; padding: 14px 18px 14px 46px; border-radius: 12px; position: relative;
+              border: 1px solid var(--line); background: rgba(255,255,255,0.035); }}
+  .callout p {{ margin: 6px 0 0; }}
+  .callout p:first-of-type + p {{ margin-top: 0; }}
+  .callout .callout-title {{ margin: 0 0 4px; font: 600 12px var(--mono); letter-spacing: .04em; text-transform: uppercase;
+                             color: var(--muted); }}
+  .callout::before {{ content: "i"; position: absolute; left: 16px; top: 15px; width: 18px; height: 18px; border-radius: 50%;
+                      font: 600 12px/18px var(--sans); text-align: center; color: var(--bg); background: var(--muted); }}
+  .callout.warning {{ border-color: rgba(255,159,10,0.35); background: rgba(255,159,10,0.07); }}
+  .callout.warning .callout-title {{ color: #ffb340; }}
+  .callout.warning::before {{ content: "!"; background: #ff9f0a; }}
   p.lead > b:first-child {{ display: block; font-size: 16px; margin-bottom: 6px; letter-spacing: -0.005em; }}
   p {{ line-height: 1.7; }}
   /* Lists stand apart from plain text: a clear round bullet, air between items. */
@@ -508,6 +599,90 @@ PAGE = """<!doctype html>
   .cards b {{ display: block; font-size: 17px; font-weight: 500; margin: 6px 0 4px; }}
   .cards span {{ display: block; color: var(--muted); font-size: 14px; line-height: 1.55; }}
   @media (max-width: 900px) {{ .cards {{ grid-template-columns: 1fr; }} }}
+  /* The docs home: the window beside the headline, then Start here, what it does, and the chapters by shelf. */
+  .hero.home {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 36px; align-items: center; }}
+  /* Beside the headline, a drawing of what docs are: a page, and a lens that shows what is underneath it. Inside
+     the lens the lines turn into bits that spell "Hostwatch" and drift slowly, still under Reduce Motion. Drawn with
+     the page's own colours so it sits in both the dark site and its lines. */
+  .hero-preview {{ margin: 0; display: flex; justify-content: center; }}
+  .hero-preview svg {{ width: 100%; max-width: 440px; height: auto; overflow: visible; }}
+  .docmark .page {{ fill: var(--bg-raise); stroke: var(--line-strong); stroke-width: 1.5; }}
+  .docmark .fold {{ fill: none; stroke: var(--line-strong); stroke-width: 1.5; stroke-linejoin: round; }}
+  .docmark .title {{ stroke: var(--text); stroke-opacity: .75; stroke-width: 6; stroke-linecap: round; }}
+  .docmark .line {{ stroke: var(--text); stroke-opacity: .16; stroke-width: 4; stroke-linecap: round; }}
+  .docmark .under {{ fill: var(--bg); }}
+  .docmark .bits text {{ font: 500 12.5px var(--mono); fill: var(--text); fill-opacity: .8; letter-spacing: .04em; }}
+  .docmark .bits {{ animation: bits-drift 7s linear infinite; }}
+  .docmark .ring {{ fill: none; stroke: var(--text); stroke-opacity: .8; stroke-width: 3; }}
+  .docmark .inner {{ fill: none; stroke: var(--text); stroke-opacity: .12; stroke-width: 1; }}
+  .docmark .glint {{ fill: none; stroke: var(--text); stroke-opacity: .35; stroke-width: 2; stroke-linecap: round; }}
+  .docmark .handle {{ stroke: var(--text); stroke-opacity: .8; stroke-width: 12; stroke-linecap: round; }}
+  @keyframes bits-drift {{ to {{ transform: translateY(-60px); }} }}
+  @media (prefers-reduced-motion: reduce) {{ .docmark .bits {{ animation: none; }} }}
+  .shelf {{ font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+            margin: 44px 0 14px; display: flex; gap: 12px; align-items: center; }}
+  .shelf-note {{ margin: -6px 0 16px; font-size: 14px; color: var(--muted); }}
+  .shelf-note a {{ color: var(--text); }}
+  /* Threat model: coverage badges from strongest (filled) to a gap (dashed), the same shades in the bar. */
+  .lvl {{ display: inline-block; font: 500 11.5px/18px var(--mono); padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+          border: 1px solid var(--line-strong); color: var(--muted); margin: 0 6px 4px 0; }}
+  .lvl-can-stop {{ background: var(--text); border-color: var(--text); color: var(--bg); }}
+  .lvl-alerts {{ border-color: rgba(255,255,255,0.55); color: var(--text); }}
+  .lvl-partial {{ background: linear-gradient(90deg, rgba(255,255,255,0.14) 50%, transparent 50%); color: #c9ccd1; }}
+  .lvl-flags {{ color: #c9ccd1; }}
+  .lvl-recorded {{ border-color: var(--line); color: var(--dim); }}
+  .lvl-gap {{ border-style: dashed; color: var(--dim); }}
+  td.cov {{ white-space: nowrap; padding-top: 8px; }}
+  td.scope .lvl {{ margin-bottom: 0; }}
+  a.tid {{ font: 500 12.5px var(--mono); white-space: nowrap; color: var(--text); text-decoration: none;
+           border-bottom: 1px solid var(--line-strong); }}
+  a.tid:hover {{ border-bottom-color: var(--text); }}
+  li.lvl-def {{ list-style: none; margin-left: -1.2em; }}
+  li.lvl-def .lvl {{ min-width: 88px; text-align: center; margin-right: 10px; }}
+  .covbar {{ margin: 26px 0 8px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); max-width: 76ch; }}
+  .covbar-track {{ display: flex; gap: 3px; height: 10px; }}
+  .covbar-track .seg {{ border-radius: 3px; border: 0; }}
+  .seg.lvl-can-stop {{ background: var(--text); }}
+  .seg.lvl-alerts {{ background: rgba(255,255,255,0.55); }}
+  .seg.lvl-partial {{ background: rgba(255,255,255,0.32); }}
+  .seg.lvl-flags {{ background: rgba(255,255,255,0.20); }}
+  .seg.lvl-recorded {{ background: rgba(255,255,255,0.11); }}
+  .seg.lvl-gap {{ background: transparent; outline: 1px dashed var(--line-strong); outline-offset: -1px; }}
+  .covbar-key {{ list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }}
+  .covbar-key li {{ margin: 0; display: flex; align-items: center; color: var(--text); font-size: 14px; }}
+  .covbar-key .lvl {{ margin: 0 8px 0 0; }}
+  .covbar-key b {{ font-weight: 500; }}
+  .covbar-key .covbar-total {{ margin-left: auto; color: var(--muted); }}
+  .shelf::after {{ content: ""; flex: 1; height: 1px; background: var(--line); }}
+  .steps {{ list-style: none; counter-reset: step; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px; padding: 0; margin: 0; position: relative; }}
+  .steps li {{ margin: 0; padding: 0; counter-increment: step; position: relative; }}
+  .steps li + li::before {{ content: ""; position: absolute; left: -14px; top: 38px; width: 14px; height: 1px; background: var(--line-strong); }}
+  .steps a {{ display: block; height: 100%; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface);
+              text-decoration: none; background: rgba(255,255,255,0.02); }}
+  .steps a:hover {{ border-color: var(--line-strong); background: rgba(255,255,255,0.04); }}
+  .step-icon {{ display: inline-flex; width: 40px; height: 40px; border-radius: 12px; align-items: center; justify-content: center;
+                border: 1px solid var(--line-strong); color: var(--text); margin-bottom: 12px; position: relative; }}
+  .step-icon .gicon {{ width: 20px; height: 20px; }}
+  .step-icon::after {{ content: counter(step); position: absolute; right: -8px; top: -8px; width: 18px; height: 18px; border-radius: 50%;
+                       background: var(--text); color: var(--bg); font: 600 11px/18px var(--mono); text-align: center; }}
+  .steps b, .tiles b {{ display: block; font-size: 16px; font-weight: 500; margin-bottom: 4px; color: var(--text); }}
+  .steps span:not(.step-icon), .tiles span {{ display: block; color: var(--muted); font-size: 14px; line-height: 1.55; }}
+  .tiles {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }}
+  .tiles a {{ display: block; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); text-decoration: none; }}
+  .tiles a:hover {{ border-color: var(--line-strong); background: rgba(255,255,255,0.02); }}
+  .tiles .gicon {{ width: 22px; height: 22px; color: var(--muted); margin-bottom: 10px; display: block; }}
+  .intro .cards {{ margin-top: 0; }}
+  .about {{ margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--line); }}
+  .about p, .about li {{ font-size: 14px; color: var(--muted); }}
+  .about h1, .about h2 {{ font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }}
+  .about .anchor {{ display: none; }}
+  @media (max-width: 900px) {{
+    .hero.home {{ grid-template-columns: 1fr; gap: 24px; }}
+    .hero-preview svg {{ max-width: 280px; }}
+    .steps, .tiles {{ grid-template-columns: 1fr; }}
+    .steps li + li::before {{ left: 32px; top: -14px; width: 1px; height: 14px; }}
+  }}
   .kind-icon {{ display: inline-flex; align-items: center; vertical-align: -3px; }}
   .sr {{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }}
   .progress {{ position: absolute; left: 0; bottom: -1px; height: 1px; width: 0; background: var(--text); opacity: .7; }}
@@ -983,6 +1158,8 @@ def main():
         body = heading_icons(kind_icons(body))
         title = next(t for lvl, _, t in toc if lvl == 2)
         sid = next(i for lvl, i, _ in toc if lvl == 2)
+        if sid == "threat-model-and-attack-coverage":
+            body = threat_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
     ids = {i: ch["page"] for ch in chapters for _, i, _ in ch["toc"]}
@@ -1001,12 +1178,72 @@ def main():
     intro_html, _ = convert(intro_md)
     blurbs = dict(re.findall(r"\*\*\[([^\]]+)\]\([^)]+\)\*\*: (.+)", listing))
     sentence = lambda t: (t[:1].upper() + t[1:]) if t else t      # "what you need…" → "What you need…"
-    cards = "".join(f'<a href="{ch["page"]}"><small>{group_icon(ch["id"])}{n:02d}</small><b>{ch["title"]}</b><span>{html.escape(sentence(blurbs.get(ch["title"], "")))}</span></a>'
-                    for n, ch in enumerate(chapters, 1))
-    hero = ('<div class="hero"><div class="label"><span>Docs</span></div>'
+    def card(n, ch):
+        return (f'<a href="{ch["page"]}"><small>{chapter_icon(ch["id"])}{n:02d}</small><b>{ch["title"]}</b>'
+                f'<span>{html.escape(sentence(blurbs.get(ch["title"], "")))}</span></a>')
+    numbered = list(enumerate(chapters, 1))
+    # Chapters in three shelves: using it, going deeper, building it.
+    shelves = [("Using Hostwatch", [c for c in numbered if c[0] <= 4]),
+               ("Going deeper", [c for c in numbered if c[1]["id"] in ("advanced-and-command-line", "privacy-security-and-limits",
+                                                                      "threat-model-and-attack-coverage")]),
+               ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"])]
+    cards = "".join(f'<h2 class="shelf">{name}</h2><div class="cards">' + "".join(card(n, ch) for n, ch in group) + "</div>"
+                    for name, group in shelves if group)
+    first = chapters[0]["page"]
+    features = next((ch for ch in chapters if ch["id"] == "features"), None)
+    fpage = features["page"] if features else first
+    # Start here: the three things a newcomer does, joined by a line.
+    steps = [("download", "Install", "Download, move it to Applications, allow Full Disk Access.", f"{first}#install"),
+             ("learn", "The learning day", "For its first day, Hostwatch learns what's normal on your Mac.",
+              f"{first}#baseline-the-learning-day"),
+             ("shield", "Turn on protection", "Watch shows what it would stop. Ask and Strict stop it.",
+              f"{fpage}#launch-and-file-protection-protection")]
+    step_icons = {"download": '<path d="M8 2.5v7.5M4.8 7l3.2 3.2L11.2 7M3 13.5h10"/>',
+                  "learn": '<path d="M2.5 3.5h4a1.5 1.5 0 0 1 1.5 1.5v8a1.2 1.2 0 0 0-1.2-1.2H2.5zM13.5 3.5h-4A1.5 1.5 0 0 0 8 5v8a1.2 1.2 0 0 1 1.2-1.2h4.3z"/>',
+                  "shield": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/>'}
+    start = ('<h2 class="shelf">Start here</h2>'
+             f'<p class="shelf-note">Your first day with Hostwatch. All of it is in <a href="{first}">Getting started</a>.</p>'
+             '<ol class="steps">' + "".join(
+        f'<li><a href="{href}"><span class="step-icon"><svg class="gicon" viewBox="0 0 16 16" aria-hidden="true">{step_icons[k]}</svg></span>'
+        f'<b>{t}</b><span>{d}</span></a></li>' for k, t, d, href in steps) + "</ol>")
+    # What it does: the six feature groups, their icons and first sentence, each into Features.
+    groups = []
+    flines = (CHAPTERS / features["file"]).read_text().split("\n") if features else []
+    for k, line in enumerate(flines):
+        if line.startswith("### "):
+            para = []
+            for nxt in flines[k + 1:]:
+                if not nxt.strip():
+                    if para: break
+                    continue
+                if nxt.startswith("#"): break
+                para.append(nxt.strip())
+            groups.append((line[4:].strip(), " ".join(para)))
+    tiles = "".join(f'<a href="{fpage}#{slug(t)}">{group_icon(slug(t))}<b>{html.escape(t)}</b>'
+                    f'<span>{html.escape(" ".join(d.split()))}</span></a>' for t, d in groups[:6])
+    does = f'<h2 class="shelf">What Hostwatch does</h2><div class="tiles">{tiles}</div>' if tiles else ""
+    # The docs mark: a page of lines, and a lens over it where the lines become bits ("Hostwatch" in ASCII, three
+    # bytes a row). The bits repeat every three rows, so drifting up by three rows (60) loops without a jump.
+    bytes_ = ["01001000 01101111 01110011", "01110100 01110111 01100001", "01110100 01100011 01101000"]
+    bits = "".join(f'<text x="226" y="{160 + 20 * i}">{bytes_[i % 3]}</text>' for i in range(11))
+    lines = "".join(f'<line class="line" x1="140" y1="{y}" x2="{140 + w}" y2="{y}"/>'
+                    for y, w in [(118, 160), (140, 140), (162, 168), (184, 120), (214, 160), (236, 150), (258, 96),
+                                 (288, 164), (310, 130)])
+    docmark = ('<svg class="docmark" viewBox="0 0 480 400" role="img" aria-label="A page of the docs under a magnifying lens">'
+               '<path class="page" d="M124 40H300l30 30V326a14 14 0 0 1-14 14H124a14 14 0 0 1-14-14V54a14 14 0 0 1 14-14z"/>'
+               '<path class="fold" d="M300 40v22a8 8 0 0 0 8 8h22"/>'
+               '<line class="title" x1="140" y1="86" x2="246" y2="86"/>' + lines +
+               '<clipPath id="lens"><circle cx="300" cy="234" r="66"/></clipPath>'
+               '<g clip-path="url(#lens)"><rect class="under" x="230" y="164" width="140" height="140"/>'
+               f'<g class="bits">{bits}</g></g>'
+               '<circle class="inner" cx="300" cy="234" r="58"/><circle class="ring" cx="300" cy="234" r="68"/>'
+               '<path class="glint" d="M262 214a42 42 0 0 1 24-24"/>'
+               '<line class="handle" x1="352" y1="286" x2="398" y2="332"/></svg>')
+    hero = ('<div class="hero home"><div class="hero-text"><div class="label"><span>Docs</span></div>'
             '<h1>How Hostwatch works. <span class="quiet">Every feature, setting and rule.</span></h1>'
             "<p>Built from the same reference that lives in the repository, so it's always current. New here? Start with "
-            f'<a href="{chapters[0]["page"]}">{chapters[0]["title"]}</a>, then read on in order.</p></div>')
+            f'<a href="{chapters[0]["page"]}">{chapters[0]["title"]}</a>, then read on in order.</p></div>'
+            f'<figure class="hero-preview">{docmark}</figure></div>')
     docs_url = f"{SITE}docs/"
     docs_desc = ("How Hostwatch works: every feature, setting and rule of the intrusion detection app for macOS, "
                  "from installing to stories, the firewall, AI and Time Travel.")
@@ -1023,7 +1260,7 @@ def main():
         **common, title="Hostwatch docs: every feature, setting and rule", edit_url=f"{REPO}/blob/main/docs/reference.md",
         page="index.html", toc=menu(chapters, None), hero=hero, url=docs_url, description=html.escape(docs_desc),
         markdown=f"{SITE}reference.md", jsonld=ld(*nodes),
-        body=f'<section class="chapter intro">{intro_html}<div class="cards">{cards}</div></section>{faq_block}'))
+        body=f'<section class="chapter intro">{start}{does}{cards}<div class="about">{intro_html}</div></section>{faq_block}'))
     sitemap = [(SITE, last_changed(ROOT / "docs" / "index.html"), "1.0"), (docs_url, last_changed(SRC), "0.9")]
 
     # One page per chapter.
