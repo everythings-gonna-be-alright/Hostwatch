@@ -218,7 +218,7 @@ SECTION_ICONS = {
     "test": '<circle cx="8" cy="8" r="6.2"/><path d="M5.4 8.1l1.8 1.8 3.4-3.6"/>',
     "demo-mode-screenshots": '<path d="M2 5.6c0-.8.6-1.4 1.4-1.4h1.8l1.2-1.6h3.2l1.2 1.6h1.8c.8 0 1.4.6 1.4 1.4v6c0 .8-.6 1.4-1.4 1.4H3.4c-.8 0-1.4-.6-1.4-1.4z"/><circle cx="8" cy="8.6" r="2.4"/>',
     "prototype-notes": '<path d="M10.8 2.2l3 3-8 8H2.8v-3z"/><path d="M9.2 3.8l3 3"/>',
-    "production-architecture": '<path d="M8 1.8l6.2 3.2L8 8.2 1.8 5z"/><path d="M1.8 8l6.2 3.2L14.2 8M1.8 11l6.2 3.2 6.2-3.2"/>',
+    "debug-tools-and-environment-variables": '<path d="M8 1.8l6.2 3.2L8 8.2 1.8 5z"/><path d="M1.8 8l6.2 3.2L14.2 8M1.8 11l6.2 3.2 6.2-3.2"/>',
 }
 GROUP_ICONS.update(SECTION_ICONS)
 

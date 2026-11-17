@@ -98,9 +98,10 @@ Earlier versions: see the [changelog](CHANGELOG.md).
 - **Heavy processes** – programs you started that keep eating CPU or memory stand out (and miners score).
 
 **🧠 Learn what's normal**
-- **Baseline** – the first hour learns your Mac: one rule per trusted app, nothing unsigned or downloaded.
-- **Patterns** – events grouped by behaviour and by program. Ordinary ones are decided automatically, so few need you.
-- **Patterns tab** – the table of all patterns, *Needs You* (what's left for you), *Rules* (what decides automatically), *Decisions* (who decided what). **Protection** is its own tab.
+- **A learning day** – for its first day Hostwatch learns what's typical on your Mac. Shells, your secrets and
+  anything unsigned are never learned.
+- **Patterns** – events grouped by behaviour and by program. Ordinary ones are decided automatically, so few need
+  you. *Needs You* lists what's left, *Rules* what decides automatically, *Decisions* who decided what.
 
 **🚨 Spot what's wrong**
 - **Stories** – related suspicious steps become one story you can open event by event.
@@ -132,8 +133,6 @@ Earlier versions: see the [changelog](CHANGELOG.md).
 3. Enter your administrator password once: it registers the collector as a background service, which macOS
    starts at boot from then on. Done.
 
-Or build it: `./scripts/build-app.sh && open dist/Hostwatch.app` (Xcode 26 or the Command Line Tools).
-
 **Requirements:** macOS 26+. Optional: Apple Intelligence (on-device AI),
 [Claude Code](https://claude.com/claude-code) (Claude AI and MCP).
 
@@ -163,12 +162,11 @@ shown. They talk over one Unix socket that accepts nothing but Hostwatch's own s
   through itself (macOS's own pf, no extension or paid entitlement) and asks the app what to do.
 - **Watch Closely** is a second, deeper recording of one process, on request.
 
-The collector is a background service: registered once, approved once, started by macOS at boot. Everything stays on
-your Mac, except what you send to Claude and a daily update check (both optional).
-
 ## Privacy
 
-- History, patterns and stories stay in `~/Library/Application Support/Hostwatch` and `~/Library/Logs/Hostwatch`.
+- Everything stays on your Mac, encrypted on disk, in `~/Library/Application Support/Hostwatch` and
+  `~/Library/Logs/Hostwatch`. Only what you send to an AI you chose, a daily update check, the daily threat-list
+  downloads and, while the firewall is on, a check that it still lets connections through leave it.
 - Passwords and tokens are masked before they're recorded, and again before anything goes to an AI.
 - The firewall reads only which server an app asks for. It never decrypts traffic.
 - Watch Closely records only the process you pick, only while it runs, and keeps it on your Mac until you ask AI.
@@ -179,21 +177,15 @@ your Mac, except what you send to Claude and a daily update check (both optional
 ## Limitations
 
 A working prototype, not a commercial product. It uses Apple's `eslogger` (a prototyping tool), and the optional
-process hold is best effort. The firewall
-covers your own apps, not programs running as root or macOS's own DNS lookups. Containers are judged by
-destination (which program inside made a connection can't be seen). VMs with bridged networking aren't covered.
+process hold is best effort. The firewall covers your own apps, not programs running as root or macOS's own DNS
+lookups. Containers are judged by destination (which program inside made a connection can't be seen). VMs with
+bridged networking aren't covered.
 
 ## Development
 
-Start with [`CLAUDE.md`](CLAUDE.md) (build, test, workflow, invariants), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the map) and [`docs/adr/`](docs/adr/) (the decisions).
-
-```bash
-./scripts/test.sh       # all tests
-./scripts/package.sh    # tests + universal build + zip
-```
-
-`src/hostwatch` is the app and collector, `tests/swift` the tests. Every rule, threshold and setting is
-in **[docs/reference.md](docs/reference.md)**, changes in **[CHANGELOG.md](CHANGELOG.md)**.
+To build Hostwatch from source, run its tests or contribute, see
+[For developers](docs/reference/07-for-developers.md). Every feature, rule and setting is in the
+[reference](docs/reference.md), changes in the [changelog](CHANGELOG.md).
 
 ## License
 

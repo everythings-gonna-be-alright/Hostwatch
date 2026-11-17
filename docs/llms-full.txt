@@ -13,10 +13,8 @@ company, under the [PolyForm Shield License 1.0.0](https://polyformproject.org/l
 thing the licence doesn't allow is using the code to make a product or service that competes with Hostwatch, such as your own server or cloud
 edition of it. Versions up to 0.11.1 were released under the MIT license.
 
-A paid edition will be only for companies. It will offer two things:
-
-- **Fleet server:** a server that watches a whole fleet of Macs from one place.
-- **Cloud:** a hosted cloud (SaaS) version.
+A paid edition will be only for companies: a server that watches a whole fleet of Macs from one place, and a hosted
+cloud (SaaS) version.
 
 
 
@@ -26,18 +24,9 @@ A paid edition will be only for companies. It will offer two things:
 
 ### Requirements
 
-Before you install, check that your Mac has these:
-
-- **macOS 26 or later.** Hostwatch uses the Liquid Glass UI, and `eslogger` is included with this version.
-- **Xcode 26 Command Line Tools.** They provide Swift 6.2+ and the macOS 26 SDK.
-- **Full Disk Access for Hostwatch.app.** If you use run-agent.sh, grant it to Terminal instead.
+- **macOS 26 or later.**
+- **Full Disk Access for Hostwatch.app.** The setup window walks you through it.
 - **Your administrator password, once.** It registers the collector as a background service.
-
-Install the command line tools if needed:
-
-```bash
-xcode-select --install
-```
 
 ### Install
 
@@ -47,91 +36,59 @@ xcode-select --install
 3. Unzip and move `Hostwatch.app` to `/Applications`. Keep it somewhere only you can write to, because the collector
    runs from it as root.
 4. Open it. It's signed with a Developer ID and notarized by Apple, so macOS opens it without a warning. To check:
-   `spctl -a -vv /Applications/Hostwatch.app` says *Notarized Developer ID*. Builds from 0.11.0 and earlier weren't
-   notarized and need **System Settings ▸ Privacy & Security ▸ Open Anyway** once.
+   `spctl -a -vv /Applications/Hostwatch.app` says *Notarized Developer ID*.
 5. A setup window asks for **Full Disk Access**. Click *Open Settings…*, turn access on, then click **Quit & Reopen**.
    Your other choices in this window:
    - **Start Without Access** watches the network only.
    - *Later* / *Not Now* close the guide.
    - **Start Watching** continues once access is on.
-6. Enter your administrator password once. The collector starts and the first-hour baseline begins.
-
-### Built-in collector
-
-The collector is the part of Hostwatch that runs with administrator (root) rights and gathers activity through
-`eslogger`. It is built into the app, so there is no separate script to install.
-
-**How it starts:** as a background service, approved once.
-
-1. The first time, Hostwatch registers the collector as a launchd service that ships inside the app
-   (`Contents/Library/LaunchDaemons/tech.hostwatch.collectord.plist`). macOS asks for your administrator password
-   once, and may list the collector under System Settings ▸ General ▸ Login Items ▸ *Allow in the Background*, where
-   you approve it once.
-2. From then on macOS starts the collector itself: at boot, after a crash, after an update. It runs as root, and
-   Hostwatch connects to its socket (`/var/run/hostwatch/collector.sock`) when it opens. No password at launch.
-3. The service runs `Hostwatch --collector-launcher self --collector --daemon`: the launcher spawns the agent, so
-   Hostwatch.app stays the responsible process for Full Disk Access. The agent serves the user at the Mac.
-4. If macOS ever refuses to start the registered service (it happens when the app bundle is replaced at the very
-   moment the service restarts), Hostwatch notices within half a minute of opening and registers it again, with
-   your password.
-5. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
-   You can turn the registration at launch off with *Register the collector when Hostwatch opens*.
-
-**Coming from 0.12.0 or earlier:** 0.13.0 has a new identity (`tech.hostwatch.app`). Your settings are carried
-over on the first launch. macOS keys Full Disk Access and the keychain by identity, so grant Full Disk Access once
-more (the setup window appears by itself) and choose *Always Allow* in the one keychain dialog for *Hostwatch data
-key*. The collector service is registered again, with your password once.
-
-A build without a Developer ID signature (your own build from source) has no service: it starts the collector as a
-temporary launchd job after an administrator prompt, every launch.
-
-**Where Full Disk Access goes:** macOS treats Hostwatch.app as the responsible process for eslogger. So Full Disk
-Access must be granted to **Hostwatch.app**.
-
-**Where the log goes:** the service writes `/var/log/hostwatch-collector.log`. A collector started by the admin
-prompt (a build without a Developer ID) writes `~/Library/Logs/Hostwatch/agent.log`. Open it with *Help ▸ Collector
-Log*.
-
-**Stopping and safety:**
-
-- **Remove…** (the service): unregisters it with your password. It stops and won't start at boot. **Stop** (an
-  admin-prompted collector) sends a shutdown command carrying a random token, written with mode 0600 to
-  `~/Library/Application Support/Hostwatch/collector.token`. The service ignores that command.
-- **If the app quits or dies:** the service keeps running but goes idle after 15 s with no client (no `eslogger`,
-  no packet capture, firewall off) until Hostwatch connects again. An admin-prompted collector exits within about
-  2 s if the app that launched it dies (`--owner-pid`).
-
-**Full Disk Access problems:**
-
-- **The error:** `eslogger` needs Full Disk Access. If the log shows `ERR_NOT_PERMITTED`, use
-  **Open Full Disk Access Settings** and enable Hostwatch, then start the collector again.
-- **Checked in advance:** the app checks for this before asking for your password. If access is missing, it shows a
-  guide.
-- **After every rebuild:** builds are ad-hoc signed by default, so **every rebuild needs the grant redone**. Remove the
-  old Hostwatch entry with − and add it again.
-- **To avoid this:** build with a stable identity:
-  `CODESIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./scripts/build-app.sh`.
+6. Enter your administrator password once. The collector starts and the learning day begins.
 
 **The welcome guide:** on a fresh install, after the Full Disk Access setup, five short pages say what Hostwatch
 does, what each tab is for, how decisions work, what the learning day is, and how Protection starts. It shows once.
 **Help ▸ Welcome Guide** opens it again at any time.
 
-**Running it by hand:** `./scripts/run-agent.sh` runs the collector from Terminal (`sudo Hostwatch --collector`).
-The app detects it and does not start a second one.
+### Built-in collector
+
+The collector is the part of Hostwatch that runs with administrator (root) rights and gathers activity. It is built
+into the app, so there is nothing else to install.
+
+**How it starts:** as a background service, approved once.
+
+1. The first time, Hostwatch registers the collector as a background service. macOS asks for your administrator
+   password once, and may list it under System Settings ▸ General ▸ Login Items ▸ *Allow in the Background*, where
+   you approve it once.
+2. From then on macOS starts the collector itself: at boot, after a crash, after an update. Hostwatch connects to it
+   when it opens, with no password.
+3. If macOS ever refuses to start the service (this can happen when the app is replaced during an update), Hostwatch
+   notices within half a minute of opening and registers it again, with your password.
+4. *Settings ▸ General ▸ Remove…* unregisters the service (your password again), for example before uninstalling.
+   It stops and won't start at boot. You can turn off the registration at launch with *Register the collector when
+   Hostwatch opens*.
+
+**Where Full Disk Access goes:** macOS counts the collector's access as Hostwatch's, so Full Disk Access must be
+granted to **Hostwatch.app**. The app checks for it before asking for your password, and shows a guide if it's
+missing. If the collector log shows `ERR_NOT_PERMITTED`, use **Open Full Disk Access Settings**, enable Hostwatch,
+then start the collector again.
+
+**Where the log goes:** `/var/log/hostwatch-collector.log`. Open it with *Help ▸ Collector Log*.
+
+**If the app quits or dies:** the collector keeps running but goes idle after 15 s with no app connected. It stops
+watching, and the firewall is off, until Hostwatch opens again.
 
 ### Baseline: the learning day
 
 On the first launch, Hostwatch spends a day learning what is normal on your Mac, so it doesn't ask you about
 everything. It learns in **waves at 5, 15 and 60 minutes, then every hour** until the day is over. *Settings ▸
 Detection ▸ Learning day* makes it 3 or 7 days, *Extend by a Day* adds one, *End Now* finishes it, and *Learn This Mac
-Again* starts it over (also for an install from before the learning day). The menu bar icon shows how long is left.
+Again* starts it over. The menu bar icon shows how long is left.
 
 During the learning day, what other signed programs do **again and again** (at least three times, over at least an
 hour) goes to the on-device AI, and its sure *Safe* is applied, recorded as the AI's decision ("learned during the
 learning day"). One-offs aren't typical, so they wait. What an AI may never allow alone (shells, interpreters, your
 sensitive files, high-risk patterns) is never learned. After the learning day, the AI's answers are suggestions again.
 
-Each wave sorts the New patterns seen so far (`BaselinePolicy`) into these groups:
+Each wave sorts the New patterns seen so far into these groups:
 
 - **Trusted:** marked Safe, with source "baseline". This needs all of the following:
   - normal risk
@@ -157,11 +114,10 @@ Each wave sorts the New patterns seen so far (`BaselinePolicy`) into these group
   signer must match.
 - **One macOS system rule.**
 
-A rule keeps trusting that app's **future** normal-risk patterns. It checks every 30 s, always through the same
-policy.
+A rule keeps trusting that app's **future** normal-risk patterns, checked every 30 s.
 
-After learning, a new app isn't added by itself. Use **Update Baseline** to sort New patterns again and add rules for
-trusted apps among them. It is local and uses code signatures only, no AI.
+After learning, a new app isn't added by itself. Use **Update Baseline** (Patterns ▸ Rules or Settings ▸ Detection) to
+sort New patterns again and add rules for trusted apps among them. It is local and uses code signatures only, no AI.
 
 - **Pause** a rule: its patterns go back to New and it stops applying. The rule is kept, so Update Baseline won't
   recreate it.
@@ -176,9 +132,6 @@ trusted apps among them. It is local and uses code signatures only, no AI.
 
   A reopened pattern is never decided again by a baseline rule, a learned rule, *Accept AI suggestions without asking*
   or *Classify with AI*. Only your own decision (Mark, Trust, Accept) closes it. Decided By shows *Reopened*.
-
-  New kinds of behaviour from a trusted app reach you through its rule's profile (see *A rule trusts only what its
-  app normally does* below).
 - **Low weight:** your markings and learned rules win over baseline rules. Stories ignore baseline trust: they count
   only your decisions and learned rules, so a chain still alerts.
 - **Needs You** has one row per app with all its reasons. An example for an app installed after learning:
@@ -193,8 +146,6 @@ trusted apps among them. It is local and uses code signatures only, no AI.
   - **See the patterns:** click *N patterns ›* to list them in the row.
   - **More actions:** *⋯* ▸ **Mark Suspicious**, or **Show in Patterns**. Show in Patterns opens exactly those
     patterns, and a removable chip replaces the Show filter.
-- **Existing installs** don't start learning by themselves. Use **Update Baseline** (Patterns ▸ Rules or Settings ▸
-  Detection).
 - **Fewer decisions for you:**
   - **macOS itself is always trusted.** Apple tools on the sealed system volume fall under the one *macOS system*
     rule, made by itself, from the first minute. This also applies when a trusted app starts them, such as Cursor
@@ -204,14 +155,13 @@ trusted apps among them. It is local and uses code signatures only, no AI.
     again by itself, though Update Baseline still can.
   - **A rule trusts only what its app normally does.** In its first week, it learns the app's kinds of behaviour
     (`launches node`, `connects to the web`, `reads ~/Documents`, `writes its own data`…). After that, a pattern of a
-    new kind isn't trusted and comes to Needs You as *new for Slack: writes ~/Movies*. Rules from before this keep
-    what they already trusted as their profile. macOS's own rule doesn't learn a profile.
+    new kind isn't trusted and comes to Needs You as *new for Slack: writes ~/Movies*. macOS's own rule doesn't learn
+    this.
   - **Needs You lists only what's active.** A pattern not seen for 7 days leaves it. It stays New in Patterns and
     comes back if it happens again.
   - **Homebrew tools share one row.**
   - **Recent automatic trust:** Patterns ▸ Rules shows *Trusted automatically in the last 24 hours: N new patterns
     (Docker 12, …)* with Show.
-- **Older baselines:** baselines from the first version (one rule per developer) are undone once and sorted again.
 
 ### After a restart
 
@@ -229,8 +179,7 @@ Travel shows the rest.
 
 ### Controls at a glance
 
-Each kind of control has one home. Use this section as a map: it tells you where to find a command, and the sections
-below explain what each one does.
+Where to find each command. The sections below explain what they do.
 
 **Menu bar icon.** The icon is the app icon's list mark, tinted like your other menu bar icons. It is for a quick
 glance and quick actions.
@@ -298,8 +247,8 @@ history search, a double-click still opens that moment.
 
 **Events toolbar.** It holds the tab bar, Time Travel, Pause, **HUD** and search, in the same places on every tab.
 The row under it starts with one filter per event kind (launches, connections, files: click one to hide that kind,
-its tooltip has the count since launch), then Show and Group. Clear Events (⌘K) is in
-the Activity menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
+its tooltip has the count since launch), then Show and Group. Clear List (⌘K) is in
+the History menu and Settings (⌘,) in the app menu. Process names read in the system font. Times, pids, paths and
 patterns stay monospaced.
 
 ### HUD
@@ -337,11 +286,9 @@ Position and size are remembered. The HUD starts at 24 rows × 360 pt.
 
 **System row.** A row of CPU, memory, network and disk sits at the top unless you turn it off (Settings ▸ HUD).
 
-Quitting also stops the collector the app started.
-
 ### Window tabs
 
-The activity window has five tabs: Events ⌘1 · Patterns ⌘2 · Rules ⌘3 · Stories ⌘4 · Network ⌘5. Network covers
+The activity window has five tabs: Events ⌘1 · Patterns ⌘2 · Protection ⌘3 · Stories ⌘4 · Network ⌘5. Network covers
 domains and the firewall.
 
 - **Badges:** a tab badges only what needs you. *Rules* counts what waits for your decision, *Network* the
@@ -414,18 +361,14 @@ takes the list recorded at or just before the playhead and rebuilds the moment b
 - "Running for" counts to the playhead.
 
 **How it is recorded for Time Travel.** Hostwatch records the list once a minute while the collector runs and history
-is on (Settings ▸ History). It goes into `History/processes-YYYYMMDD.jsonl`.
+is on (Settings ▸ History).
 
-- **What is stored:** every process each 30 minutes, and only what changed in between.
-- **Size:** a few tens of MB a day. The file is compressed when the day is over.
+- **Size:** a few tens of MB a day, compressed when the day is over.
 - **Limits and cleanup:** it is counted in the history size limit and removed together with the activity history.
-- **Gaps:** moments from before this recording started, or more than 3 minutes after the last list (Hostwatch closed),
+- **Gaps:** moments from before recording started, or more than 3 minutes after the last list (Hostwatch closed),
   say so.
 
-**How it works.** The app asks the collector for the list. The collector runs as root and reads every process with
-libproc (`proc_pid_rusage`, the task info and `KERN_PROCARGS2` for command lines). It answers with one list. CPU % is
-the difference between two lists. Nothing is asked while the list is closed or the window is hidden, except the
-once-a-minute list recorded for Time Travel.
+While the list is closed or the window is hidden, it isn't refreshed. Only the once-a-minute recording goes on.
 
 ### Heavy processes
 
@@ -457,21 +400,11 @@ already running when Hostwatch started aren't followed. Otherwise Xcode and brow
   The *Running Now* switch keeps a flame and the count while anything runs heavy. A process that calms down and
   turns heavy again shows again. In Time Travel and with Only These on, the banner stays.
 
-**Time Travel uses the same design.** The heavy list is recorded with each 5-second metrics sample, usually 0–3
-entries. At the playhead the banner reads *Running heavy at 14:32:05*. The launch rows carry the same badges as they
-did live, with the running time computed for that moment.
+**In Time Travel.** At the playhead the banner reads *Running heavy at 14:32:05*. The launch rows carry the same
+badges as they did live, with the running time computed for that moment.
 
 **Detection.** A heavy process that is unsigned, ad-hoc, quarantined or from a download/temp folder adds the story
 stage *Heavy untrusted process* (3 points, strong). This is the cryptominer pattern.
-
-**How it works.**
-
-- Every 5 s, the collector's existing sampler (libproc `proc_pid_rusage`, already used for the busiest processes) also
-  sends every process above a floor: ≥ 5% CPU or ≥ 300 MB, at most 50. Each comes with its start time.
-- Launch events carry the start time too (`pstart`). So a reused pid is never mistaken for the process that started.
-- Exits are checked with `kill(pid, 0)`.
-- Launches restored from history after a restart are followed too.
-- Nothing new is recorded, only numbers.
 
 ### Resource use (CPU, memory, network, disk)
 
@@ -505,24 +438,14 @@ deleted again count too.
 
 **Time Travel.** The timeline shows CPU (blue) and memory (green) lines under the activity bars, on the same time
 axis. The footer strip shows the slice around the playhead. The banner shows the values and the busiest process at
-the playhead. Times before this feature existed simply have no line.
+the playhead.
 
-**Recording.** Resource use is recorded while Hostwatch is open, one line per sample, in
-`History/metrics-YYYYMMDD.jsonl` (a few MB per day).
+**Recording.** Resource use is recorded while Hostwatch is open, a few MB per day. Past days are compressed, and they
+are deleted together with the activity history and by *Clear History*.
 
-- Past days are gzip-compressed.
-- Days older than the oldest activity history are deleted with it.
-- *Clear History* removes them too.
-
-**Sources.**
-
-- CPU, memory and network come from the kernel's counters. No special rights are needed.
-- The busiest processes and disk throughput come from the collector. As root it can see every user's processes
-  (`proc_pid_rusage`). The app alone can't see about a third of processes, all of them system ones.
-- The collector sends them every 5 s only to the live window, never into the event history.
-
-**Checking the numbers.** `Hostwatch --metrics-probe` prints three readings, for comparing with Activity Monitor or
-`top`.
+**Sources.** CPU, memory and network come from macOS's own counters. The busiest processes and disk throughput come
+from the collector, which can see every process (the app alone can't see about a third of processes, all of them system ones).
+They go only to the live window, never into the event history.
 
 ### Time Travel
 
@@ -567,15 +490,7 @@ everything recorded, not only the slice.
 - **Opening a match:** double-click it (or *Show in Timeline*) to open its moment, with it selected.
 - **Scope:** the scope bar switches between **All History** and **This Window** (only the shown slice).
 
-**How it reads history.** Only the slice you look at is loaded, so it stays fast.
-
-- In the plain (current) file, lines are in time order. So the offset of any moment is a binary search away.
-- Compressed files are found through their block index.
-- Bar heights come from byte counts (per-minute counts for compressed files).
-- Timings: the overview takes milliseconds, and a busy slice of ~20,000 events takes ≈0.3 s.
-- A search reads blocks newest first and parses only lines whose bytes contain the search text.
-
-`Hostwatch --time-travel-probe [dir]` prints these timings, searches included.
+Only the slice you look at is loaded, so Time Travel stays fast even with a large history.
 
 
 
@@ -594,8 +509,8 @@ Hostwatch builds a picture of how your Mac normally behaves, and asks you only a
 Hostwatch learns what your Mac normally does. Similar events become one pattern ("Slack connects to its servers"),
 so you decide once instead of a thousand times, and anything new stands out.
 
-Every event gets a **signature**: a normalized fingerprint of *who did what*. Events with the same signature are
-grouped into one **pattern**. There are three kinds:
+Every event gets a **signature**: a fingerprint of *who did what*. Events with the same signature are grouped into
+one **pattern**. There are three kinds:
 
 | Kind | Signature | Example |
 |------|-----------|---------|
@@ -604,8 +519,8 @@ grouped into one **pattern**. There are three kinds:
 | file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]`, `mds → r *  [ordinary files]` |
 
 **Normalization** removes the parts that vary, so similar events really match. Your home folder becomes `~`.
-`$TMPDIR`, UUIDs, hex IDs and version numbers become placeholders. This also applies to executable names that are
-only a version, e.g. `claude/versions/#.#.#`.
+`$TMPDIR`, UUIDs, hex IDs and version numbers become placeholders, in executable names too
+(`claude/versions/#.#.#`).
 
 **Fewer patterns where the detail says nothing:**
 
@@ -626,10 +541,6 @@ only a version, e.g. `claude/versions/#.#.#`.
   per folder: `zsh → /usr/bin/*  (plain tools)`. Tools attackers use (`curl`, `osascript`, `security`,
   `launchctl`, `defaults`…) and admin tools (`sudo`, `chown`, `diskutil`…) keep one pattern each, with their
   arguments.
-- **Earlier patterns:** at launch, patterns saved by an earlier version that these rules now write as one are moved
-  into it, with counts and dates added up. Only automatic ones move (routine Safe, or New nobody touched). Your
-  decisions, a rule's or an AI's stay as they are. On a real store: 21,172 → 7,600 patterns. Preview it with
-  `Hostwatch --regroup-report` (read-only).
 
 **Status.** Each pattern has a status: **New / Safe / Suspicious / Dangerous**. It also records who set it (you,
 Claude, auto or baseline) and a short reason.
@@ -654,8 +565,7 @@ can also be misused (`curl`, `osascript`…).
   - LOLBins talking to public IPs on unusual ports.
 - **normal:** everything else.
 
-On 2.67M real events this gives about 7.3k patterns: 6.5k routine (auto-safe), about 750 normal and about 50
-high-risk. The old per-folder scheme produced about 20k, all of them New.
+Most patterns turn out routine, so only a small share ever waits for you.
 
 **Seeing patterns and events:**
 
@@ -666,24 +576,21 @@ high-risk. The old per-folder scheme produced about 20k, all of them New.
   - *Only Important*: flagged plus new high-risk.
 - **First sighting:** the event that first shows a pattern is tagged ✦ (Events) or **FIRST** (HUD). The *New*
   status means the pattern isn't decided yet.
-- **Row colours:** flagged rows get a red or orange stripe, safe rows a green one. All rows use full-contrast text.
-- **Columns:** the Events and Patterns tables use native columns: drag a header edge to resize any of them, click a
-  header to sort. Widths are not remembered between launches yet.
+- **Row colours:** flagged rows get a red or orange stripe, safe rows a green one.
+- **Columns:** drag a header edge to resize a column, drag a header to reorder, click it to sort and again to
+  reverse. Each table remembers its sort. Widths are not remembered between launches.
   - Events show Time · Kind · Status · Process · PID · PPID · Detail.
   - Patterns show Status (🔥 = high-risk) · Kind · Process · Pattern · Decided By · Signer · Reason · Count ·
     First Seen · Last Seen.
-- **Sorting and layout:** click a column header to sort, and again to reverse. Each table remembers its sort.
-  Columns can be resized and reordered.
 - **Ask the AI:** double-click a row to ask the AI (the engine you picked).
-- **Searching and marking:** Patterns use the Show filter, can be searched and multi-selected. Right-click to mark
-  one or many patterns, or **Mark All … From This Process** as a whole-process rule.
+- **Searching and marking:** Patterns can be searched and multi-selected. Right-click to mark one or many
+  patterns, or **Mark All … From This Process** as a whole-process rule.
 - **Decided By** column: *You*, *Rule: …*, *Baseline: Slack (…)*, *AI (on-device)* / *AI (Claude)*, *AI suggests
   Safe* (waiting for you), *Automatic (routine)* or *New*. *Needs You* in the sidebar lists what waits for you.
 
 **Group** (*No Groups*, *By Process*, *By AI Session*, the same control as on Events) is *By Process* by default: one
 row per program (by name), with its patterns under it (*By AI Session* groups them by the coding-agent session that
-produced them instead, see [AI sessions](#ai-sessions-what-claude-code-did)). The
-program's row shows:
+produced them instead, see [AI sessions](#ai-sessions-what-claude-code-did)). The program's row shows:
 
 - the most serious status and risk among its patterns
 - how many are New
@@ -691,16 +598,14 @@ program's row shows:
 - the total count and first/last seen.
 
 A program with one pattern stays a plain row. Marking, deleting or asking about a program's row acts on all its
-listed patterns. Right-click it for *Show Only* that program. Columns: Status, Kind, Process, Pattern, Decided By,
-Signer, Reason, Count, First Seen, Last Seen.
+listed patterns. Right-click it for *Show Only* that program.
 
-**Reading a pattern.** The Pattern column wraps (up to three lines), so a long pattern reads without widening the
-column, and hovering it says what it means in plain words (*reads anything under ~/Documents/work*). The **inspector**
-(the sidebar button at the right of the toolbar, shown by default) has the selected pattern in full: the plain
-words, the pattern and program as selectable text, who decided it and why, the AI's suggestion, count and exact
-first/last times, the last example it was seen in, the program's signature, and Safe / Suspicious / Dangerous
-buttons. With several rows selected it marks them all. Clicking the selected row again deselects it (Escape clears
-the selection), and an empty list says why.
+**Reading a pattern.** The Pattern column wraps (up to three lines), and hovering it says what it means in plain
+words (*reads anything under ~/Documents/work*). The **inspector** (the sidebar button at the right of the toolbar,
+shown by default) has the selected pattern in full: the plain words, the pattern and program as selectable text, who
+decided it and why, the AI's suggestion, count and exact first/last times, the last example it was seen in, the
+program's signature, and Safe / Suspicious / Dangerous buttons. With several rows selected it marks them all.
+Clicking the selected row again deselects it (Escape clears the selection), and an empty list says why.
 
 **More in the Patterns tab:**
 
@@ -716,13 +621,13 @@ so detection works the first time.
 - **Hidden by default:** the Patterns tab hides it unless **Seen Once** is on. Search and scoped lists find it anyway.
 - **Removed after 7 days:** tidying removes it when it hasn't happened again for 7 days, if it's undecided or Safe
   only automatically (routine), unless an open story uses it. Ones an AI or the baseline decided stay.
-- **If it comes back:** if it happens later, it's simply new again.
+- **If it comes back:** it's simply new again.
 
 **AI suggests, you decide.** An AI can propose a status for New patterns, but you stay in charge:
 
 - **Asking:** *Ask AI for Suggestions* (Patterns ▸ Needs You) sends up to 40 New patterns (high-risk first, then most
-  recent), with code-signing facts, to the on-device model and/or Claude. For Claude that's one
-  headless `claude -p` call, about 8 s and $0.03.
+  recent), with code-signing facts, to the on-device model and/or Claude. For Claude that's one call, about 8 s and
+  $0.03.
 - **Suggestions only:** each verdict is stored as a **suggestion** on the pattern. Nothing changes until you
   **Accept** it.
 - **Automatic suggestions:** *Suggest for new patterns automatically* (Settings ▸ AI) repeats this every 90 s for
@@ -753,8 +658,8 @@ refused). What happens next:
   Rows already on screen follow it.
 - **Undo:** *Separate Combined Pattern* undoes it. New activity makes its own patterns again.
 
-**The general rule: no pattern covers a whole area.** This applies to every program (`SignatureBuilder.specificPath`).
-In file patterns, `r` is the mode (read).
+**The general rule: no pattern covers a whole area.** This applies to every program. In file patterns, `r` is the
+mode (read).
 
 - **Wildcard depth:** a wildcard needs at least 2 folders below home (`~/Documents/work/*`) or 3 elsewhere
   (`/Users/Shared/tools/*`).
@@ -762,15 +667,11 @@ In file patterns, `r` is the mode (read).
   `r /tmp/x.log`, `r /usr/bin/ls`).
 - **Deep trees:** patterns name the file's folder. For apps, trees deeper than 4 folders below home (5 elsewhere) end
   in `/**` there (`~/Projects/app/node_modules/a/**`). Interpreters and shells always get the exact folder.
-- **Never allowed:** so `r *`, `r ~/*`, `r ~/Documents/**`, `r /*`, `r /tmp/*` or `r /Users/**` never exist and
-  can't be a learned Safe rule. "Mark All … From This Process ▸ Safe" is gone. Suspicious or Dangerous for a whole
+- **Never allowed:** `r *`, `r ~/*`, `r ~/Documents/**`, `r /*`, `r /tmp/*` or `r /Users/**` never exist and can't
+  be a learned Safe rule. *Mark All … From This Process ▸ Safe* is always greyed out. Suspicious or Dangerous for a whole
   program still work.
-- **Older versions:** undecided or automatic wide patterns from earlier versions are dropped at launch. Ones you
-  decided stay.
-- **Effect:** on a real day of history, patterns went from 1,219 to 2,803, mostly routine (auto Safe). Patterns to
-  decide went from 150 to 227.
 
-Labelled places stay as before:
+Labelled places:
 
 - **sensitive places**, for any access: SSH/GPG keys, cloud and registry credentials, keychains, TCC, cookies,
   Safari/Mail/Messages data, browser credential stores, local accounts, sudoers. These are tagged `[label]`.
@@ -794,17 +695,13 @@ Labelled places stay as before:
   - Otherwise the arguments, with paths and numbers normalised, up to ~120 characters:
     `ditto -x -k ~/Downloads/app.zip ~/Downloads`.
   - A bare program run alone stays as it is.
-- **Network and files:** for interpreters and shells (python, bash, node, curl, osascript…), network patterns name
-  the destination's domain (`TCP pythonhosted.org:443`) or address, never `internet`. File patterns follow the
-  general rule (above) with the exact folder even in deep trees.
-- **No wholesale trust:** *Mark All … From This Process ▸ Safe* is disabled for them. A learned Safe rule that
-  covers them broadly is refused. The baseline never trusts them, macOS's own `/bin/bash` or `/usr/bin/python3`
-  included.
-- **Older versions:** blanket trust from earlier versions (whole-process Safe, or Safe by AI or the baseline) is
-  undone at launch. Your own per-pattern decisions stay.
+- **Network and files:** for interpreters and shells, network patterns name the destination's domain
+  (`TCP pythonhosted.org:443`) or address, never `internet`. File patterns use the exact folder even in deep trees.
+- **No wholesale trust:** a learned Safe rule that covers them broadly is refused. The baseline never trusts them,
+  macOS's own `/bin/bash` or `/usr/bin/python3` included.
 
 **Built-in safe patterns.** Some of macOS's own behaviour is the same on every Mac, so it is decided as routine out
-of the box (`BuiltInSafe`):
+of the box:
 
 - any program *reading* `~/.CFUserTextEncoding` (CoreFoundation's text-encoding preference)
 - `/usr/sbin/networksetup` running `/bin/sh -c ‹/bin/cp …/SystemConfiguration/preferences.plist …›` (its settings
@@ -814,16 +711,14 @@ of the box (`BuiltInSafe`):
 
 Only exact patterns count. When a parent is named, it must be that program on the sealed, read-only system volume.
 A copy elsewhere, or the same command from another program, doesn't count. Signing still applies (a swapped binary
-is high-risk), and stories ignore automatic decisions. Existing New patterns that match are decided at the next
-launch.
+is high-risk), and stories ignore automatic decisions.
 
 Your own developer activity (scripts, hooks, `kubectl`, `codesign`…) isn't universal, so it's not built in. Mark
 it, combine it or let rules learn it.
 
 **Code signing** refines the risk level. It looks only at the binary the pattern names (what runs, or what acts).
-Each binary is inspected once per version with the Security framework: signed or not, ad-hoc, Apple, Team ID,
-organisation, CDHash, quarantine flag. Its signature is fully validated in the background, and checked again when
-the file changes.
+Each binary is inspected once per version: signed or not, ad-hoc, Apple, Team ID, organisation, CDHash, quarantine
+flag. Its signature is fully validated in the background, and checked again when the file changes.
 
 - **Unsigned or ad-hoc code that is quarantined or runs from a download/temp folder** → high. Unsigned code
   elsewhere (Homebrew, your builds, bundled runtimes) is left to the path rules.
@@ -836,30 +731,22 @@ the file changes.
   baseline). New vendors stay untrusted until you right-click a pattern → **Trust Developer “…”**. Remove one with
   **Stop Trusting**. Patterns are re-scored right away. Facts are saved in
   `~/Library/Application Support/Hostwatch/signing.json`.
-- **Measured** on today's history: normal patterns 247 → 191. The 57 that became routine are all Developer-ID apps
-  (Claude Code, Cursor, Chrome…) doing everyday things.
-- **Debug tool:** `Hostwatch --signing-check <path>…` (set `HOSTWATCH_SIGNING_DB` for a scratch database).
+- **Homebrew tools:** Homebrew ad-hoc-signs what it builds, so signing can't vouch for `git`, `kubectl`, `fish`….
+  They're judged by the path rules like your own builds, and you decide their patterns.
 
 **Tidying (routine noise only).** Hostwatch tidies 30 seconds after launch and then daily. Routine Safe patterns are
 the ones decided automatically as ordinary: system reads, caches, scratch writes. Tidying does two things:
 
 - **Removes old ones:** routine Safe patterns not seen for 30 days are removed. They come back if they happen again.
-- **Folds look-alikes:** routine Safe patterns of one program that differ only in random parts are folded into one
-  combined pattern, marked automatic. Random parts are a token with digits and letters such as `cache-aB#dE#`,
-  `<hex>`, `<uuid>`, or a long mixed-case code. A fold needs at least 3 patterns, must pass the not-too-wide rule
-  and may cover nothing but routine Safe patterns.
+- **Folds look-alikes:** routine Safe patterns of one program that differ only in random parts (`cache-aB#dE#`,
+  `<hex>`, `<uuid>`, a long mixed-case code) are folded into one combined pattern, marked automatic. A fold needs at
+  least 3 patterns, must pass the general rule and may cover nothing but routine Safe patterns.
 
 Nothing New, reopened or decided by you, a rule, the baseline or an AI is touched. If activity that joins a fold
-later isn't routine, the fold goes back to New. On a real store: 16,490 → 15,963 on the first run (62 folded into
-14), and pruning grows as patterns age. The Patterns footer shows the last result.
+later isn't routine, the fold goes back to New. The Patterns footer shows the last result.
 
-**Where patterns are saved:** `~/Library/Application Support/Hostwatch/signatures-v2.json`, plus a journal of
-patterns changed since (`signatures-v2.journal`). The journal is folded into a new snapshot after a decision or when
-it grows. The old `signatures.json` is not migrated and can be deleted.
-
-Debug helper: `Hostwatch.app/Contents/MacOS/Hostwatch --signature-report <history.jsonl>` prints how a history file
-groups into patterns and risk levels (`REPORT_KIND=file|net|exec|routine|normal|high`, `REPORT_GREP=…`,
-`REPORT_TOP=n`).
+**Where patterns are saved:** `~/Library/Application Support/Hostwatch/signatures-v2.json`, plus a journal of recent
+changes (`signatures-v2.journal`).
 
 #### Patterns and Protection tabs
 
@@ -873,9 +760,9 @@ Needs You, Rules and Decisions, and its tab badge counts what waits in Needs You
 Protected Files and Folders, Network Firewall and Found (see Launch and file protection). Only Needs You and Found
 carry a badge, because only they wait for you.
 
-- **Needs You:** what waits for your decision. Rebuilt live as patterns change. Interpreters, shells and Hostwatch
-  itself aren't listed. It shows:
-  - New patterns, one row per app with its reasons (see the baseline section).
+- **Needs You:** what waits for your decision, updated live. Interpreters, shells and Hostwatch itself aren't
+  listed. It shows:
+  - New patterns, one row per app with its reasons.
   - The AI's suggestions (*AI suggests: Safe ×3 · on-device AI*) with **Accept**, **Trust**, **Dismiss** and *⋯*
     (Show in Patterns, Mark Suspicious).
   - Claude's rule proposals, with **Approve** / **Reject**.
@@ -919,10 +806,10 @@ least an hour apart. A Safe rule stops questions for good, so it must stand on b
 Dangerous and Suspicious decisions are always sent, because something that ran once may be exactly what to catch
 again.
 
-**What comes back:** up to 8 rules. Each has a `kind` (exec/net/file/any), a `process` glob, a `pattern` glob (`*`,
-`?`, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale.
+**What comes back:** up to 8 rules. Each has a kind (exec/net/file/any), a program and a pattern (`*` and `?` as
+wildcards, case-insensitive) and an action (Safe/Suspicious/Dangerous), with a short rationale.
 
-Every proposal is checked locally before you see it:
+Every proposal is checked on your Mac before you see it:
 
 | Check | Effect |
 |-------|--------|
@@ -935,8 +822,8 @@ Every proposal is checked locally before you see it:
 | a Safe rule whose matching decisions are all on patterns seen < 5 times or within an hour | **refused** (not regular) |
 
 **While it runs:** **Needs You** shows a progress card with how many of your decisions were sent, a live timer and
-**Cancel**. The Patterns tab reads *Patterns (…)*. Afterwards a result line says how many proposals came back and how many
-passed the checks, or why none did.
+**Cancel**. The Patterns tab reads *Patterns (…)*. Afterwards a result line says how many proposals came back and how
+many passed the checks, or why none did.
 
 **Precedence**, from strongest to weakest:
 
@@ -948,16 +835,13 @@ passed the checks, or why none did.
 A rule's verdict counts as yours. It satisfies *Only New (not reviewed)*, and a Safe rule removes matching steps
 from Stories.
 
-**Each rule's own regression test.** At approval, a rule stores the decisions it must keep matching (examples) and
+**Each rule keeps checking itself.** At approval, a rule stores the decisions it must keep matching (examples) and
 those it must never match (all your other decisions). It is re-checked at launch and whenever you mark something.
 
 - **Paused:** if it now matches a counter-example, loses an example, or contradicts any of your decisions, it is
   **paused** with the reason.
 - **Resume or delete:** it stays paused until you resume it (if it passes again) or delete it.
 - **Effect:** patterns a paused or deleted rule had classified go back to their own state.
-
-`Hostwatch --suggest-rules` is a dry run for development: it asks Claude, checks the proposals and prints them,
-changing nothing.
 
 ### Connects the dots
 
@@ -973,33 +857,32 @@ what one session did, not just what `zsh` or `git` did in general.
   row per session with its events under it, the rest under *No AI session*. A session row is a band across the
   list, the way `claude --resume` lists sessions: the maker's mark, the topic, then *MyApp · main · 12 min ·
   5 conn*, and on the right *Only this session* (the list keeps only that tree, *All sessions* takes it off),
-  *Patterns*, the worst status among its events and their count. Groups open when shown (one you fold stays folded while the window is open). Right-click a band for the
-  same actions and the Claude session id.
+  *Patterns*, the worst status among its events and their count. Groups open when shown (one you fold stays folded
+  while the window is open). Right-click a band for the same actions and the Claude session id.
 - **The maker's mark:** a small mark of the agent's maker drawn by Hostwatch: Anthropic's logomark for Claude Code,
   OpenAI's knot for Codex, Google's four-colour G for Gemini CLI, a cube for the Cursor agent. It appears on session
   bands and next to the kind of an agent's event.
-- **The topic:** Claude Code's title for the session (`ai-title`, or a title you set yourself, which wins), else the
-  first prompt, else the project folder. It comes from the transcript the guard hook names, so it needs the Claude
-  Code guard on, and it's looked up again until found, since Claude titles a session a few turns in. The branch comes
-  from the same place.
-- **How events are matched:** by process lineage at the moment each event arrives. A child that daemonizes and is
-  reparented to `launchd` keeps its session. An agent started by an agent (a sub-agent) is part of the outer session.
-  Claude Code's own helper processes (pty hosts, spare daemons) aren't sessions.
+- **The topic:** Claude Code's title for the session (or a title you set yourself, which wins), else the first
+  prompt, else the project folder. The branch comes from the same place. Claude titles a session a few turns in, so
+  Hostwatch keeps looking until it finds the title.
+- **Finding the topic:** with the Claude Code guard on, the guard tells Hostwatch which transcript belongs to the
+  session. Without it, Hostwatch finds the transcript under `~/.claude/projects/` (in a folder named after the working
+  directory) that started with the session. A session with no topic yet is named by where and when it started
+  (*Claude in ~, 16:24*).
+- **How events are matched:** by process lineage at the moment each event arrives. A child that detaches and is
+  adopted by `launchd` keeps its session. An agent started by an agent (a sub-agent) is part of the outer session.
+  Claude Code's own helper processes aren't sessions.
 - **Agents already running when Hostwatch starts** are picked up from the process list (once a minute, or every few
-  seconds while Running Now is open), with lineage for processes whose start wasn't seen.
+  seconds while Running Now is open).
 - **Running Now ▸ Group:** the same control groups the running processes under their parent process (*By
   Process*) or under the AI session they belong to (*By AI Session*), with CPU, memory, threads and writes added up
   per group and the count of processes in the PID column.
-- **Without the guard hook:** Claude Code keeps a session's transcript under `~/.claude/projects/`, in a folder
-  named after the working directory, so Hostwatch finds the transcript that started with the session and names it
-  from there. A session with no topic yet is named by where and when it started (*Claude in ~, 16:24*).
 - **Patterns ▸ Group ▸ By AI Session:** one band per session with the patterns it produced under it, the rest under
   *No AI session*. The band offers *Mark all Safe…* (after asking) for everything the session did so far.
 - **Everywhere else:** in the Events table an agent's event carries the maker's mark next to its kind (the session
-  is in the tooltip), a destination on the Network tab that a session
-  reached carries a *via Claude · MyApp* tag, and a story that happened inside a session starts with its name. In
-  Time Travel, sessions are replayed from the window's recorded process starts, so the grouping and the column work
-  for yesterday's session too (named when the saved list knows the pid and start, else by pid).
+  is in the tooltip), a destination on the Network tab that a session reached carries a *via Claude · MyApp* tag,
+  and a story that happened inside a session starts with its name. In Time Travel, sessions are rebuilt from the
+  recorded process starts, so the grouping works for yesterday's sessions too.
 - **For Claude:** the MCP tool `agent_sessions` lists them, and `trace_process` with a session's pid shows what it did.
   The list is saved in `agent-sessions.json` while Hostwatch runs.
 
@@ -1008,10 +891,7 @@ what one session did, not just what `zsh` or `git` did in general.
 Attacks are rarely one event. Hostwatch links small, harmless-looking steps of one program and its children (a
 download, a shell, a new login item) into one story, and warns you when they add up.
 
-One event rarely proves anything. An app starting `sh`, a download, an outbound connection are all everyday. Attacks
-are *chains*.
-
-So Hostwatch tags suspicious **stages** and adds up their weights per **process tree** over a 15-minute window. A
+Hostwatch tags suspicious **stages** and adds up their weights per **process tree** over a 15-minute window. A
 process tree is one program and the processes it started.
 
 | Stage | Example | Weight |
@@ -1060,18 +940,12 @@ LaunchAgent · beacon.
 **Your Safe marks:** patterns **you** marked Safe never feed stories. Claude/baseline verdicts do, because they judged
 one step alone.
 
-**Command lines:** new processes now carry their **command line**, shown in the Activity list and given to Claude.
-The collector masks secrets like tokens, passwords and URL credentials.
-
-**Tested:** on one day of real history (2.67M events) there were 2 stories, both Claude Code itself running
-`security` and reading `~/.gnupg`. Synthetic attack chains fire as Dangerous. Replay any history:
-`Hostwatch --story-replay <history.jsonl>`.
+**Command lines:** new processes carry their **command line**, shown in the Activity list and given to Claude.
+Secrets like tokens, passwords and URL credentials are masked.
 
 #### Story window
 
-Double-click a story to read it like a timeline: what ran, what it did, and why each step counts.
-
-**Double-click a story** (or **Show Chain**) to see the whole chain, event by event, on a vertical timeline.
+Double-click a story (or **Show Chain**) to read it like a timeline: what ran, what it did, and why each step counts.
 
 - **Each step** shows its time, its stage (coloured for strong stages) and one sentence, such as "sh started curl",
   "curl connected to evil.example:443" or "sh wrote ~/Library/LaunchAgents/x.plist". It also shows the command line
@@ -1101,7 +975,8 @@ count, the hostnames and the programs. The list is saved in `~/Library/Applicati
   The daemons talk to Apple constantly.
 
 **How Hostwatch learns what's normal.** On first launch, every domain in recorded history counts as known. The next
-**hour** is a learning period. To stop it early, use Network tab → *End Learning Now*.
+**hour** is a learning period. To stop it early, use Network tab → *End Learning Now* (or *End Now* in Settings ▸
+Detection).
 
 Some domains are not learned, even during learning. A domain first reached by unsigned, ad-hoc or quarantined code, or
 by a program in Downloads / Shared / a volume, stays new.
@@ -1139,10 +1014,11 @@ pattern for the whole web (`TCP internet:443`): blocking it stops the app everyw
 one domain, right-click the domain ▸ *Block for an App* and pick the app (the apps that reached it are listed), or
 right-click one of its connections ▸ *Block example.com for Slack*. The rule covers the domain's hosts
 (`api.example.com` counts under `example.com`), comes before any pattern status (a Safe pattern doesn't let it
-through), and shows as *Blocked by you* with an **Unblock** button. It is kept with the firewall's other data and
-stops connections in Ask and Strict. In Watch it shows what it would block. A connection already open finishes, and
-one let through in the last five minutes may pass until that answer runs out.
-Forget does three things:
+through), and shows as *Blocked by you* with an **Unblock** button. It stops connections in Ask and Strict. In Watch
+it shows what it would block. A connection already open finishes, and one let through in the last five minutes may
+pass until that answer runs out.
+
+**Forget** does three things:
 
 1. The domain is new again next time.
 2. Its connections leave the firewall list.
@@ -1150,9 +1026,6 @@ Forget does three things:
 
 Decisions made in Patterns stay. A firewall decision is per pattern, so other destinations of that pattern are asked
 again too.
-
-**Testing.** Run a replay to list the domains that would be flagged after that much learning:
-`REPLAY_LEARN_MINUTES=30 Hostwatch --story-replay <history.jsonl>`.
 
 #### Network map: who reaches this Mac
 
@@ -1179,14 +1052,13 @@ the list can't show: who tried to reach this Mac.
 - **Select anything** to dim the rest and follow its flow: a destination shows the programs that reached it (even ones
   folded into "and 18 more") and the way out each used. A program shows its own destinations, a way out its programs
   and destinations. Only the busiest that fit are drawn, the rest fold into "and N more", and the details panel lists
-  them all. Click an empty spot to clear the selection. Its details are on the right: a device's model, maker, addresses, when it
-  was first seen, whether its hardware address is private, and the ports it tried. *Mark as Mine* means it is never new again, a name
-  field lets you name it, and *Forget* forgets it and its tries.
+  them all. Click an empty spot to clear the selection.
 - **Filters:** Everything, Going Out, Coming In, Your Network. **Range:** Last Hour, Today, Last 7 Days.
-- **Show more:** a column shows its first few, and more when the window is taller. Click *and 12 more devices* (or programs, destinations, addresses) and
-  the map makes way for all of them in a table, with each one's address, connections and status, the details panel
-  beside it and the same right-click menu. The window's search filters it, and *Map* goes back. Each way out always keeps its busiest destinations in view, so a VPN's
-  few connections never hide behind the Wi-Fi's many.
+- **Show more:** a column shows its first few, and more when the window is taller. Click *and 12 more devices* (or
+  programs, destinations, addresses) and the map makes way for all of them in a table, with each one's address,
+  connections and status, the details panel beside it and the same right-click menu. The window's search filters it,
+  and *Map* goes back. Each way out always keeps its busiest destinations in view, so a VPN's few connections never
+  hide behind the Wi-Fi's many.
 - **Home and work:** a network is known by its router. When the Mac moves, the map shows the devices of the network
   it is on now, whatever its range (10.x, 172.16.x, 192.168.x or a company's own). The first look at a network is its
   baseline, so arriving somewhere new doesn't mark everyone there as new, and a different router at the same address
@@ -1204,17 +1076,21 @@ the list can't show: who tried to reach this Mac.
   - **Everything you blocked is listed in Protection ▸ Network:** domains in *Your destinations*, programs in *Your
     rules*, and devices, addresses and ports in *Blocked devices and addresses*, each with *Unblock*. *Block an
     Address…* there blocks one by typing it.
-- **Details:** the panel on the right shows, for a device, all its addresses, its status, the programs on this Mac
-  that connected to it and its tries by port. For a program, its connections, first and last seen and its way out, and *Process Details*: the
-  panel Events shows (status, launch chain, Ask AI, Watch Closely), under the map. Right-click a program or a listening
-  program ▸ *Show Process Details* does the same.
-  For a way out, the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
-  through it. For a destination, its connections, addresses and way out. For a listening program, its process and
-  who tried to reach it.
+- **Details:** the panel on the right shows what you selected.
+  - A device: its model, maker, all its addresses, its status, when it was first seen, whether its hardware address
+    is private, the programs on this Mac that connected to it and its tries by port. *Mark as Mine* means it is never
+    new again, a name field lets you name it, and *Forget* forgets it and its tries.
+  - A program: its connections, first and last seen, its way out, and *Process Details* under the map (the panel
+    Events shows: status, launch chain, Ask AI, Watch Closely). Right-click a program or a listening program ▸ *Show
+    Process Details* does the same.
+  - A way out: the router (maker, hardware address, network), a VPN's routes, and the destinations and programs
+    through it.
+  - A destination: its connections, addresses and way out.
+  - A listening program: its process and who tried to reach it.
 - **Time travel:** the toolbar's *Time Travel* (⌥⌘T) works on the Network tab too. It opens the same timeline at the
   bottom of the window, and the map follows the playhead: it shows the hours around the moment you picked, by the
-  hour. The way out is drawn with today's routes. *Show: New* (live or in Time Travel, next to *Show: All*, each with its count, as on the Events tab) keeps what wasn't there
-  in the 7 days before: new devices, fresh connections and first tries.
+  hour. The way out is drawn with today's routes. *Show: New* (next to *Show: All*, each with its count, as on the
+  Events tab) keeps what wasn't there in the 7 days before: new devices, fresh connections and first tries.
 - **Networks you trust:** every network gets a profile in Protection ▸ Network ▸ *Networks*, named after its router
   (rename it "Home" or "Office"). The network Hostwatch first learned on is trusted. A new one is treated as not
   trusted, and the map asks *Trust It* or *Keep Not Trusted*. On a network you don't trust:
@@ -1222,8 +1098,8 @@ the list can't show: who tried to reach this Mac.
   - the firewall asks about new connections, and goes back to Off or Watch when you leave or trust the network
   - any device that tries to connect raises a story
   Each can be turned off per network.
-- **Upload watch:** the map counts the bytes each program sends and receives, per destination (macOS's own
-  connection statistics, every 10 seconds), named by the domain the connection had. *Connections | Data Sent* at the top switches what lines, counts and
+- **Upload watch:** the map counts the bytes each program sends and receives, per destination (from macOS's own
+  connection statistics, every 10 seconds). *Connections | Data Sent* at the top switches what lines, counts and
   order measure. The details panel shows each program's, destination's and device's data sent and received.
   **Large upload** is a story: 100 MB or more sent within an hour to a destination that program first reached today.
   Uploads to devices on your network are shown but not raised, and the map's first day is its baseline.
@@ -1240,10 +1116,10 @@ address changing (*Router changed*: a new router does this, and so does someone 
 are shown on the map but raise nothing, since scanners try every public address all day.
 
 **Passive only.** Hostwatch never scans your network. It reads what macOS already knows (the neighbour and route tables,
-listening sockets), counts incoming connection attempts in the packet capture it already runs, and listens to what
-devices announce (it asks for announcements every 15 minutes, on your network only). The devices and tries
-are kept encrypted in `network-map.json`: tries for 7 days, devices for 30, yours always. Devices present when
-Hostwatch first looked are never shown as new.
+listening sockets), counts incoming connection attempts, and listens to what devices announce (it asks for
+announcements every 15 minutes, on your network only). The devices and tries are kept encrypted in
+`network-map.json`: tries for 7 days, devices for 30, yours always. Devices present when Hostwatch first looked are
+never shown as new.
 
 #### Domain details and risk score
 
@@ -1279,9 +1155,8 @@ and its own **RISK** score. The evidence it gets is in the collapsed section, an
 
 #### Beacons and raw-IP connections
 
-Flags two habits of malware: calling home at a steady rhythm, and connecting straight to an IP address without looking up a name.
-
-These are two more signals per connection. Like new domains, they are not part of pattern keys.
+Flags two habits of malware: calling home at a steady rhythm, and connecting straight to an IP address without looking
+up a name.
 
 **Beaconing** is one program contacting one destination (a domain, or an IP without a name) at a steady interval.
 Hostwatch looks for:
@@ -1303,27 +1178,21 @@ A **raw-IP connection** goes straight to an address without a name lookup. Hostw
 
 It gets a **RAW IP** badge and a **Raw-IP connection** stage in Stories.
 
-Both signals pass *Only Important* and *Only New*. On ~2 hours of real history there were 0 beacons and 0 raw-IP
-alerts. The one periodic flow (Slack → slack.com every ~125 s) was correctly ignored.
-
-**Homebrew tools.** Homebrew ad-hoc-signs what it builds, so signing can't vouch for `git`, `kubectl`, `fish`…. They're
-judged by the path rules like your own builds, and you decide their patterns.
-
-*End Now* for domain learning is in Settings ▸ Detection.
+Both signals pass *Only Important* and *Only New*.
 
 #### Firewall
 
 Choose how strict to be: only watch, ask you about each new connection, or allow only what you've approved.
 
-Pick a mode in *Protection*, on the Overview's Network card or the *Network Firewall* page: **Off**, **Watch**, **Ask** or **Strict**. The connections themselves are in the
-**Network** tab (⌘5), next to the domains (see below).
+Pick a mode in *Protection*, on the Overview's Network card or the *Network Firewall* page: **Off**, **Watch**, **Ask**
+or **Strict**. The connections themselves are in the **Network** tab (⌘5), next to the domains.
 
 - **Watch:** judges every connection and lists what wouldn't simply pass. Watch blocks nothing.
 - **Ask:** something new waits, with no time limit, while a window asks you **Allow / Block**.
 - **Strict:** something new is refused.
 
-**How a connection is judged.** Watch judges every connection Hostwatch sees, TCP and UDP, with the firewall's rules
-(`FirewallPolicy`). The first rule that matches wins:
+**How a connection is judged.** Watch judges every TCP and UDP connection Hostwatch sees. The first rule that matches
+wins:
 
 1. Local network (loopback, LAN, link-local, multicast) and Hostwatch itself pass.
 2. A known malware address blocks, even if Safe.
@@ -1336,26 +1205,17 @@ Pick a mode in *Protection*, on the Overview's Network card or the *Network Fire
 What wouldn't simply pass is listed in the Network tab: the last 7 days, at most 500, kept in `firewall-watch.json`.
 Each entry is judged again with its pattern's current status. Allow / Block mark the pattern Safe / Suspicious.
 
-**How Ask and Strict stop connections.** Ask and Strict turn on the relay in the collector (`AgentFirewall`,
-`FirewallRelay`, `PFRedirect`). The relay is a go-between that new connections pass through, so they can be held or
-refused.
-
-pf rules in the anchor `com.apple/hostwatch` (inside Apple's, which `/etc/pf.conf` loads) send connections over `lo0`
-to the relay on port 46110 (loopback only).
+**How Ask and Strict stop connections.** In Ask and Strict, Hostwatch's collector sends new outgoing connections
+through a relay on this Mac, so they can be held or refused. It uses pf rules in the anchor `com.apple/hostwatch`,
+which point connections to the relay on port 46110 (loopback only).
 
 - **Redirected:** every new outgoing TCP and UDP connection of non-root users, IPv4 and IPv6, on every interface.
-- **Not redirected:** `_mdnsresponder`, and loopback, LAN, link-local, multicast and CGNAT.
+- **Not redirected:** macOS's DNS service, and loopback, LAN, link-local, multicast and CGNAT.
 - **Already open:** connections already open aren't touched.
 
-For each connection, the relay:
-
-1. Finds the original destination (`DIOCNATLOOK`, else pf's state table).
-2. Finds the program: the process holding the client's port (`SocketOwner`).
-3. For TLS, peeks at the server name. Nothing is decrypted.
-4. Asks the app (`fw_ask`). There is one question per program, protocol, destination and port, however many
-   connections wait.
-
-The app answers with the rules:
+For each connection, the relay finds the original destination and the program that opened it, and for TLS reads the
+server name. Nothing is decrypted. There is one question per program, protocol, destination and port, however many
+connections wait. The answer:
 
 - **Allowed:** passes, remembered 5 min.
 - **Blocked:** refused (1 min).
@@ -1367,50 +1227,41 @@ macOS's own alerts. It says who started the program: the launch chain as a short
 an app, Claude Code) down to the program, and the program's own command line, so *python3.12* shows the script it
 runs. Your answer marks the pattern Safe or Suspicious and answers its other waiting connections.
 
-*Ask Claude* in a question window gathers the same evidence as Ask AI: signature, location, parent, quarantine and the
-connection, with the firewall's question first. The window then shows Claude's short advice: **Allow** or **Block** and
-why, then the program, the destination and the risks, with a verdict and 0–100 risk badge. It never answers for you.
+*Ask Claude* (⌘K) in a question window gathers the same evidence as Ask AI: signature, location, parent, quarantine
+and the connection, with the firewall's question first. The window then shows Claude's short advice: **Allow** or
+**Block** and why, then the program, the destination and the risks, with a verdict and 0–100 risk badge. It never
+answers for you.
 
 **Changing mode or losing the app.**
 
 - **Leaving Ask:** what still waits is decided by the new mode. Off or Watch: pass. Strict: refused.
 - **Without the app:** Strict refuses and Ask passes.
 
-**How traffic is relayed.** TCP is relayed with BSD sockets, and half-closes are passed on exactly. UDP is relayed as
-flows, ended after 60 s quiet, or 10 s for DNS. Relayed flows the other sources missed, UDP mostly, become net events.
-
 **Fail-safes.** The redirect is removed:
 
 - when the mode leaves Ask/Strict
 - when the collector stops
-- by a watchdog in its own session, when the collector's process is gone
+- by a watchdog, when the collector's process is gone
 - at the next collector start (stale rules)
-- at reboot, because anchors live in memory
-- when the web check through the relay (`curl` as `nobody`, every 30 s) fails twice. This also switches the app back
+- at reboot
+- when a self-check of web access through the relay (every 30 s) fails twice. This also switches the firewall back
   to Watch.
 
 **Not covered:** programs running as root, macOS's DNS lookups, and the local network. Hostwatch itself always passes.
-
-**Test tools** (run as root):
-
-- `--firewall-probe`: two test destinations.
-- `--firewall-relay-test [s]`: your real traffic through the relay, blocking nothing.
 
 **Containers and virtual machines.** Docker Desktop runs containers in a Linux VM. On macOS, a container's connection
 is opened by Docker's backend (`com.docker.backend`), so the program inside (curl, pip…) can't be seen.
 
 Connections of these VM gateways are judged **per destination**: Docker's backend and vpnkit, Podman's `gvproxy`,
-OrbStack's helper, `limactl` and QEMU (`SignatureBuilder.vmGateways`). The pattern is `TCP pypi.org:443`, not
-`TCP internet:443`. They never pass on the gateway's trusted signature.
+OrbStack's helper, `limactl` and QEMU. The pattern is `TCP pypi.org:443`, not `TCP internet:443`. They never pass on
+the gateway's trusted signature.
 
 - **Asked once per domain:** each new domain a container reaches is asked about once ("A Docker container wants to
   connect to pypi.org").
 - **Block applies to all:** Block stops it for every container.
 
 VMs with bridged or shared (NAT) networking send packets from the VM's own interface, not from a Mac process, so the
-relay never sees them.
-
-In a firewall question, **Ask Claude** has the shortcut ⌘K.
+firewall never sees them.
 
 ### Steps in when needed
 
@@ -1418,7 +1269,7 @@ When something looks wrong, pause it, or watch it closely to see what it does.
 
 #### Launch and file protection (Protection)
 
-Four pages in the Rules sidebar: *Overview* shows the state at a glance (a shield that is grey when off, purple
+Four pages in the Protection sidebar. *Overview* shows the state at a glance (a shield that is grey when off, purple
 while rehearsing, green while protecting, orange while paused) with its one next step (**Start Watching** turns on
 Watch everywhere when all is off, then **Pause for 15 Minutes** or **Resume**), a card per area with its four modes,
 what the chosen one does, today's numbers and how many it found, and links to the other pages. *Found* there shows
@@ -1428,20 +1279,20 @@ included. *Protected Files and Folders* has the cards and your own places, *Foun
 
 Each area's card has a chart: what was stopped (or would be) in red, what was asked about (or would be) in grey.
 *24 Hours | 7 Days | 30 Days* above the cards switches all of them between the last 24 hours by hour and the last
-week or month by day, and each card's two numbers are the totals of its chart. The cards share one scale, so bars side by side
-compare honestly. Hover over a bar for its numbers. VoiceOver reads each bar and offers the chart as an Audio Graph.
-The firewall's chart counts new destinations by when they were first seen. Hourly counts are kept for 31 days.
+week or month by day, and each card's two numbers are the totals of its chart. The cards share one scale, so bars side
+by side compare honestly. Hover over a bar for its numbers. VoiceOver reads each bar and offers the chart as an Audio
+Graph. The firewall's chart counts new destinations by when they were first seen. Hourly counts are kept for 31 days.
 
-The firewall is the third area, beside Launches and Files: the Overview's *Network* card has its four modes and the
-same two numbers (what it blocks or would, what it asks about or would), and the *Network Firewall* page has the
-mode with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge
-counts them), **Your rules**, how many connections are left to decide with **Review in Found**, and how it decides. *Your rules* is the full
-list: what you blocked (a domain for an app, or a connection pattern marked Suspicious or Dangerous, with who
-decided), what you allowed despite a threat list, and what you asked to be asked about again, each with *Unblock* or
-*Remove*. It doesn't depend on the list of seen connections: *Forget Seen Connections…* (in the ⋯ menu, with a
-confirmation) starts that list again and never touches a rule. *Found* is the one place to decide what the
-firewall found, under launches and files, with *Allow* and *Block*, and its badge counts all three. A long section
-opens in full with *Show all*.
+The firewall is the third area, beside Launches and Files. The Overview's *Network* card has its four modes and the
+same two numbers (what it blocks or would, what it asks about or would). The *Network Firewall* page has the mode
+with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge counts
+them), **Your rules**, how many connections are left to decide with **Review in Found**, and how it decides. *Your
+rules* is the full list: what you blocked (a domain for an app, or a connection pattern marked Suspicious or
+Dangerous, with who decided), what you allowed despite a threat list, and what you asked to be asked about again, each
+with *Unblock* or *Remove*. *Forget Seen Connections…* (in the ⋯ menu, with a confirmation) starts the list of seen
+connections again and never touches a rule. *Found* is the one place to decide what the firewall found, under
+launches and files, with *Allow* and *Block*, and its badge counts all three. A long section opens in full with
+*Show all*.
 
 Hostwatch can show what it would stop: a launch, or a program reading places like your SSH keys. It decides the way
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
@@ -1456,9 +1307,9 @@ curl and other programs that run whatever they're told are judged by what they r
   Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
 - **Your destinations:** on the *Network Firewall* page, *Add Destination…* takes a domain (its subdomains too) or an
   IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
-  and **Add Program**, with the programs as chips. They are your decisions, so they come
-  before threat lists and patterns. The most specific destination decides (`api.example.com` over `example.com`), and
-  a program on both lists is blocked. *Firewall decides* leaves it to your firewall mode.
+  and **Add Program**, with the programs as chips. They are your decisions, so they come before threat lists and
+  patterns. The most specific destination decides (`api.example.com` over `example.com`), and a program on both lists
+  is blocked. *Firewall decides* leaves it to your firewall mode.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
   something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
   files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than
@@ -1467,10 +1318,10 @@ curl and other programs that run whatever they're told are judged by what they r
 - **AI checks first (Ask):** a paused launch or file access is first looked at by the AI you chose (the on-device
   model or your own server, within 12 seconds). If it is sure it's safe, the program goes on, this time only, and a
   glass notice at the top right says so. It also shows "Checking … with AI" while it looks, whether or not a window
-  is open. Otherwise you're asked, with the AI's conclusion as a card (its verdict in colour, its confidence and its reason). The
-  question offers *Always Block* (marks the pattern Dangerous), *Block Once* (stops it this time only), *Allow Once*
-  and *Always Allow*. Shells, interpreters, high-risk programs and your sensitive
-  files are always yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
+  is open. Otherwise you're asked, with the AI's conclusion as a card (its verdict in colour, its confidence and its
+  reason). The question offers *Always Block* (marks the pattern Dangerous), *Block Once* (stops it this time only),
+  *Allow Once* and *Always Allow*. Shells, interpreters, high-risk programs and your sensitive files are always
+  yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
 - **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a
@@ -1504,8 +1355,7 @@ or stop it.
 This gives you a chance to stop a harmful step before it finishes. Turn it on in
 *Settings ▸ Detection ▸ Hold suspicious processes* or from the menu bar icon. It is off by default.
 
-When an event adds a strong story stage, Hostwatch pauses the process by sending it `SIGSTOP`. A floating panel then
-asks you what to do:
+When an event adds a strong story stage, Hostwatch pauses the process. A floating panel then asks you what to do:
 
 - **Allow:** the process goes on.
 - **Always Allow:** the process goes on, and the pattern is marked Safe.
@@ -1525,28 +1375,25 @@ A program that is a new high-risk pattern is held too.
 
 - **No answer in 60 s:** Hostwatch lets the process continue (the default) or kills it. You choose this with
   *If No Answer in 60 s*.
-- **Only your processes:** The app runs as you, so it can't hold root's or other users' processes.
+- **Only your processes:** it can't hold root's or other users' processes.
 - **Never held:** patterns marked Safe, Hostwatch itself, launchd, system UI (`/System/Library/CoreServices`,
   `/System/Applications`), and terminals or editors.
 - **At most 5 holds at once.**
-- **Safe signalling:** The pid's path is checked before every signal. An exited pid that was reused by another
-  program is left alone.
-- **Fails open:** Each hold starts a detached watchdog (`sleep 65; kill -CONT pid`). So a process can't stay frozen
-  if Hostwatch quits or crashes. Quitting or turning the hold off resumes everything.
-- **Best effort:** Events arrive after the fact, so a quick `curl` can finish before it is stopped. Slower steps,
-  such as installers, scripts and long downloads, are caught. Blocking before execution would need Endpoint Security
-  AUTH events or a Network Extension filter.
+- **Safe signalling:** if the process has exited and its pid now belongs to another program, that program is left
+  alone.
+- **Fails open:** a process can't stay frozen if Hostwatch quits or crashes, it resumes after about a minute.
+  Quitting or turning the hold off resumes everything.
+- **Best effort:** events arrive after the fact, so a quick `curl` can finish before it is stopped. Slower steps,
+  such as installers, scripts and long downloads, are caught.
 
 #### Watch Closely
 
 Curious what a program really does? Record it, and everything it starts, for a minute, then read a plain summary of
 its files, network and system changes.
 
-Use it when you don't trust a program and want to see exactly what it does on your Mac.
-
 1. Right-click an event, or choose Activity ▸ *Watch Selected Process Closely…* (⌥⌘W).
-2. Hostwatch records what its process, and every process it starts, does for 30 s to 5 min. The default is 1 min.
-   The window's duration menu offers 30 seconds, 1, 2 or 5 minutes.
+2. Hostwatch records what its process, and every process it starts, does for 30 seconds, 1, 2 or 5 minutes (the
+   window's duration menu). The default is 1 minute.
 3. Recording ends at the time limit, when you click *Stop*, when every watched process has exited, or when the app
    goes away.
 4. Read the result. **Watch Again** records once more.
@@ -1567,12 +1414,11 @@ Below that you see processes as a tree, then network, other processes, persisten
 files grouped by folder (changes first) and event counts.
 
 **Ask an AI about it.** When recording ends, **Ask** explains the result with Claude or Apple's on-device model. You
-pick with the engine switch, as in Ask AI. The evidence is the profile, most telling first, with the signer and
+pick with the engine switch, as in Ask AI. The evidence is the summary, most telling first, with the signer and
 parent chain. You can edit it before sending, and secrets are masked.
 
-**What is recorded.** The collector runs a second `eslogger` with about 60 Endpoint Security event types
-(`BehaviorRecorder.events`, those this macOS knows). Endpoint Security is the macOS interface that reports system
-activity. The event types cover:
+**What is recorded.** About 60 kinds of Endpoint Security events (the macOS interface that reports system activity),
+plus the process's network connections:
 
 - file create, write, rename, delete, permissions and quarantine changes
 - code loaded and memory made executable
@@ -1582,13 +1428,7 @@ activity. The event types cover:
 - login items, configuration profiles, privacy (TCC) changes
 - kernel extensions, drivers, mounts and more
 
-The collector's own connection sources add the network.
-
-**Technical notes.**
-
-- Lines are checked for the tree's pids before they're parsed, so other processes cost almost nothing.
-- The result is a behaviour profile (`BehaviorProfile`), never the raw events. It is sent to the app every 2 s.
-- To test it as root, run `sudo Hostwatch --watch-test <pid> [seconds]`. It prints the highlights and the evidence.
+Only the summary is kept, never the raw events.
 
 ### Knows known threats
 
@@ -1599,8 +1439,8 @@ Public threat lists, checked on your Mac every day.
 Once a day Hostwatch fetches public lists of malware servers and files and checks your Mac against them. It also
 tells you when your macOS has holes that attackers are actively using.
 
-The lists are downloaded once a day. You can also click *Update Now* in Settings ▸ Detection. The matching happens
-on this Mac: nothing about the Mac is sent.
+You can also click *Update Now* in Settings ▸ Detection. The matching happens on this Mac: nothing about the Mac is
+sent.
 
 | List | What | Key |
 |------|------|-----|
@@ -1629,8 +1469,7 @@ C2 means "command and control": servers that attackers use to steer infected mac
   way are shown as *contacted earlier*.
 
 **macOS vulnerabilities.** Hostwatch takes CISA's Apple entries for macOS, or for several Apple systems including it.
-It compares them with the date of your last macOS update and any update waiting in Software Update
-(`softwareupdate --list --no-scan`).
+It compares them with the date of your last macOS update and any update waiting in Software Update.
 
 - CISA doesn't name fixed versions. So a flaw listed before your last update is shown as *likely fixed*.
 - Later ones are shown as *fixed by the waiting update* or *not fixed by your last update*.
@@ -1647,7 +1486,7 @@ It compares them with the date of your last macOS update and any update waiting 
 - Lists are only read, never run.
 - They are fetched over HTTPS, with no cookies or cache. Redirects are followed only within the same server.
 - Before a download replaces the previous copy, it must be text. Programs, archives, documents and scripts are
-  refused: Mach-O, ELF, PE, zip, gzip, PDF, xar and `#!`.
+  refused.
 - It must be within a plausible size.
 - It must have the right shape line by line: ≥ 95% valid domains or IPs. The CISA list needs ≥ 500 entries.
 - A list that suddenly shrinks by half or grows five-fold is refused too.
@@ -1703,21 +1542,16 @@ The window also has **Re-collect** (gather the evidence again), **Copy Answer** 
 - file type and flags (file events)
 - other recent activity from the same PID
 
-**How Claude is run.** With Claude, Hostwatch runs Claude Code headless (without its interface):
+**How Claude is run.** With Claude, Hostwatch runs Claude Code in the background (`claude -p`):
 
-```
-claude -p --output-format stream-json --include-partial-messages --no-session-persistence \
-       --setting-sources "" --strict-mcp-config --tools "" --system-prompt "<analyst prompt>"
-```
-
-- **Login:** It uses your existing Claude Code login. No extra API key is needed.
-- **Isolation:** Your hooks, plugins and MCP servers are skipped, and no session is saved.
-- **No tools by default:** The evidence may be attacker-controlled. So by default Claude gets **no tools** and is told
+- **Login:** it uses your existing Claude Code login. No extra API key is needed.
+- **Isolation:** your hooks, plugins and MCP servers are skipped, and no session is saved.
+- **No tools by default:** the evidence may be attacker-controlled. So by default Claude gets **no tools** and is told
   to treat the evidence only as data.
-- **Read local files:** This is opt-in (`Read`/`Grep`/`Glob`, read-only).
-- **Finding `claude`:** It is looked up in `~/.local/bin`, `~/.claude/local`, Homebrew and `/usr/local/bin`, then
+- **Read local files:** this is opt-in (read-only).
+- **Finding `claude`:** it is looked up in `~/.local/bin`, `~/.claude/local`, Homebrew and `/usr/local/bin`, then
   your login shell. Set `CLAUDE_PATH` to override.
-- **Privacy and cost:** Evidence you send goes to Anthropic. A typical question takes about 10 s and costs about
+- **Privacy and cost:** evidence you send goes to Anthropic. A typical question takes about 10 s and costs about
   $0.02–0.05.
 
 #### AI engine and triage
@@ -1743,9 +1577,9 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
 
 `Hostwatch --triage-benchmark` compares local models on your own decisions (see Advanced and command line).
 
-**How the models compare.** Measured in November 2026 on an M3 Pro, with the current prompt: 20 patterns the user
-had marked Safe and 20 attack-shaped ones. *Settled* is how many ordinary patterns the AI would decide by itself.
-*Attacks settled Safe* is the mistake that matters.
+**How the models compare.** Measured in November 2026 on an M3 Pro: 20 patterns the user had marked Safe and 20
+attack-shaped ones. *Settled* is how many ordinary patterns the AI would decide by itself. *Attacks settled Safe* is
+the mistake that matters.
 
 | Model | Ordinary patterns settled | Attacks settled Safe | Time per pattern | Leaves the Mac |
 |---|---|---|---|---|
@@ -1756,16 +1590,14 @@ had marked Safe and 20 attack-shaped ones. *Settled* is how many ordinary patter
 | Claude Opus | 75% | 0 of 20 | 0.9 s (one batch) | yes, secrets masked |
 
 Sonnet and Opus answer *unknown* more often for the attacks, which leaves them for you rather than settling them.
-Cisco's Foundation-Sec-8B (Instruct and Reasoning) was measured with an earlier prompt: it settled 45 to 55% but
-called 5 to 6 of the 20 attacks Safe, more than any other model. Every small model trusted an Apple signature on
-curl or a shell, which is why a warning sign outranks a local model (ADR 0012). The app's own guardrails stop the
-rest: no AI's Safe is taken for a high-risk pattern, a shell or an interpreter.
+Cisco's Foundation-Sec-8B (Instruct and Reasoning) settled 45 to 55% but called 5 to 6 of the 20 attacks Safe, more
+than any other model. Every small model trusted an Apple signature on curl or a shell, which is why a warning sign
+outranks a local model (below). The app's own guardrails stop the rest: no AI's Safe is taken for a high-risk
+pattern, a shell or an interpreter.
 
 **Which to choose.** Apple's model for free, private and fast. Gemma 4 through Ollama for better local answers if
 the wait doesn't matter. Claude Haiku settles the most and costs the least of the Claude models: a batch of 40
 patterns costs a few cents.
-
-Earlier versions' two toggles are migrated to the matching engine.
 
 **What the AI sees for each pattern.** The local model and Claude get the same facts and the same instructions:
 
@@ -1773,35 +1605,37 @@ Earlier versions' two toggles are migrated to the matching engine.
 - each program involved, who signed it and where it lives (part of macOS, Homebrew, inside an app, a download or
   temp folder, a hidden folder)
 - who started it: the launch chain as a trail from its origin, the origin in words, the AI coding session if any,
-  and a launch's command line. Only when that example's own launch is still in the record: a reused pid would tell a
-  wrong story, so otherwise it says *not recorded*
+  and a launch's command line. When that launch is no longer in the record, it says *not recorded* rather than guess
 - warning signs Hostwatch checked itself: a tool that runs whatever it's told (sh, curl, osascript…), an app
   starting one, a program in a temp, download or hidden folder, removing the quarantine flag, piping a download into
   a shell, reading saved passwords, Messages or the keychain, a password dialog, a screenshot, an autostart write, a
   bare IP address
 - its history: how often, over how long, and whether regularly
-- the local risk heuristic
+- the local risk level
 
 The instructions say that developer tools in your projects are ordinary even unsigned, that an Apple signature on
-a shell or curl says nothing about the command, and that the reason must name the deciding fact. Machine text is kept
-on one line, so a crafted path can't forge a fact, and secrets are masked.
+a shell or curl says nothing about the command, and that the reason must name the deciding fact. Secrets are masked,
+and a crafted path can't pass itself off as one of these facts.
 
 **A warning sign outranks the local model.** When Hostwatch found a warning sign, a local model's Safe is never
-taken: the pattern goes to Claude, or stays New for you. Small models trust an Apple signature on curl or a shell too
-easily, and the benchmark showed it.
+taken: the pattern goes to Claude, or stays New for you.
 
 **Which patterns.** *Classify with AI* in the toolbar takes the rows you selected, or, with nothing selected, every
-row the list shows, and selects them so you see what is being classified: in Patterns, its filter, search and scope. In Events, the patterns of the events shown
-(or selected), with their filters, kinds and search. Right-click rows, a selection or a group row for the same:
-*Classify N New Patterns with AI* ▸ *Apply the Verdicts* or *Suggest Only, I’ll Decide*. Applying also applies what an
-AI already suggested for them, without asking again. Reopened patterns (decided before, sent back because something
-changed) are included when you ask: the AI is told why they were reopened, which also counts as a warning sign, so a
-small local model can't settle one Safe. Automatic classification leaves them to you. Asking for patterns again retries those an earlier pass left for
-you. *Apply the Verdicts* is your decision: every AI answer of that run is applied, including a Safe for a high-risk
-pattern or for a tool that can run or change other programs (shells, interpreters, curl, codesign…). Those are
-recorded as yours, with a note naming the AI. Without that click (automatic suggestions, or *Suggest Only*), such a
-Safe is never applied by itself, except a plain read of an exact folder in your own projects: it stays a suggestion
-with its reason (*AI suggests Safe · yours: …*), and the live list has a *Mark Safe* button.
+row the list shows, and selects them so you see what is being classified. In Patterns that follows its filter, search
+and scope. In Events, the patterns of the events shown (or selected), with their filters, kinds and search.
+Right-click rows, a selection or a group row for the same: *Classify N New Patterns with AI* ▸ *Apply the Verdicts*
+or *Suggest Only, I’ll Decide*. Applying also applies what an AI already suggested for them, without asking again.
+
+- **Reopened patterns** (decided before, sent back because something changed) are included when you ask. The AI is
+  told why they were reopened, which also counts as a warning sign, so a small local model can't settle one Safe.
+  Automatic classification leaves them to you.
+- **Asking again** retries the patterns an earlier pass left for you.
+- **Apply the Verdicts is your decision:** every AI answer of that run is applied, including a Safe for a high-risk
+  pattern or for a tool that can run or change other programs (shells, interpreters, curl, codesign…). Those are
+  recorded as yours, with a note naming the AI.
+- **Without that click** (automatic suggestions, or *Suggest Only*), such a Safe is never applied by itself, except a
+  plain read of an exact folder in your own projects. It stays a suggestion with its reason (*AI suggests Safe ·
+  yours: …*), and the live list has a *Mark Safe* button.
 
 **Watch it work.** When you start *Classify with AI*, a list opens beside the button and fills live: the pattern being
 asked about right now, then every pattern of the run with its state (waiting, being asked, its verdict and reason,
@@ -1810,24 +1644,23 @@ progress bar reopens it, and after a run the list button next to *Classify with 
 
 **Per question.** The Ask window also has a **Claude / On-device** switch for each question.
 
-- On-device answers use the same format, with the VERDICT line first.
-- The evidence is shortened to ~6,000 characters to fit the model's ~4,000-token context window (how much text it can
-  read at once).
+- On-device answers use the same format, with the verdict first.
+- The evidence is shortened to about 6,000 characters to fit what the on-device model can read at once.
 - Reading local files is Claude-only.
 - An on-device "SAFE" from Ask never marks a high-risk pattern Safe.
 
 **Model state.** The menu shows the model's state: ready, still downloading, Apple Intelligence off, or Mac not
-eligible (Intel). When unavailable, everything goes to Claude as before.
+eligible (Intel). When it's unavailable, everything goes to Claude.
 
 **Classification steps.** Triage means sorting new patterns by AI before you look at them.
 
-1. **On-device pass** (engines with on-device): Apple's on-device model (`SystemLanguageModel`, never Private Cloud
+1. **On-device pass** (engines with on-device): Apple's on-device model (on this Mac only, never Private Cloud
    Compute) looks at each pattern on its own. It sees the program, activity, signer and trust, local risk and count.
    Secrets are masked and the text is marked as data. It answers SAFE / SUSPICIOUS / DANGEROUS / UNSURE with a
-   confidence (structured output, greedy decoding).
+   confidence.
 2. **Claude** (engines with Claude): one Claude call for whatever step 1 did not settle.
 
-Routing (`TriageRouter`, unit-tested):
+Routing:
 
 | On-device says | Normal-risk pattern | High-risk pattern |
 |----------------|---------------------|-------------------|
@@ -1836,26 +1669,24 @@ Routing (`TriageRouter`, unit-tested):
 | SUSPICIOUS / DANGEROUS | Claude, else flagged (*on-device*) | Claude, else flagged |
 | model unavailable | Claude, else left for you | Claude, else left for you |
 
-**No AI verdict ever marks a high-risk pattern Safe.** This holds for the on-device model and Claude, in triage,
-Classify New and Ask AI. Event text such as file paths, process names and hostnames can be crafted to talk a model
-into it. So a high-risk pattern stays New until you decide. AI verdicts never remove steps from Stories either. Only
-your own decisions do.
+**No AI verdict ever marks a high-risk pattern Safe by itself.** This holds for the on-device model and Claude, in
+triage, Classify New and Ask AI. Event text such as file paths, process names and hostnames can be crafted to talk a
+model into it. So a high-risk pattern stays New until you decide (or until you click *Apply the Verdicts*). AI
+verdicts never remove steps from Stories either. Only your own decisions do.
 
 **Apple's safety filter.** The on-device model has built-in guardrails. They can refuse text that looks like hacking
 or credential theft, which is what security evidence is.
 
-- Ask AI uses Apple's `permissiveContentTransformations` mode, meant for analysing such text.
+- Ask AI uses Apple's mode meant for analysing such text.
 - If the model still refuses, Hostwatch retries once with the core evidence (event, process, parent chain,
   executable) and says so.
 - If that is refused too, it explains why and suggests Claude.
 - Background triage treats a refusal as "couldn't decide". The pattern goes to Claude or stays New.
-- `HOSTWATCH_LIVE_MODEL_TESTS=1 swift test --filter OnDeviceModel` runs the real model on security evidence (needs
-  Apple Intelligence).
 
 **Claude usage** (Settings ▸ AI) shows the tokens and cost of every Claude run Hostwatch made: Ask AI, classifying
 patterns and Suggest Rules.
 
-- It is counted across launches from each `claude -p` result (`usage`, `total_cost_usd`).
+- It is counted across launches.
 - It reads like "1.2M tokens · $3.41", with runs and the start date under it.
 - The tooltip breaks it down per feature and into input/cached/output.
 - Failed runs that still reached Claude count too.
@@ -1871,7 +1702,7 @@ An AI coding assistant can be tricked into running harmful commands. The guard c
 
 **What each verdict does:**
 
-- **Block:** The call gets `deny`. It doesn't run, and Claude is told why and to ask you to run it yourself.
+- **Block:** the call is denied. It doesn't run, and Claude is told why and to ask you to run it yourself.
   Examples:
   - `rm -rf ~`, `/`, `~/Documents`, `find ~ -delete`
   - `/dev/tcp`, `nc -e`
@@ -1882,7 +1713,7 @@ An AI coding assistant can be tricked into running harmful commands. The guard c
   - a secret sent to a paste or webhook site
   - a known malware domain or IP
   - deleting or changing Hostwatch's files
-- **Ask:** The call gets `ask`. Claude Code asks you, with the reason. Examples:
+- **Ask:** Claude Code asks you, with the reason. Examples:
   - `curl … | sh`, `bash <(curl …)`, `base64 -d | sh`
   - `sudo`, `osascript`
   - launch agents, shell startup files, `authorized_keys`, `/etc`, Claude Code's own settings
@@ -1894,22 +1725,21 @@ An AI coding assistant can be tricked into running harmful commands. The guard c
   - a bare public IP
   - `pkill Hostwatch`
   - scripts run with `bash x.sh` or written by Claude that do any of this
-- **Nothing:** Everything else. Claude Code's normal permissions apply.
+- **Nothing:** everything else. Claude Code's normal permissions apply.
 
-**It can only make Claude Code stricter.** Hostwatch never answers `allow`.
+**It can only make Claude Code stricter.** Hostwatch never allows a call that Claude Code would otherwise ask about.
 
-- When Claude Code won't ask (`bypassPermissions`, `dontAsk`), a Hostwatch panel asks instead. Block is the default,
-  and no answer in 60 s blocks.
-- The panel has **Allow Once** and **Block** with a countdown.
-- In `claude -p` runs, Claude Code turns `ask` into a refusal by itself.
+- When Claude Code won't ask (`bypassPermissions`, `dontAsk`), a Hostwatch panel asks instead, with **Allow Once**
+  and **Block** and a countdown. Block is the default, and no answer in 60 s blocks.
+- In `claude -p` runs, Claude Code turns an ask into a refusal by itself.
 - Hostwatch's own Claude runs don't load user settings, so they aren't checked.
 
 **Log and status.**
 
-- The log (*Show Log…*) keeps the last 300 blocked or asked calls, with secrets masked. It is kept in
-  `claude-guard.json` (the last 300 entries), and its window has **Clear Log**.
+- The log (*Show Log…*) keeps the last 300 blocked or asked calls, with secrets masked, in `claude-guard.json`. Its
+  window has **Clear Log**.
 - The tray shows blocks in the last 24 hours.
-- The hook's state is checked every 30 s. It covers two cases: the hook removed from the settings (*Restore*), or all
+- The hook's state is checked every 30 s, for two cases: the hook removed from the settings (*Restore*), or all
   hooks switched off by `disableAllHooks`.
 
 **Limits.** It judges the text of a call, so well-hidden code can get through. Hostwatch's monitoring still sees what
@@ -1922,9 +1752,9 @@ then runs.
 - Command: `'<Hostwatch>' --claude-hook`
 - Timeout: 90 s
 
-The hook takes about 15 ms. It passes the call to the app over a private Unix socket
-(`~/Library/Application Support/Hostwatch/guard/claude.sock`, 0600, same user only). If the app isn't running, the
-hook judges the call itself with the same rules, without the threat lists.
+The hook takes about 15 ms. It passes the call to the app over a private connection only you can use
+(`~/Library/Application Support/Hostwatch/guard/claude.sock`). If the app isn't running, the hook judges the call
+itself with the same rules, without the threat lists.
 
 Settings ▸ AI also shows the hook as a fragment to copy into a project's `.claude/settings.json` or the managed
 settings.
@@ -1939,11 +1769,10 @@ questions like what ran on your Mac yesterday, and it reads the answer from Host
 **Set it up.** Access is off by default.
 
 1. Turn on *Settings ▸ AI ▸ Use with Claude Code*, or use *Help ▸ Use with Claude Code…*.
-2. Hostwatch creates a random token (`hwmcp_` + 64 hex) and shows the command to run once:
+2. Hostwatch creates a random token and shows the command to run once:
    `claude mcp add --scope user hostwatch -e HOSTWATCH_MCP_TOKEN=<token> -- <path to Hostwatch.app>/Contents/MacOS/Hostwatch --mcp`
-   The command first removes an older `hostwatch` registration.
-3. The token is shown once. Hostwatch keeps only its SHA-256 in `mcp-token.sha256` (mode 600) and compares in constant
-   time.
+   The command replaces any earlier `hostwatch` registration.
+3. The token is shown only once. Hostwatch keeps only a fingerprint of it (`mcp-token.sha256`), not the token itself.
 
 **What Claude Code can ask:**
 
@@ -1954,36 +1783,31 @@ questions like what ran on your Mac yesterday, and it reads the answer from Host
 | `search_patterns` | patterns with status/risk/count/first/last/who decided: `query`, `status` (new/safe/suspicious/dangerous/flagged), `risk`, `kind`, `sort` |
 | `list_stories`, `get_story` | stories (numbered newest first) and one story's full timeline (`id` = number or id prefix) |
 | `list_domains` | domain inventory: `only_new`, `query`, `limit` |
-| `process_tree` | ancestors (respecting PID reuse: the latest start of a pid before its child), children during the process's lifetime, its recent connections and file activity |
-| `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid, and `since`/`until`): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. From the once-a-minute process lists, plus recorded starts for processes that lived under a minute |
+| `process_tree` | ancestors, children during the process's lifetime, its recent connections and file activity |
+| `find_processes` | processes that ran in a time range (`query`: name, path, command line, user or pid, and `since`/`until`): start, end or still running, CPU time, peak memory, bytes written, user, parent, command line. Processes that lived under a minute are included |
 | `agent_sessions` | coding-agent sessions Hostwatch follows or followed in the last 30 minutes: pid, project, start and end, launches, file opens, connections, new patterns. `trace_process` with the pid shows what one did |
 | `trace_process` | one process's life (`pid`, `at` to pick the run when a pid was reused, and `children`): ancestors, child tree, CPU/memory/disk use over its life, what it (and its tree) ran, opened and connected to, and a timeline. For a process running for days, children and activity cover its last 6 h. A huge tree is followed for its first 200 descendants |
 | `signing_info` | signer, Team ID, ad-hoc, quarantine, Apple, trusted, replaced-at-path, full validity check |
 
 **Access control.**
 
-- **Refusals:** With access off, or a missing or outdated token, the server answers every request with an error
-  (`-32001`) saying how to fix it. It serves no data.
+- **Refusals:** with access off, or a missing or outdated token, the server serves no data and answers every request
+  with an error saying how to fix it.
 - **New Token…** invalidates earlier registrations. Turning access off invalidates all of them.
-- **Access log:** Each session start is recorded in `mcp-access.log`: time, allowed/refused, and the program that
+- **Access log:** each session start is recorded in `mcp-access.log`: time, allowed/refused, and the program that
   started it. The last five show in Settings.
-- **Limits of a token:** It keeps out MCP clients you didn't set up, and makes access revocable and visible. A
+- **Limits of a token:** it keeps out MCP clients you didn't set up, and makes access revocable and visible. A
   program already running as your user could still read Hostwatch's files directly, as it can any of your files.
 
 **Safety.**
 
-- Every tool is annotated read-only. There are no tools that change anything.
+- Every tool is read-only. There are no tools that change anything.
 - Output is masked with the same rules as Ask AI and capped at 40,000 characters.
 - The server's instructions tell Claude to treat the data as evidence, never as instructions.
+- There's no network listener: Claude Code starts Hostwatch itself and talks to it directly.
 
-**Technical details.**
-
-- **Transport:** It is a read-only server over stdio (JSON-RPC, protocol versions 2025-06-18, 2025-03-26,
-  2024-11-05). There's no network listener: Claude Code starts the process and talks over stdin/stdout.
-- **Data:** It reads `signatures-v2.json`, `stories.json`, `domains.json` and the history files. Saved data is at
-  most ~30 s behind the app. It works when the app is closed.
-- **Search:** History is streamed with byte-level search (memchr/memmem). Only files that can contain the range are
-  read, up to 2 GB per query.
+**Data.** It reads your patterns, stories, domains and history. Saved data is at most about 30 s behind the app, and
+it works when the app is closed. One question reads up to 2 GB of history.
 
 
 
@@ -2022,9 +1846,8 @@ The HUD is Hostwatch's on-screen overlay. This pane sets what it shows and how i
 - *Show HUD* turns it on or off. It is off by default. Shortcut: ⌃⌥⌘H.
 - *Click-through* is off by default.
 - *Show CPU, memory, network and disk* is on by default.
-- **Background:** choose Glass, Clear Glass or Solid. Preview tiles show each one.
-  - Older "transparent" settings become Clear Glass.
-  - With Reduce Transparency on, glass shows as Solid.
+- **Background:** choose Glass, Clear Glass or Solid. Preview tiles show each one. With Reduce Transparency on, glass
+  shows as Solid.
 - **Contrast:** goes from Lighter to Darker, at 0.45 by default. A warning appears below 0.25.
 - **Appearance:** text size is Small, Medium (default), Large or Extra Large. You can also reset the size and position,
   which returns the HUD to 24 rows × 360 pt.
@@ -2047,7 +1870,7 @@ This pane decides how Hostwatch reacts to suspicious and unusual activity.
 
 ### Firewall settings
 
-They moved to *Protection*, next to launch and file protection. See
+The firewall is set in *Protection*, next to launch and file protection, not in Settings. See
 [Launch and file protection](03-features.md#launch-and-file-protection-rules--protection) and
 [Firewall](03-features.md#firewall).
 
@@ -2103,17 +1926,13 @@ file:*.plist
 Sensible noise defaults come preloaded: `/System`, `/usr/lib`, caches, loopback and Spotlight. **Restore Defaults** in
 the editor brings them back.
 
-Exclusions persist in `UserDefaults` (`tech.hostwatch.app`).
+Exclusions are saved with your settings, in `~/Library/Preferences/tech.hostwatch.app.plist`.
 
 ### Activity history
 
-Hostwatch writes all activity to disk, so you can look back at it later. Each event is one line of JSON (the JSON
-Lines format), with a full `ts` timestamp:
-
-```
-~/Library/Logs/Hostwatch/History/activity-20261031-202536-385.jsonl
-{"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
-```
+Hostwatch writes all activity to disk, so you can look back at it later. The history lives in
+`~/Library/Logs/Hostwatch/History` by default: `activity-*` files for events, `metrics-*` for resource samples and
+`processes-*` for process lists. The files are compressed and encrypted as they are written.
 
 You control it in *Settings ▸ History*:
 
@@ -2127,64 +1946,34 @@ You control it in *Settings ▸ History*:
 
 - **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record only what passes
   your exclusions.
-- The recorder has its own connection, with the 40/s display cap turned off.
+- The history is not limited by the overlay's display rate.
 - It keeps recording while the overlay is paused or a kind is hidden.
 
-**Max size:** the default is **5 GB**. It caps the bytes on disk of all history files together.
+**Max size:** the default is **5 GB**. It caps the space all history files take on disk together, activity, resource
+samples and process lists alike.
 
-- Compressed files count at their compressed size. So the cap holds roughly 10–20× more history than before.
-- The cap covers everything recorded in the folder: activity (`activity-*`), resource samples (`metrics-*`) and
-  process lists (`processes-*`). There is no separate limit for any of them.
-- Files rotate at about 1/20 of the cap. That is 1–100 MB of plain text each, or 100 MB with the default cap.
+- Files are compressed, so the cap holds far more history than its size in plain text.
 - When the total would go over the cap, the oldest day goes first: its activity, then its samples and process lists.
-- This is checked when a file rotates and every 10 minutes.
 - Today's files and the file being written are never deleted.
 
-**Compressed as it's written:** history takes little space, because it is compressed before it reaches the disk.
+**Crash safety:** if the app crashes, at most the last second of history is lost. The next launch recovers what was
+written. After a kernel panic or power loss, the last few seconds can be lost. New activity shows up in Time Travel
+within about 30 seconds.
 
-- Events are compressed as they arrive into the current block of `activity-….jsonl.gz` (a gzip member). A block is
-  finished every 30 seconds (or 4 MB).
-- Each finished block gets a line in `activity-….jsonl.blocks`, which records where it is and which time it covers.
-- Nothing is rewritten and nothing is written twice.
-- About 1/22 of the raw bytes reach the disk. Activity logs are very repetitive, so 30-second members compress almost
-  as well as 4 MB ones.
-- When the file is full (see Max size above), its final index `activity-….jsonl.idx` replaces the `.blocks` list.
-- Plain files left from older versions are compressed on the next start.
-
-Technical details of the compressed files:
-
-- **A normal gzip file:** the `.gz` is a series of independent gzip members of ≈4 MB of whole lines. So `zcat`,
-  `zgrep` and `gzip -d` work on it.
-- **The index:** it records each block's earliest and latest timestamp, offset and sizes, plus bytes per minute.
-  Time Travel and the MCP server decompress only the blocks a time range needs. The timeline's bars come from the
-  per-minute counts, so they are exact, with real gaps.
-- **Safe compression:** the index is written first, then the `.gz`, and only then is the plain file removed. A `.gz`
-  without an index is ignored, and the plain file stays authoritative.
-
-**Crash safety:** a crash of the app loses at most the last second of history.
-
-- **Flushed every second:** the open block is pushed into the file every second (zlib's sync flush, which keeps the
-  compression dictionary, so it costs no measurable size).
-- **Recovered on the next launch:** after an app crash those bytes are already in the file. The next launch
-  decompresses the unfinished block up to its last whole event and saves it as a finished block.
-- **Never twice:** a block is finished before its line goes into the block list, so nothing is written twice, and a
-  torn tail is cut off.
-- **Kernel panic or power loss:** the last few seconds can be lost, as with any write the system hadn't flushed.
-- **When Time Travel sees it:** once its block is finished, within 30 s.
-
-You can also search the history yourself from Terminal, for example:
+**Exporting:** the history files are encrypted, so `zcat` and `grep` can't read them. Export them as plain JSON lines,
+one event per line, from Terminal:
 
 ```bash
-cd ~/Library/Logs/Hostwatch/History
-zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
-zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
+/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --export-history > history.jsonl
+/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --export-history | jq -c 'select(.kind=="net")' | tail
 ```
 
-**Tools:**
+Without an argument it exports the whole history folder. You can also pass one file or another folder. Each event looks
+like this:
 
-- `--story-replay` and `--signature-report` accept a `.jsonl`, a `.jsonl.gz` or the whole history folder.
-- `--compress-history <folder>` compresses plain files by hand.
-- `--time-travel-probe` prints read timings.
+```
+{"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
+```
 
 
 
@@ -2194,105 +1983,57 @@ zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*
 
 ### Command-line flags
 
-You don't need any of these: the app runs without flags, and most are for testing. Run one as
-`Hostwatch.app/Contents/MacOS/Hostwatch <flag>`.
+You don't need any of these. The app runs without flags. Run one as
+`/Applications/Hostwatch.app/Contents/MacOS/Hostwatch <flag>`.
 
 | Flag | What it does |
 |------|--------------|
-| `--collector` | The collector itself (runs as root, started by the launcher). Options: `--daemon` (the background service: serves the user at the Mac, idles without a client), `--owner-pid`, `--token-file`, `--socket`. |
-| `--collector-launcher` | Started by launchd: by the bundled service (`self` names this binary) or by the admin-prompted job. It spawns the collector. |
-| `--mcp` | The read-only MCP server for Claude Code (see [MCP server](03-features.md#mcp-server)). |
-| `--claude-hook` | Claude Code's PreToolUse hook (see [Claude Code guard](03-features.md#claude-code-guard)). |
-| `--suggest-rules` | Dry run of rule suggestions from your decisions. |
-| `--signature-report <history.jsonl>` | How events group into patterns (`REPORT_NOSIGN=1` skips signing checks). |
-| `--triage-benchmark` | Compares local models on your own decisions and on attack-shaped patterns: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them (Claude gets one batch, as in the app), `BENCH_N` the sample size. Run it from the signed app. |
-| `--signing-check <path>…` | Signing facts for files (`HOSTWATCH_SIGNING_DB` for a scratch database). |
-| `--story-replay <history.jsonl>` | Replays history through the story engine (`REPLAY_LEARN_MINUTES`, `HOSTWATCH_OWN_BUNDLE`). |
-| `--metrics-probe` | Prints CPU, memory, network and disk samples. |
-| `--compress-history <folder>` | Compresses plain history files by hand. |
-| `--time-travel-probe [dir]` | Times reading history and searching it for Time Travel. |
-| `--export-history [file or folder]` | The recorded events as plain JSON lines on stdout, through the data key (the files are sealed). |
-| `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely and prints the result. |
-| `sudo … --firewall-probe` | Checks that the firewall's redirect works. |
-| `sudo … --firewall-relay-test [seconds]` | Runs the relay and reports what passes through it. |
+| `--export-history [file or folder]` | Prints the recorded events as plain JSON lines, for your own scripts or another tool. History is encrypted on disk, so this is the way to read it. Without a path it exports the whole history folder. |
+| `--metrics-probe` | Prints three readings of CPU, memory, network and disk, 2 s apart, to compare with Activity Monitor or `top`. |
+| `--mcp` | The read-only MCP server for Claude Code. You don't run it yourself. *Settings ▸ AI* gives the command that registers it with Claude Code, with its access token (see [MCP server](03-features.md#mcp-server)). |
+| `--claude-hook` | Claude Code's check before each command. Hostwatch installs it when you turn on the [Claude Code guard](03-features.md#claude-code-guard). |
 
-Environment variables:
-
-- `CLAUDE_PATH`: where `claude` is.
-- `HOSTWATCH_MCP_TOKEN`: MCP access.
-- `CODESIGN_IDENTITY`: build with a stable signature.
+Tools for building and testing Hostwatch are listed in [For developers](07-for-developers.md).
 
 ### How the collector works
 
-The collector is the part of Hostwatch that watches your Mac. It is built into the app (`Hostwatch --collector`,
-written in Swift). Until 0.5 it was a Python script.
+The collector is the part of Hostwatch that watches your Mac. It is built into the app and runs as root in the
+background. It only watches and reports, and everything is decided in the app. It combines five sources:
 
-The launcher starts it as root. It combines five sources:
+- **Processes and file opens:** Apple's `eslogger` (Endpoint Security) reports which programs start and which files
+  they open.
+- **Outgoing connections:** a read-only packet capture sees every new outgoing TCP connection, even one too short to
+  notice any other way, like `curl google.com`. It gives up root right after it starts.
+- **Connected sockets:** every second the collector looks at every process's open connections. This finds incoming
+  connections and long-lived UDP traffic.
+- **Connection statistics:** macOS's own network statistics, what `nettop` is built on, report every new connection
+  with its real destination, even one that closes within milliseconds or is taken over by another security tool.
+  When those statistics aren't available, a connection Hostwatch could only work out from a program's traffic is
+  marked **inferred**, and its destination shows as `≈name`.
+- **Hostnames:** the DNS answers your Mac receives give each connection the name that was looked up, such as
+  `www.google.com`. If no answer was seen, for example with encrypted DNS, the name comes from a reverse lookup and
+  shows as `~name`, often a provider's name like `~bt-in-f100.1e100.net`. Exclusions match hostnames, such as
+  `net:*.google.com:*`.
 
-- **Processes and file opens:** `eslogger exec exit open` (Endpoint Security) reports processes and file opens.
-  - `exit` is only used to keep the list of Hostwatch's own processes exact. It is never published.
-  - Opens are deduplicated per (pid, path) for 2 minutes and capped at 40/s per client.
-- **Outgoing connections:** packet capture sees every outgoing TCP connection, from its SYN packet, with the owning
-  process.
-  - It catches connections too short for any polling, like `curl google.com`. Endpoint Security has no connect event.
-  - The command is `tcpdump -i pktap,all -k NPD -Z nobody`, read-only. It drops root right after opening the capture
-    device, so packets are decoded without root.
-- **Connected sockets:** every second, every process's connected sockets are read with libproc and compared with the
-  previous look.
-  - This finds incoming connections and long-lived UDP flows. It is also a fallback if packet metadata is unavailable.
-  - Each connection is reported once, by whichever source sees it first.
-  - Before 0.9 this was `lsof -i`.
-- **Connection statistics:** macOS's NetworkStatistics.framework, what `nettop` is built on, reports every new TCP
-  and UDP socket of every process. It gives the real destination, even for a socket that closes within milliseconds.
-  - **Why it matters:** some security tools take over TCP flows in the kernel (e.g. a traffic-scanning network
-    extension). Their short connections never appear as packets from the process.
-  - **Fallback:** the framework is private, so it's opened at run time. If a macOS ever lacks it, the collector falls
-    back to running `nettop`, under a small shell that stops it if the collector dies.
-  - **Inferred connections:** in that fallback, a new process with TCP traffic that nobody else reported is reported
-    as an **inferred** connection. Its destination is taken from what nettop saw or from the command line (`≈name`).
-    It is marked as inferred, with byte counts.
-- **Hostnames:** passive DNS answers (`tcpdump`, port 53, read-only) give a hostname for each new connection. That is
-  the name that resolved to its IP, e.g. `curl TCP www.google.com:80`, kept even behind CNAMEs.
-  - If no answer was seen, reverse DNS is used instead, shown as `~name`. This happens when the answer was cached
-    before the collector started, or with encrypted DNS/DoH. The name is often a provider name like
-    `~bt-in-f100.1e100.net`.
-  - The Activity list still shows the IP, and Claude gets both.
-  - Exclusions match hostnames: `net:*.google.com:*`.
+**Hostwatch's own activity is not reported**, live, in history or in stories. That covers the app, the collector's
+own helpers and their children. Other runs of the Hostwatch program, such as the MCP server Claude Code starts, are
+reported like any program, so malware can't hide by starting Hostwatch with injected code.
 
-**Hostwatch's own activity is not reported**, live, in history or in stories. That covers:
-
-- the app that started the collector (verified by pid),
-- the collector's own helpers (eslogger, tcpdump, nettop if used),
-- and the children of these.
-
-Other runs of the Hostwatch program, such as the MCP server Claude Code starts, are reported like any program. Hiding
-"anything running the Hostwatch binary" would let malware hide by starting it with injected code. A pid leaves the
-list when its process exits, so a reused pid is watched again.
-
-Options: `./scripts/run-agent.sh --no-files --no-net --net-interval 0.5 --socket /var/run/hostwatch/collector.sock`.
-
-Started by hand, the collector accepts connections only from the user who ran `sudo`. For development,
-`HOSTWATCH_SOCKET` points the app at another socket path. Then its folder need not be root-owned.
-
-The HUD sends its exclusions and enabled kinds to the agent, which filters per client before sending. So exclusions
-also reduce load.
+Exclusions and the kinds of events you turned off are applied in the collector, so they also reduce load.
 
 ### Updates
 
 Hostwatch can tell you when a newer version is out. It never downloads or installs anything by itself.
 
-To check by hand, choose *Hostwatch ▸ Check for Updates…*:
-
-1. Hostwatch asks `api.github.com/repos/everythings-gonna-be-alright/Hostwatch/releases/latest` for the newest
-   published release. Drafts and pre-releases are ignored.
-2. It compares that version numerically with this app's. For example, `0.10.0` is newer than `0.9.2`.
-3. If it's newer, an alert shows the version, date and notes, with **Open Release Page**. Otherwise it says you're up
-   to date, or why it couldn't check (offline, GitHub rate limit).
+To check by hand, choose *Hostwatch ▸ Check for Updates…*. Hostwatch asks GitHub
+(`api.github.com/repos/everythings-gonna-be-alright/Hostwatch/releases/latest`) for the newest published release,
+ignoring drafts and pre-releases. If it's newer than yours, an alert shows the version, date and notes, with
+**Open Release Page**. Otherwise it says you're up to date, or why it couldn't check (offline, GitHub's rate limit).
 
 With *Check for updates automatically* (Settings ▸ General, on by default), the same check runs once a day, silently.
 A newer release appears at the top of the menu bar icon menu and in Settings.
 
-The request is anonymous (a `Hostwatch/<version>` user agent).
+The request is anonymous. It sends only `Hostwatch/<version>` as its user agent.
 
 
 
@@ -2302,17 +2043,19 @@ The request is anonymous (a `Hostwatch/<version>` user agent).
 
 ### Files Hostwatch writes
 
-Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with three exceptions:
+Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these exceptions:
 
 - what you send to an AI you chose: Claude, or a custom AI server that isn't on this Mac
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
+- the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
+  lets connections through
 
 On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
 and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
 Hostwatch may use the local network.
 
-Devices, addresses and ports you block on the network map are pf rules the collector loads in an anchor of its own
+Devices, addresses and ports you block on the network map are rules in macOS's packet filter, in a section of its own
 (`com.apple/hostwatch-block`). They are removed when the collector stops, however it stops, and loaded again when the
 app connects.
 
@@ -2324,7 +2067,7 @@ Here is where everything lives:
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
-| `~/Library/Logs/Hostwatch/` | `agent.log` (an admin-prompted collector) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
+| `~/Library/Logs/Hostwatch/` | `agent.log` (the collector's log when it was started with an admin password prompt instead of as a background service) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
 | `~/Library/Preferences/tech.hostwatch.app.plist` | settings and exclusions (plain) |
 | `…/Hostwatch/network-map.json` | the network map's devices, incoming tries and outgoing connections (sealed) |
 | `…/Hostwatch/vault.key` | the data key, wrapped by the Secure Enclave (see Encryption at rest) |
@@ -2336,17 +2079,15 @@ sessions, rules, signing facts, the firewall and Claude Code guard logs, the MCP
 whole activity history (each compressed block sealed on its own, day files line by line). The point is *where the
 key lives*: another process running as you, an AI agent included, can't fetch it silently.
 
-- **Keychain** (today): the data key is a login-keychain item whose access list names only Hostwatch's code. Any
+- **Keychain:** the data key is a login-keychain item whose access list names only Hostwatch's code. Any
   other process, `security` from a terminal included, gets macOS's keychain dialog and needs your password.
-- **Secure Enclave** (when the build can use it): the data key is wrapped by a key that never leaves the Enclave.
-  The wrapped blob is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
-  signed code, and the keychain item goes. Enclave keys need an entitlement that only a provisioned build carries, so
-  released builds use the keychain until that is in place. The code moves the key over by itself when it can.
-- **What it looks like:** a sealed file starts with `HWV1`, a sealed line with `HWV1:`. Files from earlier versions
-  are plain and still read. They're rewritten sealed the next time they're saved (history blocks when their file
-  is finished or scrubbed).
-- **Reading it yourself:** `zcat` and `zgrep` no longer work on the history files. Use
-  `Hostwatch --export-history [file or folder]`, which prints plain JSON lines through the key, and pipe it to `jq`.
+- **Secure Enclave:** on a build that can use it, the data key is wrapped by a key that never leaves the Enclave.
+  The wrapped key is `vault.key` in the support folder, useless on another Mac or to anything but Hostwatch's own
+  signed code, and the keychain item is removed. Hostwatch moves the key there by itself when it can.
+- **What it looks like:** a sealed file starts with `HWV1`, a sealed line with `HWV1:`.
+- **Reading it yourself:** `zcat` and `zgrep` don't work on the history files. Use
+  `Hostwatch --export-history [file or folder]`, which prints plain JSON lines, and pipe it to `jq` (see
+  [Activity history](04-settings.md#activity-history)).
 - **Settings ▸ General ▸ Permissions ▸ Data on disk** shows the state and where the key is.
 - **If the key is lost** (the keychain item removed, the Enclave key gone): the sealed files can't be read. Hostwatch
   says so in Settings, starts a new key and begins again. A backup of the files is only useful together with your
@@ -2364,15 +2105,12 @@ For what Hostwatch defends against, its known weaknesses and its coverage of att
 **Who runs with which rights**
 
 - **The HUD:** runs as the logged-in user. Only the collector is elevated.
-- **The collector:** it is the app's own binary, run as root (`--collector-launcher … --collector`). Keep the app
+- **The collector:** it is the app's own binary, run as root. Keep the app
   somewhere only you can write to, for example `/Applications`. Otherwise anything that can modify it gains root on
   the next start.
-- **Hardened runtime:** the app is signed with `--options runtime`. Ad-hoc builds are too, and `build-app.sh` refuses
-  to finish without it.
-  - macOS then ignores `DYLD_INSERT_LIBRARIES` and similar variables, and loads only Apple-signed libraries into
-    Hostwatch.
-  - So code can't be injected into the app, the root collector or the MCP server.
-  - Verified: a test library injected into a build without the flag ran. With the flag, it doesn't.
+- **Hardened runtime:** the app is signed with the hardened runtime. macOS then ignores `DYLD_INSERT_LIBRARIES` and
+  similar variables, and loads only Apple-signed libraries into Hostwatch. So code can't be injected into the app, the
+  root collector or the MCP server. This was verified with a test library.
 
 **The collector channel**
 
@@ -2382,14 +2120,13 @@ Unix socket is a local file-like connection point that only processes on this Ma
 - **The folder:** root creates it with mode 0755. The collector refuses a folder it doesn't own, so no other process
   can create or replace the socket. A leftover socket is replaced. Any other file is not.
 - **The socket:** it belongs to the client user, with mode 0600. Other users cannot connect.
-- **Every connection is checked:** the collector asks the kernel who is connecting (peer credentials,
-  `LOCAL_PEERPID` and `LOCAL_PEERCRED`).
+- **Every connection is checked:** the collector asks the kernel which process and user are connecting.
   - When the app launched it, only that app process and user are accepted.
   - As a background service, only the user logged in at the Mac is accepted (the socket follows a user switch).
   - When started by hand, only the `sudo` user is accepted.
   - **And only Hostwatch's own code.** On the real socket the collector also asks the kernel for the peer's audit
     token and checks, through macOS code signing, that the process satisfies the collector's own designated
-    requirement: the same Team ID and bundle identifier (or, for an ad-hoc build, the very same binary). Being the
+    requirement: the same Team ID and bundle identifier. Being the
     right user isn't enough: another program of yours can't read the stream, answer firewall questions or change
     exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
@@ -2406,7 +2143,7 @@ Unix socket is a local file-like connection point that only processes on this Ma
 **Secrets in command lines**
 
 New-process events carry the **command line**. It is forwarded to the app, shown, given to Claude and **written to
-history**. So Hostwatch masks secrets first, with one rule set (`Secrets`). It masks:
+history**. So Hostwatch masks secrets first, with one set of rules. It masks:
 
 - Authorization and API-key headers, and cookies
 - `name=value` and `--name value` for password, token, secret, API/access/private key, auth, session and signature,
@@ -2421,8 +2158,6 @@ History shows a masked secret as `***`. AI prompts show `[REDACTED]`.
 - **Nothing unmasked goes to an AI:** every prompt is masked again right before it's sent, whatever built it. This
   covers Ask AI, pattern suggestions, rule proposals and domain details, on-device or Claude. MCP output is masked
   too.
-- **Older history is masked too:** once, in the background, finished history files are re-masked. Compressed ones are
-  rewritten with a new index. Every file is also masked again before it's compressed.
 - **Limits:** a secret in a shape no rule knows can still slip through. Environment variables are never forwarded.
 
 **What the collector can and can't do**
@@ -2438,7 +2173,7 @@ erase:
 
 - **Patterns, decisions and baseline:** `~/Library/Application Support/Hostwatch` and the baseline's state. That
   folder holds patterns, stories, domains, your rules, signing facts and the MCP token.
-- **Settings:** HUD, window, detection, AI, exclusions and history options (`tech.hostwatch.app` defaults).
+- **Settings:** HUD, window, detection, AI, exclusions and history options (`tech.hostwatch.app.plist`).
 - **Event history and logs:** `~/Library/Logs/Hostwatch`. In a custom history folder, only Hostwatch's `activity-*`,
   `metrics-*` and `processes-*` files are erased.
 
@@ -2459,7 +2194,7 @@ Full Disk Access stays granted.
 | What you see | What to do |
 |--------------|------------|
 | **Nothing appears / "Collector off"** | Start it from the menu bar icon. Check *Help ▸ Collector Log*. |
-| **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). Ad-hoc builds need the grant redone after every rebuild. |
+| **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). |
 | **The firewall turned itself to Watch** | Its web check through the relay failed twice. The status line in Protection ▸ Network Firewall says why. |
 
 ### Known limitations
@@ -2467,13 +2202,13 @@ Full Disk Access stays granted.
 - **Containers:** the firewall can't tell containers apart or name the program inside one. A container's connections
   are Docker's (or Podman's, OrbStack's…), judged per destination.
 - **Virtual machines:** VMs with bridged or NAT networking aren't covered at all.
-- **Very short connections:** they are caught by packet capture and by macOS's connection statistics. Only with the
-  `nettop` fallback, on a macOS without that framework, do they arrive ~2 s late, with a destination inferred from the
-  command line.
+- **Very short connections:** they are caught by packet capture and by macOS's connection statistics. On a macOS
+  without those statistics they arrive about 2 s late, with a destination guessed from the command line.
 - **Unconnected UDP:** UDP sent without connecting (`sendto`) has no destination to show.
 - **Listening sockets:** they aren't connections.
 - **File opens:** they are high volume. The rate cap drops excess file events, so add exclusions for noisy apps.
-- **`eslogger` output:** the JSON parser is defensive but may need updates across macOS releases.
+- **New macOS releases:** Hostwatch reads macOS's event monitor (`eslogger`), whose output can change between macOS
+  releases and may need a Hostwatch update.
 
 
 
@@ -2485,129 +2220,126 @@ Full Disk Access stays granted.
 
 - `CLAUDE.md` in the repository root: how to build, test and release, the git workflow, and the invariants that bite.
 - `docs/ARCHITECTURE.md`: the flow from the collector to the views and a map of every source file.
-- `docs/adr/`: the decisions behind the shape (one binary, patterns as decisions, no blanket trust of interpreters,
-  compressed history, signing, fewer patterns, one module with one-concept files).
+- `docs/DESIGN.md`: the rules for anything you can see, from Apple's guidelines to this app's words.
+- `docs/adr/`: the decisions behind the shape, one file each.
+
+`src/hostwatch` is the app and the collector, one binary. `tests/swift` holds the tests.
 
 ### Build & run
 
+You need macOS 26 and the Xcode 26 Command Line Tools, which bring Swift 6.2+ and the macOS 26 SDK:
+
 ```bash
-./scripts/build-app.sh
-open dist/Hostwatch.app      # a Developer ID build registers the collector service (one password); an ad-hoc build
-                             # starts the collector with an admin prompt each time
+xcode-select --install
+```
+
+```bash
+swift build                     # debug binary at .build/debug/Hostwatch (the command-line tools work from it)
+./scripts/build-app.sh          # dist/Hostwatch.app
+open dist/Hostwatch.app
+./scripts/package.sh            # a release: universal build, notarized, stapled and zipped
+```
+
+- **Signing:** `build-app.sh` signs with your Developer ID when the keychain has one. Such a build registers the
+  collector as a background service once (one password). A build without a Developer ID starts the collector with an
+  admin prompt each time it launches.
+- **Full Disk Access after a rebuild:** an ad-hoc signed build looks like a new app to macOS, so every rebuild needs
+  Full Disk Access granted again. Remove the old Hostwatch entry with − and add it again. To avoid this, build with a
+  stable identity: `CODESIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./scripts/build-app.sh`.
+- **Running the collector by hand:** `./scripts/run-agent.sh` builds a release binary and runs
+  `sudo Hostwatch --collector` in Terminal, and the app connects to it instead of starting its own. Grant Full Disk
+  Access to Terminal for this. Options: `--no-files`, `--no-net`, `--net-interval <seconds>`, `--socket <path>`.
+  Started this way, the collector accepts connections only from the user who ran `sudo`.
+
+A quick check with the collector running:
+
+```bash
+/usr/bin/id                                # a process
+curl -sI https://example.com >/dev/null    # a process and a connection
+cat ~/.zshrc >/dev/null                    # a file
 ```
 
 ### Test
 
 ```bash
-./scripts/test.sh
-```
-
-This runs every automated test, in about 30 s. There are three suites.
-
-Only part of it, while working:
-
-```bash
+./scripts/test.sh                                 # everything, about 30 s, the same as the merge gate
 ./scripts/test.sh --changed                       # the suites that mention types declared in files changed since main
-./scripts/test.sh --only 'FewerPatterns|RuleText' # suites or tests matching a regex (swift test --filter)
+./scripts/test.sh --only 'FewerPatterns|RuleText' # suites or tests matching a regex
 ```
 
-`--changed` finds the types the changed source files declare and runs every suite whose file mentions one of them
-(a changed test file runs as itself). It is a shortcut for the edit loop. The merge gate still runs everything.
+- **Swift tests** (`tests/swift`, Swift Testing) cover patterns and risk, stories (attack chains must fire, everyday
+  dev work must stay quiet), code signing on real binaries made in a temp folder, domains, beaconing, the collector's
+  parsers, secret masking and the socket's checks. They use in-memory stores and a scratch signing database, so they
+  never touch your data.
+- **The demo build** is built and its tests run too.
+- **Performance budget** (`PerformanceBudgetTests.swift`) runs realistic workloads (the app's pipeline, the history
+  writer, the collector's reader, Time Travel) and compares CPU time, bytes written and memory with
+  `tests/perf-baseline.json`. A change fails when it writes more than +20%, keeps or peaks more than +30% memory, or
+  uses more than twice the CPU. After a change meant to cost more or less, record a new baseline on purpose and commit
+  it: `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Numbers depend on the Mac, so record one on yours if it is much
+  faster or slower.
+- **Merges are gated.** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and refuses the merge
+  if anything fails. Enable it after a fresh clone with `git config core.hooksPath scripts/hooks`.
 
-**Swift** (`tests/swift`, Swift Testing, `swift test`) covers:
+### Debug tools and environment variables
 
-- pattern grouping and risk rules
-- Stories: attack chains must fire as Dangerous, and everyday dev work and known false positives must stay quiet
-- code signing on real unsigned / ad-hoc / quarantined / replaced binaries made in a temp folder
-- new-domain baseline and badges
-- beaconing maths and rules, and raw-IP rules
-- Homebrew tools not trusted by signature, on a real Homebrew binary when one is installed
+Run each as `Hostwatch <flag>` from `.build/debug/Hostwatch` or from the app bundle. All of them only read, unless
+noted.
 
-Tests use in-memory engines and a scratch signing database, so they never touch your data.
+| Flag | What it does |
+|------|--------------|
+| `--signature-report <history.jsonl>` | How events group into patterns. `REPORT_NOSIGN=1` turns the signing rules off to measure their effect. |
+| `--regroup-report [folder]` | What the next launch's regrouping would do to the saved patterns. |
+| `--origin-report [history folder]` | How many kinds of origin each tool pattern has. `DAYS`, `HOURS`, `LEARN_DAYS` and `REPORT_TOP` shape it. |
+| `--story-replay <history.jsonl>` | Feeds recorded events through the story engine and prints the stories it would raise. `REPLAY_LEARN_MINUTES` sets the learning time (60 by default), `HOSTWATCH_OWN_BUNDLE` the app to treat as Hostwatch. |
+| `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
+| `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
+| `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
+| `--time-travel-probe [folder]` | Times reading and searching history for Time Travel. |
+| `--compress-history <folder>` | Compresses plain history files and prints sizes and timings. |
+| `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely (30 s by default) and prints the result. |
+| `sudo … --firewall-probe` | Checks that the firewall's relay works on this Mac, on two test destinations, for about 15 seconds. |
+| `sudo … --firewall-relay-test [seconds]` | Runs the relay and reports what passes through it. |
 
-**Collector** (`tests/swift/AgentTests.swift`) covers:
+The app starts these by itself: `--collector` (the collector, as root, with `--daemon`, `--owner-pid`, `--token-file`
+and `--socket`) and `--collector-launcher` (started by launchd, it spawns the collector).
 
-- DNS answers, pktap SYN and `nettop` parsing, with real lines captured on a Mac
-- destination inference
-- secret masking and exclusions
-- JSON output identical to the former Python collector
-- busiest processes and Hostwatch's own activity
-- the socket's permissions and peer checks
-- that helpers get a pipe as stdin and no inherited files
-
-**Performance budget** (`tests/swift/PerformanceBudgetTests.swift`) runs the same realistic workloads every time and
-measures CPU time, bytes written to disk and memory (kept and peak) against `tests/perf-baseline.json`. Each test runs
-alone, in its own process, after the rest, so other tests don't count.
-
-- **The workloads:** 40,000 events through the app's pipeline with a 15,000-pattern store saved on schedule, 100,000
-  events through the compressed history writer, 120,000 eslogger events through the collector's reader, and a Time
-  Travel page and a full search.
-- **The budget:** a change fails the tests when it writes more than +20%, keeps or peaks more than +30% memory, or uses
-  more than twice the CPU (plus small allowances, since CPU time depends on which cores macOS picks).
-- **What it catches:** the regressions found so far, such as the pattern store rewriting itself (87 MB written instead
-  of 4 MB), history written uncompressed (24 MB instead of 2 MB), and the collector's reader keeping what it read.
-- **A new baseline:** after a change meant to cost more (or less), record one on purpose and commit it:
-  `HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh`. Each workload runs 3 times and the highest figures are kept. Numbers are
-  from the debug build on the Mac they were recorded on. On a much faster or slower Mac, record a baseline there.
-
-**Local MRs are gated.** `scripts/hooks/pre-merge-commit` runs the tests on the merged result and refuses the merge
-commit if anything fails.
-
-- **Enable it:** `git config core.hooksPath scripts/hooks`. It is already set in this repo. Run it again after a
-  fresh clone.
-- **Emergency bypass:** `git merge --no-verify`.
-
-Manual check with the collector running:
-
-```bash
-/usr/bin/id                          # ▶ process
-curl -sI https://example.com >/dev/null   # ▶ process + 🌐 connection
-cat ~/.zshrc >/dev/null              # 📄 file
-```
+| Variable | What it does |
+|----------|--------------|
+| `HOSTWATCH_SOCKET` | Points the app at another collector socket. Its folder then need not be root-owned. |
+| `HOSTWATCH_SIGNING_DB` | A scratch signing database, for tests and `--signing-check`. |
+| `HOSTWATCH_MCP_TOKEN` | The MCP server's access token, set by the registration command from Settings ▸ AI. |
+| `HOSTWATCH_PERF_RECORD=1` | Records a new performance baseline. |
+| `CLAUDE_PATH` | Where the `claude` command is, when it isn't in a usual place. |
+| `CODESIGN_IDENTITY` | The identity `build-app.sh` signs with. |
+| `DEMO=1`, `RELEASE=1` | `build-app.sh` makes the demo build, or keeps whole-module optimisation as releases do. |
 
 ### Demo mode (screenshots)
 
-Demo mode fills the app with made-up activity, for screenshots and the website. It exists only in the demo build. The
-normal build, and every release, has no demo code at all.
+Demo mode fills the app with made-up activity, for screenshots and the website. It exists only in the demo build.
+The normal build, and every release, has no demo code at all.
 
-**Build it:** `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app`. It uses the Swift flag `-DDEMO`, its
-own bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
+**Build it:** `DEMO=1 ./scripts/build-app.sh` makes `dist/Hostwatch Demo.app`, with the Swift flag `-DDEMO`, its own
+bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
 
 **Run it:**
-`"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|firewall|watch]`
+`"Hostwatch Demo.app/Contents/MacOS/Hostwatch" --demo <folder> [hud|events|live|running|patterns|stories|network|map|firewall|protection|watch]`
 
-- **What it shows:** the activity of a made-up user (`/Users/alex`). That is everyday work plus a fake download that
-  removes its quarantine, reads cookies and the keychain, adds a launch agent and calls home.
-- **Scene:** it opens the scene you asked for.
-- **`live`:** keeps adding events about once a second. This is for the website's background video, recorded with
-  `screencapture -v` and encoded with ffmpeg.
+- **What it shows:** a made-up user (`/Users/alex`) at everyday work, plus a fake download that removes its
+  quarantine, reads cookies and the keychain, adds a launch agent and calls home. It opens the scene you name.
+- **`live`** keeps adding events about once a second, for the website's background video.
 - **Isolation:** everything it keeps goes to `<folder>`. It never connects to the collector and starts nothing as
   root.
-- **Tests:** `./scripts/test.sh` also runs the demo tests against the demo build.
+- **Screenshot options:** `HOSTWATCH_DEMO_SIZE=full` fills the screen, `=fullscreen` enters full screen (the default
+  is 1280 × 780). `HOSTWATCH_DEMO_PAGE=files`, `found` or `firewall` opens another Protection page.
+  `HOSTWATCH_DEMO_MEASURE=sent` sizes the network map by data sent.
 
 ### Prototype notes
 
-Apple documents `eslogger` as a tool for exploring and prototyping, not an application API. Its JSON may change
-without notice.
-
-For a distributable tool, replace the collector with:
-
-- a native Endpoint Security system extension (`com.apple.developer.endpoint-security.client` entitlement)
-- a Network Extension for connections
-
-### Production architecture
-
-For production, implement a signed Endpoint Security system extension. Use XPC or a protected local IPC channel to
-communicate with this HUD.
-
-The system extension should:
-
-- subscribe only to the event types required
-- process callbacks quickly
-- avoid blocking ES callbacks on UI or disk I/O
-
-Apple's ES entitlement must be approved for the developer team. Do not disable SIP as a routine installation
-workaround.
+The collector reads Apple's `eslogger`, which Apple documents as a tool for exploring and prototyping, not an
+application API. Its output may change without notice. A production version would use a signed Endpoint Security
+system extension (it needs Apple's `com.apple.developer.endpoint-security.client` entitlement) and a Network
+Extension for connections, talking to the app over XPC. Don't disable SIP as a way around this.
 
 
 
@@ -2616,8 +2348,7 @@ workaround.
 ## Threat model and attack coverage
 
 What Hostwatch defends against, what it doesn't, how it protects itself, and which attack techniques it sees, mapped
-to MITRE ATT&CK. Everything here is checked against the code of the current release. Where Hostwatch is weak, this
-page says so.
+to MITRE ATT&CK. Where Hostwatch is weak, this page says so.
 
 ### What Hostwatch is for
 
@@ -2663,10 +2394,10 @@ Each line where data crosses from a less trusted side to a more trusted one, and
 |----------|--------------|-------|
 | Your account → root collector | commands and firewall answers over `/var/run/hostwatch/collector.sock` | Unix socket only, no network port. The kernel names the peer (audit token), and the collector accepts only code that satisfies its own designated requirement: same Team ID and bundle id. Socket 0600, folder root-owned. |
 | Root collector → app | the event stream | The app connects only to a socket owned by you, mode 0600, not a link, in a root-owned folder. |
-| App → disk | history, patterns, decisions, logs | AES-256-GCM through one sealing point (`Vault`). The key is in a keychain item only Hostwatch's code may read, or wrapped by the Secure Enclave. |
+| App → disk | history, patterns, decisions, logs | AES-256-GCM, for every file Hostwatch writes. The key is in a keychain item only Hostwatch's code may read, or wrapped by the Secure Enclave. |
 | Events → AI | command lines, paths, evidence | Every prompt is masked for secrets right before it's sent. An AI can't mark a shell, interpreter or system tool Safe beyond an exact folder in your own projects. Your decisions always win over any AI. |
 | Internet → app | threat lists, the update check | HTTPS, no cookies. A list must be text in the right shape and size, can never make anything trusted, and can't flag the big platforms by their own domain. The update check only tells you, nothing is downloaded or installed. |
-| Claude Code → its tools | each command before it runs | A `PreToolUse` hook. It can only make Claude Code stricter, never answers `allow`. |
+| Claude Code → its tools | each command before it runs | A hook that runs before each tool use. It can only make Claude Code stricter, never answers `allow`. |
 | MCP client → history | read-only questions | A random token you register once, kept only as a SHA-256 hash, compared in constant time. Every tool is read-only. |
 | Your programs → the network | connections | With the firewall on Ask or Strict, the packet filter sends your programs' new connections through a relay that waits for your decision. Root's connections pass. |
 
@@ -2816,12 +2547,8 @@ ls -ld /var/run/hostwatch /var/run/hostwatch/collector.sock
 
 # Data on disk is sealed (starts with HWV1)
 head -c 4 ~/Library/Application\ Support/Hostwatch/stories.json && echo
-
-# Replay your own history through the story rules
-/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --story-replay <history.jsonl>
 ```
 
-The source is public. Each decision behind these rules is written down in `docs/adr/`. To report a way around any of
-them, see [SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).
+The source is public. To report a way around any of these protections, see [SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).
 
 

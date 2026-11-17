@@ -31,9 +31,8 @@ The HUD is Hostwatch's on-screen overlay. This pane sets what it shows and how i
 - *Show HUD* turns it on or off. It is off by default. Shortcut: ⌃⌥⌘H.
 - *Click-through* is off by default.
 - *Show CPU, memory, network and disk* is on by default.
-- **Background:** choose Glass, Clear Glass or Solid. Preview tiles show each one.
-  - Older "transparent" settings become Clear Glass.
-  - With Reduce Transparency on, glass shows as Solid.
+- **Background:** choose Glass, Clear Glass or Solid. Preview tiles show each one. With Reduce Transparency on, glass
+  shows as Solid.
 - **Contrast:** goes from Lighter to Darker, at 0.45 by default. A warning appears below 0.25.
 - **Appearance:** text size is Small, Medium (default), Large or Extra Large. You can also reset the size and position,
   which returns the HUD to 24 rows × 360 pt.
@@ -56,7 +55,7 @@ This pane decides how Hostwatch reacts to suspicious and unusual activity.
 
 ### Firewall settings
 
-They moved to *Protection*, next to launch and file protection. See
+The firewall is set in *Protection*, next to launch and file protection, not in Settings. See
 [Launch and file protection](03-features.md#launch-and-file-protection-rules--protection) and
 [Firewall](03-features.md#firewall).
 
@@ -112,17 +111,13 @@ file:*.plist
 Sensible noise defaults come preloaded: `/System`, `/usr/lib`, caches, loopback and Spotlight. **Restore Defaults** in
 the editor brings them back.
 
-Exclusions persist in `UserDefaults` (`tech.hostwatch.app`).
+Exclusions are saved with your settings, in `~/Library/Preferences/tech.hostwatch.app.plist`.
 
 ### Activity history
 
-Hostwatch writes all activity to disk, so you can look back at it later. Each event is one line of JSON (the JSON
-Lines format), with a full `ts` timestamp:
-
-```
-~/Library/Logs/Hostwatch/History/activity-20261031-202536-385.jsonl
-{"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
-```
+Hostwatch writes all activity to disk, so you can look back at it later. The history lives in
+`~/Library/Logs/Hostwatch/History` by default: `activity-*` files for events, `metrics-*` for resource samples and
+`processes-*` for process lists. The files are compressed and encrypted as they are written.
 
 You control it in *Settings ▸ History*:
 
@@ -136,61 +131,31 @@ You control it in *Settings ▸ History*:
 
 - **Apply exclusions to history** is off by default, so everything is recorded. Turn it on to record only what passes
   your exclusions.
-- The recorder has its own connection, with the 40/s display cap turned off.
+- The history is not limited by the overlay's display rate.
 - It keeps recording while the overlay is paused or a kind is hidden.
 
-**Max size:** the default is **5 GB**. It caps the bytes on disk of all history files together.
+**Max size:** the default is **5 GB**. It caps the space all history files take on disk together, activity, resource
+samples and process lists alike.
 
-- Compressed files count at their compressed size. So the cap holds roughly 10–20× more history than before.
-- The cap covers everything recorded in the folder: activity (`activity-*`), resource samples (`metrics-*`) and
-  process lists (`processes-*`). There is no separate limit for any of them.
-- Files rotate at about 1/20 of the cap. That is 1–100 MB of plain text each, or 100 MB with the default cap.
+- Files are compressed, so the cap holds far more history than its size in plain text.
 - When the total would go over the cap, the oldest day goes first: its activity, then its samples and process lists.
-- This is checked when a file rotates and every 10 minutes.
 - Today's files and the file being written are never deleted.
 
-**Compressed as it's written:** history takes little space, because it is compressed before it reaches the disk.
+**Crash safety:** if the app crashes, at most the last second of history is lost. The next launch recovers what was
+written. After a kernel panic or power loss, the last few seconds can be lost. New activity shows up in Time Travel
+within about 30 seconds.
 
-- Events are compressed as they arrive into the current block of `activity-….jsonl.gz` (a gzip member). A block is
-  finished every 30 seconds (or 4 MB).
-- Each finished block gets a line in `activity-….jsonl.blocks`, which records where it is and which time it covers.
-- Nothing is rewritten and nothing is written twice.
-- About 1/22 of the raw bytes reach the disk. Activity logs are very repetitive, so 30-second members compress almost
-  as well as 4 MB ones.
-- When the file is full (see Max size above), its final index `activity-….jsonl.idx` replaces the `.blocks` list.
-- Plain files left from older versions are compressed on the next start.
-
-Technical details of the compressed files:
-
-- **A normal gzip file:** the `.gz` is a series of independent gzip members of ≈4 MB of whole lines. So `zcat`,
-  `zgrep` and `gzip -d` work on it.
-- **The index:** it records each block's earliest and latest timestamp, offset and sizes, plus bytes per minute.
-  Time Travel and the MCP server decompress only the blocks a time range needs. The timeline's bars come from the
-  per-minute counts, so they are exact, with real gaps.
-- **Safe compression:** the index is written first, then the `.gz`, and only then is the plain file removed. A `.gz`
-  without an index is ignored, and the plain file stays authoritative.
-
-**Crash safety:** a crash of the app loses at most the last second of history.
-
-- **Flushed every second:** the open block is pushed into the file every second (zlib's sync flush, which keeps the
-  compression dictionary, so it costs no measurable size).
-- **Recovered on the next launch:** after an app crash those bytes are already in the file. The next launch
-  decompresses the unfinished block up to its last whole event and saves it as a finished block.
-- **Never twice:** a block is finished before its line goes into the block list, so nothing is written twice, and a
-  torn tail is cut off.
-- **Kernel panic or power loss:** the last few seconds can be lost, as with any write the system hadn't flushed.
-- **When Time Travel sees it:** once its block is finished, within 30 s.
-
-You can also search the history yourself from Terminal, for example:
+**Exporting:** the history files are encrypted, so `zcat` and `grep` can't read them. Export them as plain JSON lines,
+one event per line, from Terminal:
 
 ```bash
-cd ~/Library/Logs/Hostwatch/History
-zcat -f activity-*.jsonl* 2>/dev/null | jq -c 'select(.kind=="net")' | tail
-zgrep -h '"name":"curl"' activity-*.jsonl.gz; grep -h '"name":"curl"' activity-*.jsonl
+/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --export-history > history.jsonl
+/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --export-history | jq -c 'select(.kind=="net")' | tail
 ```
 
-**Tools:**
+Without an argument it exports the whole history folder. You can also pass one file or another folder. Each event looks
+like this:
 
-- `--story-replay` and `--signature-report` accept a `.jsonl`, a `.jsonl.gz` or the whole history folder.
-- `--compress-history <folder>` compresses plain files by hand.
-- `--time-travel-probe` prints read timings.
+```
+{"kind":"net","time":"20:25:36","pid":812,"ppid":1,"name":"curl","proc":"/usr/bin/curl","target":"140.82.112.3:443","extra":"TCP","ts":"2026-10-31T20:25:36.385+02:00"}
+```

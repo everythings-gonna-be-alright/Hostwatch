@@ -1,8 +1,7 @@
 ## Threat model and attack coverage
 
 What Hostwatch defends against, what it doesn't, how it protects itself, and which attack techniques it sees, mapped
-to MITRE ATT&CK. Everything here is checked against the code of the current release. Where Hostwatch is weak, this
-page says so.
+to MITRE ATT&CK. Where Hostwatch is weak, this page says so.
 
 ### What Hostwatch is for
 
@@ -48,10 +47,10 @@ Each line where data crosses from a less trusted side to a more trusted one, and
 |----------|--------------|-------|
 | Your account → root collector | commands and firewall answers over `/var/run/hostwatch/collector.sock` | Unix socket only, no network port. The kernel names the peer (audit token), and the collector accepts only code that satisfies its own designated requirement: same Team ID and bundle id. Socket 0600, folder root-owned. |
 | Root collector → app | the event stream | The app connects only to a socket owned by you, mode 0600, not a link, in a root-owned folder. |
-| App → disk | history, patterns, decisions, logs | AES-256-GCM through one sealing point (`Vault`). The key is in a keychain item only Hostwatch's code may read, or wrapped by the Secure Enclave. |
+| App → disk | history, patterns, decisions, logs | AES-256-GCM, for every file Hostwatch writes. The key is in a keychain item only Hostwatch's code may read, or wrapped by the Secure Enclave. |
 | Events → AI | command lines, paths, evidence | Every prompt is masked for secrets right before it's sent. An AI can't mark a shell, interpreter or system tool Safe beyond an exact folder in your own projects. Your decisions always win over any AI. |
 | Internet → app | threat lists, the update check | HTTPS, no cookies. A list must be text in the right shape and size, can never make anything trusted, and can't flag the big platforms by their own domain. The update check only tells you, nothing is downloaded or installed. |
-| Claude Code → its tools | each command before it runs | A `PreToolUse` hook. It can only make Claude Code stricter, never answers `allow`. |
+| Claude Code → its tools | each command before it runs | A hook that runs before each tool use. It can only make Claude Code stricter, never answers `allow`. |
 | MCP client → history | read-only questions | A random token you register once, kept only as a SHA-256 hash, compared in constant time. Every tool is read-only. |
 | Your programs → the network | connections | With the firewall on Ask or Strict, the packet filter sends your programs' new connections through a relay that waits for your decision. Root's connections pass. |
 
@@ -201,10 +200,6 @@ ls -ld /var/run/hostwatch /var/run/hostwatch/collector.sock
 
 # Data on disk is sealed (starts with HWV1)
 head -c 4 ~/Library/Application\ Support/Hostwatch/stories.json && echo
-
-# Replay your own history through the story rules
-/Applications/Hostwatch.app/Contents/MacOS/Hostwatch --story-replay <history.jsonl>
 ```
 
-The source is public. Each decision behind these rules is written down in `docs/adr/`. To report a way around any of
-them, see [SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).
+The source is public. To report a way around any of these protections, see [SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).

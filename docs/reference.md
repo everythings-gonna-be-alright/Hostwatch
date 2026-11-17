@@ -10,10 +10,8 @@ company, under the [PolyForm Shield License 1.0.0](https://polyformproject.org/l
 thing the licence doesn't allow is using the code to make a product or service that competes with Hostwatch, such as your own server or cloud
 edition of it. Versions up to 0.11.1 were released under the MIT license.
 
-A paid edition will be only for companies. It will offer two things:
-
-- **Fleet server:** a server that watches a whole fleet of Macs from one place.
-- **Cloud:** a hosted cloud (SaaS) version.
+A paid edition will be only for companies: a server that watches a whole fleet of Macs from one place, and a hosted
+cloud (SaaS) version.
 
 ## Chapters
 
@@ -21,9 +19,9 @@ A paid edition will be only for companies. It will offer two things:
 2. **[Everyday use](reference/02-everyday-use.md)**: the HUD, the window, Running Now, resource use and Time Travel.
 3. **[Features](reference/03-features.md)**: what Hostwatch does for you, in six groups: patterns, stories, network, stepping in, threats and AI.
 4. **[Settings](reference/04-settings.md)**: every setting, pane by pane, with its default, plus exclusions and the activity history.
-5. **[Advanced and command line](reference/05-advanced-and-command-line.md)**: command-line flags, how the collector works, and updates.
+5. **[Advanced and command line](reference/05-advanced-and-command-line.md)**: command-line flags for exporting history and checking your Mac, how the collector watches, and updates.
 6. **[Privacy, security and limits](reference/06-privacy-security-and-limits.md)**: what is stored and sent, how Hostwatch protects itself, reset, troubleshooting, limits.
-7. **[For developers](reference/07-for-developers.md)**: building, testing, demo mode and how it is put together.
+7. **[For developers](reference/07-for-developers.md)**: building from source, testing, debug tools and demo mode.
 8. **[Threat model and attack coverage](reference/08-threat-model.md)**: what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees.
 
 ## Questions and answers
@@ -42,8 +40,9 @@ edition will come only for companies: a fleet server and a hosted cloud.
 
 ### Does Hostwatch send my data anywhere?
 
-No. What it learns stays on your Mac, encrypted on disk. Only three things leave it: what you choose to send to an AI,
-a daily anonymous update check and the daily threat-list downloads. The last two can be turned off.
+No. What it learns stays on your Mac, encrypted on disk. Only a few things leave it: what you choose to send to an AI,
+a daily anonymous update check, the daily threat-list downloads and, while the firewall is on, a check that it still
+lets connections through. The update check and the threat lists can be turned off.
 
 ### Which Macs does it run on?
 
