@@ -6,7 +6,23 @@ import Security
 /// that only Hostwatch's own code may read. A file or line without the marker is an older, plain one.
 /// source: docs/adr/0009-encryption-at-rest.md
 final class Vault: @unchecked Sendable {
-    nonisolated(unsafe) static var shared = isTestProcess ? Vault(key: SymmetricKey(size: .bits256)) : Vault()
+    nonisolated(unsafe) static var shared = isTestProcess ? Vault(key: SymmetricKey(size: .bits256))
+        : AppPaths.isDemo ? Vault(key: demoKey()) : Vault()
+
+    /// The demo's own key, kept as a plain file in its folder: made-up data needs no protection, and reaching for
+    /// the real key would put up a keychain dialog (the demo's code signature isn't the app's).
+    private static func demoKey() -> SymmetricKey {
+        #if DEMO
+        if let root = Demo.root {
+            let file = root.appendingPathComponent("demo-vault.key")
+            if let data = try? Data(contentsOf: file), data.count == 32 { return SymmetricKey(data: data) }
+            let fresh = SymmetricKey(size: .bits256)
+            try? fresh.withUnsafeBytes { Data($0) }.write(to: file)
+            return fresh
+        }
+        #endif
+        return SymmetricKey(size: .bits256)
+    }
 
     /// A test run: never the keychain or the Enclave (a key made by the test runner would lock the real app out).
     static var isTestProcess: Bool {
