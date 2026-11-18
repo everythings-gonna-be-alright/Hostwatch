@@ -876,9 +876,11 @@ final class StoryEngine: ObservableObject {
         dirty = true; revision += 1
     }
 
+    /// Those chains alert again from now. The revision tells the window: without it the button stayed, unchanged.
     func clearIgnored() {
         ignored.removeAll()
         UserDefaults.standard.removeObject(forKey: "ignoredStories")
+        revision += 1
     }
 
     var ignoredCount: Int { ignored.count }
