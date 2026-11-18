@@ -623,7 +623,7 @@ final class StoryEngine: ObservableObject {
     private static func base(_ path: String) -> String { (path as NSString).lastPathComponent }
 
     /// This app's bundle; HOSTWATCH_OWN_BUNDLE lets replays recognise the installed app.
-    private static let ownBundle = (ProcessInfo.processInfo.environment["HOSTWATCH_OWN_BUNDLE"]
+    private static let ownBundle = (AppPaths.developerOverride("HOSTWATCH_OWN_BUNDLE")
                                     ?? Bundle.main.bundlePath) + "/"
     static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
 

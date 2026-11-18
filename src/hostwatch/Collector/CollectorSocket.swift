@@ -6,8 +6,8 @@ import Network
 /// belong to you and be closed to everyone else. The collector in turn only accepts this app.
 enum CollectorSocket {
     static let defaultPath = "/var/run/hostwatch/collector.sock"
-    /// HOSTWATCH_SOCKET points elsewhere for development; then the folder need not be root's.
-    static var path: String { ProcessInfo.processInfo.environment["HOSTWATCH_SOCKET"] ?? defaultPath }
+    /// HOSTWATCH_SOCKET points elsewhere in debug builds; then the folder need not be root's.
+    static var path: String { AppPaths.developerOverride("HOSTWATCH_SOCKET") ?? defaultPath }
     static var endpoint: NWEndpoint { .unix(path: path) }
 
     enum Check: Equatable {

@@ -2327,6 +2327,10 @@ noted.
 The app starts these by itself: `--collector` (the collector, as root, with `--daemon`, `--owner-pid`, `--token-file`
 and `--socket`) and `--collector-launcher` (started by launchd, it spawns the collector).
 
+Variables that change what the app trusts (`HOSTWATCH_SOCKET`, `HOSTWATCH_SIGNING_DB`, `HOSTWATCH_OWN_BUNDLE`,
+`REPORT_NOSIGN`) work only in debug and demo builds. The shipped app ignores them, so another program can't relaunch
+it with one set. Run the tools that use them from `.build/debug/Hostwatch`.
+
 | Variable | What it does |
 |----------|--------------|
 | `HOSTWATCH_SOCKET` | Points the app at another collector socket. Its folder then need not be root-owned. |
