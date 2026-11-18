@@ -16,6 +16,8 @@ struct WindowTabBar: View {
 
     let tabs: [Tab]
     @Binding var selection: Int
+    /// Told at the click, before the window starts building the new tab (the window veils the old page with it).
+    var willSelect: ((Int) -> Void)? = nil
     /// The tab the bar shows as chosen: it moves at once on a click, the window follows a moment later.
     @StateObject private var shown = ShownTab()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -31,7 +33,9 @@ struct WindowTabBar: View {
                 Button {
                     // The bar first: its new highlight is drawn before the window builds the new tab, which takes
                     // a moment and used to hold the pressed tab still on screen.
+                    guard tab.id != selection else { return }
                     shown.id = tab.id
+                    willSelect?(tab.id)
                     DispatchQueue.main.async { selection = tab.id; shown.id = nil }
                 } label: {
                     HStack(spacing: 5) {
@@ -91,6 +95,70 @@ private struct TabPressStyle: ButtonStyle {
                 Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
             }
             .animation(still ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// A layer in the window's colour over the tabs' content: it covers the old page at the click and fades away once the
+/// new one is built, so the build reads as a soft change of page instead of a pause. The fade is Core Animation's,
+/// run by the render server: a SwiftUI animation steps on the main thread, which the new tab keeps busy, and stuttered.
+/// Only this layer animates: the tabs must not change opacity (that re-attached their tables, see ActivityWindowView).
+@MainActor
+final class TabVeil: ObservableObject {
+    /// Counts covers and reveals: the layer acts on each new value.
+    @Published private(set) var step = 0
+    private(set) var covered = false
+
+    func cover() { covered = true; step += 1 }
+
+    /// After the new page's first frame: the fade starts on the next turn of the run loop.
+    func reveal() {
+        guard covered else { return }
+        DispatchQueue.main.async { [self] in covered = false; step += 1 }
+    }
+}
+
+/// The veil's layer. Clicks pass through it.
+struct TabVeilLayer: NSViewRepresentable {
+    @ObservedObject var veil: TabVeil
+    let animated: Bool
+
+    final class VeilView: NSView {
+        var lastStep = 0
+        override var wantsUpdateLayer: Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func updateLayer() {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> VeilView {
+        let view = VeilView()
+        view.wantsLayer = true
+        view.layer?.opacity = 0
+        return view
+    }
+
+    /// Both ways are Core Animation fades from wherever the layer is now: in quickly at the click (it keeps playing
+    /// while the app builds the new tab), out more slowly once the tab is drawn.
+    func updateNSView(_ view: VeilView, context: Context) {
+        guard view.lastStep != veil.step, let layer = view.layer else { return }
+        view.lastStep = veil.step
+        let from = layer.presentation()?.opacity ?? layer.opacity
+        let to: Float = veil.covered ? 0.7 : 0
+        layer.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.opacity = to
+        CATransaction.commit()
+        guard animated else { return }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = from
+        fade.toValue = to
+        fade.duration = veil.covered ? 0.1 : 0.28
+        fade.timingFunction = CAMediaTimingFunction(name: veil.covered ? .easeIn : .easeOut)
+        layer.add(fade, forKey: "veil")
     }
 }
 

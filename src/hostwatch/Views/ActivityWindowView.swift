@@ -128,6 +128,8 @@ struct ActivityWindowView: View {
     /// Sessions replayed from the Time Travel window's events.
     @StateObject private var travelSessions = ReplayedSessions()
     @StateObject private var visited = VisitedTabs()
+    @StateObject private var veil = TabVeil()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var visitedTabs: Set<Int> {
         get { visited.tabs }
         nonmutating set { visited.tabs = newValue }
@@ -182,8 +184,12 @@ struct ActivityWindowView: View {
                 .offset(x: -index * geo.size.width)
             }
             .clipped()
+            .overlay { TabVeilLayer(veil: veil, animated: !reduceMotion) }
             .onAppear { visitedTabs.insert(model.windowTab) }
-            .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
+            .onChange(of: model.windowTab) { _, tab in
+                visitedTabs.insert(tab)
+                veil.reveal()
+            }
         }
         .frame(minWidth: 1240, minHeight: 720)     // the toolbar (window controls, five tabs, title, buttons, search) fits whole from here; every page adapts above it
         // The Patterns rows are ready before the tab is opened.
@@ -337,7 +343,7 @@ struct ActivityWindowView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
+            WindowTabBar(tabs: windowTabs, selection: $model.windowTab, willSelect: { _ in veil.cover() })
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
