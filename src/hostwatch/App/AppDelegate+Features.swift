@@ -81,17 +81,9 @@ extension AppDelegate {
                 activityWindow?.orderOut(nil)
                 openWelcomeGuide(start: (Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 1) - 1)
             case "update":
-                // The alert a new release brings, with made-up notes, for screenshots.
+                // The window a new release brings, for screenshots.
                 activityWindow?.orderOut(nil)
-                DispatchQueue.main.async { [self] in
-                    updates.presentAvailable(Release(
-                        version: "0.18.0", name: "0.18.0 – A welcome tour",
-                        url: URL(string: "https://github.com/everythings-gonna-be-alright/Hostwatch/releases")!,
-                        notes: "### New\n- **A new welcome guide.** Seven short pages, and the choices that matter on day one.\n"
-                            + "- **Learning can be off.** Every new pattern then waits for you.\n### Fixes\n"
-                            + "- **The demo never asks for your keychain.**",
-                        published: Date()))
-                }
+                DispatchQueue.main.async { [self] in updates.presentAvailable(Demo.release) }
             case "watch":
                 if let e = cleanerLaunch {
                     openWatch(for: e)

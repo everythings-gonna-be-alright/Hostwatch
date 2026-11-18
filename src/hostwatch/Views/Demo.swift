@@ -31,6 +31,24 @@ enum Demo {
         setenv("HOSTWATCH_SIGNING_DB", dir.appendingPathComponent("signing.json").path, 1)
     }
 
+    // MARK: A made-up release
+
+    /// The release the update scene shows: a version after this one, notes in the changelog's shape.
+    static let release = Release(
+        version: "0.18.0", name: "0.18.0 – A welcome tour",
+        url: UpdateChecker.releasesPage,
+        notes: """
+            ## New
+            - **A new welcome guide.** Seven short pages, and the choices that matter on day one.
+            - **Learning can be off.** Every new pattern then waits for you, nothing is learned for you.
+            - **A window for new versions.** What's new, by section, with a way to get it.
+            ## Faster and lighter
+            - **Claude Code is found once.** The guide no longer waits on it.
+            ## Fixes
+            - **Settings that change what Hostwatch trusts** can no longer be set from outside the app.
+            """,
+        published: epoch)
+
     // MARK: The made-up Mac
 
     struct Proc {

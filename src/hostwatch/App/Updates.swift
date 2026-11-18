@@ -158,28 +158,35 @@ final class UpdateChecker: ObservableObject {
         }
     }
 
-    /// The new version, its notes, and a way to get it.
+    /// The new version, its notes, and a way to get it, in a window of its own (UpdateWindow).
     func presentAvailable(_ release: Release) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "\(release.name) is available"
-        var info = "You have \(currentVersion)."
-        if let date = release.published { info += " Released \(date.formatted(date: .abbreviated, time: .omitted))." }
-        let notes = Self.plainNotes(release.notes)
-        if !notes.isEmpty { info += "\n\n" + notes }
-        alert.informativeText = info
-        alert.addButton(withTitle: "Open Release Page")
-        alert.addButton(withTitle: "Later")
-        if alert.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(release.url) }
+        UpdateWindow.show(release, current: currentVersion)
+    }
+}
+
+/// A release's notes as the window shows them: sections ("New", "Fixes") with their items, from the Markdown GitHub
+/// keeps. Items keep their inline Markdown (bold leads), headings and list marks go.
+enum ReleaseNotes {
+    struct Section: Equatable {
+        var title: String?
+        var items: [String]
     }
 
-    /// Release notes without Markdown markup, shortened for an alert.
-    static func plainNotes(_ markdown: String, limit: Int = 600) -> String {
-        var text = markdown.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
-        text = text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { $0.hasPrefix("#") ? String($0.drop { $0 == "#" || $0 == " " }) : String($0) }
-            .joined(separator: "\n")
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.count > limit ? String(text.prefix(limit)).trimmingCharacters(in: .whitespaces) + "…" : text
+    static func sections(_ markdown: String) -> [Section] {
+        var out: [Section] = []
+        for raw in markdown.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") {
+                out.append(Section(title: String(line.drop { $0 == "#" || $0 == " " }), items: []))
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                if out.isEmpty { out.append(Section(title: nil, items: [])) }
+                out[out.count - 1].items.append(String(line.dropFirst(2)))
+            } else if let last = out.indices.last, !out[last].items.isEmpty {
+                out[last].items[out[last].items.count - 1] += " " + line      // a wrapped item continues
+            } else {
+                out.append(Section(title: nil, items: [line]))
+            }
+        }
+        return out.filter { !$0.items.isEmpty }
     }
 }
