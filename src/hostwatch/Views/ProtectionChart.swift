@@ -2,47 +2,67 @@ import Accessibility
 import Charts
 import SwiftUI
 
-/// One Protection area over the chosen range: what was stopped (or would be) in red, what was asked about (or would
-/// be) in a neutral grey, stacked. Red is the critical colour throughout Hostwatch, red beside orange failed the
-/// colour-vision check, so a question, pending rather than alarming, is grey. The card's two figures above name both,
-/// with a dot each, so the chart has no legend of its own. Each card has its own scale, labelled at its top.
+/// One Protection area over the chosen range: what was stopped (or would be) in red at the foot of each bar, what was
+/// asked about (or would be) in a calm blue above it. Red and blue stay apart for every kind of colour vision, and a
+/// question is pending rather than alarming. Each bucket stands on a faint track the full height of the scale, so a
+/// quiet hour still reads as an hour. The card's two figures above name both colours, so the chart has no legend.
 struct ProtectionChart: View {
     let buckets: [ProtectionTimeline.Bucket]
     let range: ProtectionTimeline.Range
     let stopLabel: String
     let askLabel: String
-    /// The top of the shared scale.
+    /// The top of the scale.
     let yMax: Int
     /// The plot's height: the Overview gives a tall window's spare height to its charts.
     var height: CGFloat = 120
     @StateObject private var hover = ChartHover()
 
     static let stop = Color(nsColor: .systemRed)
-    static let ask = Color(nsColor: .systemGray).opacity(0.75)
+    static let ask = Color(nsColor: .systemBlue)
+
+    private static func fill(_ color: Color, dim: Bool) -> LinearGradient {
+        LinearGradient(colors: [color.opacity(dim ? 0.35 : 0.95), color.opacity(dim ? 0.18 : 0.55)],
+                       startPoint: .top, endPoint: .bottom)
+    }
 
     private var empty: Bool { buckets.allSatisfy { $0.total == 0 } }
 
+    /// Narrower bars for the many hours of a day, wider for the seven days of a week.
+    private var barWidth: MarkDimension { .ratio(range == .week ? 0.42 : 0.62) }
+
     var body: some View {
+        let selected = hover.selected.flatMap { bucket(at: $0) }?.start
         Chart {
             ForEach(buckets) { b in
-                BarMark(x: .value("Time", b.start, unit: range.unit), y: .value("Count", b.block))
-                    .foregroundStyle(by: .value("What", stopLabel))
-                    .cornerRadius(3)
-                    .accessibilityLabel(Self.label(b.start, range))
-                    .accessibilityValue("\(b.block) \(stopLabel)")
-                BarMark(x: .value("Time", b.start, unit: range.unit), y: .value("Count", b.ask))
-                    .foregroundStyle(by: .value("What", askLabel))
-                    .cornerRadius(3)
-                    .accessibilityLabel(Self.label(b.start, range))
-                    .accessibilityValue("\(b.ask) \(askLabel)")
+                let dim = selected != nil && selected != b.start
+                BarMark(x: .value("Time", b.start, unit: range.unit), yStart: .value("Count", 0),
+                        yEnd: .value("Count", yMax), width: barWidth)
+                    .foregroundStyle(Color.primary.opacity(0.05))
+                    .clipShape(Capsule())
+                    .accessibilityHidden(true)
+                if b.ask > 0 {
+                    BarMark(x: .value("Time", b.start, unit: range.unit), yStart: .value("Count", 0),
+                            yEnd: .value("Count", b.block + b.ask), width: barWidth)
+                        .foregroundStyle(Self.fill(Self.ask, dim: dim))
+                        .clipShape(Capsule())
+                        .accessibilityLabel(Self.label(b.start, range))
+                        .accessibilityValue("\(b.ask) \(askLabel)")
+                }
+                if b.block > 0 {
+                    BarMark(x: .value("Time", b.start, unit: range.unit), yStart: .value("Count", 0),
+                            yEnd: .value("Count", b.block), width: barWidth)
+                        .foregroundStyle(Self.fill(Self.stop, dim: dim))
+                        .clipShape(Capsule())
+                        .accessibilityLabel(Self.label(b.start, range))
+                        .accessibilityValue("\(b.block) \(stopLabel)")
+                }
             }
-            if let selected = hover.selected, let b = bucket(at: selected) {
+            if let selected, let b = bucket(at: selected) {
                 RuleMark(x: .value("Time", b.start, unit: range.unit))
-                    .foregroundStyle(Color.secondary.opacity(0.25))
+                    .foregroundStyle(.clear)
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) { readout(b) }
             }
         }
-        .chartForegroundStyleScale([stopLabel: Self.stop, askLabel: Self.ask])
         .chartLegend(.hidden)
         .chartYScale(domain: 0...yMax)
         .chartXAxis {
@@ -62,8 +82,8 @@ struct ProtectionChart: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .trailing, values: [0, yMax]) { _ in       // the floor and the shared top, nothing between
-                AxisGridLine().foregroundStyle(.quaternary)
+            AxisMarks(position: .trailing, values: [yMax]) { _ in          // the top only: the tracks show the floor
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3])).foregroundStyle(.quaternary)
                 AxisValueLabel().foregroundStyle(Color.secondary)
             }
         }
@@ -82,10 +102,10 @@ struct ProtectionChart: View {
         buckets.min { abs($0.start.timeIntervalSince(date)) < abs($1.start.timeIntervalSince(date)) }
     }
 
-    /// "3 PM", "Tuesday 10" or "Nov 10": how a bucket is named in the readout and to VoiceOver.
+    /// "05:00", "Tuesday 10" or "Nov 10": how a bucket is named in the readout and to VoiceOver.
     static func label(_ start: Date, _ range: ProtectionTimeline.Range) -> String {
         switch range {
-        case .day: start.formatted(.dateTime.hour())
+        case .day: start.formatted(.dateTime.hour().minute())
         case .week: start.formatted(.dateTime.weekday(.wide).day())
         case .month: start.formatted(.dateTime.month(.abbreviated).day())
         }
@@ -99,7 +119,7 @@ struct ProtectionChart: View {
             HStack(spacing: 4) { Circle().fill(Self.ask).frame(width: 6, height: 6); Text("\(b.ask) \(askLabel)") }
         }
         .font(.caption.monospacedDigit())
-        .padding(6)
+        .padding(8)
         .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.regularMaterial))
     }
 }
