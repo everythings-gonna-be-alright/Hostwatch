@@ -214,11 +214,13 @@ struct FirewallAdviceView: View {
                 Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 if let verdict = analysis.verdict {
-                    Text(verdict.rawValue.capitalized + (analysis.aiRisk.map { " · risk \($0)" } ?? ""))
+                    // The status labels' style, not white on a bright fill: coloured words and icon on a light tint.
+                    Label(verdict.rawValue.capitalized + (analysis.aiRisk.map { " · risk \($0)" } ?? ""),
+                          systemImage: Self.symbol(verdict))
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(Self.color(verdict)))
+                        .foregroundStyle(Self.color(verdict))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(Self.color(verdict).opacity(0.18)))
                 }
             }
             switch analysis.state {
@@ -256,6 +258,15 @@ struct FirewallAdviceView: View {
     private func rendered(_ markdown: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+    }
+
+    static func symbol(_ v: Verdict) -> String {
+        switch v {
+        case .safe: "checkmark.shield"
+        case .suspicious: "exclamationmark.triangle"
+        case .dangerous: "xmark.octagon"
+        case .unknown: "questionmark.circle"
+        }
     }
 
     static func color(_ v: Verdict) -> Color {
