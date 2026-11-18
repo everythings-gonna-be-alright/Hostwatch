@@ -61,6 +61,13 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.18.0**
+- **👋 A welcome tour** – seven short pages, with the choices that matter on day one: which AI helps (Haiku when you
+  pick Claude), the learning day or none, login, threat lists and updates.
+- **🛡️ Fewer questions** – the Claude Code guard asks about two thirds less, Hostwatch's own AI calls aren't stopped,
+  and a connection can be answered once.
+- **⚡ Quicker tabs** and calmer windows in the Liquid Glass style.
+
 **0.17.1**
 - **🩹 Steadier with Claude Code** – resuming a Claude session (`claude --resume`) no longer quits Hostwatch.
 
