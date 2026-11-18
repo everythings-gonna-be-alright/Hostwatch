@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         openSettings: { [weak self] in self?.openSettings(nil) },
         exclude: { [weak self] pattern in self?.model.addExclusion(pattern) },
         showInTimeline: { [weak self] date in self?.showInTimeline(date) },
+        showStoryInTimeline: { [weak self] story in self?.showInTimeline(story) },
         openBaseline: { [weak self] in self?.openBaselineReport() },
         openDomain: { [weak self] domain in self?.openDomainDetails(domain) },
         openFirewallSettings: { [weak self] in self?.openFirewallPane() },

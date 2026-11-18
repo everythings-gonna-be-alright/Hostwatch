@@ -284,8 +284,11 @@ struct StoryDetailView: View {
         HStack(spacing: 8) {
             Button { actions.askStory(story) } label: { Label("Ask AI About This Story", systemImage: "sparkles") }
                 .buttonStyle(.glassProminent)
-            Button { actions.showInTimeline(story.firstSeen) } label: { Label("Show in Timeline", systemImage: "clock.arrow.circlepath") }
-                .buttonStyle(.glass)
+            if story.steps.contains(where: { $0.pid > 0 }) {
+                Button { actions.showStoryInTimeline(story) } label: { Label("Show in Timeline", systemImage: "clock.arrow.circlepath") }
+                    .buttonStyle(.glass)
+                    .help("Open Time Travel at this story, showing only its own events")
+            }
             Spacer()
             if !story.dismissed { Button("Dismiss", action: dismiss).buttonStyle(.glass) }
             Button("Always Ignore This Chain", action: ignore).buttonStyle(.glass)

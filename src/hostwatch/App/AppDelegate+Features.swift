@@ -101,6 +101,9 @@ extension AppDelegate {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 8) { MainActor.assumeIsolated { step(0) } }   // after the tabs are built ahead
+            case "storytime":
+                // The demo's story in Time Travel, only its own events, for screenshots.
+                if let story = stories.stories.first { showInTimeline(story) }
             case "settings":
                 // HOSTWATCH_DEMO_PAGE=0…5: that Settings pane, for screenshots.
                 activityWindow?.orderOut(nil)

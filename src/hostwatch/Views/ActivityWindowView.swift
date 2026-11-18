@@ -190,6 +190,8 @@ struct ActivityWindowView: View {
         // Time Travel searches all recorded history (scope All History), in the background.
         .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
         .onChange(of: traveling) { _, on in
+            // A story's filter belongs to that visit to Time Travel.
+            if !on, model.onlyStory != nil { model.onlyPids = nil; model.onlyStory = nil }
             if on && !runningNow { travel.search(model.searchText) }
             syncRunningMoment()
         }
@@ -247,6 +249,19 @@ struct ActivityWindowView: View {
 
     /// The Events tab's bars: filters, heavy processes, and Time Travel's banners.
     @ViewBuilder private var eventsBars: some View {
+            if let story = model.onlyStory {
+                HStack(spacing: 8) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(.secondary)
+                    Text("\(Text("Only the events of this story:").foregroundStyle(.secondary)) \(Text(story).fontWeight(.medium))")
+                    Spacer(minLength: 8)
+                    Button("Show All Events") { model.onlyPids = nil; model.onlyStory = nil }
+                        .buttonStyle(.glass).controlSize(.small)
+                }
+                .font(.callout)
+                .lineLimit(1)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                Divider()
+            }
             filterBar; Divider()
             if !runningNow {
                 heavySection
@@ -544,7 +559,8 @@ struct ActivityWindowView: View {
         let fresh = current.subtracting(heavyStrip.folded)
         // Live, the card shows a newly heavy process once and folds after 20 s (or ×) into Running Now's flame.
         // Time Travel and Show Only These keep it: there you came for it.
-        if !context.entries.isEmpty, !context.live || model.onlyPids != nil || !fresh.isEmpty {
+        // A story's filter has its own bar: the strip's "Show Only These" would only repeat it.
+        if model.onlyStory == nil, !context.entries.isEmpty, !context.live || model.onlyPids != nil || !fresh.isEmpty {
             HeavyStrip(context: context, state: heavyStrip, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
                 model.onlyPids = model.onlyPids == nil ? context.pids : nil
             }, actions: actions, fold: context.live && model.onlyPids == nil ? { heavyStrip.fold(current, current: current) } : nil)
@@ -554,7 +570,7 @@ struct ActivityWindowView: View {
                 guard !Task.isCancelled, model.onlyPids == nil else { return }
                 withAnimation(.snappy(duration: 0.25)) { heavyStrip.fold(current, current: current) }
             }
-        } else if model.onlyPids != nil {
+        } else if model.onlyPids != nil, model.onlyStory == nil {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle").foregroundStyle(.secondary)
                 Text(traveling ? "Nothing ran heavy at this moment." : "Those processes are no longer heavy.")

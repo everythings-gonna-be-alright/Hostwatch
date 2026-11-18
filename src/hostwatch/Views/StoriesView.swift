@@ -147,10 +147,13 @@ private struct StoryCard: View {
                     }
                     .help("The whole chain, event by event (or double-click the story)")
                     Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
-                    Button { actions.showInTimeline(story.firstSeen) } label: {
-                        Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                    // Only for a story of processes: one raised from the network (a port scan) has none to show.
+                    if story.steps.contains(where: { $0.pid > 0 }) {
+                        Button { actions.showStoryInTimeline(story) } label: {
+                            Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                        }
+                        .help("Open Time Travel at this story, showing only its own events")
                     }
-                    .help("Open Time Travel at this story, with everything else that happened around it")
                     Spacer(minLength: 8)
                     // Two ways to be done with it: delete this one, or never be told about the same chain again.
                     Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }

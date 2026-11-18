@@ -386,6 +386,25 @@ extension AppDelegate {
         travel.enter(at: date.addingTimeInterval(min(travel.span / 2, 60)))
     }
 
+    /// A story's own events: only its processes, every status shown, with a bar that names the story and clears
+    /// the filter. From the live list when its events are still there (a recent story), else in Time Travel at its
+    /// start (which needs recorded history; leaving Time Travel clears the filter too).
+    func showInTimeline(_ story: Story) {
+        let pids = Set(story.steps.map(\.pid).filter { $0 > 0 })
+        guard !pids.isEmpty else { return showInTimeline(story.firstSeen) }
+        model.onlyPids = pids
+        model.onlyStory = story.title
+        model.signatureFilter = .all
+        running.showing = false
+        if model.history.contains(where: { pids.contains($0.pid) && $0.kind == .exec }) {
+            if travel.active { travel.exit() }
+            model.windowTab = 0
+            openActivityWindow(fullScreen: false)
+        } else {
+            showInTimeline(story.firstSeen)
+        }
+    }
+
     @objc func checkForUpdates() { updates.checkAndReport() }
 
     @objc func showAvailableUpdate() {
