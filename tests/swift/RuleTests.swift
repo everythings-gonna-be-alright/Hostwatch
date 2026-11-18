@@ -259,7 +259,7 @@ import Testing
         #expect(RuleText.does(kind: .file, pattern: "w ~/.ssh/*  [SSH keys]") == "writes SSH keys (files in ~/.ssh)")
         #expect(RuleText.does(kind: .file, pattern: "r *  [ordinary files]") == "reads ordinary files (anything but sensitive places)")
         #expect(RuleText.program("/Library/Developer/CommandLineTools/usr/bin/*") == "any program in /Library/Developer/CommandLineTools/usr/bin")
-        #expect(RuleText.program("~/.local/share/claude/versions/#.#.#") == "claude/#.#.#")
+        #expect(RuleText.program("~/.local/share/claude/versions/#.#.#") == "claude")
         #expect(RuleText.program("*") == "any program")
     }
 

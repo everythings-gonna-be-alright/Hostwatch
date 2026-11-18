@@ -33,7 +33,10 @@ import Testing
         let a = file("\(home)/.local/share/claude/versions/2.1.316", pid: 3, "r", "\(home)/Documents/a")
         let b = file("\(home)/.local/share/claude/versions/2.1.317", pid: 3, "r", "\(home)/Documents/a")
         #expect(a.signatureProcess == b.signatureProcess)
-        #expect(displayProcessName(a.signatureProcess) == "claude/#.#.#")
+        #expect(displayProcessName(a.signatureProcess) == "claude")
+        #expect(a.name == "claude" && b.name == "claude")                  // shown by its folder, not "2.1.316"
+        #expect(versionedProgramName("/usr/bin/python3") == nil)
+        #expect(versionedProgramName("\(home)/apps/2.1/tool") == nil)
     }
 
     @Test func webTrafficIsOneInternetBucket() {
