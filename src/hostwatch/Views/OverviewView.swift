@@ -53,9 +53,7 @@ struct WindowTabBar: View {
                         }
                     }
                     .padding(.horizontal, showTitles ? 10 : 9)
-                    // Tall enough that the selected capsule sits as far from the bar's top and bottom as from its
-                    // ends: one shape inside the other, with concentric corners.
-                    .padding(.vertical, 6.5)
+                    .padding(.vertical, 6)
                     // Selected: a raised capsule in the text colour itself, with full-strength text. The accent
                     // colour was used before, and with a graphite accent it looked as dark as the unselected tabs.
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
@@ -74,7 +72,11 @@ struct WindowTabBar: View {
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
-        .padding(4)                                           // the same 4 points around the selected capsule
+        // Measured, not guessed: the toolbar centres the bar at a fixed height but draws its glass 2 pt taller from a
+        // fixed top. At 33 pt of content (3.5 above and below, 4 at the ends, 6 inside a tab) the glass and the
+        // selected capsule share one centre, 4.5 pt apart on every side.
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3.5)
         .fixedSize()                                          // the bar takes the width its titles need
         // No animation on switching: the bar sits in the toolbar, and animating it animated the toolbar's layout
         // while the new tab was being built, which read as a freeze. The press effect is the only motion.
