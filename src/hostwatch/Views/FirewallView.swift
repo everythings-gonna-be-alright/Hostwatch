@@ -154,7 +154,7 @@ struct FirewallPromptView: View {
                 }
                 Text(gateway.map { "It comes through \(prompt.event.name), from inside its virtual machine; which program made it "
                                    + "can't be seen. Your answer decides \($0)s → \(pattern) from now on." }
-                     ?? "Your answer decides \(prompt.event.name) → \(pattern) from now on. The connection waits until you answer.")
+                     ?? "Always decides \(prompt.event.name) → \(pattern) from now on, Once only this connection. It waits until you answer.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let chain, gateway == nil {
@@ -173,11 +173,19 @@ struct FirewallPromptView: View {
                             .help("Claude explains the program, the destination and the risks, and suggests Allow or Block (⌘K)")
                     }
                     Spacer()
-                    Button("Block") { firewall.resolve(prompt.id, allow: false) }
+                    // Two pairs, as in the launch question: once (this connection) or always (decides the pattern).
+                    Button("Always Block") { firewall.resolve(prompt.id, allow: false) }
+                        .buttonStyle(.glass)
+                        .help("Block it, and every connection of this pattern from now on")
+                    Button("Block Once") { firewall.resolve(prompt.id, allow: false, once: true) }
                         .buttonStyle(.glass)
                         .keyboardShortcut(.cancelAction)
-                        .help("Block it, and every connection of this pattern from now on")
-                    Button("Allow") { firewall.resolve(prompt.id, allow: true) }
+                        .help("Block this connection. Next time you're asked again")
+                    Divider().frame(height: 18)
+                    Button("Allow Once") { firewall.resolve(prompt.id, allow: true, once: true) }
+                        .buttonStyle(.glass)
+                        .help("Let this connection through. Next time you're asked again")
+                    Button("Always Allow") { firewall.resolve(prompt.id, allow: true) }
                         .buttonStyle(.glassProminent)
                         .keyboardShortcut(.defaultAction)
                         .help("Allow it, and every connection of this pattern from now on")
@@ -185,7 +193,7 @@ struct FirewallPromptView: View {
                 .controlSize(.large)
             }
             .padding(22)
-            .frame(width: 600)
+            .frame(width: 700)
         }
     }
 

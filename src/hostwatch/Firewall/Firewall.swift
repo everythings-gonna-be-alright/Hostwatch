@@ -539,15 +539,19 @@ final class FirewallMonitor: ObservableObject {
 
     /// Your answer. Allow / Block decide the pattern, which answers the other waiting connections of that
     /// pattern too.
-    func resolve(_ id: UUID, allow: Bool) {
+    /// Your answer. Always decides the pattern and holds it for 5 minutes. Once answers only this connection, and the
+    /// burst of parallel ones a program opens for one request (15 seconds): no pattern is marked, so the next time asks.
+    func resolve(_ id: UUID, allow: Bool, once: Bool = false) {
         guard let prompt = prompts.first(where: { $0.id == id }) else { return }
         let same = prompts.filter { $0.patternKey == prompt.patternKey }
         prompts.removeAll { p in same.contains { $0.id == p.id } }
         dropAdvice(same.map(\.id))
-        markPattern(prompt.patternKey, allow ? .safe : .suspicious)
-        decided(patternKeys: [prompt.patternKey])
+        if !once {
+            markPattern(prompt.patternKey, allow ? .safe : .suspicious)
+            decided(patternKeys: [prompt.patternKey])
+        }
         for p in same {
-            answer?(p.key, allow, 300)
+            answer?(p.key, allow, once ? 15 : 300)
             if !allow { blockedCount += 1 }
         }
         onPromptsChange?()
