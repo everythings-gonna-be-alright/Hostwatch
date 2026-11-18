@@ -126,15 +126,9 @@ struct FirewallPromptView: View {
             // The launch question's layout: the program's icon with the title beside it and the wait at the right,
             // what the answer decides, who started it, and the answers in one row at the bottom right.
             VStack(alignment: .leading, spacing: 10) {
+                QuestionKindLabel(kind: .net, title: "Network connection")
                 HStack(alignment: .top, spacing: 12) {
                     Image(nsImage: ProcessIcons.icon(prompt.event.proc)).resizable().frame(width: 36, height: 36)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "network")
-                                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
-                                .frame(width: 16, height: 16)
-                                .background(Circle().fill(Color.secondary))
-                                .offset(x: 4, y: 4)
-                        }
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
