@@ -294,11 +294,7 @@ struct LaunchChainStrip: View {
                 }
             }
             .lineLimit(1)
-            let what = report.process.args.isEmpty ? report.process.path : report.process.args
-            Text(what)
-                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
-                .help(report.process.path)
+            FullCommand(text: report.process.args.isEmpty ? report.process.path : report.process.args)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -317,5 +313,50 @@ struct LaunchChainStrip: View {
                 .font(.caption.weight(last ? .semibold : .regular)).foregroundStyle(last ? .primary : .secondary)
         }
         .help("\(step.path) (pid \(step.pid))")
+    }
+}
+
+/// A command line you can read whole, for question panels: up to three lines as it is, then Show Full Command opens
+/// all of it in a box that scrolls, with Copy. Cutting it in the middle hid the part that mattered.
+struct FullCommand: View {
+    let text: String
+    @StateObject private var expand = ExpandState()
+
+    /// Long enough to need more than three lines at this size in a question panel.
+    private var isLong: Bool { text.count > 180 || text.filter { $0 == "\n" }.count > 2 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if expand.open {
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(maxHeight: 150)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
+            } else {
+                Text(text)
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    .lineLimit(isLong ? 3 : nil).truncationMode(.tail).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if isLong || expand.open {
+                HStack(spacing: 8) {
+                    Button(expand.open ? "Show Less" : "Show Full Command") {
+                        withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
+                    }
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                    }
+                    .help("Copy the whole command")
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+            }
+        }
     }
 }
