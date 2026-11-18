@@ -80,6 +80,27 @@ extension AppDelegate {
                 // HOSTWATCH_DEMO_PAGE=1…7: the welcome guide on that page, for screenshots.
                 activityWindow?.orderOut(nil)
                 openWelcomeGuide(start: (Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 1) - 1)
+            case "tabtiming":
+                // Switches through the tabs twice and writes how long each switch keeps the main thread busy
+                // (until the next turn of the run loop) to tab-timing.txt in the demo folder.
+                var log: [String] = []
+                let order = [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 2, 0, 3]
+                @MainActor func step(_ i: Int) {
+                    guard i < order.count else {
+                        try? log.joined(separator: "\n").write(to: Demo.root!.appendingPathComponent("tab-timing.txt"),
+                                                                atomically: true, encoding: .utf8)
+                        return
+                    }
+                    let start = CFAbsoluteTimeGetCurrent()
+                    model.windowTab = order[i]
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            log.append("tab \(order[i]): \(Int((CFAbsoluteTimeGetCurrent() - start) * 1000)) ms")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { MainActor.assumeIsolated { step(i + 1) } }
+                        }
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 8) { MainActor.assumeIsolated { step(0) } }   // after the tabs are built ahead
             case "settings":
                 // HOSTWATCH_DEMO_PAGE=0…5: that Settings pane, for screenshots.
                 activityWindow?.orderOut(nil)

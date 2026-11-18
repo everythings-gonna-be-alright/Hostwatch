@@ -128,8 +128,6 @@ struct ActivityWindowView: View {
     /// Sessions replayed from the Time Travel window's events.
     @StateObject private var travelSessions = ReplayedSessions()
     @StateObject private var visited = VisitedTabs()
-    @StateObject private var veil = TabVeil()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var visitedTabs: Set<Int> {
         get { visited.tabs }
         nonmutating set { visited.tabs = newValue }
@@ -146,25 +144,6 @@ struct ActivityWindowView: View {
             FirewallFallbackBanner(firewall: firewall, openSettings: actions.openFirewallSettings)
             // A search left in the field filters quietly: say so where you look, with the way out.
             if searchFiltering && !showsHistoryScope { SearchActiveBar(text: searchText); Divider() }
-            if model.windowTab == 0 { filterBar; Divider() }
-            if model.windowTab == 0 && !runningNow {
-                heavySection
-                Color.clear.frame(height: 0)
-                    .onReceive(model.sessions.objectWillChange) { _ in
-                        // A live session's tree grows: the filter follows it, and the groupings too.
-                        DispatchQueue.main.async {
-                            if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
-                            if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
-                                model.onlySessionPids = s.pids
-                            }
-                        }
-                    }
-            }
-            if traveling {
-                if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
-                TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
-                                 noun: runningNow ? "processes" : "events"); Divider()
-            }
             // Every tab visited stays alive and *attached*: the tabs sit side by side in a strip as wide as all of
             // them, slid so the current one shows. Hiding a tab (opacity, zIndex changes) made SwiftUI detach or
             // re-add its AppKit table, and re-attaching a table costs ~2 ms per cell view (a sample showed 0.6 s of
@@ -184,12 +163,16 @@ struct ActivityWindowView: View {
                 .offset(x: -index * geo.size.width)
             }
             .clipped()
-            .overlay { TabVeilLayer(veil: veil, animated: !reduceMotion) }
             .onAppear { visitedTabs.insert(model.windowTab) }
-            .onChange(of: model.windowTab) { _, tab in
-                visitedTabs.insert(tab)
-                veil.reveal()
+            // The other tabs are built ahead, one at a time once the window has settled, so a first visit is as quick as
+            // any other (building one took 100 to 330 ms, which froze the first switch to it).
+            .task {
+                for tab in 0...4 {
+                    try? await Task.sleep(for: .seconds(tab == 0 ? 2 : 0.8))
+                    if !visitedTabs.contains(tab) { visitedTabs.insert(tab) }
+                }
             }
+            .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
         }
         .frame(minWidth: 1240, minHeight: 720)     // the toolbar (window controls, five tabs, title, buttons, search) fits whole from here; every page adapts above it
         // The Patterns rows are ready before the tab is opened.
@@ -224,6 +207,18 @@ struct ActivityWindowView: View {
     @ViewBuilder private func tabContent(_ tab: Int) -> some View {
         switch tab {
             case 0:
+                // The Events tab's own bars live in the tab, not above the strip: added and removed on every switch,
+                // they changed the strip's height and made every visited tab (their tables too) lay out again.
+                VStack(spacing: 0) {
+                    eventsBars
+                    eventsBody
+                }
+            default:
+                otherTab(tab)
+            }
+    }
+
+    @ViewBuilder private var eventsBody: some View {
                 if runningNow {
                     RunningProcessesView(running: running, signatures: signatures, search: model.searchText,
                                          history: model.history, showSpawn: { row in
@@ -234,6 +229,10 @@ struct ActivityWindowView: View {
                 } else {
                     eventsList
                 }
+    }
+
+    @ViewBuilder private func otherTab(_ tab: Int) -> some View {
+        switch tab {
             case 1: patternsAndProtection(.patterns)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
@@ -243,6 +242,30 @@ struct ActivityWindowView: View {
                                 openStories: { model.windowTab = 2 }, hud: actions,
                                 travelWindow: mapTraveling ? Self.mapWindow(travel) : nil)
             default: patternsAndProtection(.protection)
+            }
+    }
+
+    /// The Events tab's bars: filters, heavy processes, and Time Travel's banners.
+    @ViewBuilder private var eventsBars: some View {
+            filterBar; Divider()
+            if !runningNow {
+                heavySection
+                Color.clear.frame(height: 0)
+                    .onReceive(model.sessions.objectWillChange) { _ in
+                        // A live session's tree grows: the filter follows it, and the groupings too.
+                        DispatchQueue.main.async {
+                            guard model.windowTab == 0 else { return }
+                            if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
+                            if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
+                                model.onlySessionPids = s.pids
+                            }
+                        }
+                    }
+            }
+            if traveling {
+                if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
+                TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
+                                 noun: runningNow ? "processes" : "events"); Divider()
             }
     }
 
@@ -343,7 +366,7 @@ struct ActivityWindowView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            WindowTabBar(tabs: windowTabs, selection: $model.windowTab, willSelect: { _ in veil.cover() })
+            WindowTabBar(tabs: windowTabs, selection: $model.windowTab)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { travel.active }, set: { on in
