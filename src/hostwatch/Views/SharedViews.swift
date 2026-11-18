@@ -335,9 +335,27 @@ struct RowBand: NSViewRepresentable {
         /// A stripe or a band, drawn (not layered) so it follows the appearance. Which one is decided as it draws:
         /// when the cell is attached the row has no index yet.
         final class TintView: NSView {
-            weak var row: NSTableRowView?
+            /// The stripe depends on the row's place in the table. A sorted list (Running Now, every 3 s) moves row
+            /// views to other places without touching their cells, so the stripe is redrawn whenever its row moves:
+            /// otherwise the old stripes stayed and the zebra no longer matched the rows.
+            weak var row: NSTableRowView? {
+                didSet {
+                    guard row !== oldValue else { return }
+                    if let moved { NotificationCenter.default.removeObserver(moved) }
+                    moved = nil
+                    guard let row else { return }
+                    row.postsFrameChangedNotifications = true
+                    moved = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: row,
+                                                                   queue: .main) { [weak self] _ in
+                        MainActor.assumeIsolated { self?.needsDisplay = true }
+                    }
+                }
+            }
             weak var table: NSTableView?
             var isBand = false { didSet { needsDisplay = true } }
+            private var moved: NSObjectProtocol?
+
+            deinit { if let moved { NotificationCenter.default.removeObserver(moved) } }
 
             override func draw(_ dirtyRect: NSRect) {
                 // SwiftUI re-clears the table's background on every update, which leaves the window's lighter

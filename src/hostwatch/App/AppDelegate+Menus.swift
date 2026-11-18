@@ -418,12 +418,20 @@ extension AppDelegate {
         sheets.showVulns = true
     }
 
+    private static func when(_ ts: Double?) -> Date { ts.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil } ?? Date() }
+
     /// A domain's details: risk score, programs, connections, Ask AI.
     func openDomainDetails(_ domain: String) {
-        guard let record = domains.records[domain] else { return }
         let connections = model.history.filter {
             $0.kind == .net && ($0.registrableDomain == domain || $0.host == domain || $0.host.hasSuffix("." + domain))
         }
+        // A destination the map knows only from its traffic, or one always blocked before anything resolved it, has
+        // no record of its own: the details are drawn from its connections rather than the button doing nothing.
+        let record = domains.records[domain] ?? DomainRecord(
+            domain: domain, firstSeen: Self.when(connections.map(\.ts).filter { $0 > 0 }.min()),
+            lastSeen: Self.when(connections.map(\.ts).max()),
+            count: connections.count, programs: Array(Set(connections.map(\.name)).sorted().prefix(6)),
+            hosts: Array(Set(connections.map(\.host).filter { !$0.isEmpty }).sorted().prefix(6)), baseline: false)
         let details = DomainDetails(record: record, connections: Array(connections.prefix(200)),
                                     knownBad: intel.reason(forDomain: domain))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 820),
