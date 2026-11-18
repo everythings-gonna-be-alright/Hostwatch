@@ -138,44 +138,37 @@ private struct StoryCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            // The way into the story first, then where to look, then one split button for being done with it:
-            // Dismiss is its click, the rarer endings are in its menu, the way the rules ask for related actions.
-            HStack(spacing: 8) {
-                Button { actions.openStory(story) } label: { Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted") }
-                    .buttonStyle(.glass)
+            // One style, as Liquid Glass asks of a row of actions: glass capsules at the regular size in one
+            // container. The ways into the story first, then Dismiss, and the rarer endings behind ⋯.
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button { actions.openStory(story) } label: {
+                        Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
                     .help("The whole chain, event by event (or double-click the story)")
-                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
-                    .buttonStyle(.glass)
-                Button { actions.showInTimeline(story.firstSeen) } label: {
-                    Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                    Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
+                    Button { actions.showInTimeline(story.firstSeen) } label: {
+                        Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                    }
+                    .help("Open Time Travel at this story, with everything else that happened around it")
+                    Spacer(minLength: 8)
+                    if !story.dismissed {
+                        Button { stories.dismiss(story.id) } label: { Label("Dismiss", systemImage: "checkmark") }
+                    }
+                    Menu { endings } label: {
+                        Image(systemName: "ellipsis").frame(width: 16, height: 16)
+                    }
+                    .menuStyle(.button)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.plain)
+                    .padding(4)                           // as tall as the capsules beside it
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .help("More: always ignore this chain, or delete the story")
+                    .accessibilityLabel("More")
                 }
                 .buttonStyle(.glass)
-                .help("Open Time Travel at this story, with everything else that happened around it")
-                Spacer(minLength: 8)
-                if story.dismissed {
-                    Menu {
-                        endings
-                    } label: {
-                        Label("More", systemImage: "ellipsis")
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.glass)
-                    .fixedSize()
-                } else {
-                    Menu {
-                        endings
-                    } label: {
-                        Label("Dismiss", systemImage: "checkmark")
-                    } primaryAction: {
-                        stories.dismiss(story.id)
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.glass)
-                    .fixedSize()
-                    .help("Dismiss this story. The arrow has the other ways to be done with it")
-                }
+                .buttonBorderShape(.capsule)
             }
-            .controlSize(.small)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.secondary.opacity(0.07)))
