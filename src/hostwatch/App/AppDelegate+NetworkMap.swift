@@ -13,9 +13,11 @@ extension AppDelegate {
         case let .newDeviceReached(remote, device, port):
             stories.raise(.newDevice, origin: "\(device) (\(remote))",
                           note: "a device first seen today connected to port \(port) on this Mac", target: "\(remote):\(port)")
-        case let .largeUpload(program, _, destination, bytes):
+        case let .largeUpload(program, path, destination, bytes):
+            // Claude Code sends its context to Anthropic by design (Hostwatch's own AI calls too): not a leak.
+            if CodingAgent.of(path) == .claude, destination.lowercased().contains("anthropic") { return }
             let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-            stories.raise(.largeUpload, origin: program,
+            stories.raise(.largeUpload, origin: versionedProgramName(path) ?? program,
                           note: "sent \(size) within an hour to \(destination), which it first reached today", target: destination)
         case let .untrustedTry(remote, device, port, network):
             stories.raise(.newDevice, origin: "\(device) (\(remote))",

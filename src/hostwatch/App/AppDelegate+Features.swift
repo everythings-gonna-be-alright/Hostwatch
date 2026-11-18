@@ -11,7 +11,7 @@ extension AppDelegate {
         #if DEMO
         // The scene decides the look, not what was clicked in an earlier demo run: newest events on top.
         model.eventOrder = [KeyPathComparator(\.seq, order: .reverse)]
-        model.demoConnect()
+        if Demo.scene != "off" { model.demoConnect() }        // off: the window as when the collector is stopped
         domains.endLearning()
         firewall.mode = .ask
         for line in Demo.lines() { model.receive(line) }
@@ -76,6 +76,46 @@ extension AppDelegate {
                 let pages: [String: RulesSegment] = ["files": .protectedFiles, "found": .protectionFound, "firewall": .firewall]
                 rulesTab.open(pages[ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? ""] ?? .protectionOverview)
                 model.windowTab = 4
+            case "welcome":
+                // HOSTWATCH_DEMO_PAGE=1…7: the welcome guide on that page, for screenshots.
+                activityWindow?.orderOut(nil)
+                openWelcomeGuide(start: (Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 1) - 1)
+            case "tabtiming":
+                // Switches through the tabs twice and writes how long each switch keeps the main thread busy
+                // (until the next turn of the run loop) to tab-timing.txt in the demo folder.
+                var log: [String] = []
+                let order = [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 2, 0, 3]
+                @MainActor func step(_ i: Int) {
+                    guard i < order.count else {
+                        try? log.joined(separator: "\n").write(to: Demo.root!.appendingPathComponent("tab-timing.txt"),
+                                                                atomically: true, encoding: .utf8)
+                        return
+                    }
+                    let start = CFAbsoluteTimeGetCurrent()
+                    model.windowTab = order[i]
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            log.append("tab \(order[i]): \(Int((CFAbsoluteTimeGetCurrent() - start) * 1000)) ms")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { MainActor.assumeIsolated { step(i + 1) } }
+                        }
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 8) { MainActor.assumeIsolated { step(0) } }   // after the tabs are built ahead
+            case "storytime":
+                // The demo's story in Time Travel, only its own events, for screenshots.
+                if let story = stories.stories.first { showInTimeline(story) }
+            case "settings":
+                // HOSTWATCH_DEMO_PAGE=0…5: that Settings pane, for screenshots.
+                activityWindow?.orderOut(nil)
+                openSettings(SettingsPane(rawValue: Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 0))
+            case "access":
+                // The Full Disk Access window, for screenshots.
+                activityWindow?.orderOut(nil)
+                showFullDiskAccessAlert(afterFailure: false)
+            case "update":
+                // The window a new release brings, for screenshots.
+                activityWindow?.orderOut(nil)
+                DispatchQueue.main.async { [self] in updates.presentAvailable(Demo.release) }
             case "watch":
                 if let e = cleanerLaunch {
                     openWatch(for: e)

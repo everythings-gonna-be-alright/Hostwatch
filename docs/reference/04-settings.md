@@ -67,7 +67,7 @@ This pane controls how Hostwatch uses AI and how Claude Code can work with it.
   pane also shows the local model's status and the Claude Code command.
 - **Local model:** Apple On-Device (*General* or *Content Tagging*) or a custom OpenAI-compatible server, with its
   address, model, API key and a *Test* button.
-- **Claude:** which Claude model to use: Claude Code's default, Opus, Sonnet or Haiku.
+- **Claude:** which Claude model to use: Haiku (the default), Sonnet, Opus or Claude Code's own default.
 - **Suggestions:** *Suggest for new patterns automatically* and *Accept AI suggestions without asking*.
 - **Claude Code guard:** turn it on or off, see the hook fragment, and read the log. See
   [Claude Code guard](03-features.md#claude-code-guard).

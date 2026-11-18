@@ -4,8 +4,8 @@ import SwiftUI
 
 /// One Protection area over the chosen range: what was stopped (or would be) in red, what was asked about (or would
 /// be) in a neutral grey, stacked. Red is the critical colour throughout Hostwatch, red beside orange failed the
-/// colour-vision check, so a question, pending rather than alarming, is grey. The legend names both. The y scale is
-/// passed in and shared by every card, so bars side by side compare honestly (HIG, Charts).
+/// colour-vision check, so a question, pending rather than alarming, is grey. The card's two figures above name both,
+/// with a dot each, so the chart has no legend of its own. Each card has its own scale, labelled at its top.
 struct ProtectionChart: View {
     let buckets: [ProtectionTimeline.Bucket]
     let range: ProtectionTimeline.Range
@@ -18,7 +18,7 @@ struct ProtectionChart: View {
     @StateObject private var hover = ChartHover()
 
     static let stop = Color(nsColor: .systemRed)
-    static let ask = Color(nsColor: .systemGray)
+    static let ask = Color(nsColor: .systemGray).opacity(0.75)
 
     private var empty: Bool { buckets.allSatisfy { $0.total == 0 } }
 
@@ -27,12 +27,12 @@ struct ProtectionChart: View {
             ForEach(buckets) { b in
                 BarMark(x: .value("Time", b.start, unit: range.unit), y: .value("Count", b.block))
                     .foregroundStyle(by: .value("What", stopLabel))
-                    .cornerRadius(2)
+                    .cornerRadius(3)
                     .accessibilityLabel(Self.label(b.start, range))
                     .accessibilityValue("\(b.block) \(stopLabel)")
                 BarMark(x: .value("Time", b.start, unit: range.unit), y: .value("Count", b.ask))
                     .foregroundStyle(by: .value("What", askLabel))
-                    .cornerRadius(2)
+                    .cornerRadius(3)
                     .accessibilityLabel(Self.label(b.start, range))
                     .accessibilityValue("\(b.ask) \(askLabel)")
             }
@@ -43,7 +43,7 @@ struct ProtectionChart: View {
             }
         }
         .chartForegroundStyleScale([stopLabel: Self.stop, askLabel: Self.ask])
-        .chartLegend(position: .bottom, alignment: .leading, spacing: 6)
+        .chartLegend(.hidden)
         .chartYScale(domain: 0...yMax)
         .chartXAxis {
             switch range {

@@ -16,6 +16,9 @@ struct WindowTabBar: View {
 
     let tabs: [Tab]
     @Binding var selection: Int
+    /// The tab the bar shows as chosen: it moves at once on a click, the window follows a moment later.
+    @StateObject private var shown = ShownTab()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         bar(showTitles: true)
@@ -24,8 +27,14 @@ struct WindowTabBar: View {
     private func bar(showTitles: Bool) -> some View {
         HStack(spacing: 2) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { i, tab in
-                let selected = selection == tab.id
-                Button { selection = tab.id } label: {
+                let selected = (shown.id ?? selection) == tab.id
+                Button {
+                    // The bar first: its new highlight is drawn before the window builds the new tab, which takes
+                    // a moment and used to hold the pressed tab still on screen.
+                    guard tab.id != selection else { return }
+                    shown.id = tab.id
+                    DispatchQueue.main.async { selection = tab.id; shown.id = nil }
+                } label: {
                     HStack(spacing: 5) {
                         Image(systemName: tab.symbol)
                             .symbolVariant(selected ? .fill : .none)
@@ -43,8 +52,8 @@ struct WindowTabBar: View {
                                 .background(Capsule().fill(tab.badgeTint))
                         }
                     }
-                    .padding(.horizontal, showTitles ? 9 : 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, showTitles ? 10 : 9)
+                    .padding(.vertical, 6)
                     // Selected: a raised capsule in the text colour itself, with full-strength text. The accent
                     // colour was used before, and with a graphite accent it looked as dark as the unselected tabs.
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
@@ -57,15 +66,40 @@ struct WindowTabBar: View {
                     }
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TabPressStyle(still: reduceMotion))
                 .help("\(tab.title) (⌘\(i + 1))")
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
-        .padding(3)
+        // Measured, not guessed: the toolbar centres the bar at a fixed height but draws its glass 2 pt taller from a
+        // fixed top. At 33 pt of content (3.5 above and below, 4 at the ends, 6 inside a tab) the glass and the
+        // selected capsule share one centre, 4.5 pt apart on every side.
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3.5)
         .fixedSize()                                          // the bar takes the width its titles need
+        // No animation on switching: the bar sits in the toolbar, and animating it animated the toolbar's layout
+        // while the new tab was being built, which read as a freeze. The press effect is the only motion.
     }
+}
+
+/// A tab's press: a soft light under the pointer while it's held. No swelling: drawn by the app, a swell can't spring
+/// back while the window builds the new tab, and it looked frozen (the system's glass buttons animate elsewhere).
+private struct TabPressStyle: ButtonStyle {
+    let still: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
+            }
+            .animation(still ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// WindowTabBar's chosen tab between the click and the window catching up (no @State macro with the command line tools).
+final class ShownTab: ObservableObject {
+    @Published var id: Int?
 }
 
 /// Window-wide sheets and banners.

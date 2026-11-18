@@ -138,30 +138,12 @@ struct ActivityWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !collector.isRunning && !model.connected { collectorBanner; Divider() }
+            let collectorOff = !collector.isRunning && !model.connected
+            VStack(spacing: 0) { if collectorOff { collectorBanner } }.animation(.snappy, value: collectorOff)
             VulnerabilityBanner(intel: intel, sheets: sheets)
             FirewallFallbackBanner(firewall: firewall, openSettings: actions.openFirewallSettings)
             // A search left in the field filters quietly: say so where you look, with the way out.
             if searchFiltering && !showsHistoryScope { SearchActiveBar(text: searchText); Divider() }
-            if model.windowTab == 0 { filterBar; Divider() }
-            if model.windowTab == 0 && !runningNow {
-                heavySection
-                Color.clear.frame(height: 0)
-                    .onReceive(model.sessions.objectWillChange) { _ in
-                        // A live session's tree grows: the filter follows it, and the groupings too.
-                        DispatchQueue.main.async {
-                            if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
-                            if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
-                                model.onlySessionPids = s.pids
-                            }
-                        }
-                    }
-            }
-            if traveling {
-                if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
-                TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
-                                 noun: runningNow ? "processes" : "events"); Divider()
-            }
             // Every tab visited stays alive and *attached*: the tabs sit side by side in a strip as wide as all of
             // them, slid so the current one shows. Hiding a tab (opacity, zIndex changes) made SwiftUI detach or
             // re-add its AppKit table, and re-attaching a table costs ~2 ms per cell view (a sample showed 0.6 s of
@@ -182,6 +164,14 @@ struct ActivityWindowView: View {
             }
             .clipped()
             .onAppear { visitedTabs.insert(model.windowTab) }
+            // The other tabs are built ahead, one at a time once the window has settled, so a first visit is as quick as
+            // any other (building one took 100 to 330 ms, which froze the first switch to it).
+            .task {
+                for tab in 0...4 {
+                    try? await Task.sleep(for: .seconds(tab == 0 ? 2 : 0.8))
+                    if !visitedTabs.contains(tab) { visitedTabs.insert(tab) }
+                }
+            }
             .onChange(of: model.windowTab) { _, tab in visitedTabs.insert(tab) }
         }
         .frame(minWidth: 1240, minHeight: 720)     // the toolbar (window controls, five tabs, title, buttons, search) fits whole from here; every page adapts above it
@@ -200,6 +190,8 @@ struct ActivityWindowView: View {
         // Time Travel searches all recorded history (scope All History), in the background.
         .onChange(of: model.searchText) { _, text in if traveling && !runningNow { travel.search(text) } }
         .onChange(of: traveling) { _, on in
+            // A story's filter belongs to that visit to Time Travel.
+            if !on, model.onlyStory != nil { model.onlyPids = nil; model.onlyStory = nil }
             if on && !runningNow { travel.search(model.searchText) }
             syncRunningMoment()
         }
@@ -217,6 +209,18 @@ struct ActivityWindowView: View {
     @ViewBuilder private func tabContent(_ tab: Int) -> some View {
         switch tab {
             case 0:
+                // The Events tab's own bars live in the tab, not above the strip: added and removed on every switch,
+                // they changed the strip's height and made every visited tab (their tables too) lay out again.
+                VStack(spacing: 0) {
+                    eventsBars
+                    eventsBody
+                }
+            default:
+                otherTab(tab)
+            }
+    }
+
+    @ViewBuilder private var eventsBody: some View {
                 if runningNow {
                     RunningProcessesView(running: running, signatures: signatures, search: model.searchText,
                                          history: model.history, showSpawn: { row in
@@ -227,6 +231,10 @@ struct ActivityWindowView: View {
                 } else {
                     eventsList
                 }
+    }
+
+    @ViewBuilder private func otherTab(_ tab: Int) -> some View {
+        switch tab {
             case 1: patternsAndProtection(.patterns)
             case 2: StoriesView(stories: model.stories, search: model.searchText, actions: actions)
             case 3: NetworkView(domains: domains, firewall: firewall, signatures: signatures, state: networkState,
@@ -236,6 +244,43 @@ struct ActivityWindowView: View {
                                 openStories: { model.windowTab = 2 }, hud: actions,
                                 travelWindow: mapTraveling ? Self.mapWindow(travel) : nil)
             default: patternsAndProtection(.protection)
+            }
+    }
+
+    /// The Events tab's bars: filters, heavy processes, and Time Travel's banners.
+    @ViewBuilder private var eventsBars: some View {
+            if let story = model.onlyStory {
+                HStack(spacing: 8) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(.secondary)
+                    Text("\(Text("Only the events of this story:").foregroundStyle(.secondary)) \(Text(story).fontWeight(.medium))")
+                    Spacer(minLength: 8)
+                    Button("Show All Events") { model.onlyPids = nil; model.onlyStory = nil }
+                        .buttonStyle(.glass).controlSize(.small)
+                }
+                .font(.callout)
+                .lineLimit(1)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                Divider()
+            }
+            filterBar; Divider()
+            if !runningNow {
+                heavySection
+                Color.clear.frame(height: 0)
+                    .onReceive(model.sessions.objectWillChange) { _ in
+                        // A live session's tree grows: the filter follows it, and the groupings too.
+                        DispatchQueue.main.async {
+                            guard model.windowTab == 0 else { return }
+                            if signatures.groupBySession { patternList.request(signatures) { model.signatureFilter } }
+                            if let id = model.onlySession, let s = model.sessions.session(id), s.pids != model.onlySessionPids {
+                                model.onlySessionPids = s.pids
+                            }
+                        }
+                    }
+            }
+            if traveling {
+                if showsHistoryScope { HistorySearchScopeBar(travel: travel, text: $model.searchText); Divider() }
+                TimeTravelBanner(travel: travel, shown: runningNow ? running.rows.count : travel.listed.count,
+                                 noun: runningNow ? "processes" : "events"); Divider()
             }
     }
 
@@ -369,20 +414,44 @@ struct ActivityWindowView: View {
         }
     }
 
-    /// Nothing is watched while the collector is off: say so where you look, with the fix.
+    /// Nothing is watched while the collector is off: say so where you look, with the fix. A floating glass panel,
+    /// inset from the window's edges, nearly neutral so the words keep their contrast.
     private var collectorBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            Text("The collector is off, so nothing is being watched.").fontWeight(.medium)
-            Spacer()
-            Button(collector.state == .starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
-                .buttonStyle(.glassProminent)
-                .disabled(collector.state == .starting)
+        let starting = collector.state == .starting
+        return HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .offset(y: -1)                       // a triangle's weight sits low: up a point looks centred
+                .frame(width: 30, height: 30)
+                .background(Color.orange.gradient, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Hostwatch isn't watching").font(.headline)
+                Text("The collector is off. Start it to see activity again.").font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            if starting { ProgressView().controlSize(.small) }
+            Button(starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
+                .buttonStyle(.glass)
+                .controlSize(.large)
+                .disabled(starting)
         }
-        .controlSize(.small)
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.10))
+        .padding(.vertical, 10)
+        // An orange layer, an orange hairline and a soft shadow lift it off the list. The words stay white.
+        // The orange as its own layer between the glass and the words: a glass tint over a dark window turns brown.
+        .background(LinearGradient(colors: [Color.orange.opacity(0.42), Color.orange.opacity(0.24)],
+                                   startPoint: .leading, endPoint: .trailing),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.orange.opacity(0.45), lineWidth: 1))
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
     }
 
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
@@ -490,7 +559,8 @@ struct ActivityWindowView: View {
         let fresh = current.subtracting(heavyStrip.folded)
         // Live, the card shows a newly heavy process once and folds after 20 s (or ×) into Running Now's flame.
         // Time Travel and Show Only These keep it: there you came for it.
-        if !context.entries.isEmpty, !context.live || model.onlyPids != nil || !fresh.isEmpty {
+        // A story's filter has its own bar: the strip's "Show Only These" would only repeat it.
+        if model.onlyStory == nil, !context.entries.isEmpty, !context.live || model.onlyPids != nil || !fresh.isEmpty {
             HeavyStrip(context: context, state: heavyStrip, onlyThese: model.onlyPids != nil, toggleOnlyThese: {
                 model.onlyPids = model.onlyPids == nil ? context.pids : nil
             }, actions: actions, fold: context.live && model.onlyPids == nil ? { heavyStrip.fold(current, current: current) } : nil)
@@ -500,7 +570,7 @@ struct ActivityWindowView: View {
                 guard !Task.isCancelled, model.onlyPids == nil else { return }
                 withAnimation(.snappy(duration: 0.25)) { heavyStrip.fold(current, current: current) }
             }
-        } else if model.onlyPids != nil {
+        } else if model.onlyPids != nil, model.onlyStory == nil {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle").foregroundStyle(.secondary)
                 Text(traveling ? "Nothing ran heavy at this moment." : "Those processes are no longer heavy.")

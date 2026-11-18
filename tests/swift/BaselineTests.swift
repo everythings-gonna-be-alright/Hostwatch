@@ -156,6 +156,18 @@ import Testing
         #expect(wave == 1)
     }
 
+    @Test func learningCanBeTurnedOffAndBackOn() throws {
+        let (learner, _, _) = try makeLearner()
+        learner.turnOff()
+        #expect(learner.phase == .done && learner.isOff && learner.learningEnds == nil)
+        #expect(learner.statusText.hasPrefix("Learning is off"))
+        learner.setDuration(7 * 86_400)                                         // a longer day doesn't resume it
+        #expect(learner.phase == .done)
+        learner.learnAgain()
+        guard case .learning(let wave, _) = learner.phase else { Issue.record("not learning"); return }
+        #expect(wave == 1 && !learner.isOff)
+    }
+
     @Test func onlyWhatRecursIsTypical() {
         var e = entry(proc: "/x")
         e.count = 3; e.firstSeen = Date().addingTimeInterval(-7200); e.lastSeen = Date()

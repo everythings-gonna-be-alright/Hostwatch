@@ -17,7 +17,7 @@ import Testing
     @Test func centeredOnTheScreenAndWithoutTitleBarButtons() throws {
         let (fw, id) = try firewallWithAQuestion()
         let panel = QuestionPanel.make(FirewallPromptView(firewall: fw, id: id))
-        #expect(panel.frame.width > 300 && panel.frame.height > 200)              // its real size, not a placeholder
+        #expect(panel.frame.width > 300 && panel.frame.height > 120)              // its real size, not a placeholder (one row of answers)
         QuestionPanel.show(panel, slot: 0)
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         defer { panel.orderOut(nil) }

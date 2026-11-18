@@ -108,7 +108,7 @@ private struct StoryCard: View {
                 Spacer()
                 Text("score \(story.score)").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
             }
-            DisclosureGroup("\(story.steps.count) steps") {
+            DisclosureGroup(story.steps.count == 1 ? "1 step" : "\(story.steps.count) steps") {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(story.steps) { step in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -138,29 +138,32 @@ private struct StoryCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            HStack(spacing: 8) {
-                Button { actions.openStory(story) } label: { Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted") }
-                    .buttonStyle(.glassProminent)
+            // One style, as Liquid Glass asks of a row of actions: glass capsules at the regular size in one
+            // container. The ways into the story first, then the two ways to be done with it.
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button { actions.openStory(story) } label: {
+                        Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
                     .help("The whole chain, event by event (or double-click the story)")
-                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
-                    .buttonStyle(.glass)
-                Button { actions.showInTimeline(story.firstSeen) } label: {
-                    Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                    Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
+                    // Only for a story of processes: one raised from the network (a port scan) has none to show.
+                    if story.steps.contains(where: { $0.pid > 0 }) {
+                        Button { actions.showStoryInTimeline(story) } label: {
+                            Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                        }
+                        .help("Open Time Travel at this story, showing only its own events")
+                    }
+                    Spacer(minLength: 8)
+                    // Two ways to be done with it: delete this one, or never be told about the same chain again.
+                    Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }
+                        .help("Never alert again for \(story.originName) with these stages")
+                    Button(role: .destructive) { stories.delete(story.id) } label: { Label("Delete", systemImage: "trash") }
+                        .help("Remove this story from the list")
                 }
                 .buttonStyle(.glass)
-                .help("Open Time Travel at this story, with everything else that happened around it")
-                if !story.dismissed {
-                    Button("Dismiss") { stories.dismiss(story.id) }.buttonStyle(.glass)
-                }
-                Button("Always Ignore This Chain") { stories.ignoreAlways(story.id) }
-                    .buttonStyle(.glass)
-                    .help("Never alert again for \(story.originName) with these stages")
-                Spacer()
-                Button(role: .destructive) { stories.delete(story.id) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.glass)
-                    .help("Delete this story")
+                .buttonBorderShape(.capsule)
             }
-            .controlSize(.small)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.secondary.opacity(0.07)))
@@ -173,6 +176,7 @@ private struct StoryCard: View {
         .onTapGesture(count: 2) { actions.openStory(story) }
         .opacity(story.dismissed ? 0.55 : 1)
     }
+
 }
 
 /// Pinned alert at the top of the HUD.

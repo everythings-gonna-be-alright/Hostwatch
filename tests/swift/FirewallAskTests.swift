@@ -120,6 +120,14 @@ import Testing
         #expect(fw.prompts.isEmpty && marked.map(\.1) == [.safe])
         #expect(Set(answers.suffix(2).map(\.0)) == ["k3", "k4"] && answers.suffix(2).allSatisfy { $0.1 && $0.2 == 300 })
 
+        // Once: this connection only, for a short while, and no pattern is decided
+        statuses = [:]
+        fw.handleAsk(key: "k6", event: other)
+        let once = try #require(fw.prompts.first)
+        fw.resolve(once.id, allow: false, once: true)
+        #expect(fw.prompts.isEmpty && marked.count == 1)                               // nothing more marked
+        #expect(answers.last?.0 == "k6" && answers.last?.1 == false && answers.last?.2 == 15)
+
         fw.handleAsk(key: "k5", event: app)                              // waits: no time limit
         #expect(fw.prompts.count == 1 && answers.last?.0 != "k5")
         fw.mode = .watch                                                 // leaving Ask: the collector decides

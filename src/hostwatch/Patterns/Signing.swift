@@ -73,11 +73,11 @@ final class SigningCache: @unchecked Sendable {
     /// Off in reports/replays: no background validation, no disk writes.
     var live = true
     /// Reports can turn the signing rules off (REPORT_NOSIGN=1) to measure their effect.
-    var enabled = ProcessInfo.processInfo.environment["REPORT_NOSIGN"] == nil
+    var enabled = AppPaths.developerOverride("REPORT_NOSIGN") == nil
 
     private init() {
         // HOSTWATCH_SIGNING_DB: separate database for tests (--signing-check).
-        fileURL = ProcessInfo.processInfo.environment["HOSTWATCH_SIGNING_DB"].map { URL(fileURLWithPath: $0) }
+        fileURL = AppPaths.developerOverride("HOSTWATCH_SIGNING_DB").map { URL(fileURLWithPath: $0) }
             ?? AppPaths.support.appendingPathComponent("signing.json")
         trusted = Set(UserDefaults.standard.stringArray(forKey: "trustedTeams") ?? [])
         UserDefaults.standard.removeObject(forKey: "trustHomebrewTools")   // removed option

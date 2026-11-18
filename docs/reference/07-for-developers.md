@@ -79,6 +79,7 @@ noted.
 | `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
 | `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
+| `--guard-report` | What the Claude Code guard stopped, grouped by reason with how you answered and a few examples, then the same commands through today's rules. Run it from the signed app (the log is sealed). |
 | `--time-travel-probe [folder]` | Times reading and searching history for Time Travel. |
 | `--compress-history <folder>` | Compresses plain history files and prints sizes and timings. |
 | `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely (30 s by default) and prints the result. |
@@ -87,6 +88,10 @@ noted.
 
 The app starts these by itself: `--collector` (the collector, as root, with `--daemon`, `--owner-pid`, `--token-file`
 and `--socket`) and `--collector-launcher` (started by launchd, it spawns the collector).
+
+Variables that change what the app trusts (`HOSTWATCH_SOCKET`, `HOSTWATCH_SIGNING_DB`, `HOSTWATCH_OWN_BUNDLE`,
+`REPORT_NOSIGN`) work only in debug and demo builds. The shipped app ignores them, so another program can't relaunch
+it with one set. Run the tools that use them from `.build/debug/Hostwatch`.
 
 | Variable | What it does |
 |----------|--------------|

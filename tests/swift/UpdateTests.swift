@@ -60,9 +60,12 @@ import Testing
         #expect(c.statusText.hasPrefix("Couldn't check"))
     }
 
-    @Test func notesLoseMarkdownAndStayShort() {
-        let plain = UpdateChecker.plainNotes("**Time travel.** `Hostwatch`\n## Changes\n- one", limit: 600)
-        #expect(plain == "Time travel. Hostwatch\nChanges\n- one")
-        #expect(UpdateChecker.plainNotes(String(repeating: "a", count: 900)).count <= 601)
+    @Test func notesSplitIntoSectionsWithTheirItems() {
+        let notes = "Intro line\n## New\n- **Time travel.** Go back\n  to any moment.\n* `Hostwatch` speaks\n### Fixes\n- one\n## Empty"
+        #expect(ReleaseNotes.sections(notes) == [
+            .init(title: nil, items: ["Intro line"]),
+            .init(title: "New", items: ["**Time travel.** Go back to any moment.", "`Hostwatch` speaks"]),
+            .init(title: "Fixes", items: ["one"]),
+        ])
     }
 }

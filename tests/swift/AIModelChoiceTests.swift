@@ -30,6 +30,12 @@ import Testing
 
     @Test func claudeCodesDefaultAddsNoFlag() {
         #expect(ClaudeModelChoice.cliDefault.rawValue.isEmpty)
+        let defaults = scratchDefaults("hw-claude-model")
+        #expect(ClaudeModelChoice.saved(defaults) == .haiku)                    // nothing chosen: Haiku
+        defaults.set("", forKey: ClaudeModelChoice.key)
+        #expect(ClaudeModelChoice.saved(defaults) == .cliDefault)               // Claude Code's Default, chosen, stays
+        defaults.set("opus", forKey: ClaudeModelChoice.key)
+        #expect(ClaudeModelChoice.saved(defaults) == .opus)
         #expect(ClaudeModelChoice.allCases.filter { $0 != .cliDefault }.allSatisfy { !$0.rawValue.isEmpty })
     }
 }

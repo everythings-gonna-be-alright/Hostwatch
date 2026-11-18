@@ -15,6 +15,8 @@ struct HUDActions {
     var openSettings: () -> Void = {}
     var exclude: (String) -> Void = { _ in }
     var showInTimeline: (Date) -> Void = { _ in }
+    /// Time Travel at a story, its list narrowed to the story's own processes.
+    var showStoryInTimeline: (Story) -> Void = { _ in }
     var openBaseline: () -> Void = {}
     var openDomain: (String) -> Void = { _ in }
     var openFirewallSettings: () -> Void = {}

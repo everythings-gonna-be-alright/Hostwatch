@@ -323,3 +323,22 @@ import Testing
         #expect(engine.openKnownBadMatches(since: since) == 0)
     }
 }
+
+@MainActor @Suite struct IgnoredChains {
+    /// Reset ignored chains clears them and tells the window, and the chain alerts again.
+    @Test func resetBringsThemBackAndRedraws() throws {
+        defer { UserDefaults.standard.removeObject(forKey: "ignoredStories") }
+        let stories = StoryEngine(persistent: false)
+        stories.raise(.portScan, origin: "printer (192.168.1.9)", note: "ten ports", target: "192.168.1.9:0")
+        let id = try #require(stories.stories.first?.id)
+        stories.ignoreAlways(id)
+        #expect(stories.ignoredCount == 1)
+        stories.raise(.portScan, origin: "printer (192.168.1.9)", note: "ten ports", target: "192.168.1.9:0")
+        #expect(stories.stories.isEmpty)                                            // ignored
+        let before = stories.revision
+        stories.clearIgnored()
+        #expect(stories.ignoredCount == 0 && stories.revision > before)
+        stories.raise(.portScan, origin: "printer (192.168.1.9)", note: "ten ports", target: "192.168.1.9:0")
+        #expect(stories.stories.count == 1)                                         // alerts again
+    }
+}

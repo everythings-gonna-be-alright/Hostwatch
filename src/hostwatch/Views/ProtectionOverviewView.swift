@@ -27,7 +27,8 @@ struct ProtectionOverview: View {
         }
         let network = firewall.map { $0.mode == .off ? [] : ProtectionTimeline.buckets(
             firstSeen: found.map { ($0.0.firstSeen, blocked: $0.1.verdict == .block) }, range: range) } ?? []
-        let yMax = ProtectionTimeline.sharedMax(Array(series.values) + [network])
+        // Each card on its own scale, labelled at its top: one shared scale flattened a quiet area to nothing.
+        let yMax = 0
         return GlassEffectContainer(spacing: 20) { VStack(alignment: .leading, spacing: 20) {
             header
             VStack(alignment: .leading, spacing: 10) {
@@ -73,7 +74,8 @@ struct ProtectionOverview: View {
     private func fit() {
         guard viewport > 0, layout.content > 0 else { return }
         let rest = layout.content - layout.chartHeight
-        let want = max(120, (viewport - rest).rounded(.down))
+        // Capped: a taller plot only stretched one busy hour across an empty field.
+        let want = min(Self.chartMaxHeight, max(120, (viewport - rest).rounded(.down)))
         if abs(want - layout.chartHeight) >= 1 { layout.chartHeight = want }
     }
 
@@ -92,6 +94,9 @@ struct ProtectionOverview: View {
         }
         return cards
     }
+
+    /// The tallest a chart grows in a tall window.
+    static let chartMaxHeight: CGFloat = 170
 
     /// The narrowest a card can be: its Off · Watch · Ask · Strict switch and padding.
     static let cardMinWidth: CGFloat = 270
@@ -211,7 +216,7 @@ struct ProtectionOverview: View {
                     go(.protectedFiles)
                 }
                 Divider().padding(.leading, 46)
-                OverviewRow(symbol: "exclamationmark.shield.fill", color: stops > 0 ? .red : .gray, title: "Found",
+                OverviewRow(symbol: "exclamationmark.shield.fill", color: stops > 0 ? .orange : .gray, title: "Found",
                             value: review == 0 ? "Nothing to review" : "\(review.formatted()) to review",
                             detail: stops > 0 ? "\(stops.formatted()) would be stopped" : nil) {
                     go(.protectionFound)
@@ -245,7 +250,7 @@ private struct OverviewRow: View {
                     .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(color.gradient))
                 Text(title)
                 Spacer(minLength: 12)
-                if let detail { Text(detail).foregroundStyle(.red).monospacedDigit() }
+                if let detail { Text(detail).foregroundStyle(.primary).monospacedDigit() }
                 Text(value).foregroundStyle(.secondary).monospacedDigit()
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
             }
@@ -282,14 +287,20 @@ private struct CardFooter: View {
     }
 }
 
-/// What an Off card shows instead of empty numbers: what turning it on would give you.
+/// What an Off card shows instead of an empty chart: what turning it on gives you, and the button that does it.
 private struct OffHint: View {
     let text: String
+    let turnOn: () -> Void
 
     var body: some View {
-        Label(text, systemImage: "chart.bar.xaxis")
-            .font(.caption).foregroundStyle(.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 10) {
+            Image(systemName: "chart.bar.xaxis").font(.system(size: 26, weight: .light)).foregroundStyle(.tertiary)
+            Text(text).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Turn On Watch", action: turnOn).buttonStyle(.glass)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 12)
     }
 }
 
@@ -339,14 +350,17 @@ private struct AreaCard: View {
                     .font(.caption).foregroundStyle(.orange)
             }
             if mode == .off {
-                OffHint(text: "Turn on Watch to see, hour by hour, what would be stopped.")
+                OffHint(text: "Watch shows, hour by hour, what would be stopped. It stops nothing.") {
+                    protection.setMode(.watch, for: area)
+                }
             } else {
                 let stop = mode.enforces ? "stopped" : "would stop", ask = mode == .watch ? "would ask" : "asked"
                 HStack(spacing: 24) {
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax, height: chartHeight)
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask,
+                                yMax: ProtectionTimeline.sharedMax([buckets]), height: chartHeight)
             }
             Spacer(minLength: 0)
             CardFooter(title: "Found", count: findings) { go(.protectionFound) }
@@ -389,7 +403,9 @@ private struct FirewallCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(minHeight: 34, alignment: .topLeading)
             if firewall.mode == .off {
-                OffHint(text: "Turn on Watch to see, hour by hour, what would be blocked.")
+                OffHint(text: "Watch shows, hour by hour, what would be blocked. It blocks nothing.") {
+                    firewall.mode = .watch
+                }
             } else {
                 // The same two numbers as Launches and Files, summed from the chart's own buckets: new destinations
                 // it blocks (or would), and asks about (or would).
@@ -399,7 +415,8 @@ private struct FirewallCard: View {
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.block }, label: stop, alarming: true)
                     OverviewFigure(n: buckets.reduce(0) { $0 + $1.ask }, label: ask, alarming: false)
                 }
-                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask, yMax: yMax, height: chartHeight)
+                ProtectionChart(buckets: buckets, range: range, stopLabel: stop, askLabel: ask,
+                                yMax: ProtectionTimeline.sharedMax([buckets]), height: chartHeight)
             }
             if !firewall.prompts.isEmpty {
                 Label("\(firewall.prompts.count) waiting for your answer", systemImage: "hourglass").foregroundStyle(.orange)
@@ -412,17 +429,20 @@ private struct FirewallCard: View {
     }
 }
 
-/// A day's number: large and rounded, red only when something was (or would be) stopped.
+/// A number in the text colour, with the chart's own colour as a dot beside its label: the pair is the chart's
+/// legend too. Red stays in the bars, where it means "stopped".
 private struct OverviewFigure: View {
     let n: Int
     let label: String
     let alarming: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(n.formatted()).font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
-                .foregroundStyle(alarming && n > 0 ? Color.red : Color.primary)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                Circle().fill(alarming ? ProtectionChart.stop : ProtectionChart.ask).frame(width: 7, height: 7)
+                Text(label).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .accessibilityElement(children: .combine)
     }

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.18.0 – UI improvements and bugfixes
+
+### New
+
+- **A new welcome guide.** Seven short pages, each with its own picture: what Hostwatch does, the window, how you
+  decide, the learning day, which AI helps, a few settings and Protection. The choices on it are the settings
+  themselves, so you can set Hostwatch up before it starts watching.
+- **Choose your AI on day one.** On this Mac only, this Mac first (the default) or Claude, with whether the local
+  model and Claude Code are ready. When you pick Claude, Haiku is used until you choose another model.
+- **The learning day can be off.** Nothing is learned for you then, and every new pattern waits for your decision.
+  Settings says so, and Learn This Mac Again turns it back on.
+- **Answer a connection once.** The firewall's question has Block Once and Allow Once beside Always Block and Always
+  Allow. Once answers only this connection, and the next one asks again.
+- **Show in Timeline shows the story.** The list narrows to the story's own events, with a bar that names it and
+  brings everything back.
+- **A window for new versions.** What's new, by section, with the release page one click away. Nothing is installed
+  by itself.
+- **Questions say what they are.** A small label above each one: Network connection, Program launch or Protected file.
+
+### Better
+
+- **The Claude Code guard asks far less.** Tuned against a real week of work, about two thirds of its questions are
+  gone: code in a heredoc or a Python file isn't read as shell commands, a variable set just before isn't "maybe
+  empty", and AppleScript only asks when it shows a dialog, types keys, runs commands or deletes.
+- **Hostwatch's own AI isn't stopped by Hostwatch.** Its calls to Claude run without a question, and Claude Code
+  sending its context to Anthropic no longer counts as a large upload. Claude started by anything else is checked
+  as before.
+- **Claude is called claude**, not after its version (2.1.327) in every list, question and story.
+- **A calmer Protection overview.** Each chart on its own scale, a sensible height, red only where something was
+  stopped, and an area that's off offers Turn On Watch.
+- **Clearer windows.** Full Disk Access, the collector-off banner, the firewall question and the story buttons
+  follow the same Liquid Glass style. Long commands can be opened in full and copied.
+- **Network opens on the map.**
+
+### Faster and lighter
+
+- **Switching tabs is quicker.** Bars that came and went above every tab made all of them lay out again. Back to
+  Events went from up to 355 ms to about 80, and the other tabs are built ahead so the first visit is quick too.
+
+### Fixes
+
+- **Settings that change what Hostwatch trusts can't be set from outside the app.** Four developer switches
+  (another collector socket, signing database or own bundle, signing rules off) work only in debug builds now.
+- **Reset ignored chains shows that it worked.**
+- **A deleted story stays deleted** while its chain is still running.
+
 ## 0.17.1 – A map of your network
 
 ### Fixes

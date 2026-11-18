@@ -322,6 +322,32 @@ final class ClaudeGuard: ObservableObject {
 
     private struct Saved: Codable { var log: [GuardLogEntry]; var checked: Int }
 
+    /// `Hostwatch --guard-report`: what the guard stopped, by reason, with how you answered and a few examples. Read
+    /// only, for tuning its rules against real use (the log is sealed, so only the signed app can read it).
+    func report(examples: Int = 4) -> String {
+        var out = ["Checked \(checked) tool calls. Logged \(log.count) (the last \(Self.maxLog))."]
+        let groups = Dictionary(grouping: log, by: \.reason).sorted { $0.value.count > $1.value.count }
+        for (reason, entries) in groups {
+            let outcomes = Dictionary(grouping: entries, by: \.outcome.rawValue).map { "\($0.key) \($0.value.count)" }.sorted()
+            out.append("")
+            out.append("\(entries.count)× \(reason)  [\(outcomes.joined(separator: ", "))]")
+            for e in entries.prefix(examples) {
+                out.append("    \(e.tool): \(e.subject.replacingOccurrences(of: "\n", with: " ").prefix(220))")
+            }
+        }
+        // The same commands through today's rules: what would still be stopped.
+        let checker = CommandGuard(listed: listed)
+        let shells = log.filter { $0.tool == "Bash" }
+        let still = shells.filter { checker.assess(tool: "Bash", input: ["command": $0.subject], cwd: $0.cwd).level != .ok }
+        out.append("")
+        out.append("Today's rules on the \(shells.count) logged commands: \(still.count) would still be stopped.")
+        for e in still {
+            let v = checker.assess(tool: "Bash", input: ["command": e.subject], cwd: e.cwd)
+            out.append("    \(v.summary)  ←  \(e.subject.replacingOccurrences(of: "\n", with: " ").prefix(140))")
+        }
+        return out.joined(separator: "\n")
+    }
+
     var hookCommand: String { ClaudeSettingsFile.command(executable: executable) }
 
     /// The hook as a settings fragment, to paste into another Claude Code settings file.

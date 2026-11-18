@@ -75,7 +75,8 @@ struct ActivityEvent: Identifiable, Decodable {
 
     init(kind: EventKind, time: String, pid: Int, ppid: Int, name: String,
          proc: String, target: String, extra: String, parent: String, host: String = "", hostSource: String = "", args: String = "") {
-        self.kind = kind; self.time = time; self.pid = pid; self.ppid = ppid; self.name = name
+        self.kind = kind; self.time = time; self.pid = pid; self.ppid = ppid
+        self.name = versionedProgramName(proc) ?? name     // "claude", not "2.1.327"
         self.proc = proc; self.target = target; self.extra = extra; self.parent = parent
         self.host = host; self.hostSource = hostSource; self.args = args
         self.inferred = false; self.note = ""
@@ -88,8 +89,9 @@ struct ActivityEvent: Identifiable, Decodable {
         time = ((try? c.decodeIfPresent(String.self, forKey: .time)) ?? nil) ?? ""
         pid = ((try? c.decodeIfPresent(Int.self, forKey: .pid)) ?? nil) ?? 0
         ppid = ((try? c.decodeIfPresent(Int.self, forKey: .ppid)) ?? nil) ?? 0
-        name = ((try? c.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "?"
         proc = ((try? c.decodeIfPresent(String.self, forKey: .proc)) ?? nil) ?? ""
+        // Named after its folder when macOS reports only a version ("claude", not "2.1.327"): live and from history.
+        name = versionedProgramName(proc) ?? ((try? c.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "?"
         target = ((try? c.decodeIfPresent(String.self, forKey: .target)) ?? nil) ?? ""
         extra = ((try? c.decodeIfPresent(String.self, forKey: .extra)) ?? nil) ?? ""
         parent = ((try? c.decodeIfPresent(String.self, forKey: .parent)) ?? nil) ?? ""

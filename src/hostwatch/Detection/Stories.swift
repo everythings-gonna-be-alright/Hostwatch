@@ -623,7 +623,7 @@ final class StoryEngine: ObservableObject {
     private static func base(_ path: String) -> String { (path as NSString).lastPathComponent }
 
     /// This app's bundle; HOSTWATCH_OWN_BUNDLE lets replays recognise the installed app.
-    private static let ownBundle = (ProcessInfo.processInfo.environment["HOSTWATCH_OWN_BUNDLE"]
+    private static let ownBundle = (AppPaths.developerOverride("HOSTWATCH_OWN_BUNDLE")
                                     ?? Bundle.main.bundlePath) + "/"
     static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
 
@@ -871,14 +871,19 @@ final class StoryEngine: ObservableObject {
         dirty = true; revision += 1
     }
 
+    /// Gone for good: the chain it was following is forgotten too, so its next step can't bring the story back.
     func delete(_ id: UUID) {
         stories.removeAll { $0.id == id }
+        working[id] = nil
+        linkable.removeAll { $0.story == id }
         dirty = true; revision += 1
     }
 
+    /// Those chains alert again from now. The revision tells the window: without it the button stayed, unchanged.
     func clearIgnored() {
         ignored.removeAll()
         UserDefaults.standard.removeObject(forKey: "ignoredStories")
+        revision += 1
     }
 
     var ignoredCount: Int { ignored.count }

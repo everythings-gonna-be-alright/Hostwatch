@@ -479,3 +479,17 @@ import Testing
         #expect(verdict == v && limit == "curl runs whatever it is told")
     }
 }
+
+@Suite struct OwnClaudeCalls {
+    private let claude = "/Users/alex/.local/share/claude/versions/2.1.327"
+
+    /// Hostwatch's own call to Claude runs without a question; Claude started by anyone else is still checked,
+    /// and so is any other program Hostwatch starts.
+    @Test func onlyClaudeStartedByHostwatchItselfPasses() {
+        let own = 500
+        #expect(ProtectionMonitor.isOwnClaudeCall(exec(claude, pid: 9, ppid: own, parent: "/Applications/Hostwatch.app"), own: own))
+        #expect(!ProtectionMonitor.isOwnClaudeCall(exec(claude, pid: 9, ppid: 77, parent: "/bin/zsh"), own: own))
+        #expect(!ProtectionMonitor.isOwnClaudeCall(exec("/bin/sh", pid: 9, ppid: own, parent: "/Applications/Hostwatch.app"), own: own))
+        #expect(!ProtectionMonitor.isOwnClaudeCall(exec("/tmp/claude", pid: 9, ppid: own, parent: "/Applications/Hostwatch.app"), own: own))
+    }
+}

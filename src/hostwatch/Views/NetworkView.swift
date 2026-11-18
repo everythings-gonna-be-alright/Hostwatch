@@ -145,7 +145,8 @@ final class NetworkViewState: ObservableObject {
     }
     @Published var selection = Set<String>()
     enum Mode: String { case list, map }
-    @Published var mode = Mode(rawValue: UserDefaults.standard.string(forKey: "networkMode") ?? "") ?? .list {
+    /// The map until you choose: it answers "who talks to this Mac" at a glance. Your last choice is kept.
+    @Published var mode = Mode(rawValue: UserDefaults.standard.string(forKey: "networkMode") ?? "") ?? .map {
         didSet { UserDefaults.standard.set(mode.rawValue, forKey: "networkMode") }
     }
     /// The map's store, state and outgoing connections, set by AppDelegate.
@@ -204,12 +205,12 @@ struct NetworkView: View {
         }
     }
 
-    /// List or Map.
+    /// Map or List.
     private var modeSwitch: some View {
         IconSegments(selection: $state.mode, items: [
-            .init(value: .list, title: "List", symbol: "list.bullet", help: "Every destination as a row"),
             .init(value: .map, title: "Map", symbol: "point.3.connected.trianglepath.dotted",
                   help: "Who reaches this Mac, what goes out, and where"),
+            .init(value: .list, title: "List", symbol: "list.bullet", help: "Every destination as a row"),
         ])
     }
 

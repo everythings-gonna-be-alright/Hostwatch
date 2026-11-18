@@ -1039,7 +1039,7 @@ again too.
 
 #### Network map: who reaches this Mac
 
-The Network tab's **Map** (the *List | Map* switch at the top left) draws the same connections as a picture, with what
+The Network tab opens on its **Map** (the *Map | List* switch at the top left, which remembers your choice). It draws the same connections as a picture, with what
 the list can't show: who tried to reach this Mac.
 
 - **Four columns, left to right:**
@@ -1589,7 +1589,7 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
   vLLM or a cloud endpoint. Enter its address and model (*Load Models* lists them) and an API key if it needs one. The
   key is stored encrypted. *Test* runs one real triage. A server on this Mac keeps everything on it. A server elsewhere
   receives the pattern facts and Ask AI evidence, secrets masked, and Settings says where they go.
-- **Claude model:** Claude Code's default, Opus, Sonnet or Haiku, for every Claude call.
+- **Claude model:** Haiku by default, or Sonnet, Opus or Claude Code's own default, for every Claude call.
 
 `Hostwatch --triage-benchmark` compares local models on your own decisions (see Advanced and command line).
 
@@ -1902,7 +1902,7 @@ This pane controls how Hostwatch uses AI and how Claude Code can work with it.
   pane also shows the local model's status and the Claude Code command.
 - **Local model:** Apple On-Device (*General* or *Content Tagging*) or a custom OpenAI-compatible server, with its
   address, model, API key and a *Test* button.
-- **Claude:** which Claude model to use: Claude Code's default, Opus, Sonnet or Haiku.
+- **Claude:** which Claude model to use: Haiku (the default), Sonnet, Opus or Claude Code's own default.
 - **Suggestions:** *Suggest for new patterns automatically* and *Accept AI suggestions without asking*.
 - **Claude Code guard:** turn it on or off, see the hook fragment, and read the log. See
   [Claude Code guard](03-features.md#claude-code-guard).
@@ -2318,6 +2318,7 @@ noted.
 | `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
 | `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
+| `--guard-report` | What the Claude Code guard stopped, grouped by reason with how you answered and a few examples, then the same commands through today's rules. Run it from the signed app (the log is sealed). |
 | `--time-travel-probe [folder]` | Times reading and searching history for Time Travel. |
 | `--compress-history <folder>` | Compresses plain history files and prints sizes and timings. |
 | `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely (30 s by default) and prints the result. |
@@ -2326,6 +2327,10 @@ noted.
 
 The app starts these by itself: `--collector` (the collector, as root, with `--daemon`, `--owner-pid`, `--token-file`
 and `--socket`) and `--collector-launcher` (started by launchd, it spawns the collector).
+
+Variables that change what the app trusts (`HOSTWATCH_SOCKET`, `HOSTWATCH_SIGNING_DB`, `HOSTWATCH_OWN_BUNDLE`,
+`REPORT_NOSIGN`) work only in debug and demo builds. The shipped app ignores them, so another program can't relaunch
+it with one set. Run the tools that use them from `.build/debug/Hostwatch`.
 
 | Variable | What it does |
 |----------|--------------|

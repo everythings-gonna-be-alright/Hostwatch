@@ -26,6 +26,8 @@ struct ProtectionPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            QuestionKindLabel(kind: ask.area == .launches ? .exec : .file,
+                              title: ask.area == .launches ? "Program launch" : "Protected file")
             HStack(alignment: .top, spacing: 12) {
                 Image(nsImage: ProcessIcons.icon(ask.event.proc)).resizable().frame(width: 36, height: 36)
                 VStack(alignment: .leading, spacing: 3) {

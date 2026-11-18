@@ -30,6 +30,17 @@ enum AppPaths {
         #endif
         return FileManager.default.homeDirectoryForCurrentUser.path
     }
+    /// An environment override that changes what the app trusts (another collector socket, signing database or
+    /// own bundle, signing rules off): read only in debug and demo builds. In the shipped app any program running
+    /// as you could relaunch Hostwatch with one set, so there they don't exist.
+    static func developerOverride(_ key: String) -> String? {
+        #if DEBUG || DEMO
+        return ProcessInfo.processInfo.environment[key]
+        #else
+        return nil
+        #endif
+    }
+
     /// Running as the demo (only possible in the demo build).
     static var isDemo: Bool {
         #if DEMO

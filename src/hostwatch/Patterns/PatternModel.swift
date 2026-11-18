@@ -176,6 +176,17 @@ struct Signature {
 func displayProcessName(_ path: String) -> String {
     let parts = path.split(separator: "/")
     guard let last = parts.last else { return path }
+    if let program = versionedProgramName(path) { return program }
     if last.contains(where: \.isLetter) || parts.count < 3 { return String(last) }
     return "\(parts[parts.count - 3])/\(last)"
+}
+
+/// A program installed as …/<name>/versions/<version> (Claude Code: ~/.local/share/claude/versions/2.1.327, Cursor's
+/// agent) is reported by macOS under its version, which changes with every update. Its name is the folder above
+/// `versions`. Nil for any other path. Display only: patterns already key the path with the version collapsed.
+func versionedProgramName(_ path: String) -> String? {
+    let parts = path.split(separator: "/")
+    guard parts.count >= 3, let last = parts.last, !last.contains(where: \.isLetter),
+          parts[parts.count - 2] == "versions" else { return nil }
+    return String(parts[parts.count - 3])
 }

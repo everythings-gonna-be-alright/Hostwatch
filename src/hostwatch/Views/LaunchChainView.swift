@@ -294,11 +294,7 @@ struct LaunchChainStrip: View {
                 }
             }
             .lineLimit(1)
-            let what = report.process.args.isEmpty ? report.process.path : report.process.args
-            Text(what)
-                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
-                .help(report.process.path)
+            FullCommand(text: report.process.args.isEmpty ? report.process.path : report.process.args)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -317,5 +313,68 @@ struct LaunchChainStrip: View {
                 .font(.caption.weight(last ? .semibold : .regular)).foregroundStyle(last ? .primary : .secondary)
         }
         .help("\(step.path) (pid \(step.pid))")
+    }
+}
+
+/// A command line you can read whole, for question panels: up to three lines as it is, then Show Full Command opens
+/// all of it in a box that scrolls, with Copy. Cutting it in the middle hid the part that mattered.
+struct FullCommand: View {
+    let text: String
+    @StateObject private var expand = ExpandState()
+    @StateObject private var copied = ExpandState()
+
+    /// Long enough to need more than three lines at this size in a question panel.
+    private var isLong: Bool { text.count > 180 || text.filter { $0 == "\n" }.count > 2 }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Group {
+                if expand.open {
+                    ScrollView {
+                        command.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 150)
+                } else {
+                    command.lineLimit(isLong ? 3 : nil).truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // For a long command only: two small round glass buttons in its corner. A short one is selectable text.
+            if isLong {
+              HStack(spacing: 4) {
+                corner(expand.open ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                       label: expand.open ? "Show Less" : "Show Full Command") {
+                    withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
+                }
+                corner(copied.open ? "checkmark" : "doc.on.doc", label: "Copy Command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    copied.open = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied.open = false }
+                }
+              }
+            }
+        }
+    }
+
+    private var command: some View {
+        Text(text)
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func corner(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Circle())
+        .help(label)
+        .accessibilityLabel(label)
     }
 }

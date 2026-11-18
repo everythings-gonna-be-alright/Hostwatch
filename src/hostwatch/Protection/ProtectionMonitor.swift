@@ -260,6 +260,7 @@ final class ProtectionMonitor: ObservableObject {
 
     /// The policy's decision for an event, before the mode: nil for connections (the firewall's) and unprotected files.
     func decide(_ e: ActivityEvent, status: SignatureStatus) -> (ProtectionArea, ProtectionDecision)? {
+        if Self.isOwnClaudeCall(e, own: Int(getpid())) { return nil }
         switch e.kind {
         case .exec:
             guard launchMode != .off else { return nil }
@@ -276,6 +277,22 @@ final class ProtectionMonitor: ObservableObject {
         case .net:
             return nil
         }
+    }
+
+    /// Hostwatch's own call to Claude (the AI check, Ask AI, suggestions): Claude Code started by Hostwatch itself.
+    /// It runs without a question, which paused Hostwatch's own AI behind a countdown. Both must hold: Claude Code
+    /// started by you or by any other program is checked as before, and so is anything else Hostwatch starts.
+    nonisolated static func isOwnClaudeCall(_ e: ActivityEvent, own pid: Int) -> Bool {
+        e.ppid == pid && (isClaudeInstall(e.proc) || isClaudeInstall(e.target))
+    }
+
+    /// Claude Code where its installers put it, not any program named "claude" (CodingAgent's looser test, fine for
+    /// a label, is too loose to let something run unasked).
+    nonisolated static func isClaudeInstall(_ path: String) -> Bool {
+        if path.contains("/.local/share/claude/versions/") || path.contains("/node_modules/@anthropic-ai/claude-code/") {
+            return true
+        }
+        return (path as NSString).lastPathComponent == "claude" && (path.hasPrefix("/opt/homebrew/") || path.hasPrefix("/usr/local/"))
     }
 
     private func record(area: ProtectionArea, event e: ActivityEvent, decision: ProtectionDecision,

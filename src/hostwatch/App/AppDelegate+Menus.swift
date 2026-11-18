@@ -386,6 +386,25 @@ extension AppDelegate {
         travel.enter(at: date.addingTimeInterval(min(travel.span / 2, 60)))
     }
 
+    /// A story's own events: only its processes, every status shown, with a bar that names the story and clears
+    /// the filter. From the live list when its events are still there (a recent story), else in Time Travel at its
+    /// start (which needs recorded history; leaving Time Travel clears the filter too).
+    func showInTimeline(_ story: Story) {
+        let pids = Set(story.steps.map(\.pid).filter { $0 > 0 })
+        guard !pids.isEmpty else { return showInTimeline(story.firstSeen) }
+        model.onlyPids = pids
+        model.onlyStory = story.title
+        model.signatureFilter = .all
+        running.showing = false
+        if model.history.contains(where: { pids.contains($0.pid) && $0.kind == .exec }) {
+            if travel.active { travel.exit() }
+            model.windowTab = 0
+            openActivityWindow(fullScreen: false)
+        } else {
+            showInTimeline(story.firstSeen)
+        }
+    }
+
     @objc func checkForUpdates() { updates.checkAndReport() }
 
     @objc func showAvailableUpdate() {
@@ -577,7 +596,7 @@ extension AppDelegate {
         NSApp.activate(ignoringOtherApps: true)
         if let accessWindow { accessWindow.makeKeyAndOrderFront(nil); return }
         let setup = FullDiskAccessSetup(afterFailure: afterFailure)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 578),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -627,13 +646,13 @@ extension AppDelegate {
         showWelcomeGuide()
     }
 
-    /// Help ▸ Welcome Guide: the five pages again.
-    @objc func showWelcomeGuide() {
+    /// Help ▸ Welcome Guide: the pages again, showing the settings as they are now.
+    @objc func showWelcomeGuide() { openWelcomeGuide(start: 0) }
+
+    func openWelcomeGuide(start: Int) {
         NSApp.activate(ignoringOtherApps: true)
         if let welcomeWindow { welcomeWindow.makeKeyAndOrderFront(nil); return }
-        let days = baseline.duration / 86_400
-        let learning = days <= 1 ? "24 hours" : "\(Int(days.rounded())) days"
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 600),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -642,7 +661,10 @@ extension AppDelegate {
         window.title = "Welcome to Hostwatch"
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         let close: () -> Void = { [weak window] in window?.close() }
-        window.contentView = NSHostingView(rootView: WelcomeGuideView(learning: learning, done: close))
+        window.contentView = NSHostingView(rootView: WelcomeGuideView(
+            context: WelcomeContext(baseline: baseline, classifier: classifier, claudeGuard: claudeGuard, intel: intel,
+                                    updates: updates, model: model),
+            start: start, done: close))
         window.center()
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.welcomeWindow = nil }
