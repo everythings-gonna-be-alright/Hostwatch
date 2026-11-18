@@ -36,6 +36,10 @@ enum Entry {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
         }
         if args.contains("--metrics-probe") { runMetricsProbe() }
+        if args.contains("--guard-report") {                // what the Claude Code guard stopped, by reason (read only)
+            MainActor.assumeIsolated { print(ClaudeGuard().report()) }
+            exit(0)
+        }
         if let i = args.firstIndex(of: "--compress-history"), i + 1 < args.count {
             runCompressHistory(args[i + 1])
         }

@@ -77,15 +77,26 @@ struct CommandGuard {
 
     func shell(_ command: String, cwd: String, depth: Int = 0) -> [GuardFinding] {
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-        let text = expandHome(command)
+        // A heredoc fed to anything but a shell (Python's stdin, a file being written) is data or code in another
+        // language: read as shell, its strings and comments raised most of the guard's false alarms.
+        let (heredocsOut, data) = Self.splitHeredocs(command)
+        // A commit message is words about the change, not commands ("pkill Hostwatch" in one asked, wrongly).
+        let shellText = Self.commitMessage.replace(heredocsOut, with: "git commit -m ''")
+        let text = expandHome(shellText)
         let lc = text.lowercased()
         var found: [GuardFinding] = []
         func add(_ level: GuardLevel, _ reason: String) { found.append(GuardFinding(level: level, reason: reason)) }
 
         for rule in Self.rules where rule.0.matches(lc) { add(rule.1, rule.2) }
+        if lc.contains("osascript"), Self.appleScriptActs.matches(lc) {        // -e lines and a heredoc fed to it alike
+            add(.ask, "runs AppleScript that shows a dialog, types keys or runs commands (a fake password prompt looks like this)")
+        }
+        if !data.isEmpty { found += dataFindings(expandHome(data).lowercased()) }
 
-        // Code from the internet, run unseen.
-        if Self.downloadAndRun.contains(where: { $0.matches(lc) }) {
+        // Code from the internet, run unseen. Piped into an inline program that only parses it (json.load, JSON.parse)
+        // and can't run code (no exec, eval, compile, os, subprocess, pickle…), it is data. Anything else asks.
+        let parsedOnly = Self.pipedToInlineProgram.matches(lc) && Self.inlineParser.matches(lc) && !Self.inlineRunsCode.matches(lc)
+        if Self.downloadAndRun.contains(where: { $0.matches(lc) }), !parsedOnly {
             add(.ask, "downloads code from \(firstHost(lc) ?? "the internet") and runs it without saving it first")
         }
         // Secrets: reading one is worth a question; reading one and sending data out, more so.
@@ -108,9 +119,13 @@ struct CommandGuard {
 
         // Command by command: deletions, sudo, crontab, scripts.
         var dir = cwd
+        var assigned = Set<String>()                                            // variables set to something, so far
         for segment in Self.segments(text) {
             var tokens = Self.tokens(segment)
+            if tokens.first == "export" || tokens.first == "local" || tokens.first == "readonly" { tokens.removeFirst() }
             while let first = tokens.first, first.contains("="), !first.hasPrefix("-"), !first.hasPrefix("/") {
+                let parts = first.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                if parts.count == 2, !parts[1].isEmpty { assigned.insert(String(parts[0])) }
                 tokens.removeFirst()                                            // VAR=value prefixes
             }
             if tokens.first == "sudo" {
@@ -129,13 +144,14 @@ struct CommandGuard {
             case "rm", "srm", "shred", "unlink", "rmdir", "trash":
                 let recursive = program != "rm" || args.contains { $0 == "--recursive" || ($0.hasPrefix("-") && !$0.hasPrefix("--") && $0.lowercased().contains("r")) }
                 for target in args where !target.hasPrefix("-") {
-                    if let f = deletion(target, cwd: dir, project: cwd, recursive: recursive || program == "rmdir") { found.append(f) }
+                    if let f = deletion(target, cwd: dir, project: cwd, recursive: recursive || program == "rmdir",
+                                        assigned: assigned) { found.append(f) }
                 }
             case "find":
                 let deletes = args.contains("-delete") || zip(args, args.dropFirst()).contains { $0 == "-exec" && ["rm", "/bin/rm"].contains($1) }
                 if deletes {
                     for target in args.prefix(while: { !$0.hasPrefix("-") && !$0.hasPrefix("(") && $0 != "!" }) {
-                        if let f = deletion(target, cwd: dir, project: cwd, recursive: true) { found.append(f) }
+                        if let f = deletion(target, cwd: dir, project: cwd, recursive: true, assigned: assigned) { found.append(f) }
                     }
                 }
             case "crontab":
@@ -143,7 +159,11 @@ struct CommandGuard {
             default:
                 if depth < 2, let script = scriptPath(program: tokens[0], args: args, cwd: dir), let body = readScript(script) {
                     let name = (script as NSString).lastPathComponent
-                    for f in shell(body, cwd: dir, depth: depth + 1) {
+                    // Only a shell script reads as shell; Python, Ruby or JavaScript is checked for what it reads and
+                    // where it connects (read as shell, "runs semis.py, which runs index.html…").
+                    let findings = Self.isShellScript(script, body: body) ? shell(body, cwd: dir, depth: depth + 1)
+                        : dataFindings(expandHome(body).lowercased())
+                    for f in findings {
                         found.append(GuardFinding(level: f.level, reason: "runs \(name), which " + f.reason))
                     }
                 }
@@ -153,8 +173,12 @@ struct CommandGuard {
     }
 
     /// A deletion worth stopping: everything (deny), or a path outside the project (ask).
-    func deletion(_ raw: String, cwd: String, project: String, recursive: Bool) -> GuardFinding? {
+    func deletion(_ raw: String, cwd: String, project: String, recursive: Bool,
+                  assigned: Set<String> = []) -> GuardFinding? {
         if raw.contains("$") {
+            // Set earlier in the same command or script, or ${VAR:?} (the shell stops when it's empty): not empty.
+            let names = Self.variableNames(raw)
+            if raw.contains(":?") || (!names.isEmpty && names.allSatisfy(assigned.contains)) { return nil }
             // `rm -rf $DIR/` with $DIR empty is `rm -rf /`.
             let rest = raw.replacingOccurrences(of: #"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"#, with: "", options: .regularExpression)
             if recursive, ["", "/", "/*", "/.*"].contains(rest) {
@@ -193,7 +217,9 @@ struct CommandGuard {
         // A script being written is judged by what it would do when run (never more than a question).
         let ext = (full as NSString).pathExtension.lowercased()
         if Self.scriptExtensions.contains(ext) || text.hasPrefix("#!") {
-            for f in shell(text, cwd: cwd, depth: 1) {
+            let findings = Self.isShellScript(full, body: text) ? shell(text, cwd: cwd, depth: 1)
+                : dataFindings(expandHome(text).lowercased())
+            for f in findings {
                 found.append(GuardFinding(level: .ask, reason: "writes \((full as NSString).lastPathComponent), a script that " + f.reason))
             }
         }
@@ -223,8 +249,14 @@ struct CommandGuard {
     /// A public IPv4 address in the text (not loopback, private or link-local).
     private func publicIP(_ lc: String) -> String? {
         Self.ipv4.allMatches(lc).first { ip in
-            let o = ip.split(separator: ".").compactMap { Int($0) }
+            let parts = ip.split(separator: ".")
+            // "7.59.4.07" is a version, not an address: no octet starts with 0.
+            guard !parts.contains(where: { $0.count > 1 && $0.hasPrefix("0") }) else { return false }
+            let o = parts.compactMap { Int($0) }
             guard o.count == 4, o.allSatisfy({ $0 <= 255 }) else { return false }
+            // Documentation ranges (RFC 5737): example addresses, never real.
+            if (o[0] == 192 && o[1] == 0 && o[2] == 2) || (o[0] == 198 && o[1] == 51 && o[2] == 100)
+                || (o[0] == 203 && o[1] == 0 && o[2] == 113) { return false }
             return !(o[0] == 127 || o[0] == 10 || o[0] == 0 || (o[0] == 192 && o[1] == 168) || (o[0] == 172 && (16...31).contains(o[1]))
                      || (o[0] == 169 && o[1] == 254) || o[0] >= 224)
         }
@@ -244,6 +276,51 @@ struct CommandGuard {
         }
         return nil
     }
+
+    /// What code in another language, or data, can still reveal: a secret it reads, a known-bad address.
+    private func dataFindings(_ lc: String) -> [GuardFinding] {
+        let without = Self.keyUse.replace(lc, with: " ")
+        var found = Self.secrets.filter { $0.0.matches(without) }.prefix(1).map { GuardFinding(level: .ask, reason: "reads \($0.1)") }
+        found += knownBad(in: lc)
+        return found
+    }
+
+    /// A file to read as shell: a shell extension, or a shell's #! line.
+    static func isShellScript(_ path: String, body: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        if ["sh", "bash", "zsh", "command", "tool"].contains(ext) { return true }
+        guard let first = body.split(separator: "\n", maxSplits: 1).first, first.hasPrefix("#!") else { return ext.isEmpty }
+        return Regex(#"^#!\S*/(env\s+)?(ba|z|da|k|fi)?sh\b"#).matches(String(first))
+    }
+
+    /// The variables a word uses: `$S`, `${APP}`, `${DIR:?}`.
+    static func variableNames(_ word: String) -> [String] {
+        Regex(#"\$\{?([A-Za-z_][A-Za-z0-9_]*)"#, group: 1).allMatches(word)
+    }
+
+    /// The command with the bodies of heredocs fed to anything but a shell taken out, and those bodies.
+    static func splitHeredocs(_ command: String) -> (shell: String, data: String) {
+        guard command.contains("<<") else { return (command, "") }
+        var shellLines: [Substring] = [], dataLines: [Substring] = []
+        var lines = command.split(separator: "\n", omittingEmptySubsequences: false)[...]
+        while let line = lines.popFirst() {
+            shellLines.append(line)
+            guard let m = heredocStart.firstMatch(in: String(line), range: NSRange(line.startIndex..., in: line)),
+                  let r = Range(m.range(at: 2), in: line) else { continue }
+            let delimiter = String(line[r])
+            let before = line[..<line.range(of: "<<")!.lowerBound]
+            let program = (tokens(String(before.split(whereSeparator: { "|;&".contains($0) }).last ?? "")).first ?? "")
+            // A shell or AppleScript reads its heredoc as commands: those stay in.
+            let shellFed = ["sh", "bash", "zsh", "dash", "ksh", "fish", "osascript"].contains((program as NSString).lastPathComponent)
+            while let body = lines.popFirst() {
+                if body.trimmingCharacters(in: .whitespaces) == delimiter { shellLines.append(body); break }
+                if shellFed { shellLines.append(body) } else { dataLines.append(body) }
+            }
+        }
+        return (shellLines.joined(separator: "\n"), dataLines.joined(separator: "\n"))
+    }
+
+    private static let heredocStart = try! NSRegularExpression(pattern: #"<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1"#)
 
     func resolve(_ path: String, cwd: String) -> String {
         var p = path
@@ -337,6 +414,21 @@ struct CommandGuard {
 
     private static let shells = #"(sudo\s+)?(env\s+)?(\S*/)?((ba|z|da|k|c|tc|fi)?sh|python[0-9.]*|perl|ruby|node|osascript)\b"#
 
+    /// `git commit … -m "…"` (or '…'), message and all.
+    static let commitMessage = Regex(#"git\s+commit\b[^;&|\n]*?\s-[a-z]*m\s+("([^"\\]|\\.)*"|'[^']*')"#)
+
+    /// What makes AppleScript worth a question: it can deceive (a dialog), act for you (keys, shell commands), or
+    /// destroy (Finder deleting, the Trash emptied).
+    static let appleScriptActs = Regex(#"display\s+(dialog|alert)|hidden answer|do shell script|keystroke|key code|\bdelete\b|empty (the )?trash|\bmove\b[^\n]*\btrash\b"#)
+
+    /// Reading the download with a plain parser.
+    static let inlineParser = Regex(#"\bjson\.loads?\(|\bjson\.parse\("#)
+    /// Anything in the inline program that can run code, start programs, or load what it was sent.
+    static let inlineRunsCode = Regex(#"\b(exec|eval|compile|execfile|__import__|importlib|runpy|subprocess|popen|system|spawn|pickle|marshal|ctypes|require|function\s*\(|new\s+function)\b|\bos\.|\beval\b|`"#)
+
+    /// `… | python3 -I -c "…"`: the download goes to an inline program (judged by what that program does).
+    static let pipedToInlineProgram = Regex(#"\|\s*(\S*/)?(python[0-9.]*|perl|ruby|node)(\s+-[a-z]+)*\s+-[ce]\b"#)
+
     static let downloadAndRun: [Regex] = [
         Regex(#"\b(curl|wget)\b[^;&\n]*\|\s*"# + shells),
         Regex(#"(\b(ba|z)?sh|\bsource|(^|[\s;&|])\.)\s+(-c\s+)?["']?(<\(|\$\()\s*(curl|wget)\b"#),
@@ -358,7 +450,8 @@ struct CommandGuard {
         (Regex(#"\bsqlite3\b[^\n]*tcc\.db"#), .deny, "edits macOS's privacy permissions database"),
         (Regex(#"\b(rm|mv|srm|shred)\b[^;|&\n]*(/applications/hostwatch\.app|/application\\? support/hostwatch|/logs/hostwatch)"#),
          .deny, "deletes Hostwatch or its records"),
-        (Regex(#"\b(pkill|killall)\b[^;|&\n]*\bhostwatch"#), .ask, "stops Hostwatch"),
+        // Not the demo copy, whose path also ends in Hostwatch.
+        (Regex(#"\b(pkill|killall)\b(?![^;|&\n]*hostwatch[ ._-]?demo)[^;|&\n]*\bhostwatch"#), .ask, "stops Hostwatch"),
         (Regex(#"\blaunchctl\s+(bootout|remove|unload|disable)\b[^;|&\n]*hostwatch"#), .ask, "stops Hostwatch's collector"),
         (Regex(#"\bdefaults\s+(delete|write)\s+local\.hostwatch\.app\b"#), .ask, "changes Hostwatch's settings"),
         (Regex(#"\bxattr\s+(-[a-z]*c[a-z]*\b|[^;|&\n]*-[a-z]*d[a-z]*\s+com\.apple\.quarantine)"#), .ask,
@@ -372,20 +465,22 @@ struct CommandGuard {
          "registers a background program with launchd (it starts by itself)"),
         (Regex(#"\bdefaults\s+write\s+com\.apple\.loginwindow\b|login item"#), .ask, "adds something that starts at login"),
         (Regex(#"history\s+-c\b|\bunset\s+histfile\b|\b(rm|shred|truncate)\b[^;|&\n]*_history\b"#), .ask, "erases shell history"),
-        (Regex(#"\bosascript\b(?![^;|&\n]*display notification)"#), .ask,
-         "runs AppleScript, which can control other apps or show a fake password dialog"),
+        // AppleScript only when it can deceive or act for you: a dialog (a fake password prompt), typed keys, shell
+        // commands, or a script file nobody can see here. Activating or clicking an app passes.
+        (Regex(#"\bosascript\s+(?!-)\S"#), .ask, "runs an AppleScript file, which can control other apps"),
         (Regex(#"with administrator privileges"#), .ask, "asks for an administrator password through AppleScript"),
         (Regex(#"\bvisudo\b|/etc/sudoers"#), .ask, "changes who can use sudo"),
         (Regex(#"(base64\s+(-d|--decode)\b|\bxxd\s+-r\b|\bopenssl\s+(enc|base64)\b[^|]*\s-d\b)[^\n]*\|\s*"# + shells), .ask,
          "decodes hidden text and runs it"),
         (Regex(#"\beval\b[^\n]*(base64|xxd|\\x[0-9a-f]{2})|\b(ba|z)?sh\s+-c\s+["']?\$\([^)]*base64"#), .ask, "decodes hidden text and runs it"),
         (Regex(#"python[0-9.]*\s+-c\b[^\n]*(b64decode|exec\(|eval\()"#), .ask, "decodes hidden text and runs it"),
-        (Regex(#"disableallhooks"#), .ask, "turns off Claude Code's hooks, Hostwatch's check included"),
+        // Setting it, not a search for the word.
+        (Regex(#"disableallhooks["']?\s*[:=]\s*true"#), .ask, "turns off Claude Code's hooks, Hostwatch's check included"),
     ] + sensitiveWrites
 
     /// Writes to files that make things start by themselves, open the Mac, or switch off this check.
     static let sensitiveFiles: [(Regex, String)] = [
-        (Regex(#"/library/launch(agents|daemons)/"#), "makes a program start by itself (a launch agent or daemon)"),
+        (Regex(#"(?<!/contents)/library/launch(agents|daemons)/"#), "makes a program start by itself (a launch agent or daemon)"),
         (Regex(#"/\.(zshrc|zprofile|zshenv|zlogin|bashrc|bash_profile|bash_login|profile)$|/\.config/fish/config\.fish$"#),
          "changes a shell startup file (it runs whenever a terminal opens)"),
         (Regex(#"/\.ssh/authorized_keys2?$"#), "lets someone log in to this Mac with a key"),
@@ -399,7 +494,7 @@ struct CommandGuard {
     static let sensitiveWrites: [(Regex, GuardLevel, String)] = {
         let writer = #"(>>?\s*["']?|\btee\s+(-a\s+)?["']?|\b(cp|mv|ln|install|ditto|rsync)\b[^;|&\n]*\s["']?|\bsed\s+-i[^;|&\n]*\s["']?|\bperl\s+-[a-z]*i[^;|&\n]*\s["']?|\bdefaults\s+write\s+["']?|\bplutil\b[^;|&\n]*\s["']?)"#
         let paths: [(String, String)] = [
-            (#"\S*/library/launch(agents|daemons)/"#, "makes a program start by itself (a launch agent or daemon)"),
+            (#"\S*(?<!/contents)/library/launch(agents|daemons)/"#, "makes a program start by itself (a launch agent or daemon)"),
             (#"\S*/\.(zshrc|zprofile|zshenv|zlogin|bashrc|bash_profile|bash_login|profile|config/fish/config\.fish)\b"#,
              "changes a shell startup file (it runs whenever a terminal opens)"),
             (#"\S*/\.ssh/authorized_keys"#, "lets someone log in to this Mac with a key"),
