@@ -108,7 +108,7 @@ private struct StoryCard: View {
                 Spacer()
                 Text("score \(story.score)").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
             }
-            DisclosureGroup("\(story.steps.count) steps") {
+            DisclosureGroup(story.steps.count == 1 ? "1 step" : "\(story.steps.count) steps") {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(story.steps) { step in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -138,9 +138,11 @@ private struct StoryCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+            // The way into the story first, then where to look, then one split button for being done with it:
+            // Dismiss is its click, the rarer endings are in its menu, the way the rules ask for related actions.
             HStack(spacing: 8) {
                 Button { actions.openStory(story) } label: { Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted") }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.glass)
                     .help("The whole chain, event by event (or double-click the story)")
                 Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
                     .buttonStyle(.glass)
@@ -149,16 +151,29 @@ private struct StoryCard: View {
                 }
                 .buttonStyle(.glass)
                 .help("Open Time Travel at this story, with everything else that happened around it")
-                if !story.dismissed {
-                    Button("Dismiss") { stories.dismiss(story.id) }.buttonStyle(.glass)
+                Spacer(minLength: 8)
+                if story.dismissed {
+                    Menu {
+                        endings
+                    } label: {
+                        Label("More", systemImage: "ellipsis")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.glass)
+                    .fixedSize()
+                } else {
+                    Menu {
+                        endings
+                    } label: {
+                        Label("Dismiss", systemImage: "checkmark")
+                    } primaryAction: {
+                        stories.dismiss(story.id)
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.glass)
+                    .fixedSize()
+                    .help("Dismiss this story. The arrow has the other ways to be done with it")
                 }
-                Button("Always Ignore This Chain") { stories.ignoreAlways(story.id) }
-                    .buttonStyle(.glass)
-                    .help("Never alert again for \(story.originName) with these stages")
-                Spacer()
-                Button(role: .destructive) { stories.delete(story.id) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.glass)
-                    .help("Delete this story")
             }
             .controlSize(.small)
         }
@@ -172,6 +187,14 @@ private struct StoryCard: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { actions.openStory(story) }
         .opacity(story.dismissed ? 0.55 : 1)
+    }
+
+    /// The rarer ways to be done with a story, under Dismiss.
+    @ViewBuilder private var endings: some View {
+        Button("Always Ignore This Chain") { stories.ignoreAlways(story.id) }
+            .help("Never alert again for \(story.originName) with these stages")
+        Divider()
+        Button("Delete Story", role: .destructive) { stories.delete(story.id) }
     }
 }
 
