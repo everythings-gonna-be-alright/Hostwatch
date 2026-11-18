@@ -25,16 +25,9 @@ struct ProtectionPromptView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            QuestionKindLabel(kind: ask.area == .launches ? .exec : .file,
-                              title: ask.area == .launches ? "Program launch" : "Protected file")
-            HStack(alignment: .top, spacing: 12) {
-                Image(nsImage: ProcessIcons.icon(ask.event.proc)).resizable().frame(width: 36, height: 36)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.headline)
-                    Text(ask.reason).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
+        VStack(alignment: .leading, spacing: 0) {
+            QuestionBanner(kind: ask.area == .launches ? .exec : .file,
+                           title: ask.area == .launches ? "Program launch" : "Protected file") {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
                     // Paused by Hostwatch: it goes on without an answer, as Hold does. Held by Endpoint Security: blocked.
@@ -42,47 +35,47 @@ struct ProtectionPromptView: View {
                         .font(.callout.monospacedDigit()).foregroundStyle(.orange)
                 }
             }
-            if let verdict = ask.aiVerdict {
-                AIConclusion(verdict: verdict, limit: ask.aiLimit)
-            } else if let note = ask.aiNote {
-                Label(note, systemImage: "sparkles")                     // no answer, or no model: one quiet line
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if fgHint {
-                Label("Your shell shows it as stopped. After Allow it goes on in the background: type fg in your terminal to bring it back.",
-                      systemImage: "terminal")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            if ask.reactive {
-                Text(ask.area == .launches ? "It started and is paused until you answer."
-                     : "It opened the file and is paused until you answer. Block stops it.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            LaunchChainStrip(report: chain)
-            if ask.area == .files {
-                Text(detail)
-                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
-            }
-            HStack {
+            VStack(alignment: .leading, spacing: 12) {
+                QuestionSubject(icon: ProcessIcons.icon(ask.event.proc), title: title) {
+                    Text(ask.reason).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if let verdict = ask.aiVerdict {
+                    AIConclusion(verdict: verdict, limit: ask.aiLimit)
+                } else if let note = ask.aiNote {
+                    Label(note, systemImage: "sparkles")                     // no answer, or no model: one quiet line
+                        .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if fgHint {
+                    Label("Your shell shows it as stopped. After Allow it goes on in the background: type fg in your terminal to bring it back.",
+                          systemImage: "terminal")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if ask.reactive {
+                    Text(ask.area == .launches ? "It started and is paused until you answer."
+                         : "It opened the file and is paused until you answer. Block stops it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                LaunchChainStrip(report: chain)
+                if ask.area == .files {
+                    Text(detail)
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                        .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                }
                 if waiting > 1 { Text("\(waiting - 1) more waiting").font(.caption).foregroundStyle(.secondary) }
-                Spacer()
-                // Two pairs, the same choice on each side: once (this time only) or always (decides the pattern).
-                Button("Always Block") { respond(.block) }.buttonStyle(.glass)
-                    .help("Stop it, and mark its pattern Dangerous: it's stopped every time")
-                Button("Block Once") { respond(.blockOnce) }.buttonStyle(.glass)
-                    .help("Stop it this time. Next time you're asked again")
-                Divider().frame(height: 18)
-                Button("Allow Once") { respond(.allowOnce) }.buttonStyle(.glass)
-                    .help("Let it go on this time. Next time you're asked again")
-                Button("Always Allow") { respond(.alwaysAllow) }.buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
-                    .help("Let it go on, and mark its pattern Safe")
+                QuestionAnswers(alwaysBlock: { respond(.block) }, blockOnce: { respond(.blockOnce) },
+                                allowOnce: { respond(.allowOnce) }, alwaysAllow: { respond(.alwaysAllow) },
+                                help: ("Stop it, and mark its pattern Dangerous: it's stopped every time",
+                                       "Stop it this time. Next time you're asked again",
+                                       "Let it go on this time. Next time you're asked again",
+                                       "Let it go on, and mark its pattern Safe"))
+                    .padding(.top, 4)
             }
-            .controlSize(.large)
+            .padding(.horizontal, 22)
+            .padding(.top, 4)
+            .padding(.bottom, 22)
         }
-        .padding(22)
-        .frame(width: 600)
+        .frame(width: QuestionCard.width)
         .task(id: ask.id) {
             let wait = ask.deadline.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }

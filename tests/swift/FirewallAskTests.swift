@@ -120,18 +120,46 @@ import Testing
         #expect(fw.prompts.isEmpty && marked.map(\.1) == [.safe])
         #expect(Set(answers.suffix(2).map(\.0)) == ["k3", "k4"] && answers.suffix(2).allSatisfy { $0.1 && $0.2 == 300 })
 
-        // Once: this connection only, for a short while, and no pattern is decided
         statuses = [:]
-        fw.handleAsk(key: "k6", event: other)
-        let once = try #require(fw.prompts.first)
-        fw.resolve(once.id, allow: false, once: true)
-        #expect(fw.prompts.isEmpty && marked.count == 1)                               // nothing more marked
-        #expect(answers.last?.0 == "k6" && answers.last?.1 == false && answers.last?.2 == 15)
-
         fw.handleAsk(key: "k5", event: app)                              // waits: no time limit
         #expect(fw.prompts.count == 1 && answers.last?.0 != "k5")
         fw.mode = .watch                                                 // leaving Ask: the collector decides
         #expect(fw.prompts.isEmpty && answers.last?.0 != "k5")
+
+        // Once: this run of the program only, nothing remembered by the collector (ttl 0), no pattern decided
+        fw.mode = .ask
+        fw.handleAsk(key: "k6", event: other)
+        let once = try #require(fw.prompts.first)
+        fw.resolve(once.id, allow: true, once: true)
+        #expect(fw.prompts.isEmpty && marked.count == 1)                               // nothing more marked
+        #expect(answers.last?.0 == "k6" && answers.last?.1 == true && answers.last?.2 == 0)
+        // the same process's next connection of that pattern (the name's other address) gets the same answer
+        fw.handleAsk(key: "k7", event: app)
+        #expect(fw.prompts.isEmpty && answers.last?.0 == "k7" && answers.last?.1 == true && answers.last?.2 == 0)
+        // a second run of the program is asked again, however soon
+        let again = net("/Applications/Tool.app/Contents/MacOS/Tool", pid: 8, to: "93.184.216.34:443", host: "api.example.com")
+        fw.handleAsk(key: "k8", event: again)
+        #expect(fw.prompts.count == 1 && answers.last?.0 == "k7")
+    }
+
+    /// Once in the collector: the waiting connection gets the answer, the next one of that destination asks again.
+    @Test func onceReleasesTheWaitingConnectionAndRemembersNothing() async throws {
+        let rig = Rig(mode: "ask")
+        final class Box: @unchecked Sendable { let lock = NSLock(); var got: [FirewallRelay.Decision] = [] }
+        let box = Box()
+        let f = flow()
+        Thread.detachNewThread { let d = rig.fw.decide(f); box.lock.lock(); box.got.append(d); box.lock.unlock() }
+        let first = rig.asks(wait: 0.5)
+        let key = try #require(first.first?["key"] as? String)
+        rig.fw.answer(["key": key, "pass": true, "ttl": 1, "once": true])
+        try await Task.sleep(nanoseconds: 200_000_000)
+        box.lock.lock(); #expect(box.got == [.pass]); box.lock.unlock()
+        Thread.detachNewThread { let d = rig.fw.decide(f); box.lock.lock(); box.got.append(d); box.lock.unlock() }
+        let second = rig.asks(wait: 0.5)
+        #expect(second.count == 1 && second.first?["key"] as? String == key)             // asked again
+        rig.fw.configure(["mode": "off"], from: rig.client)                            // let the waiting one go
+        try await Task.sleep(nanoseconds: 200_000_000)
+        box.lock.lock(); #expect(box.got.count == 2); box.lock.unlock()
     }
 
     @MainActor @Test func theModelReadsQuestionsAndStatusEvenWhenPaused() throws {

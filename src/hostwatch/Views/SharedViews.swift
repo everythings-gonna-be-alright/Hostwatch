@@ -607,18 +607,3 @@ struct HistorySearchScopeBar: View {
         return n == 0 ? "No matches in recorded history" : "\(matches) in all recorded history · double-click one to open its moment"
     }
 }
-
-/// The kind of a question, above its title: the same tile and colour as in the Events list, so a network question
-/// and a launch or file question tell themselves apart at a glance.
-struct QuestionKindLabel: View {
-    let kind: EventKind
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            KindTile(kind: kind, size: 18)
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(0.4)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
