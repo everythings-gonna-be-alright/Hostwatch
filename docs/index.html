@@ -899,7 +899,18 @@
       document.querySelectorAll("a.dl").forEach(a => { a.href = rel.zip; a.setAttribute("aria-label", `Download Hostwatch ${ver} for macOS`); });
   })();
   // Reduce Motion: the recording stays on its first frame.
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll(".backdrop video").forEach(v => { v.autoplay = false; v.pause(); });
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.querySelectorAll(".backdrop video").forEach(v => { v.autoplay = false; v.pause(); });
+  } else {
+    // iPhones refuse autoplay in Low Power Mode or Data Saver and leave the poster up. play() is allowed once the
+    // page is ready, and after any touch or scroll, so try then.
+    document.querySelectorAll(".backdrop video").forEach(v => {
+      const play = () => { if (v.paused) v.play().catch(() => {}); };
+      if (v.readyState >= 2) play(); else v.addEventListener("loadeddata", play, { once: true });
+      ["touchstart", "pointerdown", "scroll"].forEach(e => addEventListener(e, play, { once: true, passive: true }));
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) play(); });
+    });
+  }
 </script>
 </body>
 </html>
