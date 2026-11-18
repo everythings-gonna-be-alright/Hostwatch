@@ -1081,7 +1081,7 @@ Pick the AI: Apple's on-device model keeps everything on your Mac. Claude is str
   vLLM or a cloud endpoint. Enter its address and model (*Load Models* lists them) and an API key if it needs one. The
   key is stored encrypted. *Test* runs one real triage. A server on this Mac keeps everything on it. A server elsewhere
   receives the pattern facts and Ask AI evidence, secrets masked, and Settings says where they go.
-- **Claude model:** Claude Code's default, Opus, Sonnet or Haiku, for every Claude call.
+- **Claude model:** Haiku by default, or Sonnet, Opus or Claude Code's own default, for every Claude call.
 
 `Hostwatch --triage-benchmark` compares local models on your own decisions (see Advanced and command line).
 

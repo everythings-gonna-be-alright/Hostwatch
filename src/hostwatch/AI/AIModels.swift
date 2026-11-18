@@ -57,8 +57,13 @@ enum ClaudeModelChoice: String, CaseIterable, Sendable {
     }
 
     static let key = "claudeModel"
-    static var current: ClaudeModelChoice {
-        UserDefaults.standard.string(forKey: key).flatMap(ClaudeModelChoice.init) ?? .cliDefault
+    /// Haiku until you choose: it settles the most patterns for the least cost (see the triage benchmark). A choice
+    /// you made, Claude Code's Default included, is kept.
+    static let defaultChoice: ClaudeModelChoice = .haiku
+    static var current: ClaudeModelChoice { saved(UserDefaults.standard) }
+
+    static func saved(_ defaults: UserDefaults) -> ClaudeModelChoice {
+        defaults.string(forKey: key).flatMap(ClaudeModelChoice.init) ?? defaultChoice
     }
 
     /// Added to every Claude CLI call: nothing when Claude Code's own setting decides.
