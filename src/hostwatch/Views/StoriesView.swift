@@ -139,7 +139,7 @@ private struct StoryCard: View {
                     .lineLimit(2)
             }
             // One style, as Liquid Glass asks of a row of actions: glass capsules at the regular size in one
-            // container. The ways into the story first, then Dismiss, and the rarer endings behind ⋯.
+            // container. The ways into the story first, then the two ways to be done with it.
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
                     Button { actions.openStory(story) } label: {
@@ -152,19 +152,11 @@ private struct StoryCard: View {
                     }
                     .help("Open Time Travel at this story, with everything else that happened around it")
                     Spacer(minLength: 8)
-                    if !story.dismissed {
-                        Button { stories.dismiss(story.id) } label: { Label("Dismiss", systemImage: "checkmark") }
-                    }
-                    Menu { endings } label: {
-                        Image(systemName: "ellipsis").frame(width: 16, height: 16)
-                    }
-                    .menuStyle(.button)
-                    .menuIndicator(.hidden)
-                    .buttonStyle(.plain)
-                    .padding(4)                           // as tall as the capsules beside it
-                    .glassEffect(.regular.interactive(), in: Circle())
-                    .help("More: always ignore this chain, or delete the story")
-                    .accessibilityLabel("More")
+                    // Two ways to be done with it: delete this one, or never be told about the same chain again.
+                    Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }
+                        .help("Never alert again for \(story.originName) with these stages")
+                    Button(role: .destructive) { stories.delete(story.id) } label: { Label("Delete", systemImage: "trash") }
+                        .help("Remove this story from the list")
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
@@ -182,13 +174,6 @@ private struct StoryCard: View {
         .opacity(story.dismissed ? 0.55 : 1)
     }
 
-    /// The rarer ways to be done with a story, under Dismiss.
-    @ViewBuilder private var endings: some View {
-        Button("Always Ignore This Chain") { stories.ignoreAlways(story.id) }
-            .help("Never alert again for \(story.originName) with these stages")
-        Divider()
-        Button("Delete Story", role: .destructive) { stories.delete(story.id) }
-    }
 }
 
 /// Pinned alert at the top of the HUD.

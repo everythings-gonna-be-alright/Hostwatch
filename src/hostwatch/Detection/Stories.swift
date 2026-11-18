@@ -871,8 +871,11 @@ final class StoryEngine: ObservableObject {
         dirty = true; revision += 1
     }
 
+    /// Gone for good: the chain it was following is forgotten too, so its next step can't bring the story back.
     func delete(_ id: UUID) {
         stories.removeAll { $0.id == id }
+        working[id] = nil
+        linkable.removeAll { $0.story == id }
         dirty = true; revision += 1
     }
 
