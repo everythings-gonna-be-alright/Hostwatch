@@ -577,7 +577,7 @@ extension AppDelegate {
         NSApp.activate(ignoringOtherApps: true)
         if let accessWindow { accessWindow.makeKeyAndOrderFront(nil); return }
         let setup = FullDiskAccessSetup(afterFailure: afterFailure)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 578),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden

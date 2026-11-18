@@ -80,6 +80,10 @@ extension AppDelegate {
                 // HOSTWATCH_DEMO_PAGE=1…7: the welcome guide on that page, for screenshots.
                 activityWindow?.orderOut(nil)
                 openWelcomeGuide(start: (Int(ProcessInfo.processInfo.environment["HOSTWATCH_DEMO_PAGE"] ?? "") ?? 1) - 1)
+            case "access":
+                // The Full Disk Access window, for screenshots.
+                activityWindow?.orderOut(nil)
+                showFullDiskAccessAlert(afterFailure: false)
             case "update":
                 // The window a new release brings, for screenshots.
                 activityWindow?.orderOut(nil)
