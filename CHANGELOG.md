@@ -12,7 +12,8 @@
 - **The learning day can be off.** Nothing is learned for you then, and every new pattern waits for your decision.
   Settings says so, and Learn This Mac Again turns it back on.
 - **Answer a connection once.** The firewall's question has Block Once and Allow Once beside Always Block and Always
-  Allow. Once answers only this connection, and the next one asks again.
+  Allow. Once answers this connection, and the program's next try of the same kind (curl trying the name's
+  other address), then running it again asks again.
 - **Show in Timeline shows the story.** The list narrows to the story's own events, with a bar that names it and
   brings everything back.
 - **Running Now has charts.** CPU, memory and network over the last minutes, as three cards above the list, each
@@ -20,7 +21,10 @@
   the line and sent below it. Click a program to see only it. Time Travel shows them too, at the playhead.
 - **A window for new versions.** What's new, by section, with the release page one click away. Nothing is installed
   by itself.
-- **Questions say what they are.** A small label above each one: Network connection, Program launch or Protected file.
+- **Questions say what they are.** A band in the kind's colour across the top of each one: Network connection,
+  Program launch or Protected file. The windows are more square, with the answers in two groups,
+  block on the left and allow on the right, all four alike so none looks like the right answer. Return answers Allow
+  Once, so a reflex keypress never decides for good.
 
 ### Better
 
@@ -52,6 +56,8 @@
   longer flags a connection that names the platform, and the big social networks join the platforms never flagged.
 - **Details… on the network map opens for every destination**, including one that was always blocked or that
   Hostwatch knows only from its traffic.
+- **A connection question names the domain**, not only its address, when the program connected the moment its
+  lookup returned (`curl test.ua`).
 - **The zebra stripes match the rows** in a list that re-sorts itself, such as Running Now.
 - **Reset ignored chains shows that it worked.**
 - **A deleted story stays deleted** while its chain is still running.

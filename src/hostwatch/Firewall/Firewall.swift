@@ -205,6 +205,13 @@ final class FirewallMonitor: ObservableObject {
     @Published private(set) var relayState = "off"
     @Published private(set) var relayDetail = ""
     @Published private(set) var prompts: [FirewallPrompt] = []
+    /// Once answers, by pattern and process: the same run of the program opening another connection of that pattern
+    /// right after (curl trying the name's other address) gets the same answer rather than a new question, which
+    /// made Allow Once look as if it did nothing. By process, not pattern alone: a second run of the program asks
+    /// again, however soon (by pattern, Once read as "for a while").
+    private var onceAnswers: [String: (allow: Bool, until: Date)] = [:]
+    static let onceSeconds: TimeInterval = 10
+    private static func onceKey(_ pattern: String, pid: Int) -> String { "\(pattern)|\(pid)" }
     @Published private(set) var blockedCount = 0
     /// Claude's advice per question, when you asked for it.
     @Published private(set) var advice: [UUID: AIAnalysis] = [:]
@@ -494,6 +501,13 @@ final class FirewallMonitor: ObservableObject {
             answer?(key, false, 60)
             blockedCount += 1
         case .ask:
+            let now = Date()
+            onceAnswers = onceAnswers.filter { $0.value.until > now }
+            if let once = onceAnswers[Self.onceKey(e.signatureKey, pid: e.pid)] {
+                answer?(key, once.allow, 0)
+                if !once.allow { blockedCount += 1 }
+                return
+            }
             guard !prompts.contains(where: { $0.key == key }) else { return }
             // The connection waits until you answer: no time limit.
             prompts.append(FirewallPrompt(key: key, event: e, reason: d.reason, since: Date()))
@@ -540,7 +554,7 @@ final class FirewallMonitor: ObservableObject {
     /// Your answer. Allow / Block decide the pattern, which answers the other waiting connections of that
     /// pattern too.
     /// Your answer. Always decides the pattern and holds it for 5 minutes. Once answers only this connection, and the
-    /// burst of parallel ones a program opens for one request (15 seconds): no pattern is marked, so the next time asks.
+    /// others the same run of the program opens right after: no pattern is marked, so the next time asks.
     func resolve(_ id: UUID, allow: Bool, once: Bool = false) {
         guard let prompt = prompts.first(where: { $0.id == id }) else { return }
         let same = prompts.filter { $0.patternKey == prompt.patternKey }
@@ -549,9 +563,11 @@ final class FirewallMonitor: ObservableObject {
         if !once {
             markPattern(prompt.patternKey, allow ? .safe : .suspicious)
             decided(patternKeys: [prompt.patternKey])
+        } else {
+            for p in same { onceAnswers[Self.onceKey(p.patternKey, pid: p.event.pid)] = (allow, Date().addingTimeInterval(Self.onceSeconds)) }
         }
         for p in same {
-            answer?(p.key, allow, once ? 15 : 300)
+            answer?(p.key, allow, once ? 0 : 300)
             if !allow { blockedCount += 1 }
         }
         onPromptsChange?()

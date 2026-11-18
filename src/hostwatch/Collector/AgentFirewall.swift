@@ -27,6 +27,9 @@ final class AgentFirewall: @unchecked Sendable {
     /// Waiting questions by destination key: one question per program and destination, however many flows.
     private var waiting: [String: (id: Int, done: DispatchSemaphore, waiters: Int)] = [:]
     private var answers: [String: FirewallAnswer] = [:]
+    /// Once answers by question: they release the connections waiting for that question and are not remembered,
+    /// so the program's next connection asks again (kept as an answer, a second run within its time passed unasked).
+    private var released: [Int: (pass: Bool, left: Int)] = [:]
     private var canaryUntil: TimeInterval = 0
     private var healthRunning = false
     private(set) var state = "off"
@@ -64,6 +67,16 @@ final class AgentFirewall: @unchecked Sendable {
         let pass = a["pass"] as? Bool ?? false
         let ttl = (a["ttl"] as? NSNumber)?.doubleValue ?? 60
         lock.lock()
+        if a["once"] as? Bool == true {
+            if let entry = waiting.removeValue(forKey: key) {
+                released[entry.id] = (pass, max(entry.waiters, 1))
+                lock.unlock()
+                for _ in 0..<max(entry.waiters, 1) { entry.done.signal() }
+            } else {
+                lock.unlock()
+            }
+            return
+        }
         answers[key] = FirewallAnswer(pass: pass, until: now + ttl)
         // Answers expire; forget expired ones instead of keeping one per connection ever answered.
         if answers.count > 2000 { let t = now; answers = answers.filter { $0.value.until > t } }
@@ -200,6 +213,10 @@ final class AgentFirewall: @unchecked Sendable {
         _ = entry.done.wait(timeout: .now() + (mode == .ask ? 24 * 3600 : 5))
         lock.lock()
         defer { lock.unlock() }
+        if let r = released[entry.id] {
+            released[entry.id] = r.left > 1 ? (r.pass, r.left - 1) : nil
+            return r.pass ? .pass : .block
+        }
         if let a = answers[key], a.until > now { return a.pass ? .pass : .block }
         if waiting[key]?.id == entry.id { waiting[key] = nil }
         // No answer: switched off or to Watch → pass; Strict → blocked; Ask without the app → pass.
@@ -212,6 +229,21 @@ final class AgentFirewall: @unchecked Sendable {
 
     private func ask(_ id: Int, key: String, flow: RelayFlow, client: AgentClient) {
         guard let dst = flow.original else { return }
+        // A program connects the moment its lookup returns, and packet capture reports that DNS answer a moment
+        // later: asked at once, the question named only the address (curl test.ua showed 104.21.70.122). The
+        // connection waits for the answer anyway, so the question waits up to 0.4 s for the name, off the relay's
+        // thread so no other connection is held.
+        if flow.host.isEmpty, agent.dnsName(dst.address) == nil {
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                for _ in 0..<8 where agent.dnsName(dst.address) == nil { usleep(50_000) }
+                send(id, key: key, flow: flow, dst: dst, client: client)
+            }
+            return
+        }
+        send(id, key: key, flow: flow, dst: dst, client: client)
+    }
+
+    private func send(_ id: Int, key: String, flow: RelayFlow, dst: IPEndpoint, client: AgentClient) {
         let target = dst.isV6 ? "[\(dst.address)]:\(dst.port)" : "\(dst.address):\(dst.port)"
         var ev = AgentEvent([("kind", .str("fw_ask")), ("id", .int(id)), ("key", .str(key)), ("time", .str(Agent.nowHMS())),
                              ("pid", .int(Int(flow.pid))), ("ppid", .int(agent.pidParent(Int(flow.pid)))),

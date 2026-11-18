@@ -462,8 +462,11 @@ final class HUDModel: ObservableObject {
     func sendHold(pid: Int) { send(["hold": ["pid": pid]]) }
     func sendRelease(pid: Int, stop: Bool) { send(["release": ["pid": pid, "stop": stop]]) }
 
+    /// `ttl` 0 is a Once answer: the collector releases the waiting connections and remembers nothing (an older
+    /// collector that doesn't know `once` keeps it for a second).
     func sendFirewallAnswer(key: String, pass: Bool, ttl: TimeInterval) {
-        send(["fw_answer": ["key": key, "pass": pass, "ttl": ttl]])
+        send(["fw_answer": ttl > 0 ? ["key": key, "pass": pass, "ttl": ttl] as [String: Any]
+                                   : ["key": key, "pass": pass, "ttl": 1, "once": true]])
     }
 
     /// Asks the collector to exit; it only obeys a client that knows its token.

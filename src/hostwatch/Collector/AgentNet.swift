@@ -145,6 +145,12 @@ extension Agent {
         for ip in ips { dnsNames[ip] = name }
     }
 
+    /// The name a DNS answer gave this address, if packet capture has seen one.
+    func dnsName(_ ip: String) -> String? {
+        dnsLock.lock(); defer { dnsLock.unlock() }
+        return dnsNames[ip]
+    }
+
     private static let ptrQueue = DispatchQueue(label: "hostwatch.agent.ptr", attributes: .concurrent)
     private static let ptrSlots = DispatchSemaphore(value: 8)
 
