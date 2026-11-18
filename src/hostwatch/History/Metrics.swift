@@ -30,12 +30,18 @@ struct MetricSample: Codable, Sendable, Equatable {
     var heavy: [HeavyProcess]?
     /// Free space on the startup disk, bytes (what Finder calls Available: includes purgeable space).
     var free: Double?
+    /// Running Now's charts by program: the ten programs busiest by CPU and the ten biggest by memory, an app with
+    /// its helpers as one, as [% of one core, memory in MB]. Names only, no paths, so history stays small.
+    var programs: [String: [Double]]?
+    /// Network by program as [received, sent] bytes per second, on the samples a collector traffic report (about
+    /// every 10 s) arrived for: the ten busiest, and the rest summed under `ResourceSeries.other`.
+    var traffic: [String: [Double]]?
 
     var date: Date { Date(timeIntervalSince1970: t) }
 
     enum CodingKeys: String, CodingKey {
         case t, cpu = "c", mem = "m", pressure = "p", netIn = "ni", netOut = "no", diskRead = "dr", diskWrite = "dw", top
-        case heavy = "h", free = "df"
+        case heavy = "h", free = "df", programs = "pg", traffic = "nx"
     }
 }
 
@@ -277,9 +283,31 @@ final class MetricsStore: ObservableObject {
     func start() {
         guard timer == nil else { return }
         _ = sampler.read()                                   // baseline for the first rates
+        // The last half hour from history, so the charts start full after a relaunch rather than empty.
+        let archive = archive, cache = cache, now = Date()
+        Task { [weak self] in
+            let earlier = await Task.detached(priority: .utility) {
+                cache.samples(archive, from: now.addingTimeInterval(-30 * 60), to: now)
+            }.value
+            guard let self, !earlier.isEmpty else { return }
+            let first = self.recent.first?.date ?? .distantFuture
+            self.recent = earlier.filter { $0.date < first } + self.recent
+        }
         timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+    }
+
+    /// The latest traffic report as rates per program, until the next sample takes it.
+    private var pendingTraffic: (date: Date, rates: [String: [Double]])?
+    private var lastTraffic: Date?
+
+    /// A traffic report: bytes per program and address since the previous one.
+    func receiveTraffic(_ report: [NetTraffic], at now: Date = Date()) {
+        // The first report counts since the collector started, so it gets the usual 10 s rather than a huge span.
+        let seconds = lastTraffic.map { min(max(now.timeIntervalSince($0), 5), 30) } ?? 10
+        lastTraffic = now
+        pendingTraffic = (now, ResourceSeries.traffic(report, seconds: seconds))
     }
 
     /// From the collector: the busiest processes and disk throughput of the last 5 s.
@@ -296,7 +324,12 @@ final class MetricsStore: ObservableObject {
         if let top = lastTop, now.timeIntervalSince(top.date) < Self.interval * 2 {
             sample.diskRead = top.read
             sample.diskWrite = top.write
-            sample.top = top.procs
+            sample.programs = ResourceSeries.programs(top.procs)
+            sample.top = Self.archived(top.procs)
+        }
+        if let t = pendingTraffic, now.timeIntervalSince(t.date) < 15 {
+            sample.traffic = t.rates
+            pendingTraffic = nil
         }
         let heavy = heavyProvider()
         if !heavy.isEmpty { sample.heavy = heavy }
@@ -313,6 +346,15 @@ final class MetricsStore: ObservableObject {
             if maintain { archive.maintain(today: today, keepFrom: keepFrom) }
         }
         cache.invalidate(day: today)
+    }
+
+    /// What a sample keeps of the busiest processes, with paths and pids: the five busiest by CPU and the three
+    /// biggest by memory not among them, as before the charts asked for ten of each. The charts read `programs`.
+    nonisolated static func archived(_ procs: [TopProcess]) -> [TopProcess] {
+        let byCPU = Array(procs.sorted { ($0.cpu, $0.pid) > ($1.cpu, $1.pid) }.prefix(5))
+        let cpuPids = Set(byCPU.map(\.pid))
+        let byMem = procs.sorted { ($0.mem, $0.pid) > ($1.mem, $1.pid) }.prefix(3).filter { !cpuPids.contains($0.pid) }
+        return byCPU + byMem
     }
 
     /// "activity-20261101-071732-871.jsonl" -> "20261101".

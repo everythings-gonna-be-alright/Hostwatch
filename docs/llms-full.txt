@@ -326,6 +326,17 @@ the quickest way to see what is busy right now and where it came from.
 To open it, use the Events tab's switch (**Events · Running Now**), or *View ▸ Running Now* (⌥⌘R). It replaces the
 event list. While the window is on screen, the list refreshes every 3 s.
 
+**Resources.** Three charts above the list show CPU, memory and network over the last 5, 10 or 30 minutes. Each one
+stacks the ten programs that used the most in that time, and Other for the rest. An app's helpers count as the app,
+so Google Chrome is one program. The legend lists them by name (**A–Z**) or biggest first (**By Load**). The order changes only the legend. Click a program to see only it, in all three
+charts, and click it again (or **Only …** above the charts) to see them all. Hover a chart to read a moment: the
+card's number and legend show it. Network shows what each program received above the line and what it sent below it. Network by program needs the collector. A time with no data, such as Hostwatch not running or the collector restarting, is a grey hatched band, never a curve drawn across it. Memory by program can add up to more than
+is used, because programs share memory. Click **Resources** to fold the charts away.
+
+In Time Travel the charts show the minutes up to the playhead, from history. Hostwatch records each program's CPU,
+memory and network every 5 s for this, by name only. After a relaunch the charts start with the last half hour from
+the same record.
+
 **Columns.** You can sort by any column.
 
 | Column | What it shows |

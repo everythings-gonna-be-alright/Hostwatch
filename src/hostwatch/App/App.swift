@@ -141,7 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         model.onTop = { [weak self] procs, read, write in self?.metrics.receiveTop(procs, diskRead: read, diskWrite: write) }
         model.onVitals = { [weak self] samples in self?.vitals.receive(samples) }
-        model.onNetMap = { [weak self] m in self?.networkMap.apply(m) }
+        model.onNetMap = { [weak self] m in
+            self?.networkMap.apply(m)
+            if let traffic = m.traffic { self?.metrics.receiveTraffic(traffic) }   // Running Now's network by program
+        }
         networkMap.onAlert = { [weak self] alert in self?.raiseNetworkStory(alert) }
         networkState.map = networkMap
         networkMap.announced = { [bonjour] ip in bonjour.byAddress[ip] }
