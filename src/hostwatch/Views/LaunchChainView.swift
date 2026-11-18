@@ -321,42 +321,60 @@ struct LaunchChainStrip: View {
 struct FullCommand: View {
     let text: String
     @StateObject private var expand = ExpandState()
+    @StateObject private var copied = ExpandState()
 
     /// Long enough to need more than three lines at this size in a question panel.
     private var isLong: Bool { text.count > 180 || text.filter { $0 == "\n" }.count > 2 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if expand.open {
-                ScrollView {
-                    Text(text)
-                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
+        HStack(alignment: .top, spacing: 8) {
+            Group {
+                if expand.open {
+                    ScrollView {
+                        command.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 150)
+                } else {
+                    command.lineLimit(isLong ? 3 : nil).truncationMode(.tail)
                 }
-                .frame(maxHeight: 150)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
-            } else {
-                Text(text)
-                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .lineLimit(isLong ? 3 : nil).truncationMode(.tail).textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            if isLong || expand.open {
-                HStack(spacing: 8) {
-                    Button(expand.open ? "Show Less" : "Show Full Command") {
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Two small round glass buttons in the corner, not a row of text buttons under the command.
+            HStack(spacing: 4) {
+                if isLong {
+                    corner(expand.open ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                           label: expand.open ? "Show Less" : "Show Full Command") {
                         withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
                     }
-                    Button("Copy") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
-                    }
-                    .help("Copy the whole command")
                 }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                corner(copied.open ? "checkmark" : "doc.on.doc", label: "Copy Command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    copied.open = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied.open = false }
+                }
             }
         }
+    }
+
+    private var command: some View {
+        Text(text)
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func corner(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Circle())
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
