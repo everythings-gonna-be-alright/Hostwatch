@@ -1039,7 +1039,7 @@ again too.
 
 #### Network map: who reaches this Mac
 
-The Network tab's **Map** (the *List | Map* switch at the top left) draws the same connections as a picture, with what
+The Network tab opens on its **Map** (the *Map | List* switch at the top left, which remembers your choice). It draws the same connections as a picture, with what
 the list can't show: who tried to reach this Mac.
 
 - **Four columns, left to right:**
