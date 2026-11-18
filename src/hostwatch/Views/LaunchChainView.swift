@@ -339,13 +339,12 @@ struct FullCommand: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Two small round glass buttons in the corner, not a row of text buttons under the command.
-            HStack(spacing: 4) {
-                if isLong {
-                    corner(expand.open ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                           label: expand.open ? "Show Less" : "Show Full Command") {
-                        withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
-                    }
+            // For a long command only: two small round glass buttons in its corner. A short one is selectable text.
+            if isLong {
+              HStack(spacing: 4) {
+                corner(expand.open ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                       label: expand.open ? "Show Less" : "Show Full Command") {
+                    withAnimation(.snappy(duration: 0.2)) { expand.open.toggle() }
                 }
                 corner(copied.open ? "checkmark" : "doc.on.doc", label: "Copy Command") {
                     NSPasteboard.general.clearContents()
@@ -353,6 +352,7 @@ struct FullCommand: View {
                     copied.open = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied.open = false }
                 }
+              }
             }
         }
     }

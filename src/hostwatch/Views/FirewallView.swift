@@ -123,95 +123,75 @@ struct FirewallPromptView: View {
         if let prompt = firewall.prompts.first(where: { $0.id == id }) {
             let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
             let gateway = SignatureBuilder.vmGateway(prompt.event.proc)
-            VStack(spacing: 14) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: prompt.event.proc))
-                    .resizable().frame(width: 64, height: 64)
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "network.badge.shield.half.filled")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(5)
-                            .background(Circle().fill(Color.accentColor))
-                            .offset(x: 6, y: 4)
+            // The launch question's layout: the program's icon with the title beside it and the wait at the right,
+            // what the answer decides, who started it, and the answers in one row at the bottom right.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(nsImage: ProcessIcons.icon(prompt.event.proc)).resizable().frame(width: 36, height: 36)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "network")
+                                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 16, height: 16)
+                                .background(Circle().fill(Color.secondary))
+                                .offset(x: 4, y: 4)
+                        }
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
+                             ?? (prompt.who == "Unknown program" ? "An unknown program wants to connect to \(prompt.destination)"
+                                 : "\(prompt.event.name) wants to connect to \(prompt.destination)"))
+                            .font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\(prompt.event.extra) · port \(prompt.event.remotePort) · \(prompt.event.remoteHost ?? "")")
+                            .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                     }
-                    .accessibilityHidden(true)
+                    Spacer(minLength: 8)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Label("Waiting \(Self.waited(context.date.timeIntervalSince(prompt.since)))", systemImage: "timer")
+                            .font(.callout.monospacedDigit()).foregroundStyle(.orange)
+                    }
+                }
                 if let context = prompt.context {
                     Label(context, systemImage: "checkmark.circle.fill")
                         .font(.callout.weight(.medium)).foregroundStyle(.green)
                 }
-                VStack(spacing: 5) {
-                    Text(gateway.map { "A \($0) wants to connect to \(prompt.destination)" }
-                         ?? (prompt.who == "Unknown program" ? "An unknown program wants to connect to \(prompt.destination)"
-                             : "“\(prompt.event.name)” wants to connect to \(prompt.destination)"))
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\(prompt.event.extra) · port \(prompt.event.remotePort) · \(prompt.event.remoteHost ?? "")")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                if let analysis = firewall.advice[prompt.id] {
+                    FirewallAdviceView(analysis: analysis)
                 }
                 Text(gateway.map { "It comes through \(prompt.event.name), from inside its virtual machine; which program made it "
                                    + "can't be seen. Your answer decides \($0)s → \(pattern) from now on." }
                      ?? "Your answer decides \(prompt.event.name) → \(pattern) from now on. The connection waits until you answer.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                    .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let chain, gateway == nil {
                     LaunchChainStrip(report: chain)
                 } else {
                     Text(prompt.event.proc)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .font(.caption).foregroundStyle(.tertiary)
+                        .lineLimit(1).truncationMode(.middle)
                         .help(prompt.event.proc)
                 }
-                if let analysis = firewall.advice[prompt.id] {
-                    FirewallAdviceView(analysis: analysis)
-                } else {
-                    // A secondary action, as in macOS alerts ("Show Details", "Learn More"): a borderless,
-                    // tinted text button below the message, never competing with Block and Allow.
-                    Button { firewall.askClaude(prompt.id) } label: {
-                        HStack(spacing: 5) {
-                            Text("✱").font(.system(size: 14, weight: .bold))
-                            Text("Ask Claude")
-                        }
-                        .font(.callout.weight(.medium))
+                HStack {
+                    if firewall.advice[prompt.id] == nil {
+                        Button { firewall.askClaude(prompt.id) } label: { Label("Ask Claude", systemImage: "sparkles") }
+                            .buttonStyle(.glass)
+                            .keyboardShortcut("k", modifiers: .command)
+                            .help("Claude explains the program, the destination and the risks, and suggests Allow or Block (⌘K)")
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(Color.claude)
-                    .pointerStyle(.link)
-                    .keyboardShortcut("k", modifiers: .command)
-                    .help("Claude explains the program, the destination and the risks, and suggests Allow or Block (⌘K)")
-                    .accessibilityLabel("Ask Claude about this connection")
-                }
-                VStack(spacing: 8) {
-                    HStack(spacing: 10) {
-                        Button { firewall.resolve(prompt.id, allow: false) } label: {
-                            Text("Block").frame(maxWidth: .infinity)
-                        }
+                    Spacer()
+                    Button("Block") { firewall.resolve(prompt.id, allow: false) }
                         .buttonStyle(.glass)
                         .keyboardShortcut(.cancelAction)
-                        Button { firewall.resolve(prompt.id, allow: true) } label: {
-                            Text("Allow").frame(maxWidth: .infinity)
-                        }
+                        .help("Block it, and every connection of this pattern from now on")
+                    Button("Allow") { firewall.resolve(prompt.id, allow: true) }
                         .buttonStyle(.glassProminent)
                         .keyboardShortcut(.defaultAction)
-                    }
-                    .controlSize(.large)
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text("Waiting \(Self.waited(context.date.timeIntervalSince(prompt.since)))")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                    }
+                        .help("Allow it, and every connection of this pattern from now on")
                 }
-                .padding(.top, 4)
+                .controlSize(.large)
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 26)
-            .padding(.bottom, 16)
-            .frame(width: firewall.advice[prompt.id] == nil && chain == nil ? 340 : 420)  // room for the chain and the advice
+            .padding(22)
+            .frame(width: 600)
         }
     }
 
