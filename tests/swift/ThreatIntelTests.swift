@@ -64,6 +64,17 @@ import Testing
         #expect(!FeedCheck.sharedHost("evil.t.me.example") && !FeedCheck.sharedHost("files.catbox.moe"))
     }
 
+    /// A platform's address is shared: an IP list naming it doesn't flag a connection that names the platform
+    /// (www.youtube.com on a listed Google address), while the same address with no platform name still does.
+    @Test func platformConnectionsArentFlaggedByTheirIP() {
+        for host in ["www.youtube.com", "rr3---sn-abc.googlevideo.com", "scontent.cdninstagram.com", "www.tiktok.com",
+                     "static.xx.fbcdn.net", "pbs.twimg.com", "www.linkedin.com"] {
+            #expect(FeedCheck.platformHost(host), "\(host)")
+        }
+        #expect(!FeedCheck.platformHost("c2.badguys.net") && !FeedCheck.platformHost(""))
+        #expect(!FeedCheck.platformHost("youtube.com.evil.example"))
+    }
+
     /// Lists cached by earlier versions still hold the platform hosts: they're skipped when the index is built.
     @Test func cachedPlatformHostsAreSkipped() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-intel-\(UUID().uuidString)")

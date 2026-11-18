@@ -460,7 +460,10 @@ final class ThreatIntel: ObservableObject {
         if !e.host.isEmpty, let (domain, detail) = listedDomain(e.host) {
             return hit(.domain, domain, detail, e)
         }
-        if let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), let detail = listedIP(ip, port: e.remotePort) {
+        // A platform's address is shared by everyone on it: a listed IP there is someone else's (UDP 142.251.150.4:443
+        // for www.youtube.com was flagged as malware).
+        if !FeedCheck.platformHost(e.host),
+           let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), let detail = listedIP(ip, port: e.remotePort) {
             return hit(.ip, ip, detail, e)
         }
         return nil
@@ -706,6 +709,13 @@ enum FeedCheck {
         "amazonaws.com", "amazon.com", "cloudfront.net", "cloudflare.com", "akamaihd.net", "akamaiedge.net",
         "fastly.net", "digicert.com", "letsencrypt.org", "anthropic.com", "claude.ai", "abuse.ch", "cisa.gov",
         "jsdelivr.net", "slack.com", "zoom.us",
+        // video and social networks: their front doors and media servers, shared by everyone on them
+        "googlevideo.com", "ytimg.com", "ggpht.com", "youtu.be", "1e100.net",
+        "facebook.com", "facebook.net", "fbcdn.net", "fbsbx.com", "messenger.com", "instagram.com", "cdninstagram.com",
+        "whatsapp.com", "whatsapp.net", "threads.net", "linkedin.com", "licdn.com",
+        "tiktok.com", "tiktokcdn.com", "tiktokv.com", "byteoversea.com", "x.com", "twitter.com", "twimg.com",
+        "reddit.com", "redditmedia.com", "redditstatic.com", "redd.it", "pinterest.com", "pinimg.com",
+        "snapchat.com", "sc-cdn.net", "twitch.tv", "ttvnw.net", "spotify.com", "scdn.co", "netflix.com", "nflxvideo.net",
     ]
 
     /// Hosts where anyone can publish: code, paste and file sharing, and chat or social pages that malware uses as a
@@ -718,7 +728,8 @@ enum FeedCheck {
         "codeload.github.com", "gist.github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "huggingface.co",
         "t.me", "telegram.me", "telegram.org", "api.telegram.org", "telegra.ph",
         "discord.com", "discordapp.com", "cdn.discordapp.com", "media.discordapp.net",
-        "steamcommunity.com", "x.com", "twitter.com", "vk.com", "reddit.com",
+        "steamcommunity.com", "x.com", "twitter.com", "vk.com", "reddit.com", "medium.com", "tumblr.com",
+        "bsky.app", "mastodon.social", "ok.ru",
         "pastebin.com", "paste.ee", "rentry.co",
         "dropbox.com", "dl.dropboxusercontent.com", "mediafire.com", "download.mediafire.com", "mega.nz",
         "drive.google.com", "docs.google.com", "sites.google.com", "drive.usercontent.google.com",
@@ -733,6 +744,17 @@ enum FeedCheck {
         var h = host.lowercased()
         if h.hasPrefix("www.") { h.removeFirst(4) }
         return sharedHosts.contains(h)
+    }
+
+    /// A connection to a platform, by its own name or a parent's: its address is a shared front door, so an IP list
+    /// naming that address (reported for one tenant, one video, one page) says nothing about this connection.
+    static func platformHost(_ host: String) -> Bool {
+        var h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".~≈"))
+        while h.contains(".") {
+            if neverFlag(h) || sharedHost(h) { return true }
+            h = String(h.drop { $0 != "." }.dropFirst())
+        }
+        return false
     }
 
     static func neverFlag(_ entry: String) -> Bool {

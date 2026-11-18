@@ -45,6 +45,11 @@
 
 - **Settings that change what Hostwatch trusts can't be set from outside the app.** Four developer switches
   (another collector socket, signing database or own bundle, signing rules off) work only in debug builds now.
+- **YouTube and social networks aren't called malware.** A threat list naming one of their shared addresses no
+  longer flags a connection that names the platform, and the big social networks join the platforms never flagged.
+- **Details… on the network map opens for every destination**, including one that was always blocked or that
+  Hostwatch knows only from its traffic.
+- **The zebra stripes match the rows** in a list that re-sorts itself, such as Running Now.
 - **Reset ignored chains shows that it worked.**
 - **A deleted story stays deleted** while its chain is still running.
 

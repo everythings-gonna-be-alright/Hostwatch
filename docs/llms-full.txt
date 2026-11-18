@@ -1511,8 +1511,11 @@ It compares them with the date of your last macOS update and any update waiting 
 **Poisoning can't flag the platforms everything uses.** "Poisoning" means tampering with a list to flag a popular
 domain.
 
-- Apple, Google, Microsoft, GitHub, AWS, Cloudflare, Akamai and a few others are never flagged by their own domain,
+- Apple, Google, Microsoft, GitHub, AWS, Cloudflare, Akamai, YouTube, the big social networks (Facebook, Instagram,
+  WhatsApp, LinkedIn, TikTok, X, Reddit, Pinterest, Snapchat) and a few others are never flagged by their own domain,
   nor by a parent-domain match.
+- A connection to one of these platforms isn't flagged by its address either. Their servers are shared by everyone
+  on them, so an IP list naming one was reported for someone else.
 - A phishing page on a shared host is still flagged by its full name (`login-apple.github.io`).
 - A list can only raise alerts: it can never make Hostwatch trust anything.
 
