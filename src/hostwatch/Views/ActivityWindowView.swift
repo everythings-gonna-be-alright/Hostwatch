@@ -378,6 +378,7 @@ struct ActivityWindowView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
+                .offset(y: -1)                       // a triangle's weight sits low: up a point looks centred
                 .frame(width: 30, height: 30)
                 .background(Color.orange.gradient, in: Circle())
                 .accessibilityHidden(true)
@@ -394,8 +395,12 @@ struct ActivityWindowView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        // A trace of warm tint, an orange hairline and a soft shadow lift it off the list without dimming the words.
-        .glassEffect(.regular.tint(.orange.opacity(0.07)), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // An orange layer, an orange hairline and a soft shadow lift it off the list. The words stay white.
+        // The orange as its own layer between the glass and the words: a glass tint over a dark window turns brown.
+        .background(LinearGradient(colors: [Color.orange.opacity(0.42), Color.orange.opacity(0.24)],
+                                   startPoint: .leading, endPoint: .trailing),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.orange.opacity(0.45), lineWidth: 1))
         .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
         .padding(.horizontal, 12)

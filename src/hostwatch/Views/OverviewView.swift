@@ -16,6 +16,7 @@ struct WindowTabBar: View {
 
     let tabs: [Tab]
     @Binding var selection: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         bar(showTitles: true)
@@ -43,8 +44,10 @@ struct WindowTabBar: View {
                                 .background(Capsule().fill(tab.badgeTint))
                         }
                     }
-                    .padding(.horizontal, showTitles ? 9 : 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, showTitles ? 10 : 9)
+                    // Tall enough that the selected capsule sits as far from the bar's top and bottom as from its
+                    // ends: one shape inside the other, with concentric corners.
+                    .padding(.vertical, 6.5)
                     // Selected: a raised capsule in the text colour itself, with full-strength text. The accent
                     // colour was used before, and with a graphite accent it looked as dark as the unselected tabs.
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
@@ -57,14 +60,31 @@ struct WindowTabBar: View {
                     }
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TabPressStyle(still: reduceMotion))
                 .help("\(tab.title) (⌘\(i + 1))")
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
-        .padding(3)
+        .padding(4)                                           // the same 4 points around the selected capsule
         .fixedSize()                                          // the bar takes the width its titles need
+        // No animation on switching: the bar sits in the toolbar, and animating it animated the toolbar's layout
+        // while the new tab was being built, which read as a freeze. The press effect is the only motion.
+    }
+}
+
+/// A tab's press, the way Liquid Glass buttons answer a click: it swells a little under the pointer with a soft
+/// light, then springs back. Still with Reduce Motion, where only the light shows.
+private struct TabPressStyle: ButtonStyle {
+    let still: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
+            }
+            .scaleEffect(configuration.isPressed && !still ? 1.08 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
