@@ -28,8 +28,10 @@
   sending its context to Anthropic no longer counts as a large upload. Claude started by anything else is checked
   as before.
 - **Claude is called claude**, not after its version (2.1.327) in every list, question and story.
-- **A calmer Protection overview.** Each chart on its own scale, a sensible height, red only where something was
-  stopped, and an area that's off offers Turn On Watch.
+- **A new Protection overview.** A soft backdrop in the state's colour, and five facts under it: how many areas are
+  protected (Watch only rehearses, so it doesn't count), the program stopped last, protected places, questions
+  waiting for you and how long Hostwatch has watched. The charts are redrawn: rounded bars on a faint track for every
+  hour or day, questions in a calm blue, each card on its own scale, and an area that's off offers Turn On Watch.
 - **Clearer windows.** Full Disk Access, the collector-off banner, the firewall question and the story buttons
   follow the same Liquid Glass style. Long commands can be opened in full and copied.
 - **Network opens on the map.**

@@ -191,6 +191,11 @@ struct RulesView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                if page == .protectionOverview, let protection {
+                    ProtectionBackdrop(protection: protection, firewall: firewall)
+                }
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport.height = $0 - 32 }   // less the page's padding
             .environment(\.viewportHeight, viewport.height)
             Divider()

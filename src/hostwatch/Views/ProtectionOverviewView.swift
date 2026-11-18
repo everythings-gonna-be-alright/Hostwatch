@@ -148,29 +148,64 @@ struct ProtectionOverview: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Image(systemName: state == .paused ? "pause.circle.fill" : state == .off ? "shield.slash" : "checkmark.shield.fill")
-                .font(.system(size: 30, weight: .medium))
-                .foregroundStyle(tint)
-                .symbolRenderingMode(.hierarchical)
-                .frame(width: 40)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.title2.weight(.semibold))
-                Text(sentence).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                StatusSeal(state: state, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.title2.weight(.semibold))
+                    Text(sentence).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                switch state {
+                case .off: Button("Start Watching") { startWatching() }.buttonStyle(.glassProminent)
+                case .paused: Button("Resume") { protection.resume() }.buttonStyle(.glassProminent)
+                default: Button("Pause for 15 Minutes") { protection.pause(minutes: 15) }.buttonStyle(.glass)
+                }
+                HelpLink { help.open.toggle() }
+                    .popover(isPresented: $help.open, arrowEdge: .bottom) { howItWorks }
             }
-            Spacer(minLength: 12)
-            switch state {
-            case .off: Button("Start Watching") { startWatching() }.buttonStyle(.glassProminent)
-            case .paused: Button("Resume") { protection.resume() }.buttonStyle(.glassProminent)
-            default: Button("Pause for 15 Minutes") { protection.pause(minutes: 15) }.buttonStyle(.glass)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                ForEach(facts, id: \.title) { StatusFactView(fact: $0) }
             }
-            HelpLink { help.open.toggle() }
-                .popover(isPresented: $help.open, arrowEdge: .bottom) { howItWorks }
         }
         .controlSize(.large)
-        .padding(16)
-        .glassEffect(.regular.tint(tint.opacity(state == .off ? 0 : 0.16)), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(18)
+        .glassEffect(.regular.tint(tint.opacity(state == .off ? 0 : 0.12)), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
+    }
+
+    /// The state in five facts: what is guarded, how it stops, what it guards, what waits, and for how long.
+    private var facts: [StatusFact] {
+        // Only Ask and Strict stop anything: a watched area is rehearsing, not protected.
+        let modes = ProtectionArea.allCases.map { ($0.title, protection.mode($0).short, protection.mode($0).enforces) }
+            + (firewall.map { [("Network", $0.mode.short, $0.mode == .ask || $0.mode == .strict)] } ?? [])
+        let protected = modes.filter(\.2).count
+        let same = Set(modes.map(\.1)).count == 1
+        let guarding = same ? "\(modes[0].1) everywhere" : modes.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        let groups = ProtectedGroup.all.filter { (protection.groups[$0.id] ?? ProtectedGroupSetting()).on }.count
+        let yours = protection.customPlaces.filter(\.on).count
+        let waiting = protection.prompts.count + (firewall?.prompts.count ?? 0)
+        let days = max(1, Calendar.current.dateComponents([.day], from: protection.since, to: Date()).day ?? 0)
+        return [
+            StatusFact(symbol: "shield.lefthalf.filled", title: "Protected",
+                       value: protected == 0 ? "No areas" : "\(protected) of \(modes.count) areas", detail: guarding),
+            lastStopped,
+            StatusFact(symbol: "lock.doc", title: "Protected places", value: "\(groups + yours)",
+                       detail: yours > 0 ? "\(groups) groups, \(yours) of yours" : "\(groups) of \(ProtectedGroup.all.count) groups"),
+            StatusFact(symbol: "hourglass", title: "Waiting for you", value: waiting == 0 ? "Nothing" : waiting.formatted(),
+                       detail: waiting == 0 ? "No questions open" : waiting == 1 ? "1 question open" : "\(waiting) questions open"),
+            StatusFact(symbol: "calendar", title: "Watching", value: days == 1 ? "1 day" : "\(days) days",
+                       detail: "Since \(protection.since.formatted(date: .abbreviated, time: .omitted))"),
+        ]
+    }
+
+    /// The latest program stopped, or that would have been where an area only watches, and when.
+    private var lastStopped: StatusFact {
+        guard let last = protection.findings.values.filter({ $0.verdict == .block }).max(by: { $0.lastSeen < $1.lastSeen })
+        else { return StatusFact(symbol: "hand.raised", title: "Last stopped", value: "Nothing yet", detail: "Nothing stopped so far") }
+        let when = last.lastSeen.formatted(.relative(presentation: .named))
+        return StatusFact(symbol: "hand.raised", title: last.enforced ? "Last stopped" : "Last would stop",
+                          value: last.name.isEmpty ? last.program : last.name, detail: "\(last.area.title), \(when)")
     }
 
     /// Watch everywhere: the safe first step, it stops nothing and shows what would be stopped.
@@ -223,11 +258,89 @@ struct ProtectionOverview: View {
                 }
             }
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            if state != .off {
-                Text("Watching since \(protection.since.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption).foregroundStyle(.tertiary).padding(.leading, 4)
-            }
         }
+    }
+}
+
+/// The state's seal: the shield on a soft disc of the state's colour, inside two quiet rings.
+private struct StatusSeal: View {
+    let state: ProtectionState
+    let tint: Color
+
+    var body: some View {
+        let symbol = state == .paused ? "pause.fill" : state == .off ? "shield.slash.fill" : "checkmark.shield.fill"
+        ZStack {
+            Circle().strokeBorder(tint.opacity(0.14), lineWidth: 1).frame(width: 66, height: 66)
+            Circle().strokeBorder(tint.opacity(0.24), lineWidth: 1).frame(width: 56, height: 56)
+            Image(systemName: symbol)
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(tint.gradient, in: Circle())
+                .shadow(color: tint.opacity(state == .off ? 0 : 0.45), radius: 12, y: 5)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .frame(width: 66, height: 66)
+        .accessibilityHidden(true)
+    }
+}
+
+/// One fact about the state: a symbol and its name, the value, and a line under it.
+struct StatusFact {
+    let symbol: String
+    let title: String
+    let value: String
+    let detail: String
+}
+
+private struct StatusFactView: View {
+    let fact: StatusFact
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(fact.title, systemImage: fact.symbol)
+                .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            Text(fact.value).font(.headline).lineLimit(1).truncationMode(.middle).help(fact.value)
+            Text(fact.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                .help(fact.detail)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Behind the Overview: soft pools of colour, the state's own at the top, so the glass has something to refract
+/// and the page reads as protecting, rehearsing or paused before a word is read.
+struct ProtectionBackdrop: View {
+    @ObservedObject var protection: ProtectionMonitor
+    var firewall: FirewallMonitor?
+
+    private var state: ProtectionState { protection.state(network: firewall?.mode ?? .off) }
+
+    private var tint: Color {
+        switch state {
+        case .off: .gray
+        case .rehearsing: .purple
+        case .protecting: .green
+        case .paused: .orange
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            RadialGradient(colors: [tint.opacity(state == .off ? 0.08 : 0.18), .clear],
+                           center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 520)
+            RadialGradient(colors: [Color.cyan.opacity(0.10), .clear], center: UnitPoint(x: 1, y: 0.35),
+                           startRadius: 0, endRadius: 480)
+            RadialGradient(colors: [Color.indigo.opacity(0.10), .clear], center: UnitPoint(x: 0.1, y: 1),
+                           startRadius: 0, endRadius: 520)
+        }
+        .animation(.easeInOut(duration: 0.4), value: state)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
