@@ -429,9 +429,10 @@ enum TopSampler {
     }
 
     /// The busiest processes between two snapshots (by CPU, plus the biggest by memory not already
-    /// listed) and total disk read/write per second.
+    /// listed) and total disk read/write per second. Ten of each, for Running Now's charts by program: the app
+    /// archives only the first five and three (`MetricsStore.archived`), so history doesn't grow.
     static func top(before: [ProcessInstance: ProcessUsage], after: [ProcessInstance: ProcessUsage],
-                    seconds: Double, limit: Int = 5) -> (rows: [TopRow], read: Double, write: Double) {
+                    seconds: Double, limit: Int = 10, memoryLimit: Int = 10) -> (rows: [TopRow], read: Double, write: Double) {
         var rows: [TopRow] = []
         var read = 0.0, write = 0.0
         for (key, now) in after {
@@ -445,7 +446,7 @@ enum TopSampler {
                                read: drd / seconds, write: dwr / seconds, cpuSeconds: now.cpuNanos / 1e9))
         }
         let byCPU = Array(rows.sorted { ($0.cpu, $0.pid) > ($1.cpu, $1.pid) }.prefix(limit))
-        let byMem = rows.sorted { ($0.mem, $0.pid) > ($1.mem, $1.pid) }.prefix(3).filter { !byCPU.contains($0) }
+        let byMem = rows.sorted { ($0.mem, $0.pid) > ($1.mem, $1.pid) }.prefix(memoryLimit).filter { !byCPU.contains($0) }
         return (byCPU + byMem, read / seconds, write / seconds)
     }
 

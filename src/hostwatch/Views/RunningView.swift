@@ -258,6 +258,8 @@ struct RunningProcessesView: View {
     var sessions: [EventItem.SessionHeader] = []
     /// The window's resource strip (CPU, memory, network, disk), as under the Events list.
     var strip: AnyView? = nil
+    /// CPU, memory and network charts above the list (live only).
+    var charts: AnyView? = nil
     @StateObject private var groups = GroupExpansion()
 
     var body: some View {
@@ -267,6 +269,7 @@ struct RunningProcessesView: View {
         let launches = Dictionary(grouping: history.lazy.filter { $0.kind == .exec }, by: \.pid)
         let launchEvent = { (pid: Int, start: Double) in launches[pid].flatMap { TimeTravel.launch(in: $0, pid: pid, start: start) } }
         VStack(spacing: 0) {
+            if let charts { charts; Divider() }
             if running.rows.isEmpty {
                 // Fills the space like the table would: otherwise the window's column shrinks to the
                 // placeholder's height and floats in the middle.

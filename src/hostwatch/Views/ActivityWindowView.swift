@@ -227,7 +227,8 @@ struct ActivityWindowView: View {
                                              if let start = row.started { actions.showSpawn(row.pid, start) }
                                          }, actions: actions, grouping: model.eventGrouping,
                                          sessions: shownSessions.map { .init(id: $0.id, topic: $0.topic, facts: $0.facts, agent: $0.agent, pids: $0.pids) },
-                                         strip: AnyView(MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)))
+                                         strip: AnyView(MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)),
+                                         charts: AnyView(ResourceCharts(metrics: metrics, travel: travel, traveling: traveling)))
                 } else {
                     eventsList
                 }

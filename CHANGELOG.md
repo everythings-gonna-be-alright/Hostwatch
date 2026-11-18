@@ -15,6 +15,9 @@
   Allow. Once answers only this connection, and the next one asks again.
 - **Show in Timeline shows the story.** The list narrows to the story's own events, with a bar that names it and
   brings everything back.
+- **Running Now has charts.** CPU, memory and network over the last minutes, as three cards above the list, each
+  split into the ten programs that used the most, an app with its helpers counted as one. Network shows received above
+  the line and sent below it. Click a program to see only it. Time Travel shows them too, at the playhead.
 - **A window for new versions.** What's new, by section, with the release page one click away. Nothing is installed
   by itself.
 - **Questions say what they are.** A small label above each one: Network connection, Program launch or Protected file.
