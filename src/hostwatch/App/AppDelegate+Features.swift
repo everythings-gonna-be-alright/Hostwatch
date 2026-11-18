@@ -11,7 +11,7 @@ extension AppDelegate {
         #if DEMO
         // The scene decides the look, not what was clicked in an earlier demo run: newest events on top.
         model.eventOrder = [KeyPathComparator(\.seq, order: .reverse)]
-        model.demoConnect()
+        if Demo.scene != "off" { model.demoConnect() }        // off: the window as when the collector is stopped
         domains.endLearning()
         firewall.mode = .ask
         for line in Demo.lines() { model.receive(line) }

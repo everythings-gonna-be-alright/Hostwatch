@@ -138,7 +138,8 @@ struct ActivityWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !collector.isRunning && !model.connected { collectorBanner; Divider() }
+            let collectorOff = !collector.isRunning && !model.connected
+            VStack(spacing: 0) { if collectorOff { collectorBanner } }.animation(.snappy, value: collectorOff)
             VulnerabilityBanner(intel: intel, sheets: sheets)
             FirewallFallbackBanner(firewall: firewall, openSettings: actions.openFirewallSettings)
             // A search left in the field filters quietly: say so where you look, with the way out.
@@ -369,20 +370,39 @@ struct ActivityWindowView: View {
         }
     }
 
-    /// Nothing is watched while the collector is off: say so where you look, with the fix.
+    /// Nothing is watched while the collector is off: say so where you look, with the fix. A floating glass panel,
+    /// inset from the window's edges, nearly neutral so the words keep their contrast.
     private var collectorBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            Text("The collector is off, so nothing is being watched.").fontWeight(.medium)
-            Spacer()
-            Button(collector.state == .starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
-                .buttonStyle(.glassProminent)
-                .disabled(collector.state == .starting)
+        let starting = collector.state == .starting
+        return HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(Color.orange.gradient, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Hostwatch isn't watching").font(.headline)
+                Text("The collector is off. Start it to see activity again.").font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            if starting { ProgressView().controlSize(.small) }
+            Button(starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
+                .buttonStyle(.glass)
+                .controlSize(.large)
+                .disabled(starting)
         }
-        .controlSize(.small)
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.10))
+        .padding(.vertical, 10)
+        // A trace of warm tint, an orange hairline and a soft shadow lift it off the list without dimming the words.
+        .glassEffect(.regular.tint(.orange.opacity(0.07)), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.orange.opacity(0.45), lineWidth: 1))
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
     }
 
     /// Slim bar under the toolbar: which events to show, and the pattern tally.
