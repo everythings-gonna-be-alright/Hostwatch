@@ -57,3 +57,19 @@ import Testing
         #expect(HUDFold.summary(runs) == "started 5 times by bash")
     }
 }
+
+/// The HUD keeps its card and rows between redraws, and makes them again when what they're made from changes.
+@Suite @MainActor struct HUDMemoTests {
+    @Test func sameKeyKeepsNewKeyRemakes() {
+        let memo = HUDMemo()
+        var made = 0
+        func rows(_ key: [Int]) -> Int { memo.items(key) { made += 1; return [] }.count }
+        _ = rows([1, 2]); _ = rows([1, 2])
+        #expect(made == 1)
+        _ = rows([1, 3])
+        #expect(made == 2)
+        var flagged = 0
+        _ = memo.attention([1, 3]) { flagged += 1; return [] }      // its own key: the rows' don't stand in for it
+        #expect(flagged == 1)
+    }
+}

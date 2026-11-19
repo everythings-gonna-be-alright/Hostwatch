@@ -74,7 +74,12 @@ final class NetworkMapStore: ObservableObject {
 
     private let fileURL: URL?
     /// Every outgoing connection, by program and destination. Not published: the 10 s report redraws the map.
-    private(set) var outgoing: [String: MapConnection] = [:] { didSet { keysByProgram = nil } }
+    private(set) var outgoing: [String: MapConnection] = [:] { didSet { keysByProgram = nil; outgoingStamp &+= 1 } }
+    /// Counts changes to `outgoing`, for the list below.
+    private var outgoingStamp = 0
+    /// The last outgoing list, by its window (to the minute) and `outgoingStamp`: the map asks on every redraw.
+    /// One `isNew` is assumed (the app passes the domains'): a published change or the next minute makes a new list.
+    private var lastList: (key: [Int], list: [MapOutgoing])?
     /// Each program's pattern keys, made once per change: the map asks for every program on every redraw.
     private var keysByProgram: [String: [String]]?
     /// The last few graphs the map drew, by what they were made from. A redraw with nothing new rebuilds nothing.
@@ -101,7 +106,7 @@ final class NetworkMapStore: ObservableObject {
         self.fileURL = fileURL
         load()
         // Any published change (devices, tries, routes, blocks, the network) can change a graph.
-        changeWatch = objectWillChange.sink { [weak self] _ in MainActor.assumeIsolated { self?.graphs.removeAll() } }
+        changeWatch = objectWillChange.sink { [weak self] _ in MainActor.assumeIsolated { self?.graphs.removeAll(); self?.lastList = nil } }
     }
 
     // MARK: Reports
@@ -339,15 +344,27 @@ final class NetworkMapStore: ObservableObject {
     /// Outgoing connections within a window (an hour of the day when replaying), with whether each is fresh.
     func outgoingList(_ w: DateInterval, isNew: (String) -> Bool = { _ in false }) -> [MapOutgoing] {
         regroupByName()
-        return outgoing.values.compactMap { c in
+        let key = [Int(w.start.timeIntervalSince1970 / 60), Int(w.end.timeIntervalSince1970 / 60), outgoingStamp]
+        if let lastList, lastList.key == key { return lastList.list }
+        var yours: [String: Bool] = [:]          // once per destination: the route check is the costly part
+        let list = outgoing.values.compactMap { c -> MapOutgoing? in
             let n = MapTime.sum(c.hours, w), sent = MapTime.sum(c.sentHours ?? [:], w), received = MapTime.sum(c.receivedHours ?? [:], w)
             guard n > 0 || sent > 0 || received > 0 else { return nil }
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
                                lastSeen: c.lastSeen, blocked: c.blocked,
-                               isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
+                               isNew: c.network == nil && !isYours(c.group, &yours) && isNew(c.group),
                                network: c.network, sent: sent, received: received, fresh: MapTime.fresh(c.hours, before: w.start),
                                ports: c.ports ?? [])
         }
+        lastList = (key, list)
+        return list
+    }
+
+    private func isYours(_ group: String, _ known: inout [String: Bool]) -> Bool {
+        if let k = known[group] { return k }
+        let k = NetworkMapPolicy.isYourNetwork(group, routes: routes)
+        known[group] = k
+        return k
     }
 
     /// Byte counts recorded under a bare address before its name was known join the named destination.

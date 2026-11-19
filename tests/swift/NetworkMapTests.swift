@@ -716,3 +716,15 @@ import Testing
         #expect(store.patternKeys(program: "/usr/bin/curl") == curl)
     }
 }
+
+/// Off screen, the map keeps what it last drew. Back on screen, it draws again.
+@Suite @MainActor struct MapKeptWhileHidden {
+    @Test func hiddenKeepsShownRemakes() {
+        let state = NetworkMapViewState()
+        #expect(state.kept(true, \.keptCounts) { (all: 3, new: 1) }.all == 3)
+        #expect(state.kept(false, \.keptCounts) { (all: 9, new: 9) }.all == 3)
+        #expect(state.kept(true, \.keptCounts) { (all: 9, new: 9) }.all == 9)
+        // Nothing kept yet: hidden still draws once.
+        #expect(state.kept(false, \.keptOutgoing) { [] } == [])
+    }
+}

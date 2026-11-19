@@ -182,6 +182,8 @@ struct NetworkView: View {
     var hud: HUDActions? = nil
     /// Time Travel's moment while it's on (the map follows the playhead), nil for live.
     var travelWindow: DateInterval? = nil
+    /// The window shows this tab: off, the map keeps what it last drew.
+    var onScreen = true
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -196,9 +198,11 @@ struct NetworkView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) { modeSwitch; Spacer() }
                     .controlSize(.small).padding(.horizontal, 14).padding(.top, 7)
-                NetworkMapView(store: map, state: state.mapState, outgoing: state.mapOutgoing(state.mapState.window()), interfaceName: state.interfaceName,
+                NetworkMapView(store: map, state: state.mapState,
+                               outgoing: state.mapState.kept(onScreen, \.keptOutgoing) { state.mapOutgoing(state.mapState.window()) },
+                               interfaceName: state.interfaceName,
                                openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions,
-                               hud: hud, signatures: signatures)
+                               hud: hud, signatures: signatures, onScreen: onScreen)
             }
             // Soft pools of the map's colours behind the whole page, for the glass to pick up (as Protection does).
             .background { MapBackdrop() }

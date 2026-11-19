@@ -94,6 +94,8 @@ extension AppDelegate {
             guard let window, window.isVisible else { return false }
             return window.occlusionState.contains(.visible)
         }
-        model.uiVisible = onScreen(activityWindow) || onScreen(panel)
+        let window = onScreen(activityWindow)
+        if model.windowShown != window { model.windowShown = window }
+        model.uiVisible = window || onScreen(panel)
     }
 }

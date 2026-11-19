@@ -40,14 +40,19 @@ struct HUDAttention: View {
 
 /// "now", "12s", "4m", "2h": how long ago, in the HUD's few characters.
 enum HUDTime {
-    static func ago(_ e: ActivityEvent, now: Date = Date()) -> String {
+    /// Seconds since the event.
+    static func age(_ e: ActivityEvent, now: Date = Date()) -> Double {
         let at: Double
         if e.ts > 0 { at = e.ts } else {
             // A live event without a stamp: its clock time today.
             let today = Calendar.current.startOfDay(for: now).timeIntervalSince1970
             at = today + HUDFold.seconds(e)
         }
-        let d = max(0, now.timeIntervalSince1970 - at)
+        return max(0, now.timeIntervalSince1970 - at)
+    }
+
+    static func ago(_ e: ActivityEvent, now: Date = Date()) -> String {
+        let d = age(e, now: now)
         switch d {
         case ..<3: return "now"
         case ..<60: return "\(Int(d))s"

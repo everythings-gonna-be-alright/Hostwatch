@@ -11,6 +11,8 @@ struct EventsTable: NSViewRepresentable {
     /// Live: the list follows the feed itself (`derive` gives the rows), so a batch doesn't re-render the window.
     var feed: LiveFeed?
     var derive: (() -> TravelRowsCache.Result)?
+    /// The list is on screen (its tab, the window visible). Off, batches wait: each one rebuilt the rows for nobody.
+    var onScreen = true
     var withDay: Bool
     var grouped: Bool
     @Binding var selection: Set<UUID>
@@ -121,6 +123,8 @@ struct EventsTable: NSViewRepresentable {
         private var children: [UUID: [NSUUID]] = [:]
         private var applyingSelection = false
         private var reachedEnd = false
+        /// A batch came while off screen: the rows catch up when the list is back.
+        private var missed = false
 
         init(_ parent: EventsTable) { self.parent = parent }
 
@@ -139,11 +143,14 @@ struct EventsTable: NSViewRepresentable {
             }
             syncSortIndicator()
             syncSelection(scroll: reload == false)
+            if missed, next.onScreen { followFeed() }
         }
 
         /// A batch arrived: the rows come from the same cache the window uses, so the two agree.
         private func followFeed() {
             guard let derive = parent.derive else { return }
+            missed = !parent.onScreen
+            guard !missed else { return }
             let result = derive()
             if result.version != version { load(result.rows, version: result.version) }
         }

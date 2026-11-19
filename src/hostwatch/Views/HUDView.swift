@@ -51,7 +51,7 @@ struct HUDView: View {
             header
             Rectangle().fill(HUDInk.hairline).frame(height: 0.5)
             // What needs a look first, only when something does.
-            let flagged = attention
+            let flagged = model.hudMemo.attention(memoKey) { attention }
             HUDAttention(flagged: flagged, heavy: vitals.liveContext.entries, s: s) { e in
                 if !e.protectionReason.isEmpty { return e.protectionReason }
                 if let bad = intel.flag(for: e) { return bad }
@@ -85,7 +85,10 @@ struct HUDView: View {
                     let attentionLines = flagged.count + min(2, vitals.liveContext.entries.count)
                     let rows = max(0, model.overlayRows - 2 * min(2, stories.recent().count)
                                       - (attentionLines > 0 ? attentionLines + 1 : 0))
-                    ForEach(model.overlayItems(rows: rows, flag: { vitals.badge(for: $0) != nil || intel.flag(for: $0) != nil })) { item in
+                    let items = model.hudMemo.items(memoKey + [rows, model.visibleKinds.hashValue, model.signatureFilter.hashValue]) {
+                        model.overlayItems(rows: rows, flag: { vitals.badge(for: $0) != nil || intel.flag(for: $0) != nil })
+                    }
+                    ForEach(items) { item in
                         let event = item.event
                         EventRow(event: event, status: signatures.status(for: event), s: s, vital: vitals.badge(for: event),
                                  knownBad: intel.flag(for: event), count: item.count,
@@ -206,11 +209,18 @@ struct HUDView: View {
     /// "● LIVE" capsule: green live, yellow paused, orange off.
     private var header: some View { headerContent }
 
+    /// What the card and rows are made from: the list, the patterns' and lists' changes, and a 5-second clock.
+    private var memoKey: [Int] {
+        [model.history.first?.seq ?? 0, model.history.count, signatures.revision, intel.revision, vitals.revision,
+         Int(Date().timeIntervalSince1970 / 5)]
+    }
+
     /// Flagged, threat-listed or stopped events of the last ten minutes: the HUD's attention section.
     private var attention: [ActivityEvent] {
         var out: [ActivityEvent] = []
+        let now = Date()
         for e in model.history.prefix(2_000) {
-            if HUDTime.ago(e) .hasSuffix("h") { break }
+            if HUDTime.age(e, now: now) >= 600 { break }        // the card keeps ten minutes: older ones were dropped below
             let status = signatures.status(for: e)
             if e.protection != .none || intel.flag(for: e) != nil || status == .suspicious || status == .dangerous {
                 if !out.contains(where: { $0.signatureKey == e.signatureKey }) { out.append(e) }

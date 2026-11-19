@@ -69,6 +69,20 @@ final class NetworkMapViewState: ObservableObject {
     /// Process Details opens them, a second click closes them.
     func toggleProcess(_ e: ActivityEvent) { process = showsProcess(e) ? nil : e }
     @Published var renaming = ""
+
+    /// While the map isn't on screen (another tab, the window minimized or covered) it keeps what it last drew: its
+    /// stores still publish, and every redraw would build the map again for nobody to see.
+    var keptOutgoing: [MapOutgoing]?
+    var keptGraph: NetworkGraph?
+    var keptCounts: (all: Int, new: Int)?
+
+    /// `make`'s value, or while not `live` the one kept from the last time it was.
+    func kept<T>(_ live: Bool, _ slot: ReferenceWritableKeyPath<NetworkMapViewState, T?>, _ make: () -> T) -> T {
+        if !live, let value = self[keyPath: slot] { return value }
+        let value = make()
+        self[keyPath: slot] = value
+        return value
+    }
 }
 
 /// Where each node is drawn, for the lines between them.
@@ -93,6 +107,8 @@ struct NetworkMapView: View {
     /// The window's actions and the patterns, for the process details panel.
     var hud: HUDActions?
     var signatures: SignatureStore?
+    /// The map is on screen (its tab, the window visible). Off, it shows what it last drew.
+    var onScreen = true
 
     private static let headers = ["Reaching this Mac", "This Mac", "Way out", "Destinations"]
 
@@ -101,11 +117,11 @@ struct NetworkMapView: View {
         // A whole section as a list in place of the map: the same page, the same details panel.
         // Your blocks, red at once: a domain or a program is the firewall's to stop on its next try.
         let blockedPrograms = Set(outgoing.map(\.path)).filter(actions.programBlocked)
-        let graph = store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
+        let graph = state.kept(onScreen, \.keptGraph) { store.graph(outgoing: outgoing, filter: state.allOf == nil ? state.filter : .everything, range: state.range,
                                 query: search, expanded: state.allOf.map { [$0] } ?? [], room: state.room,
                                 measure: state.measure, window: state.travel,
                                 changedOnly: state.changedOnly, blockedDomains: actions.blockedDomains(),
-                                blockedPrograms: blockedPrograms, selected: state.selection, interfaceName: interfaceName)
+                                blockedPrograms: blockedPrograms, selected: state.selection, interfaceName: interfaceName) }
         VStack(spacing: 0) {
             controls
             if let p = store.profile, !p.decided { newNetworkBanner(p).padding(.horizontal, 16).padding(.bottom, 4) }
@@ -168,7 +184,7 @@ struct NetworkMapView: View {
     }
 
     private var controls: some View {
-        let shown = counts           // once: each read builds two graphs
+        let shown = state.kept(onScreen, \.keptCounts) { counts }     // once: each read builds two graphs
         return HStack(spacing: 12) {
             IconSegments(selection: $state.filter, items: [
                 .init(value: .everything, title: "Everything", symbol: "circle.grid.cross"),

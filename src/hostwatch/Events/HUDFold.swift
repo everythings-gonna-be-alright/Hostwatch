@@ -109,3 +109,24 @@ enum HUDFold {
 private extension Optional where Wrapped == String {
     var orEmpty: String { self ?? "" }
 }
+
+/// The HUD's "needs a look" card and rows, kept between redraws. Each one scanned up to 2,000 recent events and
+/// asked every pattern's status, and the HUD redraws for any change in the eight stores it shows (every batch, every
+/// metrics sample), which kept the main thread busy enough to make window animations stutter. `key` names what
+/// they're made from, including a 5-second clock, so "10 minutes ago" still runs out on time.
+@MainActor
+final class HUDMemo {
+    private var attentionKey: [Int]?, itemsKey: [Int]?
+    private var attention: [ActivityEvent] = []
+    private var items: [HUDFold.Item] = []
+
+    func attention(_ key: [Int], _ make: () -> [ActivityEvent]) -> [ActivityEvent] {
+        if key != attentionKey { attention = make(); attentionKey = key }
+        return attention
+    }
+
+    func items(_ key: [Int], _ make: () -> [HUDFold.Item]) -> [HUDFold.Item] {
+        if key != itemsKey { items = make(); itemsKey = key }
+        return items
+    }
+}
