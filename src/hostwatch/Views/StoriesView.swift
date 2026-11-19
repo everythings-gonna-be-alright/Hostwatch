@@ -41,9 +41,12 @@ struct StoriesView: View {
             }
         } else {
             ScrollView {
-                // Each card is its own glass: in one container, cards this close would melt into each other.
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(rows) { StoryCard(story: $0, stories: stories, actions: actions) }
+                // All the glass in one container: drawn apart (a card and its buttons each), every blur was redone on every
+                // frame of the Dock's minimize animation, which dropped frames. Spacing 0, so the cards never melt together.
+                GlassEffectContainer(spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(rows) { StoryCard(story: $0, stories: stories, actions: actions) }
+                    }
                 }
                 .padding(20)
             }
@@ -199,32 +202,30 @@ private struct StoryCard: View {
         }
     }
 
-    // One style, as Liquid Glass asks of a row of actions: glass capsules at the regular size in one container. The
-    // ways into the story first, then the two ways to be done with it.
+    // One style, as Liquid Glass asks of a row of actions: glass capsules at the regular size, in the page's one
+    // container. The ways into the story first, then the two ways to be done with it.
     private var actionsRow: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                Button { actions.openStory(story) } label: {
-                    Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                .help("The whole chain, event by event (or double-click the story)")
-                Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
-                // Only for a story of processes: one raised from the network (a port scan) has none to show.
-                if story.steps.contains(where: { $0.pid > 0 }) {
-                    Button { actions.showStoryInTimeline(story) } label: {
-                        Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
-                    }
-                    .help("Open Time Travel at this story, showing only its own events")
-                }
-                Spacer(minLength: 8)
-                Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }
-                    .help("Never alert again for \(story.originName) with these stages")
-                Button(role: .destructive) { stories.delete(story.id) } label: { Label("Delete", systemImage: "trash") }
-                    .help("Remove this story from the list")
+        HStack(spacing: 8) {
+            Button { actions.openStory(story) } label: {
+                Label("Show Chain", systemImage: "point.3.connected.trianglepath.dotted")
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.capsule)
+            .help("The whole chain, event by event (or double-click the story)")
+            Button { actions.askStory(story) } label: { Label("Ask AI", systemImage: "sparkles") }
+            // Only for a story of processes: one raised from the network (a port scan) has none to show.
+            if story.steps.contains(where: { $0.pid > 0 }) {
+                Button { actions.showStoryInTimeline(story) } label: {
+                    Label("Show in Timeline", systemImage: "clock.arrow.circlepath")
+                }
+                .help("Open Time Travel at this story, showing only its own events")
+            }
+            Spacer(minLength: 8)
+            Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }
+                .help("Never alert again for \(story.originName) with these stages")
+            Button(role: .destructive) { stories.delete(story.id) } label: { Label("Delete", systemImage: "trash") }
+                .help("Remove this story from the list")
         }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
     }
 }
 

@@ -201,6 +201,10 @@ final class HUDModel: ObservableObject {
     var uiVisible = true {
         didSet { if uiVisible && !oldValue { flushUI() } }
     }
+    /// The activity window is on screen (not minimized, hidden or covered). Off, its pages hold what they last drew.
+    @Published var windowShown = true
+    /// The HUD's card and rows between redraws (HUDView).
+    let hudMemo = HUDMemo()
     private let decoder = JSONDecoder()
 
     private enum Keys {

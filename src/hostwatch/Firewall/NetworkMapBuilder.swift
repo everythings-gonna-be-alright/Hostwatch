@@ -205,7 +205,14 @@ enum NetworkMapBuilder {
                 && (!changed || $0.fresh)
         }
         let totalSent = out.reduce(Int64(0)) { $0 + $1.sent }
-        func wayOut(_ o: MapOutgoing) -> String { "way:" + Self.wayOut(o.ip, routes: input.routes) }
+        // Once per address: the route lookup is most of a build, and a busy map asks it for every connection, twice.
+        var wayFor: [String: String] = [:]
+        func wayOut(_ o: MapOutgoing) -> String {
+            if let w = wayFor[o.ip] { return w }
+            let w = "way:" + Self.wayOut(o.ip, routes: input.routes)
+            wayFor[o.ip] = w
+            return w
+        }
         // Ties by name: a dictionary's order changes on every redraw, and the list would jump.
         let byProgram = Dictionary(grouping: out, by: \.path).sorted { a, b in
             let na = a.value.reduce(0) { $0 + v($1) }, nb = b.value.reduce(0) { $0 + v($1) }

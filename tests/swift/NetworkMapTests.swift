@@ -670,3 +670,61 @@ import Testing
         #expect(g.columns[1].last?.nodes.map(\.ref) == ["/chrome"])
     }
 }
+
+/// The map's graphs are kept between redraws: nothing new means nothing rebuilt, and anything new shows at once.
+@Suite @MainActor struct MapGraphCache {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func net(_ proc: String, _ ip: String, _ host: String) -> ActivityEvent {
+        ActivityEvent(kind: .net, time: "", pid: 1, ppid: 1, name: (proc as NSString).lastPathComponent, proc: proc, target: ip + ":443",
+                      extra: "TCP", parent: "", host: host, hostSource: "dns")
+    }
+
+    func destinations(_ store: NetworkMapStore) -> [String] {
+        store.graph(outgoing: store.outgoingList(.hour, now: now), filter: .everything, range: .hour, now: now, interfaceName: { $0 })
+            .columns[3].flatMap(\.nodes).map(\.ref)
+    }
+
+    @Test func aNewConnectionShowsAtOnce() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34", "www.example.com"), blocked: false, now: now)
+        #expect(destinations(store) == ["example.com"])
+        #expect(destinations(store) == ["example.com"])                 // the same graph, from the cache
+        store.observeOutgoing(net("/usr/bin/ssh", "198.51.100.4", "git.example.org"), blocked: false, now: now)
+        #expect(Set(destinations(store)) == ["example.com", "example.org"])
+    }
+
+    @Test func aBlockShowsAtOnce() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.observeOutgoing(net("/usr/bin/curl", "198.51.100.4", ""), blocked: false, now: now)
+        let before = store.graph(outgoing: store.outgoingList(.hour, now: now), filter: .everything, range: .hour, now: now,
+                                 interfaceName: { $0 })
+        store.setBlocked(address: "198.51.100.4", true)
+        let after = store.graph(outgoing: store.outgoingList(.hour, now: now), filter: .everything, range: .hour, now: now,
+                                interfaceName: { $0 })
+        #expect(before != after)
+        #expect(after.columns[3].flatMap(\.nodes).first?.badge == .blocked)
+    }
+
+    @Test func aProgramsPatternsFollowItsConnections() {
+        let store = NetworkMapStore(fileURL: nil)
+        store.observeOutgoing(net("/usr/bin/curl", "93.184.216.34", "www.example.com"), blocked: false, now: now)
+        #expect(store.patternKeys(program: "/tmp/x").isEmpty)
+        let curl = store.patternKeys(program: "/usr/bin/curl")
+        store.observeOutgoing(net("/tmp/x", "198.51.100.9", "drop.example.net"), blocked: false, now: now)
+        #expect(!store.patternKeys(program: "/tmp/x").isEmpty)
+        #expect(store.patternKeys(program: "/usr/bin/curl") == curl)
+    }
+}
+
+/// Off screen, the map keeps what it last drew. Back on screen, it draws again.
+@Suite @MainActor struct MapKeptWhileHidden {
+    @Test func hiddenKeepsShownRemakes() {
+        let state = NetworkMapViewState()
+        #expect(state.kept(true, \.keptCounts) { (all: 3, new: 1) }.all == 3)
+        #expect(state.kept(false, \.keptCounts) { (all: 9, new: 9) }.all == 3)
+        #expect(state.kept(true, \.keptCounts) { (all: 9, new: 9) }.all == 9)
+        // Nothing kept yet: hidden still draws once.
+        #expect(state.kept(false, \.keptOutgoing) { [] } == [])
+    }
+}

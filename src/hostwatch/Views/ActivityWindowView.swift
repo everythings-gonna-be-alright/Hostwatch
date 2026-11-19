@@ -244,7 +244,8 @@ struct ActivityWindowView: View {
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) },
                                 openStories: { model.windowTab = 2 }, hud: actions,
-                                travelWindow: mapTraveling ? Self.mapWindow(travel) : nil)
+                                travelWindow: mapTraveling ? Self.mapWindow(travel) : nil,
+                                onScreen: model.windowShown && model.windowTab == 3)
             default: patternsAndProtection(.protection)
             }
     }
@@ -515,7 +516,8 @@ struct ActivityWindowView: View {
                 } else if traveling {
                     ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
                 } else {
-                    LiveShowFilter(feed: model.live, filter: $model.signatureFilter, counts: { liveDerived.counts })
+                    LiveShowFilter(feed: model.live, filter: $model.signatureFilter, shown: model.windowTab == 0 && model.windowShown,
+                                   counts: { liveDerived.counts })
                 }
                 groupingPicker(compact: compact)
                 if model.onlySession != nil {
@@ -676,6 +678,7 @@ struct ActivityWindowView: View {
         return VStack(spacing: 0) {
             EventsTable(rows: rows, version: derived.version,
                         feed: traveling ? nil : model.live, derive: traveling ? nil : { liveDerived },
+                        onScreen: model.windowTab == 0 && model.windowShown,
                         withDay: withDay, grouped: model.eventGrouping != .none,
                         selection: $model.eventSelection, sortOrder: $model.eventOrder,
                         flag: { intel.flag(for: $0) }, badge: { heavy.badge(for: $0) },
@@ -708,7 +711,7 @@ struct ActivityWindowView: View {
                     EventCountText(shown: Self.eventCount(rows), total: travel.listed.count, restored: 0, filtering: searchFiltering,
                                    always: true)
                 } else {
-                    LiveEventCount(feed: model.live, filtering: searchFiltering) {
+                    LiveEventCount(feed: model.live, filtering: searchFiltering, shown: model.windowTab == 0 && model.windowShown) {
                         // Restored events are the oldest: those still listed are what live arrivals haven't pushed out.
                         (Self.eventCount(liveDerived.rows), model.history.count,
                          max(0, min(model.restoredCount, model.history.count - model.live.arrived)))
@@ -774,11 +777,15 @@ private struct EventCountText: View {
 private struct LiveEventCount: View {
     @ObservedObject var feed: LiveFeed
     let filtering: Bool
+    /// Whether the Events tab is on screen: hidden, counting rebuilt the Events rows for every batch.
+    let shown: Bool
     let numbers: () -> (shown: Int, total: Int, restored: Int)
 
     var body: some View {
-        let n = numbers()
-        EventCountText(shown: n.shown, total: n.total, restored: n.restored, filtering: filtering)
+        if shown {
+            let n = numbers()
+            EventCountText(shown: n.shown, total: n.total, restored: n.restored, filtering: filtering)
+        }
     }
 }
 
@@ -817,9 +824,12 @@ private struct KindFilters: View {
 private struct LiveShowFilter: View {
     @ObservedObject var feed: LiveFeed
     @Binding var filter: SignatureFilter
+    /// Whether the Events tab is on screen. Hidden, it still hears every event (it observes the feed itself), and
+    /// counting rebuilt the Events rows for each one, under whatever tab you were on.
+    let shown: Bool
     let counts: () -> [SignatureFilter: Int]
 
-    var body: some View { ShowFilterPicker(filter: $filter, counts: counts()) }
+    var body: some View { ShowFilterPicker(filter: $filter, counts: shown ? counts() : [:]) }
 }
 
 /// A tab that isn't shown skips the window's updates: every tab stays alive in the strip, and the window's body runs
