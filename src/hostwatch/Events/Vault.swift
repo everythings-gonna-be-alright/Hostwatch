@@ -33,9 +33,10 @@ final class Vault: @unchecked Sendable {
 
     private static let magic = Data("HWV1".utf8)
     private static let lineMagic = "HWV1:"
-    static let keychainService = "tech.hostwatch.vault"
+    // Variables only so a test can use names of its own: a test must never reach the real key.
+    nonisolated(unsafe) static var keychainService = "tech.hostwatch.vault"
     static let keychainAccount = "data-key"
-    static let enclaveTag = Data("tech.hostwatch.vault.enclave".utf8)
+    nonisolated(unsafe) static var enclaveTag = Data("tech.hostwatch.vault.enclave".utf8)
     static let wrappedKeyFile = "vault.key"
 
     enum Backend: String { case enclave = "Secure Enclave", keychain = "keychain", memory = "in memory", none = "none" }
@@ -46,6 +47,8 @@ final class Vault: @unchecked Sendable {
     private(set) var backend: Backend = .none
     /// Why there is no key (shown in Settings when something is wrong).
     private(set) var problem: String?
+    /// A key exists that this build can't open: nothing is read or written.
+    private var locked = false
     /// Where `vault.key` lives (the support folder); tests point it elsewhere.
     var directory: URL
 
@@ -89,6 +92,14 @@ final class Vault: @unchecked Sendable {
         try seal(data).write(to: url, options: options)
     }
 
+    /// A file written before sealing (or by a build without a key): readable as it is, worth sealing on the next save.
+    static func isPlainFile(_ url: URL) -> Bool {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? h.close() }
+        let head = (try? h.read(upToCount: magic.count)) ?? Data()
+        return !head.isEmpty && head != magic
+    }
+
     func read(_ url: URL) -> Data? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return open(data)
@@ -114,7 +125,7 @@ final class Vault: @unchecked Sendable {
 
     var isSealed: Bool { currentKey() != nil }
     /// A key exists that this app can't use: nothing must be written (it would overwrite sealed files with plain).
-    var isLocked: Bool { currentKey() == nil && problem?.contains("didn't let this app read it") == true }
+    var isLocked: Bool { currentKey() == nil && (locked || problem?.contains("didn't let this app read it") == true) }
 
     // MARK: The key
 
@@ -128,10 +139,28 @@ final class Vault: @unchecked Sendable {
         // 1. The Enclave-wrapped key on disk.
         let wrapped = directory.appendingPathComponent(Self.wrappedKeyFile)
         if let blob = try? Data(contentsOf: wrapped) {
-            if let privateKey = Self.enclaveKey(create: false), let data = Self.unwrap(blob, with: privateKey) {
-                key = SymmetricKey(data: data); backend = .enclave; return
+            // Every key with the tag: more than one can exist (a build with another keychain identity made its own).
+            // Tried a few times: opening it with the Enclave can fail once and work a moment later (seen right after a
+            // rebuild), and that one failure used to make a new key over the data.
+            for attempt in 0..<4 {
+                if attempt > 0 { Thread.sleep(forTimeInterval: 0.25) }
+                for privateKey in Self.enclaveKeys() {
+                    if let data = Self.unwrap(blob, with: privateKey) { key = SymmetricKey(data: data); backend = .enclave; return }
+                }
             }
-            problem = "The Secure Enclave key for Hostwatch's data is gone (vault.key can't be opened)."
+            // Never a new key over it: the old one may come back (another build, a keychain that wasn't ready), and a new
+            // vault.key would make every sealed file unreadable for good. A keychain key that works (one a build with
+            // another keychain identity made) is used instead, and this vault.key is kept beside it, never deleted.
+            if Self.keychainRead() != nil {
+                let aside = directory.appendingPathComponent("vault.key.unopened-\(Int(Date().timeIntervalSince1970))")
+                if (try? FileManager.default.moveItem(at: wrapped, to: aside)) == nil {
+                    key = Self.keychainRead().map { SymmetricKey(data: $0) }; backend = .keychain; return
+                }
+            } else {
+                problem = "Hostwatch's data key (vault.key) can't be opened by this build of Hostwatch, so it opens nothing and writes nothing. Your data is untouched."
+                locked = true
+                return
+            }
         }
         // 2. The keychain item (a Mac without an Enclave, or earlier versions). With an Enclave at hand the key moves
         //    into it: wrapped into vault.key, then the keychain item goes (a password alone no longer opens the data).
@@ -230,7 +259,9 @@ final class Vault: @unchecked Sendable {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// Adds the item with an access list of one: this application (its code, by designated requirement).
+    /// Adds the item with an access list of one: this application (its code, by designated requirement). The two
+    /// calls are deprecated (the file keychain), and stay: it holds the data key wherever the Secure Enclave can't
+    /// (every build signed without an application identifier), and its warnings are the build's only ones.
     private static func keychainWrite(_ data: Data) -> Bool {
         var trusted: SecTrustedApplication?
         guard SecTrustedApplicationCreateFromPath(nil, &trusted) == errSecSuccess, let trusted else { return false }
@@ -253,5 +284,55 @@ final class Vault: @unchecked Sendable {
             status = SecItemAdd(attributes as CFDictionary, nil)
         }
         return status == errSecSuccess
+    }
+}
+
+// MARK: Diagnosis
+
+extension Vault {
+    /// Every Secure Enclave key with the vault's tag this build can see, in both keychains macOS has.
+    static func enclaveKeys() -> [SecKey] {
+        var out: [SecKey] = []
+        for dataProtection in [false, true] {
+            var query: [String: Any] = [kSecClass as String: kSecClassKey,
+                                        kSecAttrApplicationTag as String: enclaveTag,
+                                        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+                                        kSecReturnRef as String: true,
+                                        kSecMatchLimit as String: kSecMatchLimitAll]
+            if dataProtection { query[kSecUseDataProtectionKeychain as String] = true }
+            var items: CFTypeRef?
+            if SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess, let refs = items as? [SecKey] {
+                for r in refs where !out.contains(where: { CFEqual($0, r) }) { out.append(r) }
+            }
+        }
+        return out
+    }
+
+    /// What this build sees of the data key, without creating or changing anything (`--vault-probe`).
+    static func probe(directory: URL = AppPaths.support) -> String {
+        var lines: [String] = []
+        let blob = try? Data(contentsOf: directory.appendingPathComponent(wrappedKeyFile))
+        lines.append("vault.key: \(blob.map { "\($0.count) bytes" } ?? "missing")")
+        for dataProtection in [false, true] {
+            var query: [String: Any] = [kSecClass as String: kSecClassKey,
+                                        kSecAttrApplicationTag as String: enclaveTag,
+                                        kSecReturnAttributes as String: true,
+                                        kSecMatchLimit as String: kSecMatchLimitAll]
+            if dataProtection { query[kSecUseDataProtectionKeychain as String] = true }
+            var items: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &items)
+            let groups = (items as? [[String: Any]] ?? []).map { ($0[kSecAttrAccessGroup as String] as? String ?? "?").replacingOccurrences(of: #"^[A-Z0-9]{10}\."#, with: "TEAM.", options: .regularExpression) }
+            lines.append("enclave keys (\(dataProtection ? "data protection keychain" : "default search")): status \(status), \(groups.count) \(groups)")
+        }
+        let keys = enclaveKeys()
+        let opens = blob.map { b in keys.filter { unwrap(b, with: $0) != nil }.count } ?? 0
+        lines.append("keys seen: \(keys.count), opening vault.key: \(opens)")
+        if let b = blob { for k in keys {
+            var error: Unmanaged<CFError>?
+            let ok = SecKeyCreateDecryptedData(k, algorithm, b as CFData, &error) != nil
+            lines.append("  unwrap: \(ok ? "ok" : String(describing: error?.takeRetainedValue()))")
+        } }
+        lines.append("keychain item: \(keychainItemExists() ? (keychainRead() != nil ? "exists, opens" : "exists, can't be read") : "none")")
+        return lines.joined(separator: "\n")
     }
 }

@@ -163,7 +163,7 @@ extension Agent {
         var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
         guard getnameinfo(info.pointee.ai_addr, info.pointee.ai_addrlen, &host, socklen_t(host.count), nil, 0,
                           NI_NAMEREQD) == 0 else { return "" }
-        var name = String(cString: host).lowercased()
+        var name = String(cBuffer: host).lowercased()
         while name.hasSuffix(".") { name.removeLast() }
         return name
     }
@@ -484,24 +484,28 @@ extension Agent {
 /// owner app: the console user's Hostwatch may connect (whoever is at the Mac), and a shutdown request is ignored
 /// (launchd keeps the service alive; the app unregisters it to stop it).
 func runCollectorAgent(_ args: [String]) -> Never {
-    var noFiles = false, noNet = false, netInterval = 1.0, socketPath = CollectorSocket.path
-    var ownerPid = 0, tokenFile = "", daemon = false
-    var i = 0
-    while i < args.count {
-        let a = args[i]
-        func value() -> String { i += 1; return i < args.count ? args[i] : "" }
-        switch a {
-        case "--no-files": noFiles = true
-        case "--no-net": noNet = true
-        case "--net-interval": netInterval = Double(value()) ?? 1
-        case "--socket": socketPath = value()
-        case "--owner-pid": ownerPid = Int(value()) ?? 0
-        case "--token-file": tokenFile = value()
-        case "--daemon": daemon = true
-        default: Agent.logError("unknown option \(a)"); exit(64)
+    // Parsed once into constants: the threads below read them.
+    let (noFiles, noNet, netInterval, socketPath, ownerPid, tokenFile, daemon) = { () -> (Bool, Bool, Double, String, Int, String, Bool) in
+        var noFiles = false, noNet = false, netInterval = 1.0, socketPath = CollectorSocket.path
+        var ownerPid = 0, tokenFile = "", daemon = false
+        var i = 0
+        while i < args.count {
+            let a = args[i]
+            func value() -> String { i += 1; return i < args.count ? args[i] : "" }
+            switch a {
+            case "--no-files": noFiles = true
+            case "--no-net": noNet = true
+            case "--net-interval": netInterval = Double(value()) ?? 1
+            case "--socket": socketPath = value()
+            case "--owner-pid": ownerPid = Int(value()) ?? 0
+            case "--token-file": tokenFile = value()
+            case "--daemon": daemon = true
+            default: Agent.logError("unknown option \(a)"); exit(64)
+            }
+            i += 1
         }
-        i += 1
-    }
+        return (noFiles, noNet, netInterval, socketPath, ownerPid, tokenFile, daemon)
+    }()
     signal(SIGPIPE, SIG_IGN)
     let agent = Agent()
     agent.daemon = daemon
@@ -585,10 +589,34 @@ func runCollectorAgent(_ args: [String]) -> Never {
         signalSources.append(source)
     }
 
-    // eslogger runs while there is someone to tell; a service without a client stops it and waits.
+    // The source runs while there is someone to tell; a service without a client stops it and waits.
+    // Endpoint Security directly when this build is entitled (ADR 0018), eslogger otherwise.
+    var nativeES = true
     while !agent.isStopped {
         if daemon, agent.idle || agent.clientCount == 0 {
             guard agent.waitForClient() else { break }
+        }
+        if nativeES {
+            switch ESSource.start(events: events, handler: { raw in
+                guard !agent.isStopped, !agent.idle, let ev = agent.normalize(raw) else { return }
+                agent.publish(ev)
+            }) {
+            case .success(let source):
+                Agent.log("Endpoint Security client: \(events.joined(separator: " ")) (no eslogger)")
+                agent.guardian.setEndpointSecurity("available")
+                while !agent.isStopped && !agent.idle { _ = agent.wait(1) }
+                source.stop()
+                Agent.log("Endpoint Security client stopped")
+                if !daemon { break }
+                continue
+            case .failure(let why):
+                // Not entitled stays so: eslogger from now on. Anything else (Full Disk Access not granted yet)
+                // is tried again next time, after eslogger has run into it and the app has said so.
+                Agent.log("Endpoint Security client unavailable (\(why.text)): using eslogger")
+                if why == .notEntitled { nativeES = false }
+                agent.guardian.setEndpointSecurity(why == .notEntitled ? "not_entitled" : why == .notPermitted ? "not_permitted" : "failed",
+                                                   detail: why.text)
+            }
         }
         let eslogger: Spawned
         do {

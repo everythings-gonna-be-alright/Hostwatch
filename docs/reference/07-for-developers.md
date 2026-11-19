@@ -125,7 +125,11 @@ bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
 
 ### Prototype notes
 
-The collector reads Apple's `eslogger`, which Apple documents as a tool for exploring and prototyping, not an
-application API. Its output may change without notice. A production version would use a signed Endpoint Security
-system extension (it needs Apple's `com.apple.developer.endpoint-security.client` entitlement) and a Network
-Extension for connections, talking to the app over XPC. Don't disable SIP as a way around this.
+The collector is an Endpoint Security client in the root service (ADR 0018). Only the collector is entitled: it runs
+from its own bundle inside the app (`Contents/Library/Helpers/Hostwatch Collector.app`, `tech.hostwatch.collector`),
+and the app keeps the signature it always had, so its keychain identity and data key never change. Apple grants the
+`com.apple.developer.endpoint-security.client` entitlement per team, through a Developer ID provisioning profile for
+`tech.hostwatch.collector` that `build-app.sh` embeds when it finds one (`HOSTWATCH_COLLECTOR_PROFILE`, or
+`~/.hostwatch-signing/HostwatchCollector.provisionprofile`). Without the profile there is no helper, and the collector
+falls back to Apple's `eslogger`, a tool Apple documents for exploring and prototyping, whose output may change.
+Don't disable SIP as a way around this.

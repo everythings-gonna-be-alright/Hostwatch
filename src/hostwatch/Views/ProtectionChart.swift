@@ -103,7 +103,7 @@ struct ProtectionChart: View {
     }
 
     /// "05:00", "Tuesday 10" or "Nov 10": how a bucket is named in the readout and to VoiceOver.
-    static func label(_ start: Date, _ range: ProtectionTimeline.Range) -> String {
+    nonisolated static func label(_ start: Date, _ range: ProtectionTimeline.Range) -> String {
         switch range {
         case .day: start.formatted(.dateTime.hour().minute())
         case .week: start.formatted(.dateTime.weekday(.wide).day())

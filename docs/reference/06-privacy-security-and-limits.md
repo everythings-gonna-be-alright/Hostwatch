@@ -90,7 +90,7 @@ Unix socket is a local file-like connection point that only processes on this Ma
     exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
 - **A service with no client does nothing.** When the app isn't connected for 15 seconds, the background service
-  stops `eslogger` and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits. The
+  stops its Endpoint Security client and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits. The
   next connection starts them again. It also notices when an update replaced the app and restarts itself as the
   new version.
 - **The app checks too:** it connects only when the socket is a socket owned by you, mode 0600, not a link, and in a
@@ -123,7 +123,9 @@ History shows a masked secret as `***`. AI prompts show `[REDACTED]`.
 
 - **Network:** to find connections, the collector runs `tcpdump` as root. It reads only DNS answers and TCP SYN
   headers, no payloads. It also reads macOS's connection statistics, read-only. Nothing is captured to disk.
-- **Processes and files:** `eslogger` is a notify-only observer. It cannot deny execution.
+- **Processes and files:** in Ask and Strict, the collector holds a launch, or an open in a protected place, until
+  you or your rules answer, and denies what's blocked before it happens (see Protection). In Watch and Off it only
+  listens.
 
 ### Reset Hostwatch
 
@@ -169,5 +171,5 @@ Full Disk Access stays granted.
 - **Unconnected UDP:** UDP sent without connecting (`sendto`) has no destination to show.
 - **Listening sockets:** they aren't connections.
 - **File opens:** they are high volume. The rate cap drops excess file events, so add exclusions for noisy apps.
-- **New macOS releases:** Hostwatch reads macOS's event monitor (`eslogger`), whose output can change between macOS
-  releases and may need a Hostwatch update.
+- **Builds without the entitlement:** a build you make yourself reads macOS's event monitor (`eslogger`), whose
+  output can change between macOS releases and may need a Hostwatch update.

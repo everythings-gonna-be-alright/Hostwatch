@@ -11,8 +11,11 @@ func runCollectorLauncher(_ args: [String]) -> Never {
         FileHandle.standardError.write(Data("collector launcher: missing program\n".utf8))
         exit(64)
     }
-    // From the bundled LaunchDaemon: the program is this very binary, wherever the app lives.
-    if program == "self" { program = Bundle.main.executablePath ?? CommandLine.arguments[0] }
+    // From the bundled LaunchDaemon: the program is this very binary, wherever the app lives, or the entitled collector
+    // inside it (Endpoint Security). Either way this launcher, the app's own binary, stays the responsible process.
+    if program == "self" {
+        program = AppPaths.entitledCollector(in: Bundle.main.bundleURL) ?? Bundle.main.executablePath ?? CommandLine.arguments[0]
+    }
     let child = Process()
     child.executableURL = URL(fileURLWithPath: program)
     child.arguments = Array(args.dropFirst())

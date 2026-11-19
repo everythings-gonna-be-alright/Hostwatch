@@ -623,9 +623,9 @@ final class StoryEngine: ObservableObject {
     private static func base(_ path: String) -> String { (path as NSString).lastPathComponent }
 
     /// This app's bundle; HOSTWATCH_OWN_BUNDLE lets replays recognise the installed app.
-    private static let ownBundle = (AppPaths.developerOverride("HOSTWATCH_OWN_BUNDLE")
+    nonisolated private static let ownBundle = (AppPaths.developerOverride("HOSTWATCH_OWN_BUNDLE")
                                     ?? Bundle.main.bundlePath) + "/"
-    static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
+    nonisolated static func isOwn(_ path: String) -> Bool { !path.isEmpty && path.hasPrefix(ownBundle) }
 
     private func stages(for e: ActivityEvent) -> [(StoryStage, String)] {
         var out: [(StoryStage, String)] = []
@@ -766,7 +766,7 @@ final class StoryEngine: ObservableObject {
         guard pid > 0, proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         var buf = [CChar](repeating: 0, count: 4096)
         let n = proc_pidpath(Int32(pid), &buf, UInt32(buf.count))
-        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cString: buf) : "", seen: Date(),
+        let p = Proc(ppid: Int(info.pbi_ppid), path: n > 0 ? String(cBuffer: buf) : "", seen: Date(),
                      start: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
         procs[pid] = p
         return p

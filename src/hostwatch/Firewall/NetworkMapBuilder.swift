@@ -239,7 +239,7 @@ enum NetworkMapBuilder {
                 let blocked = input.blockedPrograms.contains(path)
                 return MapNode(id: "prog:" + path, kind: .program, title: list[0].program, count: list.reduce(0) { $0 + v($1) },
                                badge: blocked ? .blocked : input.now.timeIntervalSince(first) < NetworkMapPolicy.newFor ? .new : nil,
-                               ref: path, bytes: bytes)
+                               ref: path, bytes: bytes, ports: list.flatMap(\.ports))
             }
             graph.columns[1].append(MapSection(key: "programs", title: "Programs going out", nodes: programs,
                                                more: max(0, candidates.count - programs.count), moreNoun: "programs"))
@@ -278,7 +278,9 @@ enum NetworkMapBuilder {
                 return MapNode(id: "dst:" + d.group, kind: .destination,
                                title: isLocal ? (device?.mac == gatewayMAC ? "Router" : device?.title ?? "Device on your network") : d.group,
                                subtitle: isLocal ? d.group : "", dataSubtitle: isLocal, count: d.n,
-                               badge: blocked ? .blocked : d.isNew ? .new : nil, ref: d.group, symbol: device?.symbol, bytes: bytes)
+                               badge: blocked ? .blocked : d.isNew ? .new : nil, ref: d.group, symbol: device?.symbol, bytes: bytes,
+                               tags: Self.trafficTags((byDestination[d.group] ?? []).flatMap(\.ports)),
+                               ports: (byDestination[d.group] ?? []).flatMap(\.ports))
             }, more: max(0, (focusDests ? focusGroups.count : ranked.count) - shownDest.count), moreNoun: "destinations"))
             let shownPrograms = Set(programs.map(\.id)), shownDests = Set(shownDest.map { "dst:" + $0.group })
             var ways: [String] = []
@@ -322,5 +324,29 @@ enum NetworkMapBuilder {
         } ?? input.range.phrase
         graph.summary = parts.isEmpty ? "" : "\(when)\(changed ? ", what changed" : ""): " + parts.joined(separator: " ")
         return graph
+    }
+}
+
+extension NetworkMapBuilder {
+    /// A destination's traffic as tags: the kinds its ports usually carry ("HTTPS", "DNS"), the well-known first, at
+    /// most `shown` and a "+2" for the rest; an unknown port as ":9000". Empty when no port is known. Pure.
+    static func trafficTags(_ ports: [Int], shown: Int = 3) -> [String] {
+        let sorted = Array(Set(ports)).sorted { a, b in (a < 1024 ? 0 : 1, a) < (b < 1024 ? 0 : 1, b) }
+        var tags: [String] = []
+        for p in sorted {
+            // A port the system picked at random (49152 and up, the reply side of a connection) says nothing about
+            // the traffic: left out unless it has a name.
+            guard let tag = PortNames.name(p) ?? (p < 49152 ? ":\(p)" : nil) else { continue }
+            if !tags.contains(tag) { tags.append(tag) }
+        }
+        return tags.count > shown ? Array(tags.prefix(shown)) + ["+\(tags.count - shown)"] : tags
+    }
+
+    /// "80 HTTP, 443 HTTPS, 5228 Google Push, 9000": the ports connections went to, the well-known first, each with
+    /// what usually speaks on it when that's known; "" when none is known (connections recorded before ports were
+    /// kept). For a destination's and a program's details. Pure.
+    static func portsList(_ ports: [Int]) -> String {
+        Array(Set(ports)).sorted { a, b in (a < 1024 ? 0 : 1, a) < (b < 1024 ? 0 : 1, b) }
+            .map { p in PortNames.name(p).map { "\(p) \($0)" } ?? String(p) }.joined(separator: ", ")
     }
 }

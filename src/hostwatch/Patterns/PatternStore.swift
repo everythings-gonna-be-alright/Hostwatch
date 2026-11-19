@@ -880,7 +880,7 @@ final class SignatureStore: ObservableObject {
         dirty = false
         statsDirty = false
         let url = fileURL, journal = journalURL
-        let write: () -> Void
+        let write: @Sendable () -> Void          // runs on the writer queue: only copies cross over
         if full {
             generation += 1
             let snap = Snapshot(entries: Array(entries.values), processRules: Array(processRules.values),

@@ -61,38 +61,18 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.19.0**
+- **🛡️ Stopped before it happens** – with Apple's Endpoint Security, a blocked program never starts and a blocked
+  file is never read. Your shell simply waits for your answer.
+- **🗺️ A clearer network map** – ports and the kind of traffic for every destination, in Liquid Glass.
+- **⚡ Smoother and safer** – smooth Running Now charts, quicker tabs, and Hostwatch built in Swift 6.
+
 **0.18.0**
 - **👋 A welcome tour** – seven short pages, with the choices that matter on day one: which AI helps (Haiku when you
   pick Claude), the learning day or none, login, threat lists and updates.
 - **🛡️ Fewer questions** – the Claude Code guard asks about two thirds less, Hostwatch's own AI calls aren't stopped,
   and a connection can be answered once.
 - **⚡ Quicker tabs** and calmer windows in the Liquid Glass style.
-
-**0.17.1**
-- **🩹 Steadier with Claude Code** – resuming a Claude session (`claude --resume`) no longer quits Hostwatch.
-
-**0.17.0**
-- **🗺️ A network map** – who reaches this Mac, what listens and goes out, the way out (router or VPN) and where it
-  goes. Every device named by its maker and model, a selection follows its whole flow, and Time Travel replays it.
-- **📤 Upload watch** – how much each program sends and where, and a story when 100 MB leaves in an hour for
-  somewhere new.
-- **☕ Networks you trust** – on a café's Wi-Fi other machines can't reach your dev servers and the firewall asks.
-  Home and work are told apart by their routers.
-- **🚫 Block from the map** – a device, an address, a port, a program or a domain, red at once and listed in
-  Protection ▸ Network.
-
-**0.16.0**
-- **📚 A learning day** – for its first 24 hours Hostwatch learns what's typical on your Mac, so on day two only a
-  handful of patterns need you. Shells, your secrets and anything unsigned are never learned.
-- **🤖 AI checks first** – with Protection on Ask, a program Hostwatch doesn't know is checked by your AI before you're
-  asked. A sure Safe goes on this time, with a glass notice. Otherwise the question shows the AI's conclusion, and
-  *Block Once* joins *Allow Once*. Shells and your secrets stay yours to decide.
-- **🛡️ Protection in its own tab** – places and network destinations decided the same way (any other program: ask,
-  allow or block, plus programs you always allow or always block), charts on one honest scale, and a Found list that
-  clears itself.
-- **🗂️ Patterns that fit** – two-line rows, a sidebar that folds to icons, and a menu bar with every security switch.
-- **🚫 Fixes** – pausing the list no longer pauses detection, a pause your terminal doesn't notice, one question at a
-  time, and one malicious file no longer flags all of GitHub or Telegram.
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 

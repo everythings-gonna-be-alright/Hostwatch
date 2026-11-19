@@ -84,3 +84,26 @@ import Testing
         #expect(ResourceGaps.find([], from: t0, cadence: 5).isEmpty)
     }
 }
+
+/// The 30-minute charts draw buckets, not every sample, and hovering finds a moment by binary search.
+@Suite struct ResourceThinning {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func bucketsAverageAndKeepTheNewestDate() {
+        let rows = (0..<6).map { i in (date: t0.addingTimeInterval(Double(i) * 5), total: Double(i), parts: ["a": Double(i) * 2]) }
+        let thin = ResourceSeries.thin(rows, bucket: 15)
+        #expect(thin.count == 2)
+        #expect(thin[0].date == t0.addingTimeInterval(10) && thin[0].total == 1 && thin[0].parts["a"] == 2)
+        #expect(thin[1].date == t0.addingTimeInterval(25) && thin[1].total == 4)
+        #expect(ResourceSeries.thin(rows, bucket: 0).count == 6)
+    }
+
+    @Test func nearestFindsTheClosestPoint() {
+        let points = (0..<10).map { ResourcePoint(date: t0.addingTimeInterval(Double($0) * 5), series: "a", value: Double($0)) }
+        #expect(ResourceSeries.nearest(points, t0.addingTimeInterval(12)) == 2)
+        #expect(ResourceSeries.nearest(points, t0.addingTimeInterval(13)) == 3)
+        #expect(ResourceSeries.nearest(points, t0.addingTimeInterval(-100)) == 0)
+        #expect(ResourceSeries.nearest(points, t0.addingTimeInterval(1000)) == 9)
+        #expect(ResourceSeries.nearest([], t0) == nil)
+    }
+}

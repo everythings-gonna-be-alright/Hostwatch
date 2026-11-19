@@ -119,6 +119,43 @@ enum ResourceSeries {
         }
     }
 
+    /// Rows averaged into buckets of `bucket` seconds, each dated by its newest row: a 30-minute chart needs about a
+    /// hundred points across, not one every 5 seconds (360 per program, thousands of marks per chart, and every one
+    /// laid out again on each update). Rows already further apart than `bucket` pass unchanged.
+    static func thin(_ rows: [(date: Date, total: Double, parts: [String: Double])],
+                     bucket: TimeInterval) -> [(date: Date, total: Double, parts: [String: Double])] {
+        guard bucket > 0, rows.count > 1 else { return rows }
+        var out: [(date: Date, total: Double, parts: [String: Double])] = []
+        var key = Int.min, count = 0.0
+        var acc: (date: Date, total: Double, parts: [String: Double]) = (Date.distantPast, 0, [:])
+        func flush() {
+            guard count > 0 else { return }
+            out.append((acc.date, acc.total / count, acc.parts.mapValues { $0 / count }))
+        }
+        for r in rows {
+            let k = Int((r.date.timeIntervalSince1970 / bucket).rounded(.down))
+            if k != key { flush(); key = k; count = 0; acc = (r.date, 0, [:]) }
+            count += 1
+            acc.date = r.date
+            acc.total += r.total
+            for (name, v) in r.parts { acc.parts[name, default: 0] += v }
+        }
+        flush()
+        return out
+    }
+
+    /// The index of the point nearest `date` in points sorted by date (binary search: hovering reads every series).
+    static func nearest(_ points: [ResourcePoint], _ date: Date) -> Int? {
+        guard !points.isEmpty else { return nil }
+        var lo = 0, hi = points.count - 1
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if points[mid].date < date { lo = mid + 1 } else { hi = mid }
+        }
+        if lo > 0, abs(points[lo - 1].date.timeIntervalSince(date)) <= abs(points[lo].date.timeIntervalSince(date)) { return lo - 1 }
+        return lo
+    }
+
     /// One collector traffic report as [received, sent] per program over `seconds`: the ten busiest by both
     /// together, the rest as Other.
     static func traffic(_ report: [NetTraffic], seconds: Double, limit: Int = 10) -> [String: [Double]] {

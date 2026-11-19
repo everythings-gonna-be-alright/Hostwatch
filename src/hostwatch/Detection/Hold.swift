@@ -19,7 +19,7 @@ struct ProcessFacts: Equatable {
         guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
         let n = proc_pidpath(pid, &buf, UInt32(buf.count))
-        return ProcessFacts(uid: info.pbi_uid, path: n > 0 ? String(cString: buf) : "")
+        return ProcessFacts(uid: info.pbi_uid, path: n > 0 ? String(cBuffer: buf) : "")
     }
 }
 

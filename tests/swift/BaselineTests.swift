@@ -18,7 +18,7 @@ import Testing
     }
 
     /// Fake signing facts: Apple binaries and Slack are trusted; "signed" is signed but not trusted.
-    func identify(_ path: String) -> (identity: CodeIdentity?, trusted: Bool) {
+    nonisolated func identify(_ path: String) -> (identity: CodeIdentity?, trusted: Bool) {
         if path.hasPrefix("/usr/") || path.hasPrefix("/bin/") || path.hasPrefix("/System/") {
             return (CodeIdentity(signed: true, apple: true), true)
         }

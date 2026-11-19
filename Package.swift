@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import Foundation
 import PackageDescription
 
@@ -15,7 +15,8 @@ let package = Package(
         .executable(name: "Hostwatch", targets: ["Hostwatch"])
     ],
     targets: [
-        .executableTarget(name: "Hostwatch", path: "src/hostwatch"),
+        .executableTarget(name: "Hostwatch", path: "src/hostwatch",
+                          linkerSettings: [.linkedLibrary("EndpointSecurity")]),
         .testTarget(name: "HostwatchTests", dependencies: ["Hostwatch"], path: "tests/swift",
                     swiftSettings: testSettings),
     ]

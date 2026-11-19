@@ -105,6 +105,6 @@ enum MCPAccess {
     private static func parentProgram() -> String {
         var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
         let n = proc_pidpath(getppid(), &buf, UInt32(buf.count))
-        return n > 0 ? String(cString: buf) : "pid \(getppid())"
+        return n > 0 ? String(cBuffer: buf) : "pid \(getppid())"
     }
 }

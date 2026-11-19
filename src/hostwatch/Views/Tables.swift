@@ -152,7 +152,7 @@ struct PatternItem: Identifiable, @unchecked Sendable {
         }
     }
 
-    static let sortColumns: [String: (SortOrder) -> KeyPathComparator<PatternItem>] = [
+    static let sortColumns: [String: @Sendable (SortOrder) -> KeyPathComparator<PatternItem>] = [
         "status": { KeyPathComparator(\.priority, order: $0) },
         "kind": { KeyPathComparator(\.kind, order: $0) },
         "process": { KeyPathComparator(\.processName, order: $0) },
@@ -252,8 +252,9 @@ final class PatternListModel: ObservableObject {
         built = true
         let order = store.patternOrder, group = store.groupByProcess
         let sessions = store.groupBySession ? sessionGroups() : []
-        var input = store.patternInput(filter: filter)                       // copies only: the main thread's share
-        input.alwaysListed = Set(sessions.flatMap(\.keys))
+        var prepared = store.patternInput(filter: filter)                    // copies only: the main thread's share
+        prepared.alwaysListed = Set(sessions.flatMap(\.keys))
+        let input = prepared                                                 // the background works on a constant
         generation += 1
         let g = generation
         let work: @Sendable () -> (rows: [PatternItem], shown: Int, counts: PatternCounts) = {
@@ -314,7 +315,7 @@ struct EventItem: Identifiable {
     var parentName: String { (event.parent as NSString).lastPathComponent }
     var detail: String { event.fullDetail }
 
-    static let sortColumns: [String: (SortOrder) -> KeyPathComparator<EventItem>] = [
+    static let sortColumns: [String: @Sendable (SortOrder) -> KeyPathComparator<EventItem>] = [
         "time": { KeyPathComparator(\.seq, order: $0) },
         "kind": { KeyPathComparator(\.kind, order: $0) },
         "status": { KeyPathComparator(\.statusRank, order: $0) },
@@ -391,7 +392,7 @@ enum EventGrouping: String, CaseIterable {
 
 /// Remembers a table's primary sort column and direction in UserDefaults ("count:desc").
 enum SortMemory {
-    static func load<Row>(key: String, columns: [String: (SortOrder) -> KeyPathComparator<Row>],
+    static func load<Row>(key: String, columns: [String: @Sendable (SortOrder) -> KeyPathComparator<Row>],
                           fallback: KeyPathComparator<Row>) -> [KeyPathComparator<Row>] {
         guard let saved = UserDefaults.standard.string(forKey: key) else { return [fallback] }
         let parts = saved.split(separator: ":").map(String.init)
@@ -400,7 +401,7 @@ enum SortMemory {
     }
 
     static func save<Row>(_ order: [KeyPathComparator<Row>], key: String,
-                          columns: [String: (SortOrder) -> KeyPathComparator<Row>]) {
+                          columns: [String: @Sendable (SortOrder) -> KeyPathComparator<Row>]) {
         guard let first = order.first,
               let name = columns.first(where: { $0.value(.forward).keyPath == first.keyPath })?.key else { return }
         UserDefaults.standard.set("\(name):\(first.order == .reverse ? "desc" : "asc")", forKey: key)

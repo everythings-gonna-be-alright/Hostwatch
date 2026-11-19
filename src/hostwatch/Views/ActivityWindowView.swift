@@ -153,7 +153,8 @@ struct ActivityWindowView: View {
                 let index = CGFloat(tabs.firstIndex(of: model.windowTab) ?? 0)
                 HStack(spacing: 0) {
                     ForEach(tabs, id: \.self) { tab in
-                        tabContent(tab)
+                        HiddenTabGate(shown: model.windowTab == tab) { tabContent(tab) }
+                            .equatable()
                             .frame(width: geo.size.width, height: geo.size.height)
                             .allowsHitTesting(model.windowTab == tab)
                             .accessibilityHidden(model.windowTab != tab)
@@ -177,8 +178,8 @@ struct ActivityWindowView: View {
         .frame(minWidth: 1240, minHeight: 720)     // the toolbar (window controls, five tabs, title, buttons, search) fits whole from here; every page adapts above it
         // The Patterns rows are ready before the tab is opened.
         .onAppear {
-            patternList.sessionGroups = { [weak model] in
-                (model?.sessions.sessions ?? []).map { .init(id: $0.id, name: $0.topic, keys: $0.keys, live: $0.isLive, agent: $0.agent, facts: $0.groupFacts) }
+            patternList.sessionGroups = { [weak sessions = model.sessions] in
+                (sessions?.sessions ?? []).map { .init(id: $0.id, name: $0.topic, keys: $0.keys, live: $0.isLive, agent: $0.agent, facts: $0.groupFacts) }
             }
             if !patternList.built { patternList.build(signatures, filter: model.signatureFilter) }
         }
@@ -368,14 +369,14 @@ struct ActivityWindowView: View {
         return [
             .init(id: 0, title: "Events", symbol: "list.bullet.rectangle"),
             .init(id: 1, title: "Patterns", symbol: "square.stack.3d.up",
-                  badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .accentColor),
+                  badge: rules.running ? "…" : waiting > 0 ? "\(waiting)" : nil, badgeTint: .secondary),
             .init(id: 4, title: "Protection", symbol: "shield.lefthalf.filled"),
             .init(id: 2, title: "Stories", symbol: "point.3.connected.trianglepath.dotted",
                   badge: dangerous > 0 ? "\(dangerous)" : nil, badgeTint: .red),
             // Waiting connections first (your answer), else who tried to connect to this Mac (attention).
             .init(id: 3, title: "Network", symbol: "network.badge.shield.half.filled",
                   badge: !firewall.prompts.isEmpty ? "\(firewall.prompts.count)" : incoming.count > 0 ? "\(incoming.count)" : nil,
-                  badgeTint: firewall.prompts.isEmpty ? .orange : .accentColor),
+                  badgeTint: firewall.prompts.isEmpty ? .orange : .secondary),
         ]
     }
 
@@ -543,7 +544,6 @@ struct ActivityWindowView: View {
         .padding(.vertical, 7)
     }
 
-    @ViewBuilder
     /// Heavy processes, live or at the Time Travel playhead (recorded every 5 s): one design for both.
     private var heavy: HeavyContext {
         let _ = vitals.revision
@@ -820,4 +820,17 @@ private struct LiveShowFilter: View {
     let counts: () -> [SignatureFilter: Int]
 
     var body: some View { ShowFilterPicker(filter: $filter, counts: counts()) }
+}
+
+/// A tab that isn't shown skips the window's updates: every tab stays alive in the strip, and the window's body runs
+/// again for any change, the current tab included, so each switch rebuilt every hidden tab too (the network map's
+/// graph alone took about 150 ms of a switch). It catches up when it's shown again. What a tab observes itself
+/// (its own stores) still updates it as before.
+private struct HiddenTabGate<Content: View>: View, @MainActor Equatable {
+    let shown: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View { content() }
+
+    static func == (a: Self, b: Self) -> Bool { !a.shown && !b.shown }
 }

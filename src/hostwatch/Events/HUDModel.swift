@@ -103,6 +103,11 @@ final class HUDModel: ObservableObject {
     var onGuardAsk: (([String: Any]) -> Void)?
     var onGuardStatus: ((String, String) -> Void)?
     var onGuardBlock: (([String: Any]) -> Void)?
+    /// A held launch or open the collector let go because no quick answer came: (id, pid).
+    var onGuardLate: ((Int, Int) -> Void)?
+    /// The collector said who it is (`nil`: it said nothing, so it's from before 0.19): version, app path, Endpoint Security.
+    var onCollectorHello: (([String: Any]?) -> Void)?
+    private var helloTimer: Timer?
     /// Protection's settings for the collector, sent again on every connect.
     var guardConfig: [String: Any] = [:] { didSet { sendGuard() } }
     /// Threat lists: a connection to a listed domain or IP carries `knownBad` into stories and the rows.
@@ -386,6 +391,11 @@ final class HUDModel: ObservableObject {
                     self.connected = true
                     self.sendConfig()
                     self.receiveNext(conn)
+                    // A collector from 0.19 on says hello at once: none within a few seconds is an older one.
+                    self.helloTimer?.invalidate()
+                    self.helloTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+                        MainActor.assumeIsolated { if self?.connected == true { self?.onCollectorHello?(nil) } }
+                    }
                 case .waiting, .failed, .cancelled:
                     self.dropConnection()
                 default:
@@ -407,7 +417,7 @@ final class HUDModel: ObservableObject {
         }
     }
 
-    private func send(_ object: [String: Any], completion: (() -> Void)? = nil) {
+    private func send(_ object: [String: Any], completion: (@MainActor @Sendable () -> Void)? = nil) {   // called back on main
         guard let connection, connected,
               var data = try? JSONSerialization.data(withJSONObject: object)
         else { completion?(); return }
@@ -458,6 +468,11 @@ final class HUDModel: ObservableObject {
         send(["guard_answer": ["id": id, "allow": allow, "ttl": ttl]])
     }
 
+    /// You're being asked about a held launch or open: the collector keeps holding it until your answer.
+    func sendGuardWait(id: Int) {
+        send(["guard_wait": ["id": id]])
+    }
+
     /// Asks the root collector to hold a program while you're asked (invisible to your shell where macOS allows).
     func sendHold(pid: Int) { send(["hold": ["pid": pid]]) }
     func sendRelease(pid: Int, stop: Bool) { send(["release": ["pid": pid, "stop": stop]]) }
@@ -472,7 +487,7 @@ final class HUDModel: ObservableObject {
     /// Asks the collector to exit; it only obeys a client that knows its token.
     /// Returns false when there is no connection to send it on.
     @discardableResult
-    func sendShutdown(token: String, completion: (() -> Void)? = nil) -> Bool {
+    func sendShutdown(token: String, completion: (@MainActor @Sendable () -> Void)? = nil) -> Bool {
         guard connected else { completion?(); return false }
         send(["cmd": "shutdown", "token": token], completion: completion)
         return true
@@ -548,6 +563,8 @@ final class HUDModel: ObservableObject {
                     case "guard_ask": onGuardAsk?(obj)
                     case "guard_status": onGuardStatus?(obj["state"] as? String ?? "", obj["detail"] as? String ?? "")
                     case "guard_block": onGuardBlock?(obj)
+                    case "guard_hello": helloTimer?.invalidate(); onCollectorHello?(obj)
+                    case "guard_late": onGuardLate?((obj["id"] as? NSNumber)?.intValue ?? 0, (obj["pid"] as? NSNumber)?.intValue ?? 0)
                     default: break
                     }
                 }

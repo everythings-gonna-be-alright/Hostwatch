@@ -10,7 +10,7 @@ struct IPEndpoint: Hashable, Sendable, CustomStringConvertible {
     var address: String {
         var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
         _ = ip.withUnsafeBytes { inet_ntop(isV6 ? AF_INET6 : AF_INET, $0.baseAddress, &buf, socklen_t(buf.count)) }
-        return String(cString: buf)
+        return String(cBuffer: buf)
     }
     var description: String { isV6 ? "[\(address)]:\(port)" : "\(address):\(port)" }
 
@@ -167,13 +167,14 @@ enum PFRedirect {
         p.standardOutput = out; p.standardError = err; p.standardInput = input == nil ? FileHandle.nullDevice : inp
         do { try p.run() } catch { return (-1, "", "\(error)") }
         if let input { inp.fileHandleForWriting.write(Data(input.utf8)); try? inp.fileHandleForWriting.close() }
-        var o = Data(), e = Data()
+        // stderr on another thread (both pipes must drain, or pfctl blocks), read here only after group.wait().
+        let e = WrittenOnce<Data>()
         let group = DispatchGroup()
-        group.enter(); DispatchQueue.global().async { e = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        o = out.fileHandleForReading.readDataToEndOfFile()
+        group.enter(); DispatchQueue.global().async { e.value = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        let o = out.fileHandleForReading.readDataToEndOfFile()
         group.wait()
         p.waitUntilExit()
-        return (p.terminationStatus, String(decoding: o, as: UTF8.self), String(decoding: e, as: UTF8.self))
+        return (p.terminationStatus, String(decoding: o, as: UTF8.self), String(decoding: e.value ?? Data(), as: UTF8.self))
     }
 }
 
@@ -209,4 +210,10 @@ enum TLSClientHello {
         }
         return nil
     }
+}
+
+/// A value one thread writes once and another reads after waiting for it (a DispatchGroup, a semaphore): the wait
+/// orders the two, which the compiler can't see.
+final class WrittenOnce<T>: @unchecked Sendable {
+    var value: T?
 }

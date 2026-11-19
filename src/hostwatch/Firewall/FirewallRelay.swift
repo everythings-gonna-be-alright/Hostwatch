@@ -34,7 +34,7 @@ final class FirewallRelay: @unchecked Sendable {
     /// How long to wait for a client's first bytes (to read the TLS server name) before connecting anyway.
     var peekTimeout: TimeInterval = 0.3
     /// Where a redirected connection was going (pf; replaceable in tests).
-    var findOriginal: @Sendable (_ tcp: Bool, _ client: IPEndpoint, _ local: IPEndpoint) -> (IPEndpoint, String)? = PFRedirect.original
+    var findOriginal: @Sendable (_ tcp: Bool, _ client: IPEndpoint, _ local: IPEndpoint) -> (IPEndpoint, String)? = { PFRedirect.original(tcp: $0, client: $1, local: $2) }
     /// Who had a local port recently, when its socket is already gone by the time the relay looks.
     var recentOwner: (@Sendable (_ tcp: Bool, _ port: UInt16) -> RecentSockets.Owner?)?
 

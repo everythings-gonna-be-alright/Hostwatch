@@ -217,7 +217,7 @@ struct HistoryArchive: Sendable {
         data.withUnsafeBytes { raw in
             guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
             let count = raw.count
-            func equalsNeedle(at at: Int) -> Bool {
+            func equalsNeedle(at: Int) -> Bool {
                 for k in 0..<needle.count {
                     var c = base[at + k]
                     if c &- 65 < 26 { c |= 0x20 }

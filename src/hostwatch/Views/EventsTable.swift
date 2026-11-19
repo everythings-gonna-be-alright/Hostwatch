@@ -316,7 +316,7 @@ struct EventsTable: NSViewRepresentable {
             case "kind":
                 var icons = [EventCellView.Icon(image: badges.kindTile(e.kind), toolTip: e.kind.title)]
                 if let agent = row.agent {
-                    icons.append(.init(image: badges.agent(agent, size: 11), toolTip: "In the \(agent.short) session: \(row.session)"))
+                    icons.append(.init(image: badges.agent(agent, size: 16, tinted: true), toolTip: "In the \(agent.short) session: \(row.session)"))
                 }
                 cell.set(icons: icons, font: Self.mono)
             case "status":

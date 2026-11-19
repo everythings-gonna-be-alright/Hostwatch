@@ -32,11 +32,11 @@ launches, file access and connections you didn't allow.
 
 ### What Hostwatch assumes
 
-- **System Integrity Protection is on.** Hostwatch relies on macOS protecting its own tools (`eslogger`, `pfctl`,
-  `tcpdump`) and the code signing checks.
+- **System Integrity Protection is on.** Hostwatch relies on macOS protecting Endpoint Security and its own
+  tools (`pfctl`, `tcpdump`) and the code signing checks.
 - **The app is somewhere only an administrator can write**, such as `/Applications`. The collector is the app's own
   binary, run as root. Anything that can replace the app gains root at its next start.
-- **Full Disk Access is granted** to the collector. Without it, `eslogger` sees nothing.
+- **Full Disk Access is granted** to the collector. Without it, Endpoint Security tells it nothing.
 - **macOS itself is not compromised.** Hostwatch reads what macOS reports. A rootkit can lie to both.
 
 ### Trust boundaries
@@ -78,9 +78,10 @@ These are real, and listed so you can judge Hostwatch fairly.
 - **Malware running as you can quit Hostwatch.** The app runs as you, so a process of yours can end it. The collector
   then stops watching after 15 seconds without a client, and nothing records what happens next. Restarting the app
   resumes everything. Raising an alert when the app goes away unexpectedly is planned.
-- **It sees most things just after they happen.** `eslogger` reports events, it can't refuse them. Ask and Strict stop a
-  program a few milliseconds after it starts or opens a protected file. A very quick command can finish first. Stopping
-  before the start needs Apple's Endpoint Security approval, which is pending.
+- **It decides before a launch or a protected file's open, not after.** In Ask and Strict, Endpoint Security holds them
+  until Hostwatch answers. Two things still slip past: what macOS's own programs do (they pass without a question,
+  unless you marked their pattern, which is then enforced right after it starts), and anything while the app is too
+  busy to answer within a moment (it goes on, and is paused right after).
 - **Only your own processes can be stopped.** Launch and file protection and holds act on processes of your user.
   A root process, or another user's, is reported but not stopped. The firewall judges your programs' connections too:
   root's connections and macOS's DNS service pass without being asked about.

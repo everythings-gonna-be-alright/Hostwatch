@@ -57,10 +57,11 @@ extension AppDelegate {
         window.center()
         // If the activity window is full screen, open as a normal window over it.
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+        let closing = ObjectIdentifier(window)            // which window: the notification itself stays on its side
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 analysis.cancel()
-                self?.askWindows.removeAll { $0 === note.object as? NSWindow }
+                self?.askWindows.removeAll { ObjectIdentifier($0) == closing }
             }
         }
         askWindows.append(window)

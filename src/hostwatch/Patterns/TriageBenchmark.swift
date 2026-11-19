@@ -65,9 +65,11 @@ func runTriageBenchmark() -> Never {
     print("\(yours.count) of your decisions: \(safe.count) Safe. Flagged cases (yours, then Claude's): \(flagged.count), attack-shaped: \(red.count)")
     print("benchmark: \(cases.filter { $0.truth == .safe }.count) Safe + \(cases.filter { $0.truth != .safe }.count) flagged, models: \(models.joined(separator: ", "))\n")
 
-    var details = ""
+    // Built on the task, read here after the semaphore: the wait orders them.
+    let result = WrittenOnce<String>()
     let done = DispatchSemaphore(value: 0)
     Task.detached {
+        var details = ""
         for model in models {
             var answers: [BenchAnswer] = []
             let claude = model == "claude" || model.hasPrefix("claude:")
@@ -86,9 +88,11 @@ func runTriageBenchmark() -> Never {
             print(summary)
             details += "## \(model)\n" + lines + "\n"
         }
+        result.value = details
         done.signal()
     }
     done.wait()
+    let details = result.value ?? ""
     let out = env["BENCH_OUT"] ?? NSTemporaryDirectory() + "triage-benchmark.txt"
     try? details.write(toFile: out, atomically: true, encoding: .utf8)
     print("\ndetails (each disagreement): \(out)")

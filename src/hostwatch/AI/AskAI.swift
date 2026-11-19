@@ -199,7 +199,7 @@ final class AIAnalysis: ObservableObject {
     private let preface: String
     private let lineage: String
 
-    static let systemPrompt = """
+    nonisolated static let systemPrompt = """
     You are a macOS security analyst helping a user triage one event from a local activity \
     monitor (process spawn, network connection, or file open). Decide whether it looks \
     malicious or dangerous, or whether it is normal system/app behavior.

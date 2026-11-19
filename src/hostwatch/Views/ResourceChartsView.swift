@@ -14,6 +14,7 @@ struct ResourceCharts: View {
     @AppStorage("resourceLegendOrder") private var order = ResourceLegendOrder.name.rawValue
     @StateObject private var focus = ResourceFocus()
     @StateObject private var fold = ResourceFold()
+    @StateObject private var cache = ResourceChartsCache()
     private var shown: Bool { fold.shown }
 
     private static let cores = ProcessInfo.processInfo.activeProcessorCount
@@ -32,11 +33,17 @@ struct ResourceCharts: View {
                 // A sample or two before the window too, so the line enters from the left edge rather than inside.
                 let from = (source.last?.date ?? Date()).addingTimeInterval(-window - 15)
                 let samples = source.filter { $0.date >= from }
+                // Worked out once per new sample, window or playhead: never again for a hover, a fold or a frame.
+                let key = "\(minutes)|\(traveling)|\(samples.count)|\(samples.first?.date.timeIntervalSince1970 ?? 0)|"
+                    + "\(samples.last?.date.timeIntervalSince1970 ?? 0)"
+                let models = cache.models(key: key) { version in
+                    [cpu(samples, window, version), memory(samples, window, version), network(samples, window, version)]
+                }
                 GlassEffectContainer(spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
-                        ResourceCard(model: cpu(samples), window: window, focus: focus)
-                        ResourceCard(model: memory(samples), window: window, focus: focus)
-                        ResourceCard(model: network(samples), window: window, focus: focus)
+                        ForEach(models.indices, id: \.self) { i in
+                            ResourceCard(model: models[i], window: window, focus: focus)
+                        }
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -119,34 +126,45 @@ struct ResourceCharts: View {
 
     // MARK: Cards
 
-    private func cpu(_ samples: [MetricSample]) -> ResourceCardModel {
-        let lines = Self.programLines(ResourceSeries.split(ResourceSeries.cpuRows(samples, cores: Self.cores), limit: Self.programs))
+    /// Long windows are drawn in buckets: about 120 points across (30 minutes in 15 s steps), never every sample.
+    private static func bucket(_ window: TimeInterval) -> TimeInterval { window > 600 ? window / 120 : 0 }
+
+    private func cpu(_ samples: [MetricSample], _ window: TimeInterval, _ version: Int) -> ResourceCardModel {
+        let bucket = Self.bucket(window)
+        let rows = ResourceSeries.thin(ResourceSeries.cpuRows(samples, cores: Self.cores), bucket: bucket)
+        let lines = Self.programLines(ResourceSeries.split(rows, limit: Self.programs))
         return ResourceCardModel(title: "CPU", symbol: "cpu", tint: ResourcePalette.cpu, lines: lines,
                                  scale: { peak, _ in min(100, ResourceCardModel.nice(peak, steps: [1, 2, 5, 10, 25, 50, 100])) },
                                  format: { "\(Int($0.rounded()))%" }, detail: "of \(Self.cores) cores",
-                                 interval: glide(MetricsStore.interval), empty: empty)
+                                 interval: glide(MetricsStore.interval), cadence: max(MetricsStore.interval, bucket),
+                                 empty: empty, window: window, version: version)
     }
 
-    private func memory(_ samples: [MetricSample]) -> ResourceCardModel {
+    private func memory(_ samples: [MetricSample], _ window: TimeInterval, _ version: Int) -> ResourceCardModel {
+        let bucket = Self.bucket(window)
         let pressure = samples.last.map { $0.pressure >= 2 ? ", pressure \($0.pressureText)" : "" } ?? ""
-        let lines = Self.programLines(ResourceSeries.split(ResourceSeries.memoryRows(samples, physical: Self.physical), limit: Self.programs))
+        let rows = ResourceSeries.thin(ResourceSeries.memoryRows(samples, physical: Self.physical), bucket: bucket)
+        let lines = Self.programLines(ResourceSeries.split(rows, limit: Self.programs))
         return ResourceCardModel(title: "Memory", symbol: "memorychip", tint: ResourcePalette.memory, lines: lines,
                                  scale: { peak, stacked in stacked ? Self.physical : ResourceCardModel.nice(peak) }, format: Self.bytes,
                                  detail: "of \(Self.bytes(Self.physical))" + pressure, interval: glide(MetricsStore.interval),
-                                 empty: empty, note: "Programs share memory, so they can add up to more than is used.")
+                                 cadence: max(MetricsStore.interval, bucket), empty: empty,
+                                 note: "Programs share memory, so they can add up to more than is used.", window: window, version: version)
     }
 
     /// Received above the line and sent below it, the same programs in the same colours on both sides: chosen by
     /// both directions together.
-    private func network(_ samples: [MetricSample]) -> ResourceCardModel {
+    private func network(_ samples: [MetricSample], _ window: TimeInterval, _ version: Int) -> ResourceCardModel {
+        let bucket = Self.bucket(window)
         let names = ResourceSeries.split(ResourceSeries.trafficRows(samples), limit: Self.programs).names
-        let received = ResourceSeries.split(ResourceSeries.trafficRows(samples, direction: 0), names: names)
-        let sent = ResourceSeries.split(ResourceSeries.trafficRows(samples, direction: 1), names: names)
+        let received = ResourceSeries.split(ResourceSeries.thin(ResourceSeries.trafficRows(samples, direction: 0), bucket: bucket), names: names)
+        let sent = ResourceSeries.split(ResourceSeries.thin(ResourceSeries.trafficRows(samples, direction: 1), bucket: bucket), names: names)
         return ResourceCardModel(title: "Network", symbol: "network", tint: ResourcePalette.download,
                                  lines: Self.programLines(received, sent: sent),
                                  scale: { peak, _ in ResourceCardModel.nice(peak) }, format: Rate.text,
-                                 detail: "received above the line, sent below", interval: glide(10), cadence: 10,
-                                 empty: traveling ? "Nothing recorded here" : "Needs the collector", mirrored: true)
+                                 detail: "received above the line, sent below", interval: glide(10), cadence: max(10, bucket),
+                                 empty: traveling ? "Nothing recorded here" : "Needs the collector", mirrored: true,
+                                 window: window, version: version)
     }
 
     /// Live, the window glides over a sample's interval. In Time Travel it follows the playhead without delay.
@@ -203,7 +221,7 @@ enum ResourceGaps {
 }
 
 /// A stretch with no data: a grey band crossed by thin diagonal lines, "No data" in it when there is room.
-private struct NoDataBand: View {
+struct NoDataBand: View {
     var body: some View {
         ZStack {
             Rectangle().fill(Color.primary.opacity(0.05))
@@ -255,42 +273,51 @@ enum ResourcePalette {
     static let other = Color(nsColor: .systemGray)
 }
 
-/// One series of a card.
+/// One series of a card, ready to draw: its points split where nothing was measured (each run its own shape, so
+/// the curve never bridges a silence), and its own highest point for when it's shown alone.
 struct ResourceLine {
     let name: String
     let color: Color
     let points: [ResourcePoint]
     /// The network's other direction (sent), drawn below the line.
     var sent: [ResourcePoint] = []
+    private(set) var runs: [[ResourcePoint]] = []
+    private(set) var sentRuns: [[ResourcePoint]] = []
+    private(set) var peak = 0.0
+    private(set) var sentPeak = 0.0
 
-    /// Its value nearest a moment.
-    func value(at date: Date) -> Double { Self.nearest(points, date) }
-    func sentValue(at date: Date) -> Double { Self.nearest(sent, date) }
+    init(name: String, color: Color, points: [ResourcePoint], sent: [ResourcePoint] = []) {
+        self.name = name; self.color = color; self.points = points; self.sent = sent
+    }
+
+    /// Splits at silences longer than a few `cadence`s and finds the peaks: once, when the card's data is made.
+    mutating func prepare(cadence: TimeInterval) {
+        runs = Self.split(points, limit: cadence * 2.5)
+        sentRuns = Self.split(sent, limit: cadence * 2.5)
+        peak = points.map(\.value).max() ?? 0
+        sentPeak = sent.map(\.value).max() ?? 0
+    }
+
+    private static func split(_ points: [ResourcePoint], limit: TimeInterval) -> [[ResourcePoint]] {
+        var out: [[ResourcePoint]] = []
+        var run: [ResourcePoint] = []
+        for p in points {
+            if let last = run.last, p.date.timeIntervalSince(last.date) > limit { out.append(run); run = [] }
+            run.append(p)
+        }
+        if !run.isEmpty { out.append(run) }
+        return out
+    }
+
+    /// Its value nearest a moment (binary search: a hover reads every line of every card).
+    func value(at date: Date) -> Double { ResourceSeries.nearest(points, date).map { points[$0].value } ?? 0 }
+    func sentValue(at date: Date) -> Double { ResourceSeries.nearest(sent, date).map { sent[$0].value } ?? 0 }
     /// Both directions together.
     func total(at date: Date) -> Double { value(at: date) + sentValue(at: date) }
-
-    private static func nearest(_ points: [ResourcePoint], _ date: Date) -> Double {
-        points.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }?.value ?? 0
-    }
 }
 
-extension Array where Element == ResourceLine {
-    /// The highest point, or the highest stack when the lines are stacked (they are summed at each moment).
-    var peak: Double { Self.peak(map(\.points)) }
-    /// The same below the line, for the network's sent half.
-    var sentPeak: Double { Self.peak(map(\.sent)) }
-
-    private static func peak(_ series: [[ResourcePoint]]) -> Double {
-        var sums: [Date: Double] = [:]
-        var single = 0.0
-        for points in series {
-            for p in points { sums[p.date, default: 0] += p.value; single = Swift.max(single, p.value) }
-        }
-        return Swift.max(single, sums.values.max() ?? 0)
-    }
-}
-
-/// What a card shows, worked out by the panel.
+/// What a card shows, worked out by the panel once per new sample: the lines ready to draw, the moments sampled,
+/// the silences and the stacked peaks. `version` changes with the data, so the plot redraws only then.
 struct ResourceCardModel {
     let title: String
     let symbol: String
@@ -303,14 +330,55 @@ struct ResourceCardModel {
     /// Seconds between samples: the window glides over exactly this long, so it never stops or jumps (0 in Time
     /// Travel, where it doesn't glide).
     let interval: TimeInterval
-    /// How often samples come: a longer silence is a gap, drawn hatched rather than bridged by the curve.
-    var cadence: TimeInterval = MetricsStore.interval
+    /// How often a point comes (a bucket on long windows): a longer silence is a gap, drawn hatched.
+    let cadence: TimeInterval
     let empty: String
-    var note: String? = nil
+    let note: String?
     /// Received above the line and sent below it (each line's `sent`), on a scale as deep as it is high.
-    var mirrored = false
+    let mirrored: Bool
+    let version: Int
+    /// Every moment with a point, sorted.
+    let dates: [Date]
+    let gaps: [ClosedRange<Date>]
+    /// The highest stack (or single program) above and below the line.
+    let stackPeak: Double
+    let stackSentPeak: Double
 
-    var last: Date? { lines.compactMap { $0.points.last?.date }.max() }
+    init(title: String, symbol: String, tint: Color, lines: [ResourceLine], scale: @escaping (Double, Bool) -> Double,
+         format: @escaping (Double) -> String, detail: String, interval: TimeInterval, cadence: TimeInterval,
+         empty: String, note: String? = nil, mirrored: Bool = false, window: TimeInterval, version: Int) {
+        self.title = title; self.symbol = symbol; self.tint = tint; self.scale = scale; self.format = format
+        self.detail = detail; self.interval = interval; self.cadence = cadence; self.empty = empty; self.note = note
+        self.mirrored = mirrored; self.version = version
+        self.lines = lines.map { var l = $0; l.prepare(cadence: cadence); return l }
+        let all = lines.flatMap { $0.points.map(\.date) }
+        dates = Array(Set(all)).sorted()
+        let last = dates.last ?? Date()
+        gaps = ResourceGaps.find(dates, from: last.addingTimeInterval(-window - interval), cadence: cadence)
+        stackPeak = Self.peak(lines.map(\.points))
+        stackSentPeak = Self.peak(lines.map(\.sent))
+    }
+
+    var last: Date? { dates.last }
+
+    /// The moment sampled nearest `date`.
+    func nearestDate(_ date: Date) -> Date? {
+        guard !dates.isEmpty else { return nil }
+        var lo = 0, hi = dates.count - 1
+        while lo < hi { let mid = (lo + hi) / 2; if dates[mid] < date { lo = mid + 1 } else { hi = mid } }
+        if lo > 0, abs(dates[lo - 1].timeIntervalSince(date)) <= abs(dates[lo].timeIntervalSince(date)) { return dates[lo - 1] }
+        return dates[lo]
+    }
+
+    /// The highest point, or the highest stack (the lines summed at each moment).
+    private static func peak(_ series: [[ResourcePoint]]) -> Double {
+        var sums: [Date: Double] = [:]
+        var single = 0.0
+        for points in series {
+            for p in points { sums[p.date, default: 0] += p.value; single = Swift.max(single, p.value) }
+        }
+        return Swift.max(single, sums.values.max() ?? 0)
+    }
 
     /// A round top for the scale at or above `peak`: 1, 2 or 5 times a power of ten, or the first of `steps`.
     static func nice(_ peak: Double, steps: [Double]? = nil) -> Double {
@@ -321,8 +389,26 @@ struct ResourceCardModel {
     }
 }
 
+/// The cards' data and the inputs it was made from (no @State macro with the command line tools): a new model only
+/// when the samples, window or playhead change.
+final class ResourceChartsCache: ObservableObject {
+    private var key = ""
+    private var models: [ResourceCardModel] = []
+    private var version = 0
+
+    func models(key: String, build: (Int) -> [ResourceCardModel]) -> [ResourceCardModel] {
+        if key != self.key || models.isEmpty {
+            self.key = key
+            version += 1
+            models = build(version)
+        }
+        return models
+    }
+}
+
 /// One resource: its name, the value now (or at the hovered moment), the chart, and a legend that reads the same
-/// moment, biggest first. A program chosen in any legend is drawn alone, as a line over its own gradient.
+/// moment. A program chosen in any legend is drawn alone, as a line over its own gradient. Hovering changes only the
+/// numbers and a thin line over the plot: the plot itself (`ResourcePlot`) redraws only with new data.
 private struct ResourceCard: View {
     let model: ResourceCardModel
     let window: TimeInterval
@@ -335,15 +421,13 @@ private struct ResourceCard: View {
     private var focused: ResourceLine? { focus.program.flatMap { name in model.lines.first { $0.name == name } } }
     private var lines: [ResourceLine] { focused.map { [$0] } ?? model.lines }
     private var stacked: Bool { focused == nil }
-    private var top: Double { max(model.scale(max(lines.peak, lines.sentPeak), stacked), 0.001) }
-
-    private var moment: Date? {
-        guard let selected = hover.selected else { return nil }
-        let dates = model.lines.flatMap { $0.points.map(\.date) }
-        return dates.min { abs($0.timeIntervalSince(selected)) < abs($1.timeIntervalSince(selected)) }
+    private var top: Double {
+        let peak = focused.map { max($0.peak, $0.sentPeak) } ?? max(model.stackPeak, model.stackSentPeak)
+        return max(model.scale(peak, stacked), 0.001)
     }
 
-    private var isEmpty: Bool { Set(model.lines.flatMap { $0.points.map(\.date) }).count < 2 }
+    private var moment: Date? { hover.selected.flatMap(model.nearestDate) }
+    private var isEmpty: Bool { model.dates.count < 2 }
 
     var body: some View {
         let at = moment ?? model.last
@@ -389,17 +473,6 @@ private struct ResourceCard: View {
         }
     }
 
-    /// Below the line the fade runs the other way: strongest at the edge, faint at the line.
-    private func sentGradient(_ c: Color) -> LinearGradient {
-        LinearGradient(colors: stacked ? [c.opacity(0.5), c.opacity(0.85)] : [c.opacity(0.03), c.opacity(0.45)],
-                       startPoint: .top, endPoint: .bottom)
-    }
-
-    private func gradient(_ c: Color) -> LinearGradient {
-        LinearGradient(colors: stacked ? [c.opacity(0.85), c.opacity(0.5)] : [c.opacity(0.45), c.opacity(0.03)],
-                       startPoint: .top, endPoint: .bottom)
-    }
-
     /// The chart slides as one picture. It is drawn one sample wider than the card, starting one interval earlier,
     /// and moved left over exactly that interval: when the next sample comes, the picture is redrawn one interval on
     /// and put back, which shows the very same view, so nothing jumps. Animating the chart's own scale instead
@@ -411,9 +484,12 @@ private struct ResourceCard: View {
         // The time drawn: the newest sample once the slide has caught up with it. A new sample changes it only
         // together with putting the slide back, in one step, so the picture never jumps ahead and back.
         let shown = slide.end ?? end
+        let start = shown.addingTimeInterval(-window - lead)
         return GeometryReader { geo in
             let extra = window > 0 ? geo.size.width * lead / window : 0
-            chart(start: shown.addingTimeInterval(-window - lead), end: shown)
+            ResourcePlot(model: model, lines: lines, stacked: stacked, top: top, start: start, end: shown,
+                         window: window, focused: focused?.name, hover: hover)
+                .equatable()
                 // Swift Charts animates marks to their new places when the data changes: on top of the slide that
                 // drew a ghost of the old shapes. The chart redraws plainly, only the slide moves.
                 .transaction { $0.animation = nil }
@@ -421,6 +497,7 @@ private struct ResourceCard: View {
                 .offset(x: -extra * slide.progress)
         }
         .clipped()
+        .overlay { hoverLine(start: start, end: shown, lead: lead) }
         .overlay(alignment: .topTrailing) {
             // The scale's top, small and in the corner: every card the same, no axis eating the plot's width.
             Text(model.format(top)).font(.caption2.weight(.medium)).monospacedDigit().foregroundStyle(.tertiary)
@@ -443,89 +520,32 @@ private struct ResourceCard: View {
         }
     }
 
-    private func chart(start: Date, end: Date) -> some View {
-        let step = window <= 300 ? 1 : window <= 600 ? 2 : 5
-        let top = top
-        let gaps = ResourceGaps.find(model.lines.flatMap { $0.points.map(\.date) }, from: start, cadence: model.cadence)
-        // A gap ends one shape and starts the next: each run between gaps is its own series, so the curve never
-        // bridges a time nothing was measured.
-        let run = { (date: Date) in gaps.filter { $0.upperBound <= date }.count }
-        return Chart {
-            ForEach(lines, id: \.name) { line in
-                ForEach(line.points) { p in
-                    AreaMark(x: .value("Time", p.date), y: .value(model.title, p.value),
-                             series: .value("Series", "\(line.name)#\(run(p.date))"), stacking: stacked ? .standard : .unstacked)
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(gradient(line.color))
-                    if !stacked {
-                        LineMark(x: .value("Time", p.date), y: .value(model.title, p.value), series: .value("Series", "\(line.name)#\(run(p.date))"))
-                            .interpolationMethod(.monotone)
-                            .foregroundStyle(line.color)
-                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    }
-                }
-                // Sent, below the line: its own series, so it stacks downwards and never joins the received shape.
-                ForEach(line.sent) { p in
-                    AreaMark(x: .value("Time", p.date), y: .value(model.title, -p.value),
-                             series: .value("Series", "\(line.name) sent#\(run(p.date))"), stacking: stacked ? .standard : .unstacked)
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(sentGradient(line.color))
-                    if !stacked {
-                        LineMark(x: .value("Time", p.date), y: .value(model.title, -p.value), series: .value("Series", "\(line.name) sent#\(run(p.date))"))
-                            .interpolationMethod(.monotone)
-                            .foregroundStyle(line.color)
-                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    }
-                }
-            }
-            if model.mirrored {
-                RuleMark(y: .value(model.title, 0)).foregroundStyle(Color.primary.opacity(0.2)).lineStyle(StrokeStyle(lineWidth: 0.5))
-            }
-            if let moment {
-                RuleMark(x: .value("Time", moment))
-                    .foregroundStyle(Color.primary.opacity(0.35))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                if let focused {
-                    PointMark(x: .value("Time", moment), y: .value(model.title, focused.value(at: moment)))
-                        .symbolSize(40)
-                        .foregroundStyle(focused.color)
-                    if model.mirrored {
-                        PointMark(x: .value("Time", moment), y: .value(model.title, -focused.sentValue(at: moment)))
-                            .symbolSize(40)
-                            .foregroundStyle(focused.color)
-                    }
-                }
-            }
-        }
-        .chartXScale(domain: start...end)
-        .chartYScale(domain: (model.mirrored ? -top : 0)...top)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .minute, count: step)) { _ in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3])).foregroundStyle(.quaternary)
-                AxisValueLabel(format: .dateTime.hour().minute()).foregroundStyle(Color.secondary)
-            }
-        }
-        .chartYAxis {
-            AxisMarks(values: model.mirrored ? [-top, 0, top] : [0, top / 2, top]) { _ in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3])).foregroundStyle(.quaternary)
-            }
-        }
-        .chartPlotStyle { $0.clipped() }
-        .chartOverlay { proxy in
+    /// The hovered moment as a thin line over the plot (and a dot on a program shown alone): drawn here, not in the
+    /// chart, so moving the pointer never lays out the chart's marks again.
+    @ViewBuilder private func hoverLine(start: Date, end: Date, lead: TimeInterval) -> some View {
+        if let moment {
             GeometryReader { geo in
-                if let frame = proxy.plotFrame.map({ geo[$0] }) {
-                    ForEach(gaps, id: \.lowerBound) { gap in
-                        if let x1 = proxy.position(forX: gap.lowerBound), let x2 = proxy.position(forX: gap.upperBound) {
-                            NoDataBand()
-                                .frame(width: max(0, x2 - x1), height: frame.height)
-                                .position(x: frame.minX + (x1 + x2) / 2, y: frame.midY)
-                        }
+                // What's visible: the drawn span, less the part the slide has moved past.
+                let from = start.addingTimeInterval(lead * Double(slide.progress))
+                let span = max(end.timeIntervalSince(from), 1)
+                let x = CGFloat(moment.timeIntervalSince(from) / span) * geo.size.width
+                let plotHeight = geo.size.height - ResourcePlot.axisHeight
+                Rectangle().fill(Color.primary.opacity(0.35))
+                    .frame(width: 1, height: plotHeight)
+                    .position(x: x, y: plotHeight / 2)
+                if let line = focused {
+                    let zero = model.mirrored ? plotHeight / 2 : plotHeight
+                    let scale = model.mirrored ? plotHeight / 2 : plotHeight
+                    let up = CGFloat(line.value(at: moment) / top) * scale
+                    Circle().fill(line.color).frame(width: 7, height: 7).position(x: x, y: zero - up)
+                    if model.mirrored {
+                        let down = CGFloat(line.sentValue(at: moment) / top) * scale
+                        Circle().fill(line.color).frame(width: 7, height: 7).position(x: x, y: zero + down)
                     }
                 }
             }
             .allowsHitTesting(false)
         }
-        .chartXSelection(value: $hover.selected)
     }
 
     /// The programs, two to a row, by name or biggest first (as chosen) and Other last: a colour, the name, the value.

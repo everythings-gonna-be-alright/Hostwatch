@@ -72,8 +72,9 @@ extension AppDelegate {
         let close: () -> Void = { [weak window] in window?.close() }
         window.contentView = NSHostingView(rootView: LaunchChainView(report: report, close: close))
         window.center()
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
-            MainActor.assumeIsolated { self?.askWindows.removeAll { $0 === note.object as? NSWindow } }
+        let closing = ObjectIdentifier(window)            // which window: the notification itself stays on its side
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.askWindows.removeAll { ObjectIdentifier($0) == closing } }
         }
         askWindows.append(window)
         NSApp.activate(ignoringOtherApps: true)

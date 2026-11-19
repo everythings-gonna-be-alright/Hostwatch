@@ -254,7 +254,7 @@ struct HeavyContext {
     /// Live only: "ended · peak" for heavy processes that exited in the last 10 minutes.
     var ended: (ActivityEvent) -> ProcessVitals.Badge? = { _ in nil }
 
-    static let empty = HeavyContext(entries: [], at: Date(), live: true)
+    static var empty: HeavyContext { HeavyContext(entries: [], at: Date(), live: true) }   // made fresh: it holds closures
 
     func entry(for e: ActivityEvent) -> HeavyProcess? {
         guard e.kind == .exec else { return nil }

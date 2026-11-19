@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 // `Hostwatch --collector`: the root collector, run by the collector launcher (launchd job).
-// Sources: eslogger exec/exit/open, tcpdump pktap (DNS answers, SYNs), macOS's connection statistics
+// Sources: Endpoint Security exec/exit/open (eslogger without the entitlement), tcpdump pktap (DNS answers, SYNs), macOS's connection statistics
 // (nettop as fallback), and libproc (a socket-list diff, busiest processes). Events go out as JSON lines on a Unix socket that only
 // the verified app may use. Details: docs/reference.md, "How the collector works".
 
@@ -306,6 +306,8 @@ final class Agent: @unchecked Sendable {
     /// The firewall (Ask and Strict modes): the relay and pf redirect, decisions from the app.
     lazy var firewall = AgentFirewall(agent: self)
     let hold = AgentHold()
+    /// Protection with Endpoint Security: launches and protected files held before they happen.
+    lazy var guardian: AgentGuard = { let g = AgentGuard(); g.ours = { [unowned self] in self.isOurs($0) }; return g }()
     lazy var watch = AgentWatch(agent: self)
 
     init() { ignoredPids = [selfPid] }
@@ -439,7 +441,7 @@ final class Agent: @unchecked Sendable {
         // A service with nobody to ask: the firewall goes off, so nothing is held or blocked unanswered. The app
         // sends its mode again when it reconnects.
         if last, daemon { firewall.configure(["mode": "off"], from: client) }
-        firewall.clientGone(client); watch.clientGone(client)
+        firewall.clientGone(client); watch.clientGone(client); guardian.clientGone(client)
     }
 
     var clientCount: Int { clientsLock.lock(); defer { clientsLock.unlock() }; return clients.count }

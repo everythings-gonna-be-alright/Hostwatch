@@ -222,13 +222,14 @@ struct RulesView: View {
 
     @ViewBuilder private var needsYou: some View {
         let count = review.reduce(0) { $0 + $1.keys.count }
-        section("Needs You", subtitle: review.isEmpty ? "" : "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
-            HStack(spacing: 10) {
+        GlassSection(symbol: "tray.full.fill", tint: .orange, title: "Needs You",
+                     subtitle: review.isEmpty ? "New patterns, by app" : "\(review.count) app\(review.count == 1 ? "" : "s") · \(count) pattern\(count == 1 ? "" : "s")") {
+            HStack(alignment: .top, spacing: 12) {
                 Text("New patterns, by app. Trust an app you know (a rule is added for it), accept the AI's "
                      + "suggestion, or Dismiss to hide it here (its patterns stay New). Interpreters and shells "
                      + "like python or bash aren't listed: they run any script, so they can't be trusted.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Spacer()
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 if classifier.running {
                     ProgressView().controlSize(.small)
                     Button("Cancel") { classifier.cancel() }.buttonStyle(.glass)
@@ -241,56 +242,57 @@ struct RulesView: View {
                 }
             }
             .controlSize(.small)
-        }
-        if book.running {
-            RuleProgressCard(book: book)
-        } else if let result = book.lastResult {
-            HStack(spacing: 8) {
-                Image(systemName: book.proposals.isEmpty ? "info.circle" : "checkmark.circle.fill")
-                    .foregroundStyle(book.proposals.isEmpty ? Color.secondary : Color.green)
-                Text("Suggest Rules: " + result).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Button { book.lastResult = nil } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Close")
-            }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.secondary.opacity(0.07)))
-        }
-        if !book.proposals.isEmpty {
-            section("Rule proposals", subtitle: "from Claude, checked by Hostwatch") {
-                ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
-            }
-        }
-        if review.isEmpty && book.proposals.isEmpty && !book.running {
-            VStack(spacing: 8) {
-                Image(systemName: "checkmark.circle").font(.system(size: 34)).foregroundStyle(.green)
-                Text("Nothing needs you").font(.headline)
-                Text("\(signatures.allEntries.count - signatures.count(.unclassified)) patterns are decided. "
-                     + "New ones appear here.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-        } else if !review.isEmpty {
-            VStack(spacing: 0) {
-                ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
-                    if i > 0 { Divider() }
-                    ReviewRow(group: g, baseline: baseline, signatures: signatures, showKeys: showKeys)
+            if book.running {
+                RuleProgressCard(book: book)
+            } else if let result = book.lastResult {
+                InsetPanel(padding: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)) {
+                    HStack(spacing: 8) {
+                        Image(systemName: book.proposals.isEmpty ? "info.circle" : "checkmark.circle.fill")
+                            .foregroundStyle(book.proposals.isEmpty ? Color.secondary : Color.green)
+                        Text("Suggest Rules: " + result).font(.callout).fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button { book.lastResult = nil } label: { Image(systemName: "xmark") }
+                            .buttonStyle(.plain).foregroundStyle(.secondary).help("Close")
+                    }
                 }
             }
-            .padding(.horizontal, 12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.05)))
+            if review.isEmpty && book.proposals.isEmpty && !book.running {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle").font(.system(size: 34)).foregroundStyle(.green)
+                    Text("Nothing needs you").font(.headline)
+                    Text("\(signatures.allEntries.count - signatures.count(.unclassified)) patterns are decided. "
+                         + "New ones appear here.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else if !review.isEmpty {
+                InsetPanel {
+                    VStack(spacing: 0) {
+                        ForEach(Array(review.enumerated()), id: \.element.id) { i, g in
+                            if i > 0 { Divider() }
+                            ReviewRow(group: g, baseline: baseline, signatures: signatures, showKeys: showKeys)
+                        }
+                    }
+                }
+            }
+        }
+        if !book.proposals.isEmpty {
+            GlassSection(symbol: "sparkles", tint: .claude, title: "Rule proposals", subtitle: "from Claude, checked by Hostwatch") {
+                ForEach(book.proposals) { ProposalCard(proposal: $0, book: book) }
+            }
         }
     }
 
     // MARK: Rules
 
     private var baselineSection: some View {
-        section("Baseline rules", subtitle: "from code signatures, on this Mac, no AI") {
+        GlassSection(symbol: "checkmark.shield.fill", tint: .green, title: "Baseline rules",
+                     subtitle: "from code signatures, on this Mac, no AI") {
             HStack(spacing: 10) {
                 Image(systemName: baseline.phase == .done ? "checkmark.shield" : "hourglass")
                     .foregroundStyle(baseline.phase == .done ? .green : .secondary)
-                Text(baseline.statusText).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(baseline.statusText).font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button { Task { await baseline.buildNow() } } label: {
                     Label(baseline.running ? "Updating…" : "Update Baseline", systemImage: "arrow.clockwise")
@@ -309,7 +311,7 @@ struct RulesView: View {
             Text("One rule per app (its developer's signature must match), plus one for macOS itself. A rule trusts "
                  + "the kinds of normal-risk behaviour the app showed in its first week. Something new for it comes to "
                  + "Needs You. Never high-risk, unsigned or downloaded code, interpreters or shells.")
-                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             let recent = recentlyTrusted
             if !recent.isEmpty {
                 let total = recent.reduce(0) { $0 + $1.keys.count }
@@ -317,21 +319,21 @@ struct RulesView: View {
                     Image(systemName: "clock.badge.checkmark").foregroundStyle(.green)
                     Text("Trusted automatically in the last 24 hours: \(total) new pattern\(total == 1 ? "" : "s") ("
                          + recent.prefix(4).map { "\($0.name) \($0.keys.count)" }.joined(separator: ", ") + (recent.count > 4 ? "…" : "") + ")")
-                        .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(2)
                     Spacer()
                     Button("Show") { showKeys("Trusted automatically, last 24 hours", recent.flatMap(\.keys)) }
-                        .buttonStyle(.glass).controlSize(.small).font(.system(size: 12))
+                        .buttonStyle(.glass).controlSize(.small)
                 }
             }
             if !baseline.rules.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
-                        if i > 0 { Divider() }
-                        BaselineRuleRow(rule: rule, baseline: baseline, signatures: signatures, showKeys: showKeys)
+                InsetPanel {
+                    VStack(spacing: 0) {
+                        ForEach(Array(baseline.rules.enumerated()), id: \.element.id) { i, rule in
+                            if i > 0 { Divider() }
+                            BaselineRuleRow(rule: rule, baseline: baseline, signatures: signatures, showKeys: showKeys)
+                        }
                     }
                 }
-                .padding(.horizontal, 12)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.06)))
             }
         }
     }
@@ -349,15 +351,16 @@ struct RulesView: View {
     }
 
     private var learnedSection: some View {
-        section("Learned rules", subtitle: "\(book.activeCount) active · from your decisions") {
-            HStack(spacing: 10) {
+        GlassSection(symbol: "checklist", tint: .teal, title: "Learned rules",
+                     subtitle: "\(book.activeCount) active · from your decisions") {
+            HStack(alignment: .top, spacing: 12) {
                 Text("Claude turns patterns you marked yourself into rules. Hostwatch checks each one (never a "
                      + "blanket trust of python, bash or node). You approve it in Needs You.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Spacer()
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 if book.running {
                     ProgressView().controlSize(.small)
-                    Text("Claude is working… proposals appear in Needs You").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("Claude is working… proposals appear in Needs You").font(.callout).foregroundStyle(.secondary)
                     Button("Cancel") { book.cancel() }.buttonStyle(.glass)
                 } else {
                     Button { book.suggest(); tab.open(.needsYou) } label: { Label("Suggest Rules…", systemImage: "sparkles") }
@@ -375,23 +378,21 @@ struct RulesView: View {
                      ? "No learned rules yet. You've decided \(mine) patterns yourself: Suggest Rules… can turn them into a few "
                        + "rules that also cover new ones."
                      : "No learned rules yet. Mark at least two patterns Safe or Suspicious yourself, then ask for suggestions.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if classifier.engine == .onDevice {
                     Text("Suggest Rules needs Claude: choose an engine with Claude in Settings ▸ AI.")
-                        .font(.system(size: 12)).foregroundStyle(.orange)
+                        .font(.callout).foregroundStyle(.orange)
+                }
+            } else {
+                InsetPanel {
+                    VStack(spacing: 0) {
+                        ForEach(Array(book.rules.enumerated()), id: \.element.id) { i, rule in
+                            if i > 0 { Divider() }
+                            RuleRow(rule: rule, book: book, signatures: signatures, keys: matchingKeys(rule), showKeys: showKeys)
+                        }
+                    }
                 }
             }
-            ForEach(book.rules) { RuleRow(rule: $0, book: book, signatures: signatures, keys: matchingKeys($0), showKeys: showKeys) }
-        }
-    }
-
-    private func section<Content: View>(_ title: String, subtitle: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(.system(size: 15, weight: .semibold))
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-            content()
         }
     }
 
@@ -410,8 +411,7 @@ struct RuleSentenceView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: sentence.symbol).foregroundStyle(.secondary).frame(width: 14)
-                (Text(sentence.who).fontWeight(.semibold) + Text(" \(sentence.does) ")
-                 + Text("→ ").foregroundStyle(.secondary) + Text(sentence.then).fontWeight(.semibold))
+                Text("\(Text(sentence.who).fontWeight(.semibold)) \(sentence.does) \(Text("→").foregroundStyle(.secondary)) \(Text(sentence.then).fontWeight(.semibold))")
                     .fixedSize(horizontal: false, vertical: true)
                 Button(details.open ? "Hide details" : "Details") { withAnimation(.snappy(duration: 0.2)) { details.open.toggle() } }
                     .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -470,7 +470,7 @@ private struct ProposalCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.secondary.opacity(0.07)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 }
 
@@ -510,7 +510,7 @@ private struct RuleRow: View {
         }
         .controlSize(.small)
         .font(.system(size: 12))
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
 
@@ -788,31 +788,27 @@ private struct DecidedView: View {
     var body: some View {
         let _ = signatures.revision
         let groups = grouped()
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 18) {
             ForEach(Who.allCases, id: \.self) { who in
                 let list = groups[who] ?? []
                 let total = list.reduce(0) { $0 + $1.keys.count }
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Label { Text(who.rawValue) } icon: { Image(systemName: who.symbol).foregroundStyle(who.tint) }
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("\(total) pattern\(total == 1 ? "" : "s") · \(who.detail)").font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
+                GlassSection(symbol: who.symbol, tint: who.tint, title: who.rawValue,
+                             subtitle: "\(total) pattern\(total == 1 ? "" : "s") · \(who.detail)") {
                     if list.isEmpty {
-                        Text("None.").font(.system(size: 12)).foregroundStyle(.tertiary)
+                        Text("None.").font(.callout).foregroundStyle(.tertiary)
                     } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(list.prefix(who == .baseline ? 12 : 50).enumerated()), id: \.element.id) { i, g in
-                                if i > 0 { Divider() }
-                                DecidedRow(group: g, who: who, signatures: signatures, showKeys: showKeys)
-                            }
-                            if list.count > (who == .baseline ? 12 : 50) {
-                                Text("and \(list.count - (who == .baseline ? 12 : 50)) more apps: see Patterns, Decided By column")
-                                    .font(.system(size: 11)).foregroundStyle(.tertiary).padding(.vertical, 6)
+                        InsetPanel {
+                            VStack(spacing: 0) {
+                                ForEach(Array(list.prefix(who == .baseline ? 12 : 50).enumerated()), id: \.element.id) { i, g in
+                                    if i > 0 { Divider() }
+                                    DecidedRow(group: g, who: who, signatures: signatures, showKeys: showKeys)
+                                }
+                                if list.count > (who == .baseline ? 12 : 50) {
+                                    Text("and \(list.count - (who == .baseline ? 12 : 50)) more apps: see Patterns, Decided By column")
+                                        .font(.system(size: 11)).foregroundStyle(.tertiary).padding(.vertical, 6)
+                                }
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(who.tint.opacity(0.05)))
                     }
                 }
             }
@@ -896,8 +892,7 @@ private struct RuleProgressCard: View {
             Button("Cancel") { book.cancel() }.buttonStyle(.glass).controlSize(.small)
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.accentColor.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor.opacity(0.25)))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 }
 

@@ -10,7 +10,7 @@ developer tools (`--signature-report`, `--regroup-report`, `--origin-report`, `-
 ```
  root collector (Agent*.swift)                       app, main actor
  ───────────────────────────                         ───────────────────────────────────────────────────────────
- eslogger exec/exit/open ─┐                          HUDModel.receive(line)
+ Endpoint Security ───────┐                          HUDModel.receive(line)
  pktap DNS + SYN ─────────┼─ JSON lines, masked ──▶    ActivityEvent (Events.swift)
  NetworkStatistics ───────┤   over a Unix socket        │ SignatureBuilder.signature(for:)   pure: kind|process|pattern + risk
  libproc processes ───────┘   (CollectorSocket)         ├─ SignatureStore.observe   ──▶ PatternStore: status, source, counts
@@ -74,6 +74,7 @@ written, crash safety), `HistoryFiles.swift` (files, indexes, gunzip), `HistoryA
 `TimeTravel.swift` (state), `ProcessHistory.swift`, `Metrics.swift`, `ProcessVitals.swift`.
 
 **`Collector/`** (runs as root, no UI) — `Agent.swift` (loop, sources, JSON out), `AgentNet.swift` (parsers, pure),
+`ESSource.swift` (the Endpoint Security client: exec, exit, open; `eslogger` without the entitlement),
 `AgentSystem.swift` (libproc), `AgentProcesses.swift`, `AgentFirewall.swift`, `AgentWatch.swift`, `NetStats.swift`,
 `AgentNetMap.swift` (the network map's facts: incoming tries, listeners, neighbours, routes);
 `Collector.swift` (start and stop from the app), `CollectorDaemon.swift` (the background service: `SMAppService`

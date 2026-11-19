@@ -2,7 +2,7 @@ import Carbon.HIToolbox
 
 /// A system-wide keyboard shortcut via Carbon's RegisterEventHotKey.
 /// Unlike NSEvent global monitors, this needs no Accessibility permission.
-final class GlobalHotKey {
+@MainActor final class GlobalHotKey {          // Carbon calls its handler on the main thread
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
     private let action: @MainActor () -> Void
@@ -25,7 +25,7 @@ final class GlobalHotKey {
         }
     }
 
-    deinit {
+    isolated deinit {                              // unregistered on the main thread, where it was registered
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         if let handlerRef { RemoveEventHandler(handlerRef) }
     }

@@ -23,21 +23,31 @@ struct NetworkMapInspector: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let node { details(node) } else { empty }
             }
-            .padding(16)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .protectionGlass(18)
     }
 
     private var empty: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Select anything on the map", systemImage: "cursorarrow.click").font(.headline)
+        VStack(spacing: 12) {
+            Image(systemName: "cursorarrow.click.2")
+                .font(.system(size: 22, weight: .medium)).foregroundStyle(.secondary)
+                .frame(width: 52, height: 52)
+                .glassEffect(.regular, in: Circle())
+                .accessibilityHidden(true)
+            Text("Select anything on the map").font(.headline)
             Text("On the left, devices on your network and addresses on the internet that tried to reach this Mac. "
                  + "Then what listens and goes out on it, the way out, and where it goes.")
-                .font(.caption).foregroundStyle(.secondary)
-            Text("Hostwatch only listens. It never scans your network or sends anything to find these.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Label("Hostwatch only listens. It never scans your network or sends anything to find these.",
+                  systemImage: "ear")
+                .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 28)
     }
 
     // MARK: By kind
@@ -55,10 +65,16 @@ struct NetworkMapInspector: View {
     }
 
     private func header(_ symbol: String, _ title: String, _ subtitle: String, badge: MapBadge? = nil, tint: Color = .secondary) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 22)).foregroundStyle(tint).frame(width: 28).accessibilityHidden(true)
+        // A seal in the item's colour (grey, orange for new, red for blocked), the name, its address in monospace.
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background((tint == .secondary ? Color.gray : tint).gradient, in: Circle())
+                .shadow(color: (tint == .secondary ? Color.gray : tint).opacity(0.35), radius: 5, y: 2)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline).lineLimit(2)
+                Text(title).font(.title3.weight(.semibold)).lineLimit(2)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
                 }
@@ -69,26 +85,25 @@ struct NetworkMapInspector: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// A fact: its label small above, the value below (a long value no longer squeezed into a narrow column).
     func row(_ label: String, _ value: String, data: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label).foregroundStyle(.secondary).frame(width: 96, alignment: .leading)
-            Text(value).font(.system(size: 12, design: data ? .monospaced : .default)).textSelection(.enabled)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 13, design: data ? .monospaced : .default)).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 
     func when(_ d: Date) -> String { d.formatted(.relative(presentation: .named)) }
 
     func tries(from ips: [String]) -> [MapInbound] {
-        let since = state.window().start
         return store.inbound.values.filter { ips.contains($0.remote) && $0.count(in: state.window()) > 0 }.sorted { $0.port < $1.port }
     }
 
     /// "Tried 40 ports on this Mac. 38 were refused. It reached Python on port 8000."
     private func triesText(_ list: [MapInbound]) -> String {
-        let since = state.window().start
         let ports = Set(list.map(\.port)).count
         let refused = list.filter { $0.refused >= $0.count }.count
         var text = "Tried \(ports == 1 ? "1 port" : "\(ports) ports") on this Mac."
@@ -103,7 +118,11 @@ struct NetworkMapInspector: View {
 
     private func callout(_ title: String, _ text: String, tint: Color, story: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(tint).accessibilityHidden(true)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(tint.gradient, in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.system(size: 13, weight: .semibold))
                 Text(text).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -112,7 +131,8 @@ struct NetworkMapInspector: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(tint.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(tint.opacity(0.25), lineWidth: 0.5))
         .accessibilityElement(children: .contain)
     }
 
@@ -211,7 +231,6 @@ struct NetworkMapInspector: View {
                  ? "Anyone on a network this Mac joins can reach it on port \(port). If you only use it on this Mac, it can listen on this Mac alone."
                  : "Devices on your network can reach it on port \(port).")
                 .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-            let since = state.window().start
             let n = store.inbound.values.filter { $0.port == port }.reduce(0) { $0 + $1.count(in: state.window()) }
             VStack(alignment: .leading, spacing: 8) {
                 row("Port", ":\(port)", data: true)
@@ -219,14 +238,15 @@ struct NetworkMapInspector: View {
             }
             listenerMore(l)
             if let showProcess {
-                Button("Process Details") { showProcess(store.listenerEvent(l)) }.buttonStyle(.glass).controlSize(.small)
-                    .help("Its launch chain, status and actions, as under Events")
+                let event = store.listenerEvent(l)
+                Button(state.showsProcess(event) ? "Hide Process Details" : "Process Details") { showProcess(event) }
+                    .buttonStyle(.glass).controlSize(.small)
+                    .help("Its launch chain, status and actions, as under Events (again to close)")
             }
         }
     }
 
     private var closedPorts: some View {
-        let since = state.window().start
         let list = store.inbound.values.filter { $0.refused >= $0.count && $0.count(in: state.window()) > 0 }
         let ports = Dictionary(grouping: list, by: \.port).map { ($0.key, $0.value.reduce(0) { $0 + $1.count(in: state.window()) }) }
             .sorted { $0.1 > $1.1 }
@@ -250,17 +270,26 @@ struct NetworkMapInspector: View {
         let mine = outgoing.filter { $0.path == node.ref && $0.lastSeen >= since }
         let bytes = state.measure == .sent
         let byGroup = Self.destinations(mine, bytes: bytes)
+        // The ports belong to the destination: listed under each one this program went to.
+        let ports = Dictionary(grouping: mine, by: \.group).mapValues { NetworkMapBuilder.portsList($0.flatMap(\.ports)) }
         header("app", node.title, node.ref, badge: node.badge)
         if let showProcess, let event = store.lastEvent(program: node.ref) {
-            Button("Process Details") { showProcess(event) }.buttonStyle(.glass).controlSize(.small)
-                .help("Its launch chain, status and actions, as under Events")
+            Button(state.showsProcess(event) ? "Hide Process Details" : "Process Details") { showProcess(event) }
+                .buttonStyle(.glass).controlSize(.small)
+                .help("Its launch chain, status and actions, as under Events (again to close)")
         }
         programMore(node, mine)
         Text("Went to \(byGroup.count == 1 ? "1 destination" : "\(byGroup.count) destinations").").font(.system(size: 12))
         VStack(alignment: .leading, spacing: 6) {
             ForEach(byGroup.prefix(10), id: \.0) { group, n, blocked in
-                HStack {
-                    Text(group).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(group).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                        if let p = ports[group], !p.isEmpty {
+                            Text("port\(p.contains(",") ? "s" : "") \(p)").font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
                     Spacer()
                     if blocked { MapBadgeView(badge: .blocked) }
                     Text(bytes ? ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .file) : n.formatted())
@@ -304,16 +333,26 @@ struct NetworkMapInspector: View {
         let since = state.window().start
         let conns = outgoing.filter { $0.group == node.ref && $0.lastSeen >= since }
         let programs = Dictionary(grouping: conns, by: \.program).map { ($0.key, $0.value.reduce(0) { $0 + $1.count }) }.sorted { $0.1 > $1.1 }
+        // The ports connections to this destination went to, all of them and by program.
+        let allPorts = NetworkMapBuilder.portsList(conns.flatMap(\.ports))
+        let portsBy = Dictionary(grouping: conns, by: \.program).mapValues { NetworkMapBuilder.portsList($0.flatMap(\.ports)) }
         header(node.symbol ?? "globe", node.title, node.subtitle, badge: node.badge,
                tint: node.badge == .blocked ? .red : node.badge == .new ? .orange : .secondary)
         destinationMore(node, conns)
+        if !allPorts.isEmpty { row(allPorts.contains(",") ? "Ports" : "Port", allPorts, data: true) }
         if node.badge == .new {
             Text("No program on this Mac had contacted it before.").font(.system(size: 12)).foregroundStyle(.secondary)
         }
         VStack(alignment: .leading, spacing: 6) {
             ForEach(programs.prefix(8), id: \.0) { name, n in
-                HStack {
-                    Text(name).font(.system(size: 12)).lineLimit(1)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(name).font(.system(size: 12)).lineLimit(1)
+                        if let p = portsBy[name], !p.isEmpty, p != allPorts {
+                            Text("port\(p.contains(",") ? "s" : "") \(p)").font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
                     Spacer()
                     Text(n, format: .number).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 }

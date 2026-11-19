@@ -208,25 +208,29 @@ final class AgentWatch: @unchecked Sendable {
         print("Watching \(Agent.base(path)) (pid \(pid)) and \(recorder.tree.count - 1) process(es) it already runs, for "
               + "\(Int(seconds)) s with \(supportedEvents.count) event types…")
         guard let child = try? Spawned.start("/usr/bin/eslogger", supportedEvents) else { print("eslogger didn't start."); exit(1) }
-        let lock = NSLock()
-        var parsed = 0, skipped = 0
-        var ignored: [String: Int] = [:]                    // matched a pid but weren't the tree's own events
+        // The reader thread and this one share the recorder and the counts: all of it in one box, only under its lock
+        // (skipped was counted outside it).
+        let shared = WatchProbeState(recorder)
+        let lock = shared.lock
         Thread.detachNewThread {
             let reader = LineReader(fd: child.stdout!)
             while let line = reader.next() {
                 lock.lock()
-                let markers = recorder.markers
+                let markers = shared.recorder.markers
                 lock.unlock()
                 guard markers.contains(where: { line.range(of: $0) != nil }),
-                      let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { skipped += 1; continue }
+                      let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else {
+                    lock.lock(); shared.skipped += 1; lock.unlock()
+                    continue
+                }
                 lock.lock()
-                let before = recorder.profile.events
-                recorder.add(raw)
-                parsed += 1
-                if recorder.profile.events == before {
+                let before = shared.recorder.profile.events
+                shared.recorder.add(raw)
+                shared.parsed += 1
+                if shared.recorder.profile.events == before {
                     let type = (raw["event"] as? [String: Any])?.keys.first ?? "?"
                     let caller = raw["process"] as? [String: Any]
-                    ignored["\(type) by \(Agent.base(Agent.exe(caller))) (\(Agent.pid(caller)))", default: 0] += 1
+                    shared.ignored["\(type) by \(Agent.base(Agent.exe(caller))) (\(Agent.pid(caller)))", default: 0] += 1
                 }
                 lock.unlock()
             }
@@ -243,6 +247,7 @@ final class AgentWatch: @unchecked Sendable {
         recorder.finish(recorder.allExited ? "the process exited" : "time limit")
         let profile = recorder.profile
         lock.unlock()
+        lock.lock(); let (parsed, skipped, ignored) = (shared.parsed, shared.skipped, shared.ignored); lock.unlock()
         print("Lines: \(parsed) parsed for the tree, \(skipped) skipped (other processes). Events: \(profile.events).")
         if !ignored.isEmpty {
             print("Mentioned the tree but done by others (not counted): "
@@ -262,4 +267,16 @@ enum SCConsoleUser {
         guard stat("/dev/console", &st) == 0 else { return nil }
         return st.st_uid
     }
+}
+
+/// What `--watch-probe`'s reader thread and its main loop share. Every field is read and written only under `lock`:
+/// that is what makes it safe to send between the two threads.
+final class WatchProbeState: @unchecked Sendable {
+    let lock = NSLock()
+    let recorder: BehaviorRecorder
+    var parsed = 0
+    var skipped = 0
+    var ignored: [String: Int] = [:]          // matched a pid but weren't the tree's own events
+
+    init(_ recorder: BehaviorRecorder) { self.recorder = recorder }
 }

@@ -144,8 +144,7 @@ struct ClassifyAllButton: View {
             } else {
                 HStack(spacing: 6) {
                     LastRunButton(live: classifier.live) { ui.live = true }
-                    Button { ui.show = true } label: { Label("Classify with AI", systemImage: "sparkles") }
-                        .buttonStyle(.glass)
+                    AIGlowButton(title: "Classify with AI") { ui.show = true }
                         .disabled(classifier.running)
                         .help("Ask AI about every New pattern")
                         .popover(isPresented: $ui.show, arrowEdge: .bottom) { confirm }
@@ -266,7 +265,7 @@ final class TravelRowsCache: ObservableObject {
 
 /// Which group rows are folded. Groups open when shown (a grouping you chose is there to be read, not unfolded
 /// one by one); a group you fold stays folded while the window lives.
-final class GroupExpansion: ObservableObject {
+@MainActor final class GroupExpansion: ObservableObject {
     @Published private var closed: Set<AnyHashable> = []
 
     func isOpen(_ id: some Hashable) -> Binding<Bool> {
@@ -355,7 +354,7 @@ struct RowBand: NSViewRepresentable {
             var isBand = false { didSet { needsDisplay = true } }
             private var moved: NSObjectProtocol?
 
-            deinit { if let moved { NotificationCenter.default.removeObserver(moved) } }
+            isolated deinit { if let moved { NotificationCenter.default.removeObserver(moved) } }   // a view: on the main thread
 
             override func draw(_ dirtyRect: NSRect) {
                 // SwiftUI re-clears the table's background on every update, which leaves the window's lighter
@@ -605,5 +604,59 @@ struct HistorySearchScopeBar: View {
             return "Newest \(matches), back to \(back ?? "–"). Refine the search to reach older ones."
         }
         return n == 0 ? "No matches in recorded history" : "\(matches) in all recorded history · double-click one to open its moment"
+    }
+}
+
+/// A page's section as a glass card, the way Stories and Protection draw theirs: a seal in the section's colour, the
+/// title and a line of what it covers, then the content. The colour is a faint wash from the corner, never the text.
+/// Lists inside sit in `InsetPanel` (no glass on glass).
+struct GlassSection<Content: View>: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    var subtitle: String = ""
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(tint.gradient, in: Circle())
+                    .shadow(color: tint.opacity(0.35), radius: 5, y: 2)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.title3.weight(.semibold))
+                    if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1) }
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            content
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            LinearGradient(colors: [tint.opacity(0.12), tint.opacity(0.03), .clear],
+                           startPoint: .topLeading, endPoint: UnitPoint(x: 0.5, y: 0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .allowsHitTesting(false)
+        }
+        .protectionGlass(20)
+    }
+}
+
+/// A quiet panel inside a glass card: rows, a note, a running task. A plain fill, since glass on glass blurs twice.
+struct InsetPanel<Content: View>: View {
+    var padding: EdgeInsets = EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 }

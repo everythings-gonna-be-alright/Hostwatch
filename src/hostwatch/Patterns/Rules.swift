@@ -187,6 +187,8 @@ final class RuleBook: ObservableObject {
             let d = JSONDecoder()
             d.dateDecodingStrategy = .iso8601
             rules = (try? d.decode([LearnedRule].self, from: data)) ?? []
+            // Saved before files were sealed (0.12): written again sealed, so your rules aren't readable on disk.
+            if !rules.isEmpty, Vault.shared.isSealed, Vault.isPlainFile(fileURL) { save() }
         }
         recheck()
         store.onDecisionsChanged = { [weak self] in self?.recheck() }

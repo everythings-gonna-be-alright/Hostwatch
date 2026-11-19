@@ -12,6 +12,8 @@ extension AppDelegate {
             self.firewall.rulesChanged()                     // a network rule may have changed what passes
         }
         protection.answer = { [weak self] id, allow, ttl in self?.model.sendGuardAnswer(id: id, allow: allow, ttl: ttl) }
+        protection.waiting = { [weak self] id in self?.model.sendGuardWait(id: id) }
+        model.onGuardLate = { [weak self] id, pid in self?.protection.collectorLate(id: id, pid: pid) }
         protection.markPattern = { [weak self] key, status in
             self?.signatures.set(status, keys: [key], note: status == .safe ? "allowed in Protection" : "blocked in Protection")
         }

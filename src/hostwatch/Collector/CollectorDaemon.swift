@@ -77,7 +77,7 @@ final class CollectorDaemon: ObservableObject {
     /// What the status means, in words.
     var statusText: String {
         switch status {
-        case .enabled: "Collector running as a background service (no password at launch)"
+        case .enabled: "Collector running as a background service"
         case .requiresApproval: "Waiting for your approval in System Settings ▸ Login Items"
         case .notRegistered: "Collector not registered"
         case .notFound: "Collector service not found in this build"

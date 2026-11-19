@@ -162,9 +162,10 @@ final class DomainDetails: ObservableObject {
                     signers[path] = (id.label, SigningCache.shared.trusts(path, id), id.untrustedCode || id.valid == false || id.missing)
                 }
             }
+            let found = signers                       // handed over as it is, never changed again
             await MainActor.run { [weak self] in
                 self?.addresses = ips
-                self?.signers = signers
+                self?.signers = found
             }
         }
     }

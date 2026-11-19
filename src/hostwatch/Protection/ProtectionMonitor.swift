@@ -126,6 +126,10 @@ final class ProtectionMonitor: ObservableObject {
     var onConfigChange: (() -> Void)?
     /// Answers a held launch or file access: (id, allow, seconds the collector may reuse the answer).
     var answer: ((Int, Bool, TimeInterval) -> Void)?
+    /// Tells the collector a held launch or open is now your question (it waits for you, not for a quick answer).
+    var waiting: ((Int) -> Void)?
+    /// What the collector's recent questions were answered with, for one it had to let go before the answer came.
+    private var collectorVerdicts: [Int: (verdict: ProtectionVerdict, path: String)] = [:]
     /// Your answer that should stick: the pattern marked Safe (Always Allow) or Dangerous (Block).
     var markPattern: ((String, SignatureStatus) -> Void)?
     var onPromptsChange: (() -> Void)?
@@ -211,7 +215,7 @@ final class ProtectionMonitor: ObservableObject {
     /// One live event: in Watch, marks what would be stopped and counts the rest. In Ask and Strict (without
     /// Endpoint Security) the reactive engine acts: a blocked program is stopped, a question pauses it.
     /// Asks the AI about a paused program (LiveAICheck): nil when no fast model is ready. Set by the app.
-    var aiCheck: ((ActivityEvent) async -> LiveAICheck.Outcome?)?
+    var aiCheck: (@Sendable (ActivityEvent) async -> LiveAICheck.Outcome?)?   // run in a task group, off the main actor
     /// A launch question was answered (by you, the AI or the time limit): allowed or stopped. Set by the app, so the
     /// firewall's question about the same program comes after, or goes.
     var onLaunchAnswered: ((ActivityEvent, Bool) -> Void)?
@@ -224,7 +228,9 @@ final class ProtectionMonitor: ObservableObject {
         guard !paused, let (area, decision) = decide(e, status: status) else { return }
         let mode = self.mode(area)
         // With Endpoint Security enforcing, what reaches the feed was allowed: the collector reports what it stopped.
-        if mode.enforces && enforcer.canEnforce { return }
+        // macOS's own programs it lets through without asking (HoldConfig.systemProgram) are still judged here, so a
+        // pattern you marked on one is stopped right after it starts, as before.
+        if mode.enforces && enforcer.canEnforce && !HoldConfig.systemProgram(Self.subject(e)) { return }
         guard let verdict = ProtectionPolicy.effective(decision.verdict, mode: mode), verdict != .allow else { return }
         guard mode.enforces else {
             record(area: area, event: e, decision: decision, verdict: verdict, enforced: false)
@@ -472,11 +478,21 @@ final class ProtectionMonitor: ObservableObject {
     /// What the collector needs to decide on its own: modes, and each protected card's places, expected programs and
     /// choice for everyone else. Launches it can't settle quickly come back as questions.
     func collectorConfig(home: String = NSHomeDirectory()) -> [String: Any] {
-        let cards: [[String: Any]] = ProtectedGroup.all.compactMap { g in
+        let cards: [[String: Any]] = ProtectedGroup.all.flatMap { g -> [[String: Any]] in
             let s = groups[g.id] ?? ProtectedGroupSetting()
-            guard s.on else { return nil }
-            return ["id": g.id, "prefixes": g.prefixes(home: home), "owners": g.owners + s.exceptions.allowed,
-                    "blocked": s.exceptions.blocked, "writesOnly": g.writesOnly, "others": s.others.rawValue]
+            guard s.on else { return [] }
+            func card(_ prefixes: [String], names: [String] = []) -> [String: Any] {
+                ["id": g.id, "prefixes": prefixes, "owners": g.owners + s.exceptions.allowed, "blocked": s.exceptions.blocked,
+                 "writesOnly": g.writesOnly, "others": s.others.rawValue, "names": names]
+            }
+            // Browser profile folders hold far more than credentials: there, only the credential stores are held.
+            let all = g.prefixes(home: home)
+            let exact = Set(SignatureBuilder.sensitive.filter { g.labels.contains($0.label) }
+                .map { $0.prefix.hasPrefix("~") ? home + $0.prefix.dropFirst() : $0.prefix })
+            let byName = all.filter { !exact.contains($0) }
+            guard g.labels.contains("browser credentials"), !byName.isEmpty else { return [card(all)] }
+            return [card(all.filter(exact.contains)), card(byName, names: Array(SignatureBuilder.credentialFiles).sorted())]
+                .filter { !($0["prefixes"] as? [String] ?? []).isEmpty }
         } + customPlaces.filter(\.on).map {
             ["id": $0.groupID, "prefixes": [$0.path], "owners": $0.exceptions.allowed, "blocked": $0.exceptions.blocked,
              "writesOnly": false, "others": $0.others.rawValue]
@@ -490,6 +506,7 @@ final class ProtectionMonitor: ObservableObject {
         guard let (area, decision) = decide(ask.event, status: status),
               let verdict = ProtectionPolicy.effective(decision.verdict, mode: mode(area)), !paused
         else { answer?(ask.id, true, 60); return }
+        noteVerdict(ask.id, verdict, Self.subject(ask.event))
         switch verdict {
         case .allow:
             answer?(ask.id, true, 300)
@@ -497,11 +514,38 @@ final class ProtectionMonitor: ObservableObject {
             answer?(ask.id, false, 60)
             record(area: area, event: ask.event, decision: decision, verdict: .block, enforced: true)
         case .ask:
+            // Let go by the AI earlier this session: not held or checked again.
+            if aiAllowed.contains(ask.event.signatureKey) { answer?(ask.id, true, 0); return }
+            waiting?(ask.id)
             var held = ask
             held.reason = decision.reason
             held.group = decision.group
+            held.checking = aiCheck != nil && LiveAICheck.enabled(defaults)
             prompts.append(held)
             onPromptsChange?()
+            if held.checking { checkWithAI(ask.id) }
+        }
+    }
+
+    private func noteVerdict(_ id: Int, _ v: ProtectionVerdict, _ path: String) {
+        collectorVerdicts[id] = (v, path)
+        if collectorVerdicts.count > 200, let oldest = collectorVerdicts.keys.min() { collectorVerdicts[oldest] = nil }
+    }
+
+    /// The collector let a held launch or open go because no quick answer came (the app was busy). It's running now,
+    /// so the old way takes over: a question pauses it, a block stops it.
+    func collectorLate(id: Int, pid: Int) {
+        if let i = prompts.firstIndex(where: { $0.id == id && !$0.reactive }) {
+            let path = Self.subject(prompts[i].event)
+            if engine.pause(pid: pid, path: path) {
+                prompts[i].reactive = true
+                prompts[i].deadline = Date().addingTimeInterval(ReactiveEnforcer.pauseTimeout)
+            } else {
+                prompts.remove(at: i)
+            }
+            onPromptsChange?()
+        } else if let v = collectorVerdicts[id], v.verdict == .block {
+            _ = engine.stop(pid: pid, path: v.path)
         }
     }
 
@@ -516,7 +560,11 @@ final class ProtectionMonitor: ObservableObject {
             case .allow(let note)?:
                 let done = self.prompts.remove(at: i)
                 self.aiAllowed.insert(done.event.signatureKey)
-                self.engine.release(pid: done.event.pid, path: Self.subject(done.event), stop: false)
+                if done.reactive {
+                    self.engine.release(pid: done.event.pid, path: Self.subject(done.event), stop: false)
+                } else {
+                    self.answer?(done.id, true, 0)
+                }
                 self.record(area: done.area, event: done.event,
                             decision: .init(verdict: .ask, reason: "allowed this time by AI: " + note, group: done.group),
                             verdict: .ask, enforced: false)
