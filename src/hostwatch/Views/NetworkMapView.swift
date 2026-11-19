@@ -125,40 +125,44 @@ struct NetworkMapView: View {
         VStack(spacing: 0) {
             controls
             if let p = store.profile, !p.decided { newNetworkBanner(p).padding(.horizontal, 16).padding(.bottom, 4) }
-            HStack(alignment: .top, spacing: 16) {
-                Group {
-                    if let key = state.allOf {
-                        NetworkMapListView(store: store, state: state, key: key, graph: graph, search: search, actions: actions)
-                    } else if graph.isEmpty, !search.trimmingCharacters(in: .whitespaces).isEmpty {
-                        ContentUnavailableView.search(text: search)
-                    } else if graph.isEmpty {
-                        ContentUnavailableView {
-                            Label("Nothing on the Map Yet", systemImage: "point.3.connected.trianglepath.dotted")
-                        } description: {
-                            Text("The map fills in as programs connect and devices answer on your network. "
-                                 + "It updates every 10 seconds.")
+            // One container for the map's glass and the details': drawn apart, each blur was redone on every frame of
+            // the Dock's minimize animation, which dropped frames (Protection, always grouped, never did).
+            GlassEffectContainer(spacing: 0) {
+                HStack(alignment: .top, spacing: 16) {
+                    Group {
+                        if let key = state.allOf {
+                            NetworkMapListView(store: store, state: state, key: key, graph: graph, search: search, actions: actions)
+                        } else if graph.isEmpty, !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                            ContentUnavailableView.search(text: search)
+                        } else if graph.isEmpty {
+                            ContentUnavailableView {
+                                Label("Nothing on the Map Yet", systemImage: "point.3.connected.trianglepath.dotted")
+                            } description: {
+                                Text("The map fills in as programs connect and devices answer on your network. "
+                                     + "It updates every 10 seconds.")
+                            }
+                        } else {
+                            ScrollView {
+                                map(graph).padding(16)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    // A click on an empty spot clears the selection.
+                                    .background(Color.clear.contentShape(Rectangle()).onTapGesture { state.selection = nil })
+                            }
+                            // The map as a glass card, like the details beside it (its nodes are plain tiles on it).
+                            .protectionGlass(22)
                         }
-                    } else {
-                        ScrollView {
-                            map(graph).padding(16)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
-                                // A click on an empty spot clears the selection.
-                                .background(Color.clear.contentShape(Rectangle()).onTapGesture { state.selection = nil })
-                        }
-                        // The map as a glass card, like the details beside it (its nodes are plain tiles on it).
-                        .protectionGlass(22)
                     }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 12)
-                .onGeometryChange(for: Int.self) { max(1, Int(($0.size.height - 70) / 42)) } action: { rows in   // 42: a tile and its gap
-                    if state.room != rows { state.room = rows }
-                }
-                NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
-                                    openStories: openStories, interfaceName: interfaceName, actions: actions,
-                                    showProcess: hud == nil ? nil : { state.toggleProcess($0) })
-                    .frame(width: 300)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.vertical, 12)
+                    .onGeometryChange(for: Int.self) { max(1, Int(($0.size.height - 70) / 42)) } action: { rows in   // 42: a tile and its gap
+                        if state.room != rows { state.room = rows }
+                    }
+                    NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
+                                        openStories: openStories, interfaceName: interfaceName, actions: actions,
+                                        showProcess: hud == nil ? nil : { state.toggleProcess($0) })
+                        .frame(width: 300)
+                        .padding(.vertical, 12)
+                }
             }
             .padding(.horizontal, 16)
             if let event = state.process, let hud, let signatures {

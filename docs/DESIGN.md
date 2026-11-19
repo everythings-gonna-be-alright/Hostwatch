@@ -57,7 +57,9 @@ the ones a machine can check.
 ## 5. Liquid Glass
 
 - **Glass is for controls, navigation and panels that float**, and for content cards the way macOS draws widgets
-  (`protectionGlass`). Group glass on one page in a `GlassEffectContainer`.
+  (`protectionGlass`). Group glass on one page in a `GlassEffectContainer` (spacing 0 keeps cards apart). It isn't
+  only style: glass drawn apart is blurred again on every frame of the Dock's minimize animation, and the map and
+  Stories dropped frames until theirs was grouped.
 - **Don't put glass on glass.** A form inside a glass card uses a plain quaternary fill.
 - **Tint glass only to carry state** (the status panel's green, purple or orange, an orange warning panel).
 
