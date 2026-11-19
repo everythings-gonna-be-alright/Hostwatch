@@ -100,7 +100,7 @@ struct RailButton: View {
 struct SidebarCollapseButton: View {
     let collapsed: Bool
     let action: () -> Void
-    static let size = CGSize(width: 26, height: 22)
+    nonisolated static let size = CGSize(width: 26, height: 22)
 
     var body: some View {
         Button(action: action) {

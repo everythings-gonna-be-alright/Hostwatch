@@ -40,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     let aiNotices = AICheckNotices()
     /// One window per waiting question.
     var firewallPanels: [UUID: NSPanel] = [:]
+    /// Asked once a launch whether to use this copy's collector (AppDelegate+CollectorCopy).
+    var collectorCopyAsked = false
+    /// When this copy's collector last said hello (a silent one is from before 0.19).
+    var collectorHelloAt: Date?
     let sheets = WindowSheetState()
     let sessions = AgentSessions()
     lazy var model = HUDModel(signatures: signatures, stories: stories, domains: domains, sessions: sessions)
@@ -219,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         setUpFirewall()
         setUpProtection()
+        setUpCollectorCopyCheck()
         classifier.context = { [weak self] entry in self?.triageContext(for: entry) }
         // A pattern an open story points at is kept while the story is open, even a one-off.
         signatures.inUse = { [weak self] in

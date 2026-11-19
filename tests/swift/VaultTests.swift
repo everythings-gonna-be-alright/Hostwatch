@@ -30,6 +30,26 @@ import Testing
         #expect(sealed.count > 1)
     }
 
+    /// A key file this build can't open is never replaced: a new key over it made every sealed file unreadable for good
+    /// (it happened when the app's keychain identity changed, and after a single failed Enclave call). Only reads the
+    /// keychain, never creates anything.
+    @Test func anUnopenableKeyIsNeverReplaced() throws {
+        // Names of its own: the real keychain item and Enclave key are never reached.
+        let (service, tag) = (Vault.keychainService, Vault.enclaveTag)
+        Vault.keychainService = "tech.hostwatch.vault.test-\(UUID().uuidString)"
+        Vault.enclaveTag = Data("tech.hostwatch.vault.test-\(UUID().uuidString)".utf8)
+        defer { Vault.keychainService = service; Vault.enclaveTag = tag }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-vault-locked-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent(Vault.wrappedKeyFile)
+        let old = Data((0..<113).map { _ in UInt8.random(in: 0...255) })
+        try old.write(to: file)
+        let v = Vault(key: nil, directory: dir)
+        #expect(v.isLocked && !v.isSealed)
+        #expect(try Data(contentsOf: file) == old)
+    }
+
     @Test func appendOnlyFilesRoundTrip() throws {
         let v = Vault(key: SymmetricKey(size: .bits256))
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("hw-vault-\(UUID().uuidString).log")

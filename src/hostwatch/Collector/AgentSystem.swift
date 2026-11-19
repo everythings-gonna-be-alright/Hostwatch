@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-import Security
+@preconcurrency import Security        // SecRequirement and friends are immutable once made; Security predates Sendable
 import SystemConfiguration
 
 // MARK: - Processes (libproc)
@@ -16,7 +16,7 @@ enum ProcessList {
 
     static func path(_ pid: Int) -> String {
         var buf = [CChar](repeating: 0, count: 4096)
-        return proc_pidpath(pid_t(pid), &buf, UInt32(buf.count)) > 0 ? String(cString: buf) : ""
+        return proc_pidpath(pid_t(pid), &buf, UInt32(buf.count)) > 0 ? String(cBuffer: buf) : ""
     }
 
     private static func bsdInfo(_ pid: Int) -> proc_bsdinfo? {
@@ -249,13 +249,19 @@ enum AgentSocket {
         return fd
     }
 
-    /// Our own designated requirement: for a Developer ID build, the Team ID and bundle identifier; for an
-    /// ad-hoc build, the exact binary. What a client must satisfy to be Hostwatch.
+    /// The app's designated requirement: for a Developer ID build, the Team ID and bundle identifier; for an
+    /// ad-hoc build, the exact binary. What a client must satisfy to be Hostwatch. The entitled collector runs from
+    /// its own bundle inside the app (another identifier): it asks for the app's requirement, not its own.
     private static let ownRequirement: SecRequirement? = {
-        var me: SecCode?
-        guard SecCodeCopySelf([], &me) == errSecSuccess, let me else { return nil }
         var code: SecStaticCode?
-        guard SecCodeCopyStaticCode(me, [], &code) == errSecSuccess, let code else { return nil }
+        if Bundle.main.bundlePath.contains("/" + AppPaths.collectorHelper) {
+            guard SecStaticCodeCreateWithPath(AppPaths.outerApp as CFURL, [], &code) == errSecSuccess else { return nil }
+        } else {
+            var me: SecCode?
+            guard SecCodeCopySelf([], &me) == errSecSuccess, let me else { return nil }
+            guard SecCodeCopyStaticCode(me, [], &code) == errSecSuccess else { return nil }
+        }
+        guard let code else { return nil }
         var requirement: SecRequirement?
         guard SecCodeCopyDesignatedRequirement(code, [], &requirement) == errSecSuccess else { return nil }
         return requirement
@@ -328,6 +334,7 @@ extension Agent {
             let client = AgentClient(fd: fd)
             client.uid = peer.uid
             addClient(client)
+            sayHello(to: client)
             Thread.detachNewThread { [self] in readClient(client) }
         }
     }
@@ -365,6 +372,9 @@ extension Agent {
                 if let answer = cfg["fw_answer"] as? [String: Any] { firewall.answer(answer) }
                 if let b = cfg["block"] as? [String: Any] { blocks.set(b); return }
                 if let h = cfg["hold"] as? [String: Any] { hold.hold(h, from: client); return }
+                if let g = cfg["guard"] as? [String: Any] { guardian.configure(g, from: client); return }
+                if let a = cfg["guard_answer"] as? [String: Any] { guardian.answer(a); return }
+                if let w = cfg["guard_wait"] as? [String: Any] { guardian.wait(w); return }
                 if let r = cfg["release"] as? [String: Any] { hold.release(r, from: client); return }
                 if let w = cfg["watch"] as? [String: Any] { watch.handle(w, from: client) }
                 if cfg["processes"] as? Bool == true { sendProcessList(to: client); return }
@@ -505,5 +515,18 @@ extension Agent {
             started = now
           }
         }
+    }
+}
+
+extension Agent {
+    /// Who this collector is, first thing on a new connection: its version, the app it belongs to, and whether it
+    /// reads Endpoint Security. The app checks it's its own copy's collector (a service registered from another copy,
+    /// an older one in Downloads, kept answering a newer app without Endpoint Security). Collectors before 0.19 send
+    /// none, and the app reads that silence the same way.
+    func sayHello(to client: AgentClient) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let ev = AgentEvent([("kind", .str("guard_hello")), ("version", .str(version)),
+                             ("app", .str(AppPaths.outerApp.path)), ("es", .str(guardian.esState))])
+        client.lock.lock(); _ = client.send(ev.jsonLine()); client.lock.unlock()
     }
 }

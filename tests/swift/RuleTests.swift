@@ -133,6 +133,20 @@ import Testing
         #expect(reloaded.rules.count == 1)
     }
 
+    @Test func rulesSavedBeforeSealingAreSealedOnLoad() throws {
+        let url = dir.appendingPathComponent("rules-plain.json")
+        let book = RuleBook(store: store, fileURL: url)
+        let a = seen(keychainRead(parent: git))
+        makeRegular(a)
+        store.set(.safe, keys: [a])
+        book.approve(RuleProposal(rule: gitRule, evaluation: RuleEvaluation.evaluate(gitRule, entries: store.allEntries)))
+        // As an old version left it: plain JSON on disk.
+        try #require(Vault.shared.read(url)).write(to: url)
+        #expect(Vault.isPlainFile(url))
+        let reloaded = RuleBook(store: store, fileURL: url)
+        #expect(reloaded.rules.count == 1 && !Vault.isPlainFile(url))
+    }
+
     @Test func parsesClaudeProposalsAndIgnoresJunk() {
         let text = """
         Here you go:

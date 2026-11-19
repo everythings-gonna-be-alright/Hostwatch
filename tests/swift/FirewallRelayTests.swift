@@ -16,7 +16,7 @@ import Testing
             listener.newConnectionHandler = { [unowned self] c in
                 lock.lock(); open.append(c); lock.unlock()
                 c.start(queue: .global())
-                func loop() {
+                @Sendable func loop() {
                     if tcp {
                         c.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { d, _, done, _ in
                             if let d, !d.isEmpty { c.send(content: d, completion: .contentProcessed { _ in }) }
@@ -36,7 +36,8 @@ import Testing
         var port: UInt16 { listener.port?.rawValue ?? 0 }
     }
 
-    final class Ended: @unchecked Sendable { let lock = NSLock(); var flows: [RelayFlow] = [] }
+    /// What the callbacks collect, only touched under `lock`.
+    final class Ended: @unchecked Sendable { let lock = NSLock(); var flows: [RelayFlow] = []; var data = Data(); var messages: [Data] = [] }
 
     func relay(to echo: UInt16, decide: @escaping @Sendable (RelayFlow) -> FirewallRelay.Decision = { _ in .pass }) throws -> (FirewallRelay, Ended) {
         let r = FirewallRelay(port: UInt16.random(in: 50_000...59_000))
@@ -85,16 +86,15 @@ import Testing
         let hello = Data(Self.clientHello("api.example.com")) + Data(repeating: 0x41, count: 100_000)
         c.send(content: hello, contentContext: .defaultStream, isComplete: true, completion: .contentProcessed { _ in })   // a half-close
         let echoed = Ended()
-        var got = Data()
-        func read() {
+        @Sendable func read() {
             c.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { d, _, done, _ in
-                echoed.lock.lock(); if let d { got.append(d) }; echoed.lock.unlock()
+                echoed.lock.withLock { if let d { echoed.data.append(d) } }
                 if !done { read() }
             }
         }
         read()
-        try await waitFor { echoed.lock.lock(); defer { echoed.lock.unlock() }; return got.count >= hello.count }
-        echoed.lock.lock(); let total = got; echoed.lock.unlock()
+        try await waitFor { echoed.lock.withLock { echoed.data.count >= hello.count } }
+        let total = echoed.lock.withLock { echoed.data }
         #expect(total == hello)
         try await waitFor { ended.lock.lock(); defer { ended.lock.unlock() }; return !ended.flows.isEmpty }
         let flow = try #require(ended.flows.first)
@@ -112,12 +112,11 @@ import Testing
         let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: r.port)!, using: .udp)
         c.start(queue: .global())
         let box = Ended()
-        var replies: [Data] = []
         for i in 0..<3 { c.send(content: Data("ping \(i)".utf8), completion: .contentProcessed { _ in }) }
-        func read() { c.receiveMessage { d, _, _, e in if let d { box.lock.lock(); replies.append(d); box.lock.unlock() }; if e == nil { read() } } }
+        @Sendable func read() { c.receiveMessage { d, _, _, e in if let d { box.lock.withLock { box.messages.append(d) } }; if e == nil { read() } } }
         read()
-        try await waitFor { box.lock.lock(); defer { box.lock.unlock() }; return replies.count >= 3 }
-        box.lock.lock(); let all = Set(replies.map { String(decoding: $0, as: UTF8.self) }); box.lock.unlock()
+        try await waitFor { box.lock.withLock { box.messages.count >= 3 } }
+        let all = box.lock.withLock { Set(box.messages.map { String(decoding: $0, as: UTF8.self) }) }
         #expect(all == ["ping 0", "ping 1", "ping 2"])
         c.cancel()
     }

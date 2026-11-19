@@ -285,6 +285,11 @@ final class NetworkMapStore: ObservableObject {
         c.blocked = blocked
         c.hours[MapTime.hour(now), default: 0] += 1
         c.pid = e.pid; c.ppid = e.ppid; c.parent = e.parent; c.target = e.target; c.proto = e.extra; c.host = e.host
+        if let port = Int(e.remotePort), port > 0 {
+            var ports = c.ports ?? []
+            if !ports.contains(port) { ports.append(port); if ports.count > 16 { ports.removeFirst() } }
+            c.ports = ports
+        }
         let key = e.signatureKey
         if !key.isEmpty, !(c.keys ?? []).contains(key), (c.keys?.count ?? 0) < 20 { c.keys = (c.keys ?? []) + [key] }
         outgoing[c.id] = c
@@ -332,7 +337,8 @@ final class NetworkMapStore: ObservableObject {
             return MapOutgoing(program: c.program, path: c.path, group: c.group, ip: c.ip, count: n, firstSeen: c.firstSeen,
                                lastSeen: c.lastSeen, blocked: c.blocked,
                                isNew: c.network == nil && !NetworkMapPolicy.isYourNetwork(c.group, routes: routes) && isNew(c.group),
-                               network: c.network, sent: sent, received: received, fresh: MapTime.fresh(c.hours, before: w.start))
+                               network: c.network, sent: sent, received: received, fresh: MapTime.fresh(c.hours, before: w.start),
+                               ports: c.ports ?? [])
         }
     }
 

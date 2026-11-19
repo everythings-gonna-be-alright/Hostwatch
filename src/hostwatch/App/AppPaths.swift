@@ -7,6 +7,25 @@ enum AppPaths {
     /// The identifier up to 0.13.0 (`local.`): its settings and keychain items are carried over on first launch.
     static let oldBundleID = "local.hostwatch.app"
 
+    /// The collector with the Endpoint Security entitlement, in its own bundle inside the app (ADR 0018): the app keeps the
+    /// signature it always had (its keychain identity, and so its data key), and only the root collector is entitled.
+    static let collectorBundleID = "tech.hostwatch.collector"
+    static let collectorHelper = "Contents/Library/Helpers/Hostwatch Collector.app"
+
+    /// The entitled collector inside `app`, when this build has one.
+    static func entitledCollector(in app: URL) -> String? {
+        let path = app.appendingPathComponent(collectorHelper + "/Contents/MacOS/Hostwatch").path
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
+    }
+
+    /// The app around this process: itself, or the app holding the collector's helper bundle.
+    static var outerApp: URL { outerApp(ofBundle: Bundle.main.bundlePath) }
+
+    static func outerApp(ofBundle path: String) -> URL {
+        if let r = path.range(of: "/" + collectorHelper) { return URL(fileURLWithPath: String(path[..<r.lowerBound])) }
+        return URL(fileURLWithPath: path)
+    }
+
     private static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
     /// ~/Library/Application Support/Hostwatch: patterns, stories, domains, signing facts, token.
     /// In demo mode everything lives in the demo folder instead.

@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.19.0 – Endpoint Security and Swift 6
+
+### New
+
+- **Protection stops things before they happen.** Apple granted Hostwatch the Endpoint Security entitlement. In Ask
+  and Strict, macOS now holds a launch, or an open in a protected place, until Hostwatch answers: a blocked program
+  never starts, a blocked file is never read. Your shell just waits for your answer instead of saying "Job has
+  stopped". What Hostwatch can settle by itself never waits, and without the app everything goes on.
+- **Finish updating Hostwatch.** When the part that works in the background is still an older one (or another copy's,
+  in Downloads, say), Hostwatch offers to replace it, so the update really brings Endpoint Security.
+- **Ports on the network map.** A destination's and a program's details list the ports their connections went to,
+  with what usually speaks there ("443 HTTPS, 5223 Apple Push"). Destinations carry their kind of traffic as small
+  tags, and the full lists have a Ports column.
+- **Classify with AI says what happened to each pattern.** Decided, or still New with the AI's suggestion and why:
+  high-risk, sent back to you, a program that runs anything, or AI answers waiting for you in Needs You.
+
+### Better
+
+- **Liquid Glass throughout.** The selected tab is a glass lens. Stories, Needs You, Rules and Decisions are glass
+  cards with a seal in their colour. The network map sits on a glass card over soft colour, with a new details
+  panel, lines that fan apart instead of bundling into one, and a second click that clears a selection.
+- **Classify with AI** is a glass button with a violet light inside that wakes on hover.
+- **A story's steps** open from a whole bar, list each connection once, and read left to right.
+- **Readable badges.** Counts on orange carry dark digits, plain counts are a soft capsule in the text colour.
+- **Process Details** on the map opens and closes from the same button, and takes only the room it needs.
+- **The Claude session mark** in Events is a tile like the kinds beside it.
+
+### Faster and lighter
+
+- **Endpoint Security, directly.** The collector hears about launches and file opens straight from macOS, without
+  running Apple's `eslogger` beside it. One process fewer, less work per event. Only the collector carries the
+  entitlement, from its own bundle inside the app, so the app itself is signed as before and your data key stays
+  where it was.
+- **Running Now's charts stay smooth**, 30 minutes included: worked out once per sample, drawn in 15-second steps,
+  and moving the pointer no longer redraws them (it took up to 88% CPU).
+- **Switching tabs** no longer rebuilds the hidden ones (the network map alone cost 150 ms a switch).
+- **Swift 6.** Hostwatch builds in Swift 6 language mode: a data race is now a compile error, not a rare crash. A
+  race in Watch Closely's command-line tool was found and fixed on the way.
+
+### Fixes
+
+- **Your data key is never replaced.** If Hostwatch can't open its key file, it now says so and writes nothing,
+  rather than making a new key over it, which made everything saved before unreadable. A failed Secure Enclave call is
+  retried first. Rules saved before files were encrypted are encrypted now.
+- **Allow Once and Block Once** answer this run of the program only: running it again asks again.
+- **Settings** says plainly that the collector runs as a background service.
+
 ## 0.18.0 – UI improvements and bugfixes
 
 ### New

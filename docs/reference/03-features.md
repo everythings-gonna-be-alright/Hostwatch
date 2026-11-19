@@ -832,13 +832,16 @@ curl and other programs that run whatever they're told are judged by what they r
   yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
-- **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a
-  launch or a protected file's open reaches it, a few milliseconds after it happened. What's blocked is stopped.
-  A question pauses the program, and a glass panel asks: *Block* stops it, *Allow Once* lets it go on, *Always
-  Allow* also marks its pattern Safe. Without an answer in 30 seconds it goes on. Only your own programs are acted on,
-  never root's, the system UI, terminals or Hostwatch, and at most five are paused at once. A file that was opened
-  may already have been read: the program is stopped, the read can't be undone. Endpoint Security, once approved,
-  will stop things before they happen.
+- **Ask and Strict act before it happens.** With Endpoint Security, macOS holds a launch, or an open in a protected
+  place, until Hostwatch answers: a blocked program never starts, a blocked file is never read. A question holds it
+  while a glass panel asks: *Always Block*, *Block Once*, *Allow Once* or *Always Allow*. Your shell just waits, as
+  for a slow program, and there's nothing to resume. Without an answer before macOS's time limit runs out (the
+  question counts it down), it is blocked. What Hostwatch can settle by itself never waits: its own processes, other
+  users' and root's, macOS's own programs (except the ones that run anything, like shells, curl or python),
+  unprotected files, and a place's expected programs. Without the app connected, everything goes on.
+- **When the app is busy:** if the app doesn't answer within a moment, the launch goes on and Hostwatch pauses it
+  right after, the way it did before Endpoint Security, then asks. A build without Apple's entitlement (one you make
+  yourself) works that way all the time: a few milliseconds late, a question pausing the program.
 - **Careful with Strict for launches.** It stops every launch nobody decided yet, builds included. Watch first:
   its counts on the Overview page show what Ask and Strict would do.
 - **Protected files:** cards for SSH keys, developer credentials (cloud, Kubernetes, registries, GitHub, GPG),

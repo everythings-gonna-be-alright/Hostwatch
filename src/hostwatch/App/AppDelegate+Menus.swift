@@ -444,10 +444,11 @@ extension AppDelegate {
             showInTimeline: { [weak self] date in self?.showInTimeline(date) }))
         window.center()
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+        let closing = ObjectIdentifier(window)            // which window: the notification itself stays on its side
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 details.analysis.cancel()
-                self?.askWindows.removeAll { $0 === note.object as? NSWindow }
+                self?.askWindows.removeAll { ObjectIdentifier($0) == closing }
             }
         }
         askWindows.append(window)
@@ -471,8 +472,9 @@ extension AppDelegate {
             ignore: { [weak self, weak window] in self?.stories.ignoreAlways(story.id); window?.close() }))
         window.center()
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
-            MainActor.assumeIsolated { self?.askWindows.removeAll { $0 === note.object as? NSWindow } }
+        let closing = ObjectIdentifier(window)            // which window: the notification itself stays on its side
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.askWindows.removeAll { ObjectIdentifier($0) == closing } }
         }
         askWindows.append(window)
         NSApp.activate(ignoringOtherApps: true)

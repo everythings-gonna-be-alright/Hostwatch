@@ -147,7 +147,8 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     }
 
     private func pushConfig() {
-        let cfg: [String: Any] = applyExclusions
+        // Built here, then only read on the queue: [String: Any] can't say it's Sendable, this one is never changed.
+        nonisolated(unsafe) let cfg: [String: Any] = applyExclusions
             ? ["exclude": exclusionLines, "kinds": kinds, "rate_limit": false]
             : ["exclude": [String](), "kinds": EventKind.allCases.map(\.rawValue), "rate_limit": false]
         queue.async {
@@ -173,10 +174,10 @@ final class HistoryRecorder: ObservableObject, @unchecked Sendable {
     /// Compresses a finished file in the background, then re-applies the size limit.
     private func compressLater(_ plain: URL) {
         compressQueue.async { [weak self] in
-            guard FileManager.default.fileExists(atPath: plain.path) else { return }
+            guard let self, FileManager.default.fileExists(atPath: plain.path) else { return }
             _ = try? HistoryFiles.scrubSecrets(.plain(plain))   // anything recorded before full masking
-            do { try HistoryFiles.compress(plain) } catch { self?.report("Compressing \(plain.lastPathComponent) failed") }
-            self?.queue.async { self?.enforceLimit() }
+            do { try HistoryFiles.compress(plain) } catch { self.report("Compressing \(plain.lastPathComponent) failed") }
+            self.queue.async { self.enforceLimit() }
         }
     }
 

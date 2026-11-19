@@ -36,6 +36,7 @@ enum Entry {
             MainActor.assumeIsolated { runStoryReplay(args[i + 1]) }
         }
         if args.contains("--metrics-probe") { runMetricsProbe() }
+        if args.contains("--vault-probe") { print(Vault.probe()); exit(0) }   // why the data key opens or not (read only)
         if args.contains("--guard-report") {                // what the Claude Code guard stopped, by reason (read only)
             MainActor.assumeIsolated { print(ClaudeGuard().report()) }
             exit(0)

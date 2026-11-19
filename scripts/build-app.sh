@@ -15,6 +15,31 @@ if [ "${DEMO:-0}" = 1 ]; then
   SWIFT_FLAGS+=(-Xswiftc -DDEMO --build-path .build-demo)
   NAME="Hostwatch Demo"; BUNDLE_ID="tech.hostwatch.demo"
 fi
+# Endpoint Security (ADR 0018): only the root collector is entitled, from its own bundle inside the app
+# (Contents/Library/Helpers/Hostwatch Collector.app, tech.hostwatch.collector). The app itself keeps exactly the
+# signature it always had: an entitlement there changed its keychain identity, so it lost its data key. The
+# entitlement is restricted: it needs Apple's Developer ID provisioning profile for the collector's identifier, or
+# macOS refuses to start it. Both go in only together, only when the profile names the collector and grants it.
+# The profile lives outside the repo (it names the team): HOSTWATCH_COLLECTOR_PROFILE, or the default path below.
+# Checked before building, so a wrong profile stops here and never leaves an unsigned app behind.
+COLLECTOR_ID="tech.hostwatch.collector"
+PROFILE="${HOSTWATCH_COLLECTOR_PROFILE:-$HOME/.hostwatch-signing/HostwatchCollector.provisionprofile}"
+ES_ENTITLED=0
+if [ -f "$PROFILE" ] && [ "${DEMO:-0}" != 1 ]; then
+  DECODED="$(mktemp)"; trap 'rm -f "$DECODED" "$DECODED.ent"' EXIT
+  security cms -D -i "$PROFILE" > "$DECODED"
+  TEAM="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$DECODED")"
+  APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$DECODED")"
+  ES="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.endpoint-security.client' "$DECODED" 2>/dev/null || true)"
+  EXPIRES="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$DECODED")"
+  if [ "$APPID" != "$TEAM.$COLLECTOR_ID" ]; then
+    echo "error: $PROFILE is for another identifier, not $COLLECTOR_ID" >&2; exit 1
+  fi
+  if [ "$ES" != "true" ]; then
+    echo "error: $PROFILE doesn't grant Endpoint Security (enable it for $COLLECTOR_ID and download the profile again)" >&2; exit 1
+  fi
+  ES_ENTITLED=1
+fi
 # Whole-module optimisation re-optimises the whole app on any change (77 s for a one-line edit). Local builds skip it
 # (40 s, a few percent slower at run time); releases (RELEASE=1, package.sh) keep it.
 if [ "${RELEASE:-0}" != 1 ]; then SWIFT_FLAGS+=(-Xswiftc -no-whole-module-optimization); fi
@@ -26,7 +51,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Hostwatch"
 # Shipped binaries don't need debug symbols (they also list build paths); strip before signing.
-strip -S -x "$APP/Contents/MacOS/Hostwatch"
+# KEEP_SYMBOLS=1 keeps them, to read a `sample` of the running app (never for a release).
+if [ "${KEEP_SYMBOLS:-0}" != 1 ] || [ "${RELEASE:-0}" = 1 ]; then strip -S -x "$APP/Contents/MacOS/Hostwatch"; fi
 # The collector ships inside the app; Hostwatch starts it with an admin prompt.
 # Icon: regenerate with `swift scripts/make-icon.swift` after changing the design.
 [ -f assets/AppIcon.icns ] || swift scripts/make-icon.swift
@@ -97,6 +123,45 @@ if [ -n "${CODESIGN_IDENTITY:-}" ] && [ "$CODESIGN_IDENTITY" != "-" ] && [ "${DE
 </dict>
 </plist>
 DAEMON
+  if [ "$ES_ENTITLED" = 1 ]; then
+    # The entitled collector: the same binary in a background-only bundle of its own, signed first (inside out).
+    HELPER="$APP/Contents/Library/Helpers/Hostwatch Collector.app"
+    mkdir -p "$HELPER/Contents/MacOS"
+    cp "$APP/Contents/MacOS/Hostwatch" "$HELPER/Contents/MacOS/Hostwatch"
+    cp "$PROFILE" "$HELPER/Contents/embedded.provisionprofile"
+    cat > "$HELPER/Contents/Info.plist" <<HELPERPLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>$COLLECTOR_ID</string>
+  <key>CFBundleName</key><string>Hostwatch Collector</string>
+  <key>CFBundleExecutable</key><string>Hostwatch</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
+  <key>LSMinimumSystemVersion</key><string>26.0</string>
+  <key>LSBackgroundOnly</key><true/>
+</dict>
+</plist>
+HELPERPLIST
+    cat > "$DECODED.ent" <<ENT
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.application-identifier</key><string>$TEAM.$COLLECTOR_ID</string>
+  <key>com.apple.developer.team-identifier</key><string>$TEAM</string>
+  <key>com.apple.developer.endpoint-security.client</key><true/>
+</dict>
+</plist>
+ENT
+    codesign --force --options runtime $TIMESTAMP --entitlements "$DECODED.ent" --sign "$CODESIGN_IDENTITY" "$HELPER"
+    echo "Endpoint Security: the collector is entitled (profile valid until $EXPIRES)"
+  else
+    echo "Endpoint Security: no profile at $PROFILE, the collector uses eslogger"
+  fi
+  # The app: no entitlements, ever (its keychain identity holds the data key).
   codesign --force --options runtime $TIMESTAMP --sign "$CODESIGN_IDENTITY" "$APP"
   echo "Signed: $CODESIGN_IDENTITY" | sed -E 's/\([A-Z0-9]{10}\)/(team)/'
 else

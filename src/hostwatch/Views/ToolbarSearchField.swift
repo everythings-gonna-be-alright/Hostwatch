@@ -31,7 +31,7 @@ struct ToolbarSearchField: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
 
-    final class Coordinator: NSObject {
+    @MainActor final class Coordinator: NSObject {
         var text: Binding<String>
         init(text: Binding<String>) { self.text = text }
 

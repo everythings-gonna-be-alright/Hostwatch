@@ -58,8 +58,16 @@ final class NetworkMapViewState: ObservableObject {
 
     /// The full list's order when it opened: rows keep their place while counts change, new ones go to the end.
     var listOrder: [String] = []
+    /// When the full list's selection last changed (a second click on the same row clears it).
+    var selectedAt = Date.distantPast
     /// The process whose details show under the map, as under Events.
     @Published var process: ActivityEvent?
+
+    /// Whether `e`'s details are the ones showing (the same process: pid and program).
+    func showsProcess(_ e: ActivityEvent) -> Bool { process.map { $0.pid == e.pid && $0.proc == e.proc } ?? false }
+
+    /// Process Details opens them, a second click closes them.
+    func toggleProcess(_ e: ActivityEvent) { process = showsProcess(e) ? nil : e }
     @Published var renaming = ""
 }
 
@@ -100,8 +108,7 @@ struct NetworkMapView: View {
                                 blockedPrograms: blockedPrograms, selected: state.selection, interfaceName: interfaceName)
         VStack(spacing: 0) {
             controls
-            Divider()
-            if let p = store.profile, !p.decided { newNetworkBanner(p) }
+            if let p = store.profile, !p.decided { newNetworkBanner(p).padding(.horizontal, 16).padding(.bottom, 4) }
             HStack(alignment: .top, spacing: 16) {
                 Group {
                     if let key = state.allOf {
@@ -117,20 +124,23 @@ struct NetworkMapView: View {
                         }
                     } else {
                         ScrollView {
-                            map(graph).padding(.vertical, 12)
+                            map(graph).padding(16)
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                                 // A click on an empty spot clears the selection.
                                 .background(Color.clear.contentShape(Rectangle()).onTapGesture { state.selection = nil })
                         }
+                        // The map as a glass card, like the details beside it (its nodes are plain tiles on it).
+                        .protectionGlass(22)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onGeometryChange(for: Int.self) { max(1, Int(($0.size.height - 70) / 48)) } action: { rows in
+                .padding(.vertical, 12)
+                .onGeometryChange(for: Int.self) { max(1, Int(($0.size.height - 70) / 42)) } action: { rows in   // 42: a tile and its gap
                     if state.room != rows { state.room = rows }
                 }
                 NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
                                     openStories: openStories, interfaceName: interfaceName, actions: actions,
-                                    showProcess: hud == nil ? nil : { state.process = $0 })
+                                    showProcess: hud == nil ? nil : { state.toggleProcess($0) })
                     .frame(width: 300)
                     .padding(.vertical, 12)
             }
@@ -138,9 +148,8 @@ struct NetworkMapView: View {
             if let event = state.process, let hud, let signatures {
                 Divider()
                 EventDetailPanel(event: event, signatures: signatures, actions: hud) { state.process = nil }
-                    .frame(maxHeight: 280)
+                    .fixedSize(horizontal: false, vertical: true)       // its own height: a fixed 280 left an empty band above it
             }
-            Divider()
             footer(graph)
         }
     }
@@ -201,8 +210,12 @@ struct NetworkMapView: View {
 
     /// A network Hostwatch hasn't seen before: treated as not trusted until you say.
     private func newNetworkBanner(_ p: NetworkProfile) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange).accessibilityHidden(true)
+        HStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(Color.orange.gradient, in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("A new network: \(p.name)").font(.system(size: 13, weight: .semibold))
                 Text("Hostwatch treats it as not trusted until you decide: other machines are kept away from this Mac.")
@@ -213,8 +226,9 @@ struct NetworkMapView: View {
             Button("Trust It") { store.setTrusted(p.id, true) }.buttonStyle(.glassProminent)
         }
         .controlSize(.small)
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Color.orange.opacity(0.08))
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        // A glass card tinted for attention, like the other notices.
+        .protectionGlass(16, tint: Color.orange.opacity(0.12))
         .accessibilityElement(children: .contain)
     }
 
@@ -247,8 +261,8 @@ struct NetworkMapView: View {
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .monospacedDigit()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 8)
         .help(graph.summary)
     }
 
@@ -289,10 +303,26 @@ struct NetworkMapView: View {
         .backgroundPreferenceValue(NodeFrames.self) { anchors in
             GeometryReader { proxy in
                 Canvas { context, _ in
-                    for edge in graph.edges {
+                    // Many lines from one tile (a browser's twenty destinations) start a little apart down its edge,
+                    // and many into one tile arrive apart: one point for all of them made a single thick rope.
+                    // Each fan in the order of its other ends, top to bottom, so its lines don't cross.
+                    func y(_ id: String) -> CGFloat { anchors[id].map { proxy[$0].midY } ?? 0 }
+                    let outs = Dictionary(grouping: graph.edges.indices, by: { graph.edges[$0].from })
+                        .mapValues { $0.sorted { y(graph.edges[$0].to) < y(graph.edges[$1].to) } }
+                    let ins = Dictionary(grouping: graph.edges.indices, by: { graph.edges[$0].to })
+                        .mapValues { $0.sorted { y(graph.edges[$0].from) < y(graph.edges[$1].from) } }
+                    func spread(_ i: Int, in list: [Int]?, height: CGFloat) -> CGFloat {
+                        guard let list, list.count > 1, let k = list.firstIndex(of: i) else { return 0 }
+                        let step = min(3, height * 0.6 / CGFloat(list.count - 1))
+                        return (CGFloat(k) - CGFloat(list.count - 1) / 2) * step
+                    }
+                    // A busy map draws quieter lines: the blocked ones keep their full strength.
+                    let busy = graph.edges.count > 30
+                    for (i, edge) in graph.edges.enumerated() {
                         guard let a = anchors[edge.from], let b = anchors[edge.to] else { continue }
                         let from = proxy[a], to = proxy[b]
-                        let start = CGPoint(x: from.maxX, y: from.midY), end = CGPoint(x: to.minX, y: to.midY)
+                        let start = CGPoint(x: from.maxX, y: from.midY + spread(i, in: outs[edge.from], height: from.height))
+                        let end = CGPoint(x: to.minX, y: to.midY + spread(i, in: ins[edge.to], height: to.height))
                         var path = Path()
                         path.move(to: start)
                         let mid = (start.x + end.x) / 2
@@ -300,8 +330,9 @@ struct NetworkMapView: View {
                         let dim = related.map { !($0.contains(edge.from) && $0.contains(edge.to)) } ?? false
                         // Bytes from 100 KB up, connections from one: both reach the widest line at about the same mass.
                         let scaled = state.measure == .sent ? Double(edge.weight) / 100_000 : Double(edge.weight)
-                        let width = min(5, 1 + log2(max(1, scaled)) / 2)
-                        context.stroke(path, with: .color(LegendLine.color(edge.style).opacity(dim ? 0.15 : edge.style == .allowed ? 0.55 : 0.9)),
+                        let width = min(3.5, 1 + log2(max(1, scaled)) / 2.5)
+                        let strength = edge.style == .blocked ? 0.9 : edge.style == .new ? (busy ? 0.6 : 0.85) : (busy ? 0.35 : 0.55)
+                        context.stroke(path, with: .color(LegendLine.color(edge.style).opacity(dim ? 0.12 : strength)),
                                        style: StrokeStyle(lineWidth: width, lineCap: .round,
                                                           dash: edge.style == .blocked ? [4, 3] : []))
                     }
@@ -313,7 +344,7 @@ struct NetworkMapView: View {
     }
 
     private func column(_ sections: [MapSection], index: Int, related: Set<String>?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 if !section.nodes.isEmpty || section.more > 0 {
                     if section.key == "devices", let p = store.profile {
@@ -356,8 +387,10 @@ struct NetworkMapView: View {
         }
         .padding(index == 1 ? 8 : 0)
         .background {
+            // This Mac, at the centre: a quiet panel of its own (a plain fill: the map is already glass).
             if index == 1 {
-                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.04))
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.accentColor.opacity(0.08))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
             }
         }
     }
@@ -423,6 +456,7 @@ struct MapNodeView: View {
     let selected: Bool
     let dimmed: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: action) {
@@ -434,10 +468,13 @@ struct MapNodeView: View {
                         .frame(width: 18)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(node.title)
-                        .font(.system(size: 13, weight: selected ? .semibold : .medium,
-                                      design: node.kind == .internet ? .monospaced : .default))
-                        .lineLimit(1).truncationMode(.middle)
+                    // The name, then what kind of traffic went there (from its ports) as small neutral tags on the
+                    // same line: a line of its own made every destination taller. Status keeps its colours.
+                    // The name always whole: the tags show only when they fit beside it.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) { titleText.fixedSize(); tagsRow }
+                        titleText
+                    }
                     if !node.subtitle.isEmpty {
                         Text(node.subtitle)
                             .font(.system(size: 11, design: node.dataSubtitle ? .monospaced : .default))
@@ -455,16 +492,17 @@ struct MapNodeView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .frame(minHeight: node.kind == .listener || node.kind == .program || node.kind == .closedPorts ? 32 : 40)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(blocked ? Color.red.opacity(0.08) : Color(nsColor: .controlBackgroundColor)))
+            .frame(minHeight: node.kind == .listener || node.kind == .program || node.kind == .closedPorts ? 30 : 36)
+            // A light tile on the map's glass (no glass on glass): a little brighter when selected, tinted red when
+            // blocked, with a hairline that turns into the selection's or the block's outline.
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(blocked ? Color.red.opacity(0.10) : tileFill))
             .overlay {
-                // Blocked: a red outline (the selection's own outline wins while selected).
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(selected ? Color.primary : blocked ? Color.red.opacity(0.7) : Color.primary.opacity(0.1),
-                                  lineWidth: selected ? 2 : blocked ? 1.5 : 0.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(selected ? Color.primary.opacity(0.8) : blocked ? Color.red.opacity(0.7) : Color.primary.opacity(0.20),
+                                  lineWidth: selected || blocked ? 1.5 : 0.5)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .opacity(dimmed ? 0.45 : 1)
@@ -473,7 +511,36 @@ struct MapNodeView: View {
         .help(node.title + (node.subtitle.isEmpty ? "" : ", " + node.subtitle))
     }
 
+    private var titleText: some View {
+        Text(node.title)
+            .font(.system(size: 13, weight: selected ? .semibold : .medium, design: node.kind == .internet ? .monospaced : .default))
+            .lineLimit(1).truncationMode(.middle)
+    }
+
+    /// What kind of traffic went there (from its ports): small neutral tags, status keeps its colours.
+    @ViewBuilder private var tagsRow: some View {
+        if !node.tags.isEmpty {
+            HStack(spacing: 3) {
+                ForEach(node.tags, id: \.self) { tag in
+                    Text(tag)
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.primary.opacity(0.10)))
+                        .lineLimit(1).fixedSize()
+                }
+            }
+            .accessibilityLabel("Traffic: " + node.tags.joined(separator: ", "))
+        }
+    }
+
     private var blocked: Bool { node.badge == .blocked }
+
+    /// Darker than the glass behind it in either appearance: black in dark mode (the text colour is white there, so
+    /// more of it only made the tiles lighter), the text colour in light mode. Selected: a step further.
+    private var tileFill: Color {
+        scheme == .dark ? Color.black.opacity(selected ? 0.24 : 0.14) : Color.primary.opacity(selected ? 0.22 : 0.16)
+    }
 
     private var subtitleColor: Color {
         switch (node.kind, node.badge) {
@@ -495,5 +562,23 @@ struct MapNodeView: View {
             return node.title == "VPN" ? "lock.shield" : node.title.localizedCaseInsensitiveContains("wi-fi") ? "wifi" : "cable.connector"
         case .destination: return nil
         }
+    }
+}
+
+/// Behind the network map: soft pools of colour (blue for this Mac, teal for the way out, indigo for the internet)
+/// for the glass to pick up, as Protection's backdrop does.
+struct MapBackdrop: View {
+    var body: some View {
+        ZStack {
+            RadialGradient(colors: [Color.blue.opacity(0.12), .clear], center: UnitPoint(x: 0.3, y: 0.15),
+                           startRadius: 0, endRadius: 520)
+            RadialGradient(colors: [Color.teal.opacity(0.10), .clear], center: UnitPoint(x: 0.75, y: 0.5),
+                           startRadius: 0, endRadius: 480)
+            RadialGradient(colors: [Color.indigo.opacity(0.10), .clear], center: UnitPoint(x: 0.05, y: 0.95),
+                           startRadius: 0, endRadius: 520)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

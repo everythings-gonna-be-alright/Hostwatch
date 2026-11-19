@@ -8,11 +8,13 @@ import SwiftUI
 struct AgentBadge: View {
     let agent: CodingAgent
     var size: CGFloat = 15
+    /// As the Events list's kind tiles: a soft tint of the maker's colour with the mark in it (Claude so far).
+    var tinted = false
 
     var body: some View {
         Group {
             switch agent {
-            case .claude: AnthropicMark()
+            case .claude: AnthropicMark(tinted: tinted)
             case .codex: OpenAIMark()
             case .gemini: GoogleMark()
             case .cursor: CursorMark()
@@ -26,14 +28,18 @@ struct AgentBadge: View {
 
 /// Anthropic: a rounded terracotta tile with the slanted, cross-bar-less A.
 private struct AnthropicMark: View {
+    var tinted = false
+    static let terracotta = Color(red: 0.85, green: 0.47, blue: 0.34)
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             ZStack {
-                RoundedRectangle(cornerRadius: w * 0.24, style: .continuous).fill(Color(red: 0.85, green: 0.47, blue: 0.34))
+                RoundedRectangle(cornerRadius: w * (tinted ? 0.28 : 0.24), style: .continuous)
+                    .fill(tinted ? Self.terracotta.opacity(0.18) : Self.terracotta)
                 // Anthropic's logomark (the published 24-unit outline), drawn at 62 % of the box.
                 Path { p in
-                    let s = w * 0.62 / 24, ox = (w - 24 * s) / 2, oy = (h - 24 * s) / 2
+                    let s = w * (tinted ? 0.56 : 0.62) / 24, ox = (w - 24 * s) / 2, oy = (h - 24 * s) / 2
                     func pt(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: ox + x * s, y: oy + y * s) }
                     p.move(to: pt(17.3041, 3.541)); p.addLine(to: pt(13.6323, 3.541)); p.addLine(to: pt(20.3283, 20.459))
                     p.addLine(to: pt(24, 20.459)); p.closeSubpath()
@@ -42,7 +48,7 @@ private struct AnthropicMark: View {
                     p.addLine(to: pt(17.2322, 20.4591)); p.addLine(to: pt(10.5363, 3.5409)); p.closeSubpath()
                     p.move(to: pt(6.3247, 13.7641)); p.addLine(to: pt(8.6161, 7.8185)); p.addLine(to: pt(10.9075, 13.7641)); p.closeSubpath()
                 }
-                .fill(Color.white, style: FillStyle(eoFill: true))
+                .fill(tinted ? Self.terracotta : Color.white, style: FillStyle(eoFill: true))
             }
         }
     }
@@ -157,7 +163,8 @@ extension AgentSession {
 }
 
 extension RelativeDateTimeFormatter {
-    static let short: RelativeDateTimeFormatter = { let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; return f }()
+    // Formatters are thread-safe (Apple, since macOS 10.9) and this one is set up once: shared by models and views.
+    nonisolated(unsafe) static let short: RelativeDateTimeFormatter = { let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; return f }()
 }
 
 /// Sessions replayed from the Time Travel window, once per window (not on every redraw).

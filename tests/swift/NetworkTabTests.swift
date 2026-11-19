@@ -102,7 +102,7 @@ import Testing
         let domains = DomainRegistry(replayLearningUntil: Date().addingTimeInterval(-1))
         let t = Date()
         for (i, h) in ["api.example.com", "www.apple.com", "cdn.example.net", "docs.swift.org"].enumerated() {
-            domains.observe(net("/opt/tools/bin/syncd", pid: 9, to: "93.184.216.\(i):443", host: h), at: t.addingTimeInterval(Double(i) * 30))
+            _ = domains.observe(net("/opt/tools/bin/syncd", pid: 9, to: "93.184.216.\(i):443", host: h), at: t.addingTimeInterval(Double(i) * 30))
         }
         let state = NetworkViewState()
         state.filter = .all
@@ -202,5 +202,27 @@ import Testing
         #expect(fw.prompts.first { $0.event.pid == 7 }?.context == "You just allowed curl to run.")
         fw.launchAnswered(pid: 999, name: "x", allowed: false)                  // another program: nothing happens
         #expect(fw.prompts.count == 1)
+    }
+}
+
+/// The network map's details list the ports connections went to, the well-known first.
+@Suite struct MapProgramPorts {
+    @Test func wellKnownFirstThenTheRest() {
+        #expect(NetworkMapBuilder.portsList([]) == "")
+        #expect(NetworkMapBuilder.portsList([443]) == "443 HTTPS")
+        #expect(NetworkMapBuilder.portsList([5228, 443, 80, 443]) == "80 HTTP, 443 HTTPS, 5228 Google Push")
+        #expect(NetworkMapBuilder.portsList([9000, 22]) == "22 SSH, 9000")                // an unknown port: its number alone
+    }
+}
+
+/// A destination's tile tags the kind of traffic that went there, from its ports.
+@Suite struct MapTrafficTags {
+    @Test func knownKindsFirstUnknownAsPortThenACount() {
+        #expect(NetworkMapBuilder.trafficTags([]) == [])
+        #expect(NetworkMapBuilder.trafficTags([443, 443, 80]) == ["HTTP", "HTTPS"])
+        #expect(NetworkMapBuilder.trafficTags([67, 68]) == ["DHCP"])                       // one kind, two ports
+        #expect(NetworkMapBuilder.trafficTags([9000]) == [":9000"])
+        #expect(NetworkMapBuilder.trafficTags([58458]) == [])                                // a random reply port: no tag
+        #expect(NetworkMapBuilder.trafficTags([22, 53, 443, 5228, 9000]) == ["SSH", "DNS", "HTTPS", "+2"])
     }
 }

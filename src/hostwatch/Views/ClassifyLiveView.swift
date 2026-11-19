@@ -94,7 +94,8 @@ struct ClassifyLiveView: View {
         case .asking(let who): "Asking \(who)…"
         case .done(_, let by, let reason): reason.isEmpty ? "by \(by)" : "\(by): \(reason)"
         case .left(let why): why
-        case .yours(_, let by, let reason, let why): "\(by) says: \(reason). It stays New: \(why)."
+        case .yours(let status, let by, let reason, let why):
+            "\(by) suggests \(status.title)" + (reason.isEmpty ? "" : ": \(reason)") + ". Still New, because \(why)."
         case .failed(let why): why
         }
     }

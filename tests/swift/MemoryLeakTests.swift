@@ -75,15 +75,16 @@ import Testing
     func growth(lines count: Int, pooled: Bool) throws -> Int64 {
         var fds: [Int32] = [-1, -1]
         #expect(pipe(&fds) == 0)
+        let (readEnd, writeEnd) = (fds[0], fds[1])          // constants for the two threads
         let writer = Thread {
-            for i in 0..<count { let d = Self.esloggerLine(i); d.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, d.count) } }
-            close(fds[1])
+            for i in 0..<count { let d = Self.esloggerLine(i); d.withUnsafeBytes { _ = write(writeEnd, $0.baseAddress, d.count) } }
+            close(writeEnd)
         }
         let done = DispatchSemaphore(value: 0)
-        var grown: Int64 = 0
+        let grown = WrittenOnce<Int64>()                   // set by the reader, read after done.wait()
         let before = MemoryFootprint.current()
         Thread.detachNewThread {
-            let reader = LineReader(fd: fds[0])
+            let reader = LineReader(fd: readEnd)
             func handle(_ line: Data) {
                 guard let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else { return }
                 let process = raw["process"] as? [String: Any] ?? [:]
@@ -95,13 +96,13 @@ import Testing
             } else {
                 while let line = reader.next() { handle(line) }
             }
-            grown = Int64(MemoryFootprint.current()) - Int64(before)
-            close(fds[0])
+            grown.value = Int64(MemoryFootprint.current()) - Int64(before)
+            close(readEnd)
             done.signal()
         }
         writer.start()
         done.wait()
-        return grown
+        return grown.value ?? 0
     }
 
     @Test func eachLineDrainsItsAutoreleasePool() throws {
@@ -118,18 +119,19 @@ import Testing
     @Test func readingHundredsOfMegabytesKeepsNoneOfThem() throws {
         var fds: [Int32] = [-1, -1]
         #expect(pipe(&fds) == 0)
+        let (readEnd, writeEnd) = (fds[0], fds[1])
         let line = Data((String(repeating: "x", count: 1999) + "\n").utf8)
         let block = Data((0..<64).map { _ in line }.joined())            // 128 KB of whole lines
         let writer = Thread {
-            for _ in 0..<2400 { block.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, block.count) } }   // 300 MB
-            close(fds[1])
+            for _ in 0..<2400 { block.withUnsafeBytes { _ = write(writeEnd, $0.baseAddress, block.count) } }   // 300 MB
+            close(writeEnd)
         }
-        let reader = LineReader(fd: fds[0])
+        let reader = LineReader(fd: readEnd)
         var count = 0
         var most = 0
         writer.start()
         reader.forEach { _ in count += 1; most = max(most, reader.retainedBytes); return true }
-        close(fds[0])
+        close(readEnd)
         #expect(count == 2400 * 64)
         // The storage, not the process's footprint (other tests run alongside): the bug kept all 300 MB here.
         #expect(most < 2_000_000, "the reader's buffer held \(most / 1_000_000) MB")

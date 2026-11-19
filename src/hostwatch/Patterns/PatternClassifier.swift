@@ -137,12 +137,34 @@ final class PatternClassifier: ObservableObject {
         (SignatureBuilder.aiSafeRefusal(e) ?? "it's yours to decide") + ", so only you can mark it Safe"
     }
 
-    /// The live list's state for an answer: a Safe the app won't take is yours to decide, with why.
+    /// The live list's state for an answer, from what the store actually did with it. An AI answer is often kept as a
+    /// suggestion and the pattern stays New (high-risk, sent back to you, a run-anything tool, or AI answers waiting
+    /// for you): the list said "Safe" anyway, and the pattern looked decided, then New again. Now it says which, and why.
     private func liveState(_ status: SignatureStatus, _ e: SignatureEntry, by: String, _ reason: String) -> ClassifyLive.Step.State {
-        guard status == .safe, Self.staysYours(e) else { return .done(status, by: by, reason: reason) }
-        // Apply the Verdicts: applied as your decision. Otherwise (suggest only, or automatic) it waits for you.
-        if bulk?.apply == true { return .done(status, by: by, reason: reason + " · applied as your decision") }
-        return .yours(status, by: by, reason: reason, why: Self.yoursBecause(e))
+        // Apply the Verdicts is your decision: applied as the answer arrives (it used to wait for the next batch, so
+        // the list showed a verdict the table didn't have yet).
+        if bulk?.apply == true { store.acceptSuggestions(keys: [e.id], yours: true) }
+        let now = store.status(forKey: e.id)
+        if now != .unclassified {
+            let yours = status == .safe && Self.staysYours(e) && bulk?.apply == true
+            return .done(now, by: by, reason: reason + (yours ? " · applied as your decision" : ""))
+        }
+        return .yours(status, by: by, reason: reason, why: Self.whyItWaits(status, store.entry(e.id) ?? e, autoAccept: store.autoAcceptAI))
+    }
+
+    /// Why an AI's answer was kept as a suggestion and the pattern stays New. Pure.
+    nonisolated static func whyItWaits(_ status: SignatureStatus, _ e: SignatureEntry, autoAccept: Bool) -> String {
+        if status == .safe, staysYours(e) { return yoursBecause(e) }
+        if e.risk == .high { return "it's high-risk, so only you decide it" }
+        if let why = e.reopened { return "it came back to you (\(why)), so only you decide it" }
+        if !autoAccept { return "AI answers wait for you to accept them in Needs You (Settings ▸ AI can apply them by themselves)" }
+        return "it's yours to decide"
+    }
+
+    /// "· 7 wait for you in Needs You": the answers in `batch` kept as suggestions, for the summary line.
+    private func waiting(_ batch: [SignatureEntry]) -> String {
+        let n = batch.filter { store.status(forKey: $0.id) == .unclassified && store.entry($0.id)?.suggestion != nil }.count
+        return n == 0 ? "" : " · \(n) wait for you in Needs You"
     }
 
     /// Your decision from the live list (a pattern the AI may not decide): applied as yours.
@@ -282,7 +304,7 @@ final class PatternClassifier: ObservableObject {
             if flagged > 0 { parts.append("\(flagged) flagged") }
             if left > 0 { parts.append("\(left) left for you") }
             if !escalate.isEmpty { parts.append("\(escalate.count) sent to Claude") }
-            self.lastMessage = parts.joined(separator: ", ")
+            self.lastMessage = parts.joined(separator: ", ") + self.waiting(batch)
             if !escalate.isEmpty { self.sendToClaude(escalate, prefix: self.lastMessage) }
         }
     }
@@ -369,7 +391,7 @@ final class PatternClassifier: ObservableObject {
         }
         let summary = SignatureStatus.allCases.compactMap { s in tally[s].map { "\($0) \(s.rawValue)" } }
         for e in batch { if case .asking? = live.steps.first(where: { $0.id == e.id })?.state { live.set(e.id, .left("Claude gave no answer for it")) } }
-        lastMessage = "Claude classified \(items.count): " + summary.joined(separator: ", ")
+        lastMessage = "Claude classified \(items.count): " + summary.joined(separator: ", ") + waiting(batch)
             + String(format: " · total $%.3f", totalCost)
     }
 

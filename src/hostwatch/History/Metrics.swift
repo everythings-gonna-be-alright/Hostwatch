@@ -101,7 +101,10 @@ final class SystemSampler {
             }
         }
         guard ok == KERN_SUCCESS else { return 0 }
-        let page = UInt64(vm_kernel_page_size)
+        // The kernel's page size (what the counts are in), asked rather than read from a C global Swift 6 won't share.
+        var pageSize: vm_size_t = 0
+        guard host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS else { return 0 }
+        let page = UInt64(pageSize)
         let app = UInt64(stats.internal_page_count) &- UInt64(stats.purgeable_count)
         return (app + UInt64(stats.wire_count) + UInt64(stats.compressor_page_count)) * page
     }
@@ -131,7 +134,7 @@ final class SystemSampler {
                 if Int32(header.ifm_type) == RTM_IFINFO2, offset + MemoryLayout<if_msghdr2>.size <= size {
                     let msg = raw.loadUnaligned(fromByteOffset: offset, as: if_msghdr2.self)
                     if if_indextoname(UInt32(msg.ifm_index), &name) != nil {
-                        let ifname = String(cString: name)
+                        let ifname = String(cBuffer: name)
                         if ifname.hasPrefix("en") || ifname.hasPrefix("pdp_ip") {
                             bytesIn &+= msg.ifm_data.ifi_ibytes
                             bytesOut &+= msg.ifm_data.ifi_obytes
@@ -341,8 +344,9 @@ final class MetricsStore: ObservableObject {
         let maintain = today != lastMaintenanceDay
         lastMaintenanceDay = today
         let keepFrom = maintain ? HistoryFiles.list(in: archive.directory).first.flatMap { Self.day(ofHistory: $0.name) } : nil
+        let written = sample                              // a copy for the writer queue
         writer.async {
-            archive.append(sample)
+            archive.append(written)
             if maintain { archive.maintain(today: today, keepFrom: keepFrom) }
         }
         cache.invalidate(day: today)

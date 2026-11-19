@@ -121,12 +121,13 @@ final class MCPServer {
         }
     }
 
-    static let since: [String: Any] = ["type": "string",
+    // The tools' descriptions: constants built once, never changed, read by the one request loop.
+    nonisolated(unsafe) static let since: [String: Any] = ["type": "string",
         "description": "Start of the time range: relative (\"30m\", \"24h\", \"7d\"), \"today\", \"yesterday\" or an ISO 8601 date. Default 24h."]
-    static let until: [String: Any] = ["type": "string", "description": "End of the time range (same formats). Default now."]
-    static let limit: [String: Any] = ["type": "integer", "description": "Maximum results (default 50, max 300)."]
+    nonisolated(unsafe) static let until: [String: Any] = ["type": "string", "description": "End of the time range (same formats). Default now."]
+    nonisolated(unsafe) static let limit: [String: Any] = ["type": "integer", "description": "Maximum results (default 50, max 300)."]
 
-    static let tools: [Tool] = [
+    nonisolated(unsafe) static let tools: [Tool] = [
         Tool(name: "hostwatch_overview", title: "Overview",
              description: "Collector state, pattern counts by status and risk, open stories, new domains, recorded history span and the AI engine.",
              properties: [:], required: []),
@@ -265,7 +266,8 @@ final class MCPServer {
         throw ToolError("Cannot read the time \"\(text!)\". Use 30m, 24h, 7d, today, yesterday or an ISO 8601 date.")
     }
 
-    private static let isoFormatters: [ISO8601DateFormatter] = {
+    // ISO8601DateFormatter is thread-safe (Apple's documentation); these are set up once and only read.
+    nonisolated(unsafe) private static let isoFormatters: [ISO8601DateFormatter] = {
         let full = ISO8601DateFormatter()
         full.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter()
@@ -843,7 +845,7 @@ final class MCPServer {
         guard proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         var buf = [CChar](repeating: 0, count: 4096)
         let n = proc_pidpath(Int32(pid), &buf, UInt32(buf.count))
-        return (Int(info.pbi_ppid), n > 0 ? String(cString: buf) : "?",
+        return (Int(info.pbi_ppid), n > 0 ? String(cBuffer: buf) : "?",
                 Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
     }
 

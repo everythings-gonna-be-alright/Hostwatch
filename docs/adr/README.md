@@ -18,3 +18,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0011](0011-protection.md) | Launch and file protection: rehearse on the event feed, enforce with Endpoint Security later |
 | [0012](0012-triage-warning-signs.md) | One triage prompt with checked warning signs, and a warning sign outranks a local model's Safe |
 | [0013](0013-ai-safe-project-reads.md) | An AI may mark Safe a run-anything tool's plain read of an exact project folder |
+| [0018](0018-endpoint-security-client.md) | The collector is its own Endpoint Security client, eslogger only as the fallback |

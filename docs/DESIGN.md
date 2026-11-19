@@ -25,7 +25,8 @@ the ones a machine can check.
 
 - **Text uses the semantic colours:** primary, secondary, tertiary. Never encode meaning in grey shades alone.
 - **Selection is raised in the text colour, not the accent colour:** `Color.primary.opacity(0.16)` behind full-strength
-  text (the tab bar, `IconSegments`, the rail). The user's accent can be graphite, which made accent-tinted selection
+  text (`IconSegments`, the rail). The window's tab bar uses a Liquid Glass lens instead (`glassEffect`, moved with
+  `glassEffectID`), as macOS's own toolbar controls do: still no accent colour. The user's accent can be graphite, which made accent-tinted selection
   look unselected.
 - **Status colours are reserved:** red for stopped, blocked or critical, orange for attention and warnings, green for
   allowed or safe (and the AI check's progress ring, which leads to "allowed"), grey for pending or a question.

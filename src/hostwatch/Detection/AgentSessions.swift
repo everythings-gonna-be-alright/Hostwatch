@@ -431,7 +431,7 @@ final class AgentSessions: ObservableObject {
             let parent = Int(info.kp_eproc.e_ppid)
             guard parent > 1 else { return 0 }
             var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-            if proc_pidpath(pid_t(parent), &buffer, UInt32(buffer.count)) > 0, CodingAgent.of(String(cString: buffer)) != nil {
+            if proc_pidpath(pid_t(parent), &buffer, UInt32(buffer.count)) > 0, CodingAgent.of(String(cBuffer: buffer)) != nil {
                 return parent
             }
             p = parent

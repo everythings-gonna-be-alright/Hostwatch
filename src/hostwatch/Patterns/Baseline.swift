@@ -23,7 +23,7 @@ enum BaselineDecision: Equatable {
 /// could be malware already on the Mac (unsigned, downloaded, temp, high-risk, a third-party app touching
 /// login items or credentials) is left for you, so the baseline can't be poisoned.
 enum BaselinePolicy {
-    typealias Identify = (String) -> (identity: CodeIdentity?, trusted: Bool)
+    typealias Identify = @Sendable (String) -> (identity: CodeIdentity?, trusted: Bool)   // runs off the main thread
 
     static let dropZones = ["/Downloads/", "/Users/Shared/", "/var/folders/", "/Volumes/"]
     static let tempPrefixes = ["/tmp/", "/private/tmp/"]

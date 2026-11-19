@@ -1351,13 +1351,16 @@ curl and other programs that run whatever they're told are judged by what they r
   yours. The pattern stays New for your own decision. Turn it off in *Settings ▸ AI ▸ Protection*.
 - **Modes per area:** Launches and Files each have Off, Watch, Ask and Strict. Watch is the default. It stops
   nothing, it marks what would be stopped and counts what would be asked about.
-- **Ask and Strict act now, a moment late.** Until Apple approves Endpoint Security, Hostwatch acts as soon as a
-  launch or a protected file's open reaches it, a few milliseconds after it happened. What's blocked is stopped.
-  A question pauses the program, and a glass panel asks: *Block* stops it, *Allow Once* lets it go on, *Always
-  Allow* also marks its pattern Safe. Without an answer in 30 seconds it goes on. Only your own programs are acted on,
-  never root's, the system UI, terminals or Hostwatch, and at most five are paused at once. A file that was opened
-  may already have been read: the program is stopped, the read can't be undone. Endpoint Security, once approved,
-  will stop things before they happen.
+- **Ask and Strict act before it happens.** With Endpoint Security, macOS holds a launch, or an open in a protected
+  place, until Hostwatch answers: a blocked program never starts, a blocked file is never read. A question holds it
+  while a glass panel asks: *Always Block*, *Block Once*, *Allow Once* or *Always Allow*. Your shell just waits, as
+  for a slow program, and there's nothing to resume. Without an answer before macOS's time limit runs out (the
+  question counts it down), it is blocked. What Hostwatch can settle by itself never waits: its own processes, other
+  users' and root's, macOS's own programs (except the ones that run anything, like shells, curl or python),
+  unprotected files, and a place's expected programs. Without the app connected, everything goes on.
+- **When the app is busy:** if the app doesn't answer within a moment, the launch goes on and Hostwatch pauses it
+  right after, the way it did before Endpoint Security, then asks. A build without Apple's entitlement (one you make
+  yourself) works that way all the time: a few milliseconds late, a question pausing the program.
 - **Careful with Strict for launches.** It stops every launch nobody decided yet, builds included. Watch first:
   its counts on the Overview page show what Ask and Strict would do.
 - **Protected files:** cards for SSH keys, developer credentials (cloud, Kubernetes, registries, GitHub, GPG),
@@ -2034,8 +2037,9 @@ Tools for building and testing Hostwatch are listed in [For developers](07-for-d
 The collector is the part of Hostwatch that watches your Mac. It is built into the app and runs as root in the
 background. It only watches and reports, and everything is decided in the app. It combines five sources:
 
-- **Processes and file opens:** Apple's `eslogger` (Endpoint Security) reports which programs start and which files
-  they open.
+- **Processes and file opens:** Apple's Endpoint Security reports which programs start and which files they open.
+  The collector is its own Endpoint Security client. A build without Apple's entitlement (one you build yourself)
+  reads the same events through Apple's `eslogger` instead.
 - **Outgoing connections:** a read-only packet capture sees every new outgoing TCP connection, even one too short to
   notice any other way, like `curl google.com`. It gives up root right after it starts.
 - **Connected sockets:** every second the collector looks at every process's open connections. This finds incoming
@@ -2165,7 +2169,7 @@ Unix socket is a local file-like connection point that only processes on this Ma
     exclusions. The audit token can't be fooled by a reused pid.
   - Rejections are logged with the process path.
 - **A service with no client does nothing.** When the app isn't connected for 15 seconds, the background service
-  stops `eslogger` and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits. The
+  stops its Endpoint Security client and packet capture, turns the firewall off (nothing is held with nobody to ask) and waits. The
   next connection starts them again. It also notices when an update replaced the app and restarts itself as the
   new version.
 - **The app checks too:** it connects only when the socket is a socket owned by you, mode 0600, not a link, and in a
@@ -2198,7 +2202,9 @@ History shows a masked secret as `***`. AI prompts show `[REDACTED]`.
 
 - **Network:** to find connections, the collector runs `tcpdump` as root. It reads only DNS answers and TCP SYN
   headers, no payloads. It also reads macOS's connection statistics, read-only. Nothing is captured to disk.
-- **Processes and files:** `eslogger` is a notify-only observer. It cannot deny execution.
+- **Processes and files:** in Ask and Strict, the collector holds a launch, or an open in a protected place, until
+  you or your rules answer, and denies what's blocked before it happens (see Protection). In Watch and Off it only
+  listens.
 
 ### Reset Hostwatch
 
@@ -2244,8 +2250,8 @@ Full Disk Access stays granted.
 - **Unconnected UDP:** UDP sent without connecting (`sendto`) has no destination to show.
 - **Listening sockets:** they aren't connections.
 - **File opens:** they are high volume. The rate cap drops excess file events, so add exclusions for noisy apps.
-- **New macOS releases:** Hostwatch reads macOS's event monitor (`eslogger`), whose output can change between macOS
-  releases and may need a Hostwatch update.
+- **Builds without the entitlement:** a build you make yourself reads macOS's event monitor (`eslogger`), whose
+  output can change between macOS releases and may need a Hostwatch update.
 
 
 
@@ -2378,10 +2384,14 @@ bundle id `tech.hostwatch.demo` and its own build folder `.build-demo`.
 
 ### Prototype notes
 
-The collector reads Apple's `eslogger`, which Apple documents as a tool for exploring and prototyping, not an
-application API. Its output may change without notice. A production version would use a signed Endpoint Security
-system extension (it needs Apple's `com.apple.developer.endpoint-security.client` entitlement) and a Network
-Extension for connections, talking to the app over XPC. Don't disable SIP as a way around this.
+The collector is an Endpoint Security client in the root service (ADR 0018). Only the collector is entitled: it runs
+from its own bundle inside the app (`Contents/Library/Helpers/Hostwatch Collector.app`, `tech.hostwatch.collector`),
+and the app keeps the signature it always had, so its keychain identity and data key never change. Apple grants the
+`com.apple.developer.endpoint-security.client` entitlement per team, through a Developer ID provisioning profile for
+`tech.hostwatch.collector` that `build-app.sh` embeds when it finds one (`HOSTWATCH_COLLECTOR_PROFILE`, or
+`~/.hostwatch-signing/HostwatchCollector.provisionprofile`). Without the profile there is no helper, and the collector
+falls back to Apple's `eslogger`, a tool Apple documents for exploring and prototyping, whose output may change.
+Don't disable SIP as a way around this.
 
 
 
@@ -2421,11 +2431,11 @@ launches, file access and connections you didn't allow.
 
 ### What Hostwatch assumes
 
-- **System Integrity Protection is on.** Hostwatch relies on macOS protecting its own tools (`eslogger`, `pfctl`,
-  `tcpdump`) and the code signing checks.
+- **System Integrity Protection is on.** Hostwatch relies on macOS protecting Endpoint Security and its own
+  tools (`pfctl`, `tcpdump`) and the code signing checks.
 - **The app is somewhere only an administrator can write**, such as `/Applications`. The collector is the app's own
   binary, run as root. Anything that can replace the app gains root at its next start.
-- **Full Disk Access is granted** to the collector. Without it, `eslogger` sees nothing.
+- **Full Disk Access is granted** to the collector. Without it, Endpoint Security tells it nothing.
 - **macOS itself is not compromised.** Hostwatch reads what macOS reports. A rootkit can lie to both.
 
 ### Trust boundaries
@@ -2467,9 +2477,10 @@ These are real, and listed so you can judge Hostwatch fairly.
 - **Malware running as you can quit Hostwatch.** The app runs as you, so a process of yours can end it. The collector
   then stops watching after 15 seconds without a client, and nothing records what happens next. Restarting the app
   resumes everything. Raising an alert when the app goes away unexpectedly is planned.
-- **It sees most things just after they happen.** `eslogger` reports events, it can't refuse them. Ask and Strict stop a
-  program a few milliseconds after it starts or opens a protected file. A very quick command can finish first. Stopping
-  before the start needs Apple's Endpoint Security approval, which is pending.
+- **It decides before a launch or a protected file's open, not after.** In Ask and Strict, Endpoint Security holds them
+  until Hostwatch answers. Two things still slip past: what macOS's own programs do (they pass without a question,
+  unless you marked their pattern, which is then enforced right after it starts), and anything while the app is too
+  busy to answer within a moment (it goes on, and is paused right after).
 - **Only your own processes can be stopped.** Launch and file protection and holds act on processes of your user.
   A root process, or another user's, is reported but not stopped. The firewall judges your programs' connections too:
   root's connections and macOS's DNS service pass without being asked about.

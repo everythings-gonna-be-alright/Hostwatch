@@ -52,7 +52,7 @@ import Testing
         #expect(ask["proc"] as? String == "/Applications/Tool.app/Contents/MacOS/Tool" && ask["host"] as? String == "api.example.com")
         #expect(ask["target"] as? String == "93.184.216.34:443" && ask["extra"] as? String == "TCP")
         rig.fw.answer(["key": ask["key"]!, "pass": true, "ttl": 300])
-        for _ in 0..<100 { box.lock.lock(); let n = box.results.count; box.lock.unlock(); if n == 3 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        for _ in 0..<100 { let n = box.lock.withLock { box.results.count }; if n == 3 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
         #expect(box.results == [.pass, .pass, .pass])
         #expect(rig.fw.decide(flow()) == .pass && rig.asks(wait: 0.1).isEmpty)      // remembered, no new question
 
@@ -67,10 +67,10 @@ import Testing
             Thread.detachNewThread { let d = rig.fw.decide(self.flow()); box.lock.lock(); box.results.append(d); box.lock.unlock() }
             #expect(rig.asks().count == 1)
             try await Task.sleep(nanoseconds: 300_000_000)
-            box.lock.lock(); let early = box.results.count; box.lock.unlock()
+            let early = box.lock.withLock { box.results.count }
             #expect(early == 0)                                          // still waiting for you
             rig.fw.configure(["mode": next], from: rig.client)
-            for _ in 0..<100 { box.lock.lock(); let n = box.results.count; box.lock.unlock(); if n == 1 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+            for _ in 0..<100 { let n = box.lock.withLock { box.results.count }; if n == 1 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
             #expect(box.results == [expected], "after switching to \(next)")
         }
     }
@@ -153,13 +153,13 @@ import Testing
         let key = try #require(first.first?["key"] as? String)
         rig.fw.answer(["key": key, "pass": true, "ttl": 1, "once": true])
         try await Task.sleep(nanoseconds: 200_000_000)
-        box.lock.lock(); #expect(box.got == [.pass]); box.lock.unlock()
+        box.lock.withLock { #expect(box.got == [.pass]) }
         Thread.detachNewThread { let d = rig.fw.decide(f); box.lock.lock(); box.got.append(d); box.lock.unlock() }
         let second = rig.asks(wait: 0.5)
         #expect(second.count == 1 && second.first?["key"] as? String == key)             // asked again
         rig.fw.configure(["mode": "off"], from: rig.client)                            // let the waiting one go
         try await Task.sleep(nanoseconds: 200_000_000)
-        box.lock.lock(); #expect(box.got.count == 2); box.lock.unlock()
+        box.lock.withLock { #expect(box.got.count == 2) }
     }
 
     @MainActor @Test func theModelReadsQuestionsAndStatusEvenWhenPaused() throws {

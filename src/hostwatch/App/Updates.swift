@@ -46,8 +46,8 @@ enum Version {
 /// request to api.github.com; nothing is downloaded or installed automatically.
 @MainActor
 final class UpdateChecker: ObservableObject {
-    static let repository = "everythings-gonna-be-alright/Hostwatch"
-    static let releasesPage = URL(string: "https://github.com/\(repository)/releases")!
+    nonisolated static let repository = "everythings-gonna-be-alright/Hostwatch"
+    nonisolated static let releasesPage = URL(string: "https://github.com/\(repository)/releases")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!
     private static let interval: TimeInterval = 24 * 3600
 

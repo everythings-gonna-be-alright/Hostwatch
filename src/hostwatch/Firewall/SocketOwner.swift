@@ -93,7 +93,7 @@ enum NetAddress {
         var a = a
         var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         inet_ntop(AF_INET, &a, &buf, socklen_t(buf.count))
-        return "\(String(cString: buf)):\(port)"
+        return "\(String(cBuffer: buf)):\(port)"
     }
 
     static func text(v6 a: in6_addr, port: UInt16) -> String {
@@ -104,7 +104,7 @@ enum NetAddress {
         var a = a
         var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
         inet_ntop(AF_INET6, &a, &buf, socklen_t(buf.count))
-        return "[\(String(cString: buf))]:\(port)"
+        return "[\(String(cBuffer: buf))]:\(port)"
     }
 
     /// A sockaddr (sockaddr_in / sockaddr_in6 bytes) as text; nil for other families or too short.

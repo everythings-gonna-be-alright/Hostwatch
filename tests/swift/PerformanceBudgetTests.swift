@@ -125,7 +125,7 @@ enum PerfWorkload {
         return s
     }
 
-    private static let formatter: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let formatter: ISO8601DateFormatter = {   // thread-safe, set up once
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
@@ -185,7 +185,7 @@ enum PerfWorkload {
                              domains: DomainRegistry(replayLearningUntil: Date()))
         // A busy Mac's store first (15,000 patterns, not measured): its size is what a careless save rewrites.
         for i in 0..<15_000 {
-            autoreleasepool {
+            _ = autoreleasepool {
                 model.signatures.observe(ActivityEvent(kind: .file, time: "", pid: 1, ppid: 0, name: "tool", proc: "/usr/local/bin/tool",
                                                        target: PerfWorkload.projectFile(i), extra: "r", parent: ""))
             }
@@ -242,21 +242,22 @@ enum PerfWorkload {
     private func measureCollectorEsloggerLoop() throws -> ResourceCost {
         var fds: [Int32] = [-1, -1]
         #expect(pipe(&fds) == 0)
+        let (readEnd, writeEnd) = (fds[0], fds[1])          // constants for the writer thread
         let agent = Agent()
         let input = (0..<120_000).map { i in autoreleasepool { CollectorLineLoops.esloggerLine(i) } }
         let writer = Thread {
-            for d in input { d.withUnsafeBytes { _ = write(fds[1], $0.baseAddress, d.count) } }
-            close(fds[1])
+            for d in input { d.withUnsafeBytes { _ = write(writeEnd, $0.baseAddress, d.count) } }
+            close(writeEnd)
         }
         let (cost, events) = ResourceCost.measure { () -> Int in
-            let reader = LineReader(fd: fds[0])
+            let reader = LineReader(fd: readEnd)
             var n = 0
             writer.start()
             reader.forEach { line in
                 if let raw = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any], agent.normalize(raw) != nil { n += 1 }
                 return true
             }
-            close(fds[0])
+            close(readEnd)
             return n
         }
         #expect(events > 0)

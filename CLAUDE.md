@@ -20,7 +20,9 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
 - Swift Testing (`@Suite`, `#expect`), in `tests/swift`. Tests use scratch folders and in-memory stores, never the
   user's data. `HOSTWATCH_SIGNING_DB` points the signing cache at a scratch file.
 - Command Line Tools toolchain, not Xcode: SwiftUI's `@State` macro is unavailable, use a small `ObservableObject`
-  (`ExpandState`) instead. Swift 6 language-mode warnings are known; don't add new ones.
+  (`ExpandState`) instead. Swift 6 language mode: data races are compile errors. The build's only warnings are the
+  file keychain's two deprecated calls in `Vault.swift`; keep it that way. A `nonisolated(unsafe)` or `@unchecked
+  Sendable` says on its line why it is safe (immutable once made, only touched under a lock, a wait orders it).
 - Demo build (`DEMO=1 ./scripts/build-app.sh`) adds `Demo.swift` behind `-DDEMO`; the release has no demo code.
 
 ## Git workflow (local-only repository)

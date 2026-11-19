@@ -121,7 +121,7 @@ final class DomainRegistry: ObservableObject {
 
     /// Unsigned, ad-hoc or quarantined code, or a program run from Downloads, Shared or a mounted volume.
     /// (Temporary folders are left out: updaters and developer builds live there all day.)
-    static func untrustedProgram(_ path: String) -> Bool {
+    nonisolated static func untrustedProgram(_ path: String) -> Bool {
         guard !path.isEmpty else { return false }
         if ["/Downloads/", "/Users/Shared/", "/Volumes/"].contains(where: path.contains) { return true }
         guard let id = SigningCache.shared.cached(path) else { return false }
@@ -226,7 +226,7 @@ struct DomainItem: Identifiable {
     var count: Int { record.count }
     var programs: String { record.programs.joined(separator: ", ") }
 
-    static let sortColumns: [String: (SortOrder) -> KeyPathComparator<DomainItem>] = [
+    static let sortColumns: [String: @Sendable (SortOrder) -> KeyPathComparator<DomainItem>] = [
         "status": { KeyPathComparator(\.statusRank, order: $0) },
         "domain": { KeyPathComparator(\.domain, order: $0) },
         "first": { KeyPathComparator(\.firstSeen, order: $0) },

@@ -65,7 +65,7 @@ struct NetworkRow: Identifiable {
         return isNew ? "New" : r.known ? "Known" : r.baseline ? "Baseline" : "Seen"
     }
 
-    static let sortColumns: [String: (SortOrder) -> KeyPathComparator<NetworkRow>] = [
+    static let sortColumns: [String: @Sendable (SortOrder) -> KeyPathComparator<NetworkRow>] = [
         "last": { KeyPathComparator(\.lastSeen, order: $0) },
         "destination": { KeyPathComparator(\.destination, order: $0) },
         "firewall": { KeyPathComparator(\.firewallRank, order: $0) },
@@ -200,6 +200,8 @@ struct NetworkView: View {
                                openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions,
                                hud: hud, signatures: signatures)
             }
+            // Soft pools of the map's colours behind the whole page, for the glass to pick up (as Protection does).
+            .background { MapBackdrop() }
         } else {
             list
         }

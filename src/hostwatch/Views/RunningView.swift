@@ -50,7 +50,7 @@ struct RunningRow: Identifiable, Equatable {
     /// Grouped: one row per parent process (its children under it), or per AI session (its tree under it, the
     /// rest under "No AI session"). A group's numbers are its members' added up.
     /// The same band as the Events list's, with the group's CPU and memory as its note.
-    static func band(_ row: RunningRow) -> some View {
+    @MainActor static func band(_ row: RunningRow) -> some View {
         GroupBand(title: row.name, agent: row.groupAgent, dimmed: row.groupAgent == nil && row.name == EventItem.noSessionTitle,
                   notes: ["CPU \(RunningFormat.cpu(row.info.cpu)) · \(RunningFormat.bytes(row.mem))"],
                   count: row.children?.count ?? 0, noun: "process")

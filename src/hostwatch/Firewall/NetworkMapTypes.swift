@@ -85,6 +85,8 @@ struct MapConnection: Codable, Equatable, Identifiable {
     var target: String?
     var proto: String?
     var host: String?
+    /// The ports it connected to (up to 16, the newest kept): what the program's tile lists.
+    var ports: [Int]?
     /// Bytes sent and received, by the hour (macOS's connection statistics).
     var sentHours: [Int: Int64]?
     var receivedHours: [Int: Int64]?
@@ -112,6 +114,8 @@ struct MapOutgoing: Equatable {
     var received: Int64 = 0
     /// Nothing between this program and destination in the 7 days before the window: what "What Changed" keeps.
     var fresh = false
+    /// The ports it connected to.
+    var ports: [Int] = []
 }
 
 /// A network this Mac joins (known by its router), with how far you trust it. On one you don't trust, other
@@ -189,6 +193,10 @@ struct MapNode: Identifiable, Equatable {
     var symbol: String?
     /// `count` is bytes (the map measures data sent).
     var bytes = false
+    /// What kind of traffic it carried, from its ports ("HTTPS", "DNS"): a destination's small tags.
+    var tags: [String] = []
+    /// Every port its connections went to (a program's or a destination's), for the full list.
+    var ports: [Int] = []
 }
 
 struct MapSection: Equatable {

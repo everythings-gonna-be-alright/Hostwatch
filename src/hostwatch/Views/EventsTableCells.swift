@@ -42,7 +42,9 @@ final class BadgeImages {
     func vital(_ badge: ProcessVitals.Badge) -> NSImage { image("vital:\(badge)") { VitalBadgeView(badge: badge) } }
     func fileMode(_ mode: String) -> NSImage { image("mode:\(mode)") { FileModeIcon(mode: mode) } }
     func proto(_ proto: String) -> NSImage { image("proto:\(proto)") { ProtocolTag(proto: proto) } }
-    func agent(_ agent: CodingAgent, size: CGFloat) -> NSImage { image("agent:\(agent):\(size)") { AgentBadge(agent: agent, size: size) } }
+    func agent(_ agent: CodingAgent, size: CGFloat, tinted: Bool = false) -> NSImage {
+        image("agent:\(agent):\(size):\(tinted)") { AgentBadge(agent: agent, size: size, tinted: tinted) }
+    }
     func kindTile(_ kind: EventKind) -> NSImage { image("kindtile:\(kind.rawValue)") { KindTile(kind: kind) } }
     func capsule(count: Int, noun: String) -> NSImage { image("count:\(count):\(noun)") { CountCapsule(count: count, noun: noun) } }
     func plainMark() -> NSImage {

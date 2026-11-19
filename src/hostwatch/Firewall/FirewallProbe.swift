@@ -128,7 +128,8 @@ enum FirewallProbe {
             var peer = sockaddr_in(); var len = socklen_t(MemoryLayout<sockaddr_in>.size)
             let fd = withUnsafeMutablePointer(to: &peer) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { accept(server, $0, &len) } }
             guard fd >= 0 else { continue }
-            Thread.detachNewThread { relayTCP(fd, peer) }
+            let who = peer                                   // a copy for the new thread
+            Thread.detachNewThread { relayTCP(fd, who) }
         }
     }
 

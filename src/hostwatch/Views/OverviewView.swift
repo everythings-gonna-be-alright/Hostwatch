@@ -19,57 +19,67 @@ struct WindowTabBar: View {
     /// The tab the bar shows as chosen: it moves at once on a click, the window follows a moment later.
     @StateObject private var shown = ShownTab()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var highlight
 
     var body: some View {
         bar(showTitles: true)
     }
 
     private func bar(showTitles: Bool) -> some View {
-        HStack(spacing: 2) {
-            ForEach(Array(tabs.enumerated()), id: \.element.id) { i, tab in
-                let selected = (shown.id ?? selection) == tab.id
-                Button {
-                    // The bar first: its new highlight is drawn before the window builds the new tab, which takes
-                    // a moment and used to hold the pressed tab still on screen.
-                    guard tab.id != selection else { return }
-                    shown.id = tab.id
-                    DispatchQueue.main.async { selection = tab.id; shown.id = nil }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: tab.symbol)
-                            .symbolVariant(selected ? .fill : .none)
-                            .font(.system(size: 12, weight: .medium))
-                        if showTitles {
-                            // Never truncated: the toolbar squeezed "Rules" to "R…" when it ran short of room.
-                            Text(tab.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
-                                .lineLimit(1).fixedSize()
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 2) {
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { i, tab in
+                    let selected = (shown.id ?? selection) == tab.id
+                    Button {
+                        // The bar first: its new highlight is drawn before the window builds the new tab, which takes
+                        // a moment and used to hold the pressed tab still on screen.
+                        guard tab.id != selection, shown.id != tab.id else { return }
+                        // No glide: the lens moves at once (a sliding lens drew the eye on every switch).
+                        shown.id = tab.id
+                        DispatchQueue.main.async {
+                            guard shown.id == tab.id else { return }               // another tab was clicked meanwhile
+                            selection = tab.id
+                            shown.id = nil
                         }
-                        if let badge = tab.badge {
-                            Text(badge)
-                                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(tab.badgeTint))
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: tab.symbol)
+                                .symbolVariant(selected ? .fill : .none)
+                                .font(.system(size: 12, weight: .medium))
+                            if showTitles {
+                                // Never truncated: the toolbar squeezed "Rules" to "R…" when it ran short of room. One
+                                // weight for all, so the bar keeps its size while the lens moves: the lens marks the tab.
+                                Text(tab.title).font(.system(size: 12)).lineLimit(1).fixedSize()
+                            }
+                            if let badge = tab.badge {
+                                // White on orange or yellow is too faint to read: those carry near-black digits. A count
+                                // without a status (secondary) is a soft capsule in the text colour, never the accent
+                                // (graphite made white digits on it unreadable).
+                                let neutral = tab.badgeTint == .secondary
+                                let light = tab.badgeTint == .orange || tab.badgeTint == .yellow
+                                Text(badge)
+                                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(neutral ? Color.primary : light ? Color.black.opacity(0.85) : Color.white)
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Capsule().fill(neutral ? Color.primary.opacity(0.16) : tab.badgeTint))
+                            }
                         }
+                        .padding(.horizontal, showTitles ? 10 : 9)
+                        .padding(.vertical, 6)
+                        // Selected: a Liquid Glass lens with the tab as its content, moving between tabs as one piece of
+                        // glass (glassEffectID in the bar's container). The title must be the glass's own content: as a
+                        // neighbour, the container drew the glass over it and blurred it. Never the accent colour:
+                        // graphite made it look unselected.
+                        .foregroundStyle(selected ? Color.primary : Color.secondary)
+                        .glassEffect(selected ? .regular.interactive() : .identity, in: Capsule())
+                        .glassEffectID(selected ? "selected" : "tab-\(tab.id)", in: highlight)
+                        .contentShape(Capsule())
                     }
-                    .padding(.horizontal, showTitles ? 10 : 9)
-                    .padding(.vertical, 6)
-                    // Selected: a raised capsule in the text colour itself, with full-strength text. The accent
-                    // colour was used before, and with a graphite accent it looked as dark as the unselected tabs.
-                    .foregroundStyle(selected ? Color.primary : Color.secondary)
-                    .background {
-                        if selected {
-                            Capsule().fill(Color.primary.opacity(0.16))
-                                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.75))
-                                .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-                        }
-                    }
-                    .contentShape(Capsule())
+                    .buttonStyle(TabPressStyle(still: reduceMotion))
+                    .help("\(tab.title) (⌘\(i + 1))")
+                    .accessibilityLabel(tab.title)
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                 }
-                .buttonStyle(TabPressStyle(still: reduceMotion))
-                .help("\(tab.title) (⌘\(i + 1))")
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
         // Measured, not guessed: the toolbar centres the bar at a fixed height but draws its glass 2 pt taller from a
@@ -78,8 +88,8 @@ struct WindowTabBar: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 3.5)
         .fixedSize()                                          // the bar takes the width its titles need
-        // No animation on switching: the bar sits in the toolbar, and animating it animated the toolbar's layout
-        // while the new tab was being built, which read as a freeze. The press effect is the only motion.
+        // The lens moves at once, then the window switches, and the bar never changes size (one weight
+        // for every title): animating the toolbar's layout while the new tab was built read as a freeze.
     }
 }
 
@@ -101,6 +111,7 @@ private struct TabPressStyle: ButtonStyle {
 final class ShownTab: ObservableObject {
     @Published var id: Int?
 }
+
 
 /// Window-wide sheets and banners.
 final class WindowSheetState: ObservableObject {

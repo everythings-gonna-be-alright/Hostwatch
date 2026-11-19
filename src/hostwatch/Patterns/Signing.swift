@@ -6,7 +6,7 @@ import Security
 // high-risk, Apple and trusted developers' everyday activity is routine, and a binary whose signer
 // changes at a known path (swapped/replaced) raises an alert.
 
-struct CodeIdentity: Codable, Equatable {
+struct CodeIdentity: Codable, Equatable, Sendable {
     var signed = false
     var adhoc = false
     var apple = false              // platform binary or signed by Apple ("Software Signing")

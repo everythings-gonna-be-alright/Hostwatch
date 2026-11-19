@@ -58,7 +58,7 @@ enum Reset {
     /// Stops the collector, clears settings, hands file removal to a helper and exits; the helper reopens the app.
     static func run(_ plan: ResetPlan, collector: Collector, model: HUDModel, historyDir: URL) {
         guard !plan.isEmpty else { return }
-        let finish = {
+        let finish: @MainActor @Sendable () -> Void = {
             let script = ResetPlan.script(plan, pid: getpid(), support: AppPaths.support, logs: AppPaths.logs,
                                           historyDir: historyDir, app: Bundle.main.bundleURL)
             let helper = Process()
@@ -81,8 +81,9 @@ enum Reset {
             collector.stopService()                      // a fresh install has no service registered
             finish()
         } else if collector.isRunning {
-            var done = false
-            let once = { if !done { done = true; finish() } }
+            // Whichever comes first, the collector's answer or the time limit, finishes; both on the main thread.
+            let done = OnceFlag()
+            let once: @MainActor @Sendable () -> Void = { if !done.fired { done.fired = true; finish() } }
             collector.stop(via: model) { DispatchQueue.main.async(execute: once) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: once)   // don't wait forever
         } else {
@@ -90,3 +91,6 @@ enum Reset {
         }
     }
 }
+
+/// Set once, on the main thread: the first of several callbacks wins.
+@MainActor final class OnceFlag { var fired = false }

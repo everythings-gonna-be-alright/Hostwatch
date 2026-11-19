@@ -19,8 +19,9 @@ Tools for building and testing Hostwatch are listed in [For developers](07-for-d
 The collector is the part of Hostwatch that watches your Mac. It is built into the app and runs as root in the
 background. It only watches and reports, and everything is decided in the app. It combines five sources:
 
-- **Processes and file opens:** Apple's `eslogger` (Endpoint Security) reports which programs start and which files
-  they open.
+- **Processes and file opens:** Apple's Endpoint Security reports which programs start and which files they open.
+  The collector is its own Endpoint Security client. A build without Apple's entitlement (one you build yourself)
+  reads the same events through Apple's `eslogger` instead.
 - **Outgoing connections:** a read-only packet capture sees every new outgoing TCP connection, even one too short to
   notice any other way, like `curl google.com`. It gives up root right after it starts.
 - **Connected sockets:** every second the collector looks at every process's open connections. This finds incoming
