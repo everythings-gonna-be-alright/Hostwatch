@@ -168,7 +168,8 @@ struct NetworkMapView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 12) {
+        let shown = counts           // once: each read builds two graphs
+        return HStack(spacing: 12) {
             IconSegments(selection: $state.filter, items: [
                 .init(value: .everything, title: "Everything", symbol: "circle.grid.cross"),
                 .init(value: .goingOut, title: "Going Out", symbol: "arrow.up.right"),
@@ -183,9 +184,9 @@ struct NetworkMapView: View {
             Divider().frame(height: 16)
             Text("Show").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             ShowButtons(selection: $state.changedOnly, items: [
-                .init(value: false, title: "All", symbol: "square.stack", help: "Everything in this time", count: counts.all),
+                .init(value: false, title: "All", symbol: "square.stack", help: "Everything in this time", count: shown.all),
                 .init(value: true, title: "New", symbol: "sparkles",
-                      help: "Only connections, devices and tries that weren't there in the 7 days before", count: counts.new),
+                      help: "Only connections, devices and tries that weren't there in the 7 days before", count: shown.new),
             ])
             Spacer()
             triesMenu

@@ -515,7 +515,8 @@ struct ActivityWindowView: View {
                 } else if traveling {
                     ShowFilterPicker(filter: $model.signatureFilter, counts: travelDerived.counts)
                 } else {
-                    LiveShowFilter(feed: model.live, filter: $model.signatureFilter, counts: { liveDerived.counts })
+                    LiveShowFilter(feed: model.live, filter: $model.signatureFilter, shown: model.windowTab == 0,
+                                   counts: { liveDerived.counts })
                 }
                 groupingPicker(compact: compact)
                 if model.onlySession != nil {
@@ -817,9 +818,12 @@ private struct KindFilters: View {
 private struct LiveShowFilter: View {
     @ObservedObject var feed: LiveFeed
     @Binding var filter: SignatureFilter
+    /// Whether the Events tab is on screen. Hidden, it still hears every event (it observes the feed itself), and
+    /// counting rebuilt the Events rows for each one, under whatever tab you were on.
+    let shown: Bool
     let counts: () -> [SignatureFilter: Int]
 
-    var body: some View { ShowFilterPicker(filter: $filter, counts: counts()) }
+    var body: some View { ShowFilterPicker(filter: $filter, counts: shown ? counts() : [:]) }
 }
 
 /// A tab that isn't shown skips the window's updates: every tab stays alive in the strip, and the window's body runs

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// The collector's network map report: `{"kind":"netmap",…}` every 10 s.
@@ -73,7 +74,12 @@ final class NetworkMapStore: ObservableObject {
 
     private let fileURL: URL?
     /// Every outgoing connection, by program and destination. Not published: the 10 s report redraws the map.
-    private(set) var outgoing: [String: MapConnection] = [:]
+    private(set) var outgoing: [String: MapConnection] = [:] { didSet { keysByProgram = nil } }
+    /// Each program's pattern keys, made once per change: the map asks for every program on every redraw.
+    private var keysByProgram: [String: [String]]?
+    /// The last few graphs the map drew, by what they were made from. A redraw with nothing new rebuilds nothing.
+    private var graphs: [(key: GraphKey, outgoing: [MapOutgoing], graph: NetworkGraph)] = []
+    private var changeWatch: AnyCancellable?
     /// Router address -> hardware address last seen.
     private var routers: [String: String] = [:]
     /// Networks whose first report was learned: what was there then is never new. (`learned`: from before networks.)
@@ -94,6 +100,8 @@ final class NetworkMapStore: ObservableObject {
     init(fileURL: URL? = AppPaths.support.appendingPathComponent("network-map.json")) {
         self.fileURL = fileURL
         load()
+        // Any published change (devices, tries, routes, blocks, the network) can change a graph.
+        changeWatch = objectWillChange.sink { [weak self] _ in MainActor.assumeIsolated { self?.graphs.removeAll() } }
     }
 
     // MARK: Reports
@@ -400,7 +408,10 @@ final class NetworkMapStore: ObservableObject {
 
     /// The patterns of a program's connections, for blocking or allowing it from the map.
     func patternKeys(program path: String) -> [String] {
-        Array(Set(outgoing.values.filter { $0.path == path }.flatMap { $0.keys ?? [] }))
+        if let keysByProgram { return keysByProgram[path] ?? [] }
+        let index = Dictionary(grouping: outgoing.values, by: \.path).mapValues { Array(Set($0.flatMap { $0.keys ?? [] })) }
+        keysByProgram = index
+        return index[path] ?? []
     }
 
     /// Once an hour per address and kind.
@@ -550,12 +561,28 @@ final class NetworkMapStore: ObservableObject {
                expanded: Set<String> = [], room: Int? = nil, measure: MapMeasure = .connections, window: DateInterval? = nil,
                changedOnly: Bool = false, blockedDomains: Set<String> = [], blockedPrograms: Set<String> = [], selected: String? = nil,
                interfaceName: @escaping (String) -> String) -> NetworkGraph {
-        NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
+        // Within the same minute: "the last hour" moving by seconds changes nothing you'd see.
+        let key = GraphKey(minute: Int(now.timeIntervalSince1970 / 60), filter: filter, range: range, query: query,
+                           expanded: expanded, room: room, measure: measure, window: window, changedOnly: changedOnly,
+                           blockedDomains: blockedDomains, blockedPrograms: blockedPrograms, selected: selected)
+        if let hit = graphs.first(where: { $0.key == key && $0.outgoing == outgoing }) { return hit.graph }
+        let graph = NetworkMapBuilder.build(.init(devices: Array(devices.values), inbound: Array(inbound.values), listeners: listeners,
                                       routes: routes, outgoing: outgoing, filter: filter, range: range, now: now,
                                       interfaceName: interfaceName, query: query, network: network, expanded: expanded,
                                       blockedAddresses: blockedAddresses, blockedPorts: blockedPorts, room: room, measure: measure,
                                       window: window, changedOnly: changedOnly, blockedDomains: blockedDomains,
                                       blockedPrograms: blockedPrograms, selected: selected))
+        // The map draws three at a time (the map and the All and New counts), the full list one more.
+        graphs.append((key, outgoing, graph))
+        if graphs.count > 4 { graphs.removeFirst() }
+        return graph
+    }
+
+    /// What a graph is made from besides the store and the outgoing list (the interface names never change).
+    private struct GraphKey: Equatable {
+        let minute: Int
+        let filter: MapFilter, range: MapRange, query: String, expanded: Set<String>, room: Int?, measure: MapMeasure
+        let window: DateInterval?, changedOnly: Bool, blockedDomains: Set<String>, blockedPrograms: Set<String>, selected: String?
     }
 
     func device(forIP ip: String) -> MapDevice? { devices.values.first { $0.ips.contains(ip) && $0.isOn(network) } }
