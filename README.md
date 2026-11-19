@@ -61,18 +61,15 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.19.1**
+- **🪟 Smooth to the Dock** – minimizing no longer stutters on the network map and Stories.
+- **⚡ Lighter** – about half the processor time with the network map open, and hidden pages rest.
+
 **0.19.0**
 - **🛡️ Stopped before it happens** – with Apple's Endpoint Security, a blocked program never starts and a blocked
   file is never read. Your shell simply waits for your answer.
 - **🗺️ A clearer network map** – ports and the kind of traffic for every destination, in Liquid Glass.
 - **⚡ Smoother and safer** – smooth Running Now charts, quicker tabs, and Hostwatch built in Swift 6.
-
-**0.18.0**
-- **👋 A welcome tour** – seven short pages, with the choices that matter on day one: which AI helps (Haiku when you
-  pick Claude), the learning day or none, login, threat lists and updates.
-- **🛡️ Fewer questions** – the Claude Code guard asks about two thirds less, Hostwatch's own AI calls aren't stopped,
-  and a connection can be answered once.
-- **⚡ Quicker tabs** and calmer windows in the Liquid Glass style.
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 
