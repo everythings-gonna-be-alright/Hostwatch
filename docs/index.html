@@ -262,30 +262,41 @@
     .hero { padding-bottom: 40px; display: flex; flex-direction: column; }
     .hero .wrap { order: 1; width: 100%; box-sizing: border-box; }  /* centred by auto margins, it would size to its text */
     .backdrop { order: 2; position: relative; top: auto; left: auto; width: 108%; margin: 44px 0 0 -2%; height: auto;
-                perspective: 1100px; --k: .32;
-                -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 98%); mask-image: linear-gradient(180deg, #000 62%, transparent 98%);
-                -webkit-mask-composite: source-over; mask-composite: add; }
+                perspective: 1100px; --k: .32; -webkit-mask-image: none; mask-image: none; }
+    /* The bottom fades under a gradient of the page's own colour, not a mask: a mask over a moving window with a
+       video inside is redrawn off screen for every frame, which an iPhone can't keep up with. The border covers
+       what the tilt pushes below the box. */
+    .backdrop::after { content: ""; position: absolute; inset: 0 0 -40px; z-index: 1; pointer-events: none;
+                       border-bottom: 40px solid var(--bg); background-clip: padding-box;
+                       background-image: linear-gradient(180deg, rgba(8,9,10,0) 62%, var(--bg) 98%); }
     .backdrop .win { position: relative; top: 0; height: auto; aspect-ratio: 1800 / 1123;
                      transform: rotateY(-14deg) rotateX(7deg) rotateZ(-1.2deg); }
     .backdrop { animation-name: hw-enter-narrow; }
     /* Phones land the controls flat: a short slide and a small settle, no depth. Seven 3D layers over a video stutter
        on a phone, and a control resting on the window's own plane flickers in iOS Safari (it can't tell which of two
-       layers on one plane is in front). The window keeps its gentle tilt. */
+       layers on one plane is in front). The window keeps its gentle tilt.
+       The slide and the settle are one animation of transform, and every keyframe names both ends: iOS Safari hands
+       only that form (plus opacity) to the GPU. The separate translate property and from-only keyframes ran on the
+       main thread there, which stalls while the page scrolls, exactly when this landing plays. */
     .backdrop .win { transform-style: flat; }
-    .backdrop .part:not(.base) { animation: hw-xy var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
-                                            hw-settle var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
-                                            hw-in calc(var(--t) * .55) var(--d) cubic-bezier(.33,0,.2,1) both;
-                                 will-change: translate, transform, opacity; }
+    .backdrop .base { animation-name: hw-show; }
+    .backdrop .part:not(.base) { animation: hw-land var(--t) var(--d) cubic-bezier(.22,1,.36,1) both,
+                                            hw-show calc(var(--t) * .55) var(--d) cubic-bezier(.33,0,.2,1) both;
+                                 will-change: transform, opacity; }
     .hero-shot { display: none; }
   }
-  @keyframes hw-settle { from { transform: scale(1.04); } }
-  /* Below the headline the window starts out of view: its landing waits, on its first frame, until you scroll to it
-     (otherwise it played unseen and you found it already at rest). Only set by the script, so without it the
-     landing simply runs. */
-  .backdrop.later, .backdrop.later .part { animation-play-state: paused; }
+  @keyframes hw-land { from { transform: translate(calc(var(--dx, 0px) * var(--k, 1)), calc(var(--dy, -16px) * var(--k, 1))) scale(1.04); }
+                       to   { transform: translate(0, 0) scale(1); } }
+  @keyframes hw-show { from { opacity: 0; } to { opacity: 0.4; } }
+  /* Below the headline the window starts out of view: it stays unseen and its landing has not begun until you scroll
+     to it (otherwise it played unseen and you found it already at rest). The landing then starts fresh: pausing it
+     on its first frame and resuming made iOS Safari skip ahead, so the window just popped in. Only set by the
+     script, so without it the landing simply runs. Keep these after the phone rules: same weight, later wins. */
+  .backdrop.later, .backdrop.later .part { animation: none; }
+  .backdrop.later .part { opacity: 0; }
   /* Again after the phone rules, so Reduce Motion stops the phone landing too. */
   @media (prefers-reduced-motion: reduce) { .backdrop, .backdrop .win, .backdrop .part, .backdrop .part:not(.base) { animation: none; } }
-  @keyframes hw-enter-narrow { from { transform: translate(28px, 18px) scale(0.95); } }
+  @keyframes hw-enter-narrow { from { transform: translate(28px, 18px) scale(0.95); } to { transform: translate(0, 0) scale(1); } }
 
   .proof { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 0; position: relative; z-index: 2; background: var(--bg); }
   .proof .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -598,7 +609,7 @@
 </header>
   <script>
     // Right after the hero, so the headline is laid out above the window: while the window is below the screen
-    // (phones), its landing waits, and plays as it comes into view.
+    // (phones), its landing has not started, and starts as it comes into view.
     (() => {
       const b = document.getElementById("backdrop");
       if (!("IntersectionObserver" in window) || b.getBoundingClientRect().top < innerHeight * 0.8) return;
