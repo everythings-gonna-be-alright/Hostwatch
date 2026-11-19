@@ -1,26 +1,26 @@
 {
-  "app.eventPipeline": {
-    "cpu": 14.284301999999999,
-    "memory": 15695872,
-    "peak": 15695872,
-    "writes": 6135808
+  "app.eventPipeline" : {
+    "cpu" : 14.284301999999999,
+    "memory" : 15695872,
+    "peak" : 15695872,
+    "writes" : 6135808
   },
-  "collector.esloggerLoop": {
-    "cpu": 4.279177,
-    "memory": 35389488,
-    "peak": 35422256,
-    "writes": 0
+  "collector.esloggerLoop" : {
+    "cpu" : 4.279177,
+    "memory" : 35389488,
+    "peak" : 35422256,
+    "writes" : 0
   },
-  "history.write": {
-    "cpu": 0.5613680000000001,
-    "memory": 589824,
-    "peak": 589824,
-    "writes": 2306048
+  "history.write" : {
+    "cpu" : 0.7120290000000002,
+    "memory" : 573440,
+    "peak" : 573440,
+    "writes" : 3874816
   },
-  "timetravel.read": {
-    "cpu": 0.32956399999999997,
-    "memory": 20725784,
-    "peak": 20725784,
-    "writes": 0
+  "timetravel.read" : {
+    "cpu" : 0.32956399999999997,
+    "memory" : 20725784,
+    "peak" : 20725784,
+    "writes" : 0
   }
 }
