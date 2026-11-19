@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.19.1 – A lighter, smoother window
+
+### Faster and lighter
+
+- **Minimizing is smooth again.** On the network map and Stories the window dropped frames on its way to the Dock.
+  Their glass is now drawn together, the way Protection's always was, and it looks the same.
+- **The network map rests when nothing changes.** It was rebuilt nine times on every redraw. Now it's built when
+  something new arrives, and with the map open Hostwatch uses about half the processor time it did.
+- **Hidden pages hold still.** While the window is minimized, covered or on another tab, the Events list and the map
+  wait, and catch up the moment you're back.
+- **A lighter HUD.** Its "needs a look" card and its rows are kept between redraws instead of rescanning the list.
+
 ## 0.19.0 – Endpoint Security and Swift 6
 
 ### New
