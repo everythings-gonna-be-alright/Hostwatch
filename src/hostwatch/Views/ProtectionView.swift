@@ -325,36 +325,45 @@ struct PlaceChoices<Choice: Hashable>: View {
     let options: [(Choice, String)]
     @Binding var exceptions: PlaceExceptions
     let place: String
+    /// False on the firewall's General cards: what one app meets lives on that app's own card.
+    var showsPrograms = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("Any other program").font(.callout).foregroundStyle(.secondary)
+                Text(showsPrograms ? "Any other program" : "Every program").font(.callout).foregroundStyle(.secondary)
                 Picker("Any other program", selection: $others) {
                     ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
                 }
                 .labelsHidden().fixedSize().controlSize(.small)
                 .help("What happens when a program not in your list below uses \(place)")
                 Spacer(minLength: 12)
-                // One labelled button, styled like the page's other buttons: an action, not a link (HIG). Blue link
-                // text on every card was noise, and a bare + was easy to miss.
-                Menu {
-                    Button("Always Allow a Program…") { choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
-                    Button("Always Block a Program…") { choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
-                } label: {
-                    Label("Add Program", systemImage: "plus")
-                }
-                .menuStyle(.button)
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .fixedSize()
-                .help("Always allow, or always block, a program here")
+                if showsPrograms { addProgram }
             }
-            ExceptionChips(exceptions: $exceptions)
+            if showsPrograms { ExceptionChips(exceptions: $exceptions) }
         }
     }
 
-    private func choose(_ add: (String) -> Void) {
+    private var addProgram: some View {
+        // One labelled button, styled like the page's other buttons: an action, not a link (HIG). Blue link text on
+        // every card was noise, and a bare + was easy to miss.
+        Menu {
+            Button("Always Allow a Program…") { ProgramPicker.choose { if !exceptions.allowed.contains($0) { exceptions.allowed.append($0) } } }
+            Button("Always Block a Program…") { ProgramPicker.choose { if !exceptions.blocked.contains($0) { exceptions.blocked.append($0) } } }
+        } label: {
+            Label("Add Program", systemImage: "plus")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Always allow, or always block, a program here")
+    }
+}
+
+/// Choose an app or a command-line program, from /Applications.
+@MainActor enum ProgramPicker {
+    static func choose(_ add: (String) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true

@@ -36,6 +36,8 @@ extension AppDelegate {
         }
         protection.aiCheck = { [weak self] event in await self?.checkWithAI(event) }
         protection.onAIAllowed = { [weak self] ask, note in self?.aiNotices.allowed(ask, note: note) }
+        let adopted = firewall.adoptPrograms(from: protection.destinations)
+        if adopted != protection.destinations { protection.destinations = adopted }
         firewall.networkDecision = { [weak self] f in self?.protection.networkDecision(host: f.host, ip: f.ip, program: f.program) }
         model.onGuardStatus = { [weak self] state, detail in self?.protection.enforcerStatus(state, detail) }
         model.onGuardAsk = { [weak self] obj in

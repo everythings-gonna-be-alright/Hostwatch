@@ -27,6 +27,7 @@ struct NetworkFirewallPage: View {
                 if let protection {
                     DestinationsSection(protection: protection, map: networkMap ?? Self.noMap, bothWays: networkMap != nil,
                                         firewall: firewall, showNetwork: showNetwork)
+                    AppRulesSection(firewall: firewall)
                 }
                 if let networkMap { NetworksSection(store: networkMap) }
                 findings(found)
@@ -259,23 +260,16 @@ struct FirewallRulesSection: View {
     var body: some View {
         let _ = signatures.revision
         let rules = firewall.rules
-        let blocks = rules.filter { $0.kind == .domainBlock }, patterns = blockedPatterns
+        let patterns = blockedPatterns
         let exceptions = rules.filter { $0.kind == .threatException }, again = rules.filter { $0.kind == .askAgain }
         VStack(alignment: .leading, spacing: 10) {
             Text("Your rules").font(.headline)
-            if rules.isEmpty && patterns.isEmpty && !firewall.everywhereBlocked {
-                Text("None yet. Block a domain for an app in Network, or Block a connection here, and it's listed here.")
+            if rules.isEmpty && patterns.isEmpty {
+                Text("None outside your cards below. A connection pattern you block, or an exception to a threat list, is listed here.")
                     .foregroundStyle(.secondary)
             }
-            if !blocks.isEmpty || !patterns.isEmpty {
+            if !patterns.isEmpty {
                 group("Blocked", symbol: "nosign", tint: .red) {
-                    ForEach(blocks) { r in
-                        line(program: r.program, what: r.destination,
-                             detail: r.destination.contains(":") || r.destination.allSatisfy({ $0.isNumber || $0 == "." })
-                                 ? "every connection to this address" : "every connection to this domain") {
-                            Button("Unblock") { firewall.remove(r) }
-                        }
-                    }
                     ForEach(patterns) { e in
                         line(program: displayProcessName(e.process), what: e.pattern,
                              detail: "marked \(signatures.status(forKey: e.id).title) · \(signatures.decidedBy(e.id))") {
@@ -290,22 +284,6 @@ struct FirewallRulesSection: View {
                     ForEach(exceptions) { r in
                         line(program: r.program, what: r.destination, detail: "you chose Allow Anyway") {
                             Button("Remove") { firewall.remove(r) }.help("Blocked again because of the threat list")
-                        }
-                    }
-                }
-            }
-            let apps = rules.filter { $0.kind == .appBlock }
-            if !apps.isEmpty || firewall.everywhereBlocked {
-                group("Blocked everywhere", symbol: "globe.americas", tint: .red) {
-                    if firewall.everywhereBlocked {
-                        line(program: "Every program", what: "everywhere",
-                             detail: "but the \(firewall.everywhereAllowed.count) you always allow") {
-                            Button("Unblock") { firewall.setEverywhereBlocked(false) }.help("Back to Firewall decides")
-                        }
-                    }
-                    ForEach(apps) { r in
-                        line(program: PlaceExceptions.name(r.key), what: "everywhere", detail: "every connection, your network too") {
-                            Button("Unblock") { firewall.remove(r) }.help("Its connections are judged as usual again")
                         }
                     }
                 }
@@ -344,8 +322,8 @@ struct FirewallRulesSection: View {
     }
 }
 
-/// Your destinations, shaped like protected places: a domain (its subdomains too) or an IP, what any other program
-/// meets there (Firewall decides, Allow or Block), and programs you always allow or always block, as chips.
+/// General: the rules for every program, shaped like protected places. A domain (its subdomains too) or an IP and what
+/// every program meets there (Firewall decides, Allow or Block). One app's rules are on its card (`AppRulesSection`).
 struct DestinationsSection: View {
     @ObservedObject var protection: ProtectionMonitor
     /// Devices, addresses and ports blocked both ways (the collector's own block), in the same list.
@@ -395,19 +373,19 @@ struct DestinationsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Your destinations").font(.headline)
+                Text("General").font(.headline)
                 Spacer()
                 Button { adding.open = true } label: { Label("Add Domain or Address…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
             }
-            Text("A domain (its subdomains too) or an IP address, with what any other program meets there and the programs "
-                 + "you always allow or always block: your decisions, before threat lists and patterns. An address or a "
+            Text("For every program. A domain (its subdomains too) or an IP address, and what programs meet there: your "
+                 + "decisions, before threat lists and patterns. An app's own rules below win over these. An address or a "
                  + "device can also be blocked both ways: nothing reaches this Mac from it or goes to it, whatever the "
                  + "firewall's mode.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if adding.open { addRow }
             if networkMap == nil, protection.destinations.isEmpty, !adding.open {
-                Text("None yet. Block a domain for every program, or always allow one app to a server.")
+                Text("None yet. Block a domain for every program, or allow one.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             EverywhereCard(firewall: firewall)
@@ -476,7 +454,8 @@ struct DestinationsSection: View {
                     .buttonStyle(.borderless).help("Remove \(d.target)")
             }
             PlaceChoices(others: pick(d, binding), options: options(d),
-                         exceptions: Binding(get: { d.exceptions }, set: { e in binding { $0.exceptions = e } }), place: d.target)
+                         exceptions: Binding(get: { d.exceptions }, set: { e in binding { $0.exceptions = e } }), place: d.target,
+                         showsPrograms: false)
                 .disabled(!d.on).opacity(d.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
@@ -491,10 +470,8 @@ final class DestinationDraft: ObservableObject {
     @Published var text = ""
 }
 
-/// Your destinations' first card, always there: every destination, your network too, shaped like the others.
-/// Any other program: Firewall decides (the default) or Block, every program's traffic but the ones you always allow
-/// here. Always block: all of a program's traffic, whatever else you allowed (the firewall checks it first). Always
-/// allow only keeps a program out of this card's Block: not past threat lists or your other destinations.
+/// General's first card, always there: every destination, your network too, shaped like the others. Any program:
+/// Firewall decides (the default) or Block, every program's traffic but the apps whose own card allows them everywhere.
 struct EverywhereCard: View {
     @ObservedObject var firewall: FirewallMonitor
 
@@ -502,17 +479,6 @@ struct EverywhereCard: View {
 
     private var others: Binding<Choice> {
         Binding(get: { firewall.everywhereBlocked ? .block : .firewall }, set: { firewall.setEverywhereBlocked($0 == .block) })
-    }
-
-    /// The shared chips and Add Program, bound to the firewall's two lists.
-    private var exceptions: Binding<PlaceExceptions> {
-        Binding(get: { PlaceExceptions(allowed: firewall.everywhereAllowed.sorted(), blocked: firewall.appBlocks.sorted()) },
-                set: { new in
-                    for app in firewall.appBlocks where !new.blocked.contains(app) { firewall.setNoNetwork(false, app: app) }
-                    for app in new.blocked where !firewall.appBlocks.contains(app) { firewall.setNoNetwork(true, app: app) }
-                    for app in firewall.everywhereAllowed where !new.allowed.contains(app) { firewall.setAllowedEverywhere(false, app: app) }
-                    for app in new.allowed where !firewall.everywhereAllowed.contains(app) { firewall.setAllowedEverywhere(true, app: app) }
-                })
     }
 
     var body: some View {
@@ -532,19 +498,22 @@ struct EverywhereCard: View {
                             .padding(.horizontal, 6).padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.10)))
                     }
-                    Text("Every destination, your network too. Applies wherever no destination below decides.")
+                    Text("Every destination, your network too, for every program. Applies wherever no other rule decides.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
             VStack(alignment: .leading, spacing: 6) {
                 PlaceChoices(others: others, options: [(.firewall, "Firewall decides"), (.block, "Block")],
-                             exceptions: exceptions, place: "any destination")
+                             exceptions: .constant(PlaceExceptions()), place: "any destination", showsPrograms: false)
                 if firewall.everywhereBlocked {
-                    Text("Every program's traffic is blocked, but the programs you always allow here.")
+                    let allowed = firewall.apps.filter { $0.everywhere == .allow }.map(\.name)
+                    Text(allowed.isEmpty ? "Every program's traffic is blocked. Allow an app everywhere in its card below."
+                                         : "Every program's traffic is blocked, but \(allowed.joined(separator: ", ")).")
                         .font(.caption).foregroundStyle(.red)
                 }
-                if firewall.everywhereBlocked || !firewall.appBlocks.isEmpty, firewall.mode == .off || firewall.mode == .watch {
+                if firewall.everywhereBlocked || firewall.apps.contains(where: { $0.everywhere == .block }),
+                   firewall.mode == .off || firewall.mode == .watch {
                     Label(firewall.mode == .off
                           ? "The firewall is off: nothing is blocked. Ask or Strict blocks it."
                           : "Watch stops nothing: blocked connections are listed as would block. Ask or Strict blocks them.",

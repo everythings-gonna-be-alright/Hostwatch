@@ -66,14 +66,15 @@ import Testing
                       knownBad: "", patternKey: "net|\(program)|TCP internet:443")
     }
 
-    @Test func yourBlockWinsOverASafePatternButNotTheLocalNetwork() {
+    @Test func yourBlockWinsOverASafePatternAndLeavesTheRest() {
         let hw = "/Applications/Hostwatch.app/Contents/MacOS/Hostwatch"
-        let blocked = FirewallPolicy.decide(facts(app, host: "api.example.com"), status: .safe, blockedDomain: "example.com", hostwatch: hw)
+        let card = AppRules(app: "Tool", destinations: [Destination(target: "example.com", others: .block)])
+        let blocked = FirewallPolicy.decide(facts(app, host: "api.example.com"), status: .safe, app: card, hostwatch: hw)
         #expect(blocked.verdict == .block && blocked.reason.contains("example.com"))
         // The app's one web pattern stays Safe: nothing else of it is stopped.
-        #expect(FirewallPolicy.decide(facts(app, host: "other.org"), status: .safe, hostwatch: hw).verdict == .allow)
+        #expect(FirewallPolicy.decide(facts(app, host: "other.org"), status: .safe, app: card, hostwatch: hw).verdict == .allow)
         #expect(FirewallPolicy.decide(facts(app, host: "nas.local", ip: "192.168.1.5"), status: .safe,
-                                      blockedDomain: "nas.local", hostwatch: hw).verdict == .allow)
+                                      app: card, hostwatch: hw).verdict == .allow)
     }
 
     @Test func aBlockCoversTheDomainsHostsForThatAppOnly() throws {
@@ -190,11 +191,11 @@ import Testing
         fw.setBlocked(true, domain: "example.com", program: app)
         fw.setThreatException(true, FirewallFacts(program: app, proto: "TCP", ip: "1.2.3.4", port: "443", host: "raw.githubusercontent.com",
                                                   risk: .normal, riskReason: "", knownBad: "x", patternKey: "k"))
-        #expect(Set(fw.rules.map(\.kind)) == [.domainBlock, .threatException])
-        #expect(fw.rules.first { $0.kind == .domainBlock }.map { ($0.program, $0.destination) }! == ("Tool", "example.com"))
+        #expect(fw.rules.map(\.kind) == [.threatException])                  // the block is on Tool's card
+        #expect(fw.apps.map(\.app) == ["/Applications/Tool.app"] && fw.isBlocked(domain: "example.com", program: app))
         fw.clear()                                                        // Forget Seen Connections
-        #expect(fw.rules.count == 2)
-        fw.remove(fw.rules.first { $0.kind == .domainBlock }!)
-        #expect(!fw.isBlocked(domain: "example.com", program: app) && fw.rules.count == 1)
+        #expect(fw.rules.count == 1 && fw.apps.count == 1)
+        fw.setBlocked(false, domain: "example.com", program: app)
+        #expect(!fw.isBlocked(domain: "example.com", program: app) && fw.rules.count == 1 && fw.apps.isEmpty)
     }
 }

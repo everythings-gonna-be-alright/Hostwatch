@@ -34,7 +34,7 @@ import Testing
         #expect(fw.prompts.map(\.key) == ["k2"])                               // github is still asked about
         let decide = { (e: ActivityEvent) in
             let f = try #require(FirewallMonitor.facts(e))
-            return FirewallPolicy.decide(f, status: .unclassified, blockedDomain: fw.blockedDomain(f)).verdict
+            return FirewallPolicy.decide(f, status: .unclassified, app: fw.appRules(for: f.program)).verdict
         }
         #expect(try decide(bad) == .block && decide(good) == .ask)
     }
@@ -46,7 +46,7 @@ import Testing
         fw.resolve(try #require(fw.prompts.first).id, allow: false)
         let f = try #require(FirewallMonitor.facts(bare))
         #expect(fw.blockedDomain(f) == "198.18.0.7")
-        #expect(fw.rules.map(\.destination) == ["198.18.0.7"])
+        #expect(fw.apps.first?.destinations.map(\.target) == ["198.18.0.7"])
     }
 
     @Test func clearingAConnectionPatternFlushesAtOnce() throws {

@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Protection ▸ Network ▸ Your destinations: the devices and ports you blocked both ways (the network map's
+/// Protection ▸ Network Firewall ▸ General: the devices and ports you blocked both ways (the network map's
 /// right-click). Addresses are destination cards (`BlockedAddressCards`). The collector blocks them itself, both ways, whatever the firewall's mode, so they work
 /// on Watch too. source: docs/adr/0017-network-map.md
 struct BlockedCards: View {
     @ObservedObject var store: NetworkMapStore
-    /// Your destinations has nothing else to show: the shared "None yet" is said here, where the blocks are known.
+    /// General has nothing else to show: the shared "None yet" is said here, where the blocks are known.
     var noDestinations = false
     var showNetwork: () -> Void = {}
 

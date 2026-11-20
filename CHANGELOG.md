@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### New
+
+- **Firewall rules per app.** The Network Firewall page now has General, for every program, and Apps: one card per
+  app with its own Everywhere (Firewall decides, Allow or Block) and its own domains and addresses. An app's own rules
+  win over General's. Everything one app may reach is on its card: the program chips on General's cards, the apps
+  you always allowed or blocked everywhere, and the domains you blocked from a question moved there.
+
 ### Fixes
 
 - **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web
