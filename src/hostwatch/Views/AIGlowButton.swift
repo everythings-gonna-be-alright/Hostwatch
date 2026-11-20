@@ -14,7 +14,7 @@ struct AIGlowButton: View {
     var body: some View {
         Button(action: action) {
             Label {
-                Text(title)
+                Text(title).lineLimit(1).fixedSize()          // "Ask Again" wrapped to two lines in a full bar
             } icon: {
                 Image(systemName: systemImage)
                     .foregroundStyle(enabled ? AnyShapeStyle(AIGlow.iconGradient) : AnyShapeStyle(.secondary))

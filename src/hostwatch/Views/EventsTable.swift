@@ -51,12 +51,13 @@ struct EventsTable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let outline = OutlineView()
-        // The inset look with alternating rows, like the other lists (Running Now, Patterns). Group rows are
-        // ordinary rows with their own row view, not AppKit group items (those float and get a gap above).
+        // The inset look on the list's ground with Patterns' stripes (drawBackground), so the two lists match. Group rows are ordinary rows with their own row
+        // view, not AppKit group items (those float and get a gap above).
         outline.style = .inset
         outline.rowSizeStyle = .custom                  // else AppKit picks its own, taller rows
         outline.intercellSpacing = NSSize(width: 3, height: 2)
-        outline.usesAlternatingRowBackgroundColors = true
+        outline.usesAlternatingRowBackgroundColors = false
+        outline.backgroundColor = .controlBackgroundColor     // the list's ground, as Patterns has (RowBand.GroundView)
         outline.allowsMultipleSelection = true
         outline.allowsColumnReordering = false
         outline.indentationPerLevel = 12
@@ -86,6 +87,8 @@ struct EventsTable: NSViewRepresentable {
 
         let scroll = NSScrollView()
         scroll.borderType = .noBorder                   // the bezel drew a line above the header (and left of it)
+        scroll.drawsBackground = false
+        scroll.contentView.drawsBackground = false
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
@@ -291,7 +294,9 @@ struct EventsTable: NSViewRepresentable {
                 view.set(row, links: parent.groupLinks(row))
                 return view
             }
-            return nil                                      // plain rows, like the Patterns list
+            // Plain rows: selection raised in the text colour (DESIGN.md), not the system's blue.
+            return outlineView.makeView(withIdentifier: GlassRowView.identifier, owner: nil) as? GlassRowView
+                ?? { let r = GlassRowView(); r.identifier = GlassRowView.identifier; return r }()
         }
 
         func outlineView(_ outlineView: NSOutlineView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
@@ -423,11 +428,34 @@ struct EventsTable: NSViewRepresentable {
 /// Sorting by click and resizing by drag stay NSTableHeaderView's.
 final class LegendHeaderView: NSTableHeaderView {
     private static let font = NSFont.systemFont(ofSize: 11, weight: .bold)
+    private var blur: NSVisualEffectView?
+
+    /// The system's header blur behind the titles, in the clip view that holds the header (it has none until the
+    /// scroll view lays out, so this runs again whenever the header moves to one).
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        installBlur()
+    }
+
+    func installBlur() {
+        guard let clip = superview, blur?.superview !== clip else { return }
+        blur?.removeFromSuperview()
+        let fx = NSVisualEffectView(frame: clip.bounds)
+        fx.material = .headerView
+        fx.blendingMode = .withinWindow
+        fx.state = .followsWindowActiveState
+        fx.autoresizingMask = [.width, .height]
+        clip.addSubview(fx, positioned: .below, relativeTo: self)
+        blur = fx
+    }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard tableView != nil else { return }
+        // Its ground is the blur behind it (`installBlur`): rows scrolling under it blur, the page's colour shows. A solid
+        // fill was darker than the page around it. Then a hairline below.
+        NSColor.separatorColor.setFill()
+        NSRect(x: bounds.minX, y: isFlipped ? bounds.maxY - 1 : bounds.minY, width: bounds.width, height: 1).fill()
         guard let table = tableView else { return }
-        table.backgroundColor.setFill()
-        dirtyRect.fill()
         let sorted = table.sortDescriptors.first
         for (i, column) in table.tableColumns.enumerated() {
             let rect = headerRect(ofColumn: i)
@@ -471,20 +499,18 @@ private extension NSImage {
 final class OutlineView: NSOutlineView {
     var menuProvider: ((UUID) -> NSMenu?)?
 
-    /// Alternating rows only where there are rows: the space below the list stays plain.
+    /// Alternating rows as Patterns draws them (`RowBand`: its shape and the system's stripe colour, see-through in
+    /// dark mode), only where there are rows, none behind a group's tile. A fainter colour of our own read weaker
+    /// than Patterns, AppKit's own opaque stripes stronger.
     override func drawBackground(inClipRect clipRect: NSRect) {
-        let used = numberOfRows > 0 ? rect(ofRow: numberOfRows - 1).maxY : 0
-        if clipRect.minY >= used {
-            backgroundColor.setFill()
-            clipRect.fill()
-            return
-        }
-        if clipRect.maxY > used {
-            backgroundColor.setFill()
-            NSRect(x: clipRect.minX, y: used, width: clipRect.width, height: clipRect.maxY - used).fill()
-            super.drawBackground(inClipRect: NSRect(x: clipRect.minX, y: clipRect.minY, width: clipRect.width, height: used - clipRect.minY))
-        } else {
-            super.drawBackground(inClipRect: clipRect)
+        backgroundColor.setFill()
+        clipRect.fill()
+        let visible = rows(in: clipRect)
+        guard visible.length > 0 else { return }
+        NSColor.alternatingContentBackgroundColors[1].setFill()
+        for row in visible.location..<(visible.location + visible.length)
+        where row % 2 == 1 && !(rowView(atRow: row, makeIfNecessary: false) is GroupRowView) {     // a group has its tile
+            RowBand.shape(in: rect(ofRow: row)).fill()
         }
     }
 

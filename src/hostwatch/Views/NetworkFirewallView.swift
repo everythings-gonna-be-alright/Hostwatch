@@ -13,6 +13,8 @@ struct NetworkFirewallPage: View {
     var protection: ProtectionMonitor? = nil
     /// Devices, addresses and ports blocked from the network map.
     var networkMap: NetworkMapStore? = nil
+    /// For a page without a network map: nothing blocked, nothing offered.
+    private static let noMap = NetworkMapStore(fileURL: nil)
 
     var body: some View {
         let found = firewall.list(status: { signatures.status(forKey: $0) })
@@ -22,11 +24,11 @@ struct NetworkFirewallPage: View {
                 numbers(found)
                 if !firewall.prompts.isEmpty { waiting }
                 FirewallRulesSection(firewall: firewall, signatures: signatures)
-                if let protection { DestinationsSection(protection: protection) }
-                if let networkMap {
-                    NetworksSection(store: networkMap)
-                    BlockedDevicesSection(store: networkMap, showNetwork: showNetwork)
+                if let protection {
+                    DestinationsSection(protection: protection, map: networkMap ?? Self.noMap, bothWays: networkMap != nil,
+                                        firewall: firewall, showNetwork: showNetwork)
                 }
+                if let networkMap { NetworksSection(store: networkMap) }
                 findings(found)
                 howItDecides
             }
@@ -256,7 +258,7 @@ struct FirewallRulesSection: View {
         let exceptions = rules.filter { $0.kind == .threatException }, again = rules.filter { $0.kind == .askAgain }
         VStack(alignment: .leading, spacing: 10) {
             Text("Your rules").font(.headline)
-            if blocks.isEmpty && patterns.isEmpty && exceptions.isEmpty && again.isEmpty {
+            if rules.isEmpty && patterns.isEmpty && !firewall.everywhereBlocked {
                 Text("None yet. Block a domain for an app in Network, or Block a connection here, and it's listed here.")
                     .foregroundStyle(.secondary)
             }
@@ -281,6 +283,22 @@ struct FirewallRulesSection: View {
                     ForEach(exceptions) { r in
                         line(program: r.program, what: r.destination, detail: "you chose Allow Anyway") {
                             Button("Remove") { firewall.remove(r) }.help("Blocked again because of the threat list")
+                        }
+                    }
+                }
+            }
+            let apps = rules.filter { $0.kind == .appBlock }
+            if !apps.isEmpty || firewall.everywhereBlocked {
+                group("Blocked everywhere", symbol: "globe.americas", tint: .red) {
+                    if firewall.everywhereBlocked {
+                        line(program: "Every program", what: "everywhere",
+                             detail: "but the \(firewall.everywhereAllowed.count) you always allow") {
+                            Button("Unblock") { firewall.setEverywhereBlocked(false) }.help("Back to Firewall decides")
+                        }
+                    }
+                    ForEach(apps) { r in
+                        line(program: PlaceExceptions.name(r.key), what: "everywhere", detail: "every connection, your network too") {
+                            Button("Unblock") { firewall.remove(r) }.help("Its connections are judged as usual again")
                         }
                     }
                 }
@@ -323,27 +341,79 @@ struct FirewallRulesSection: View {
 /// meets there (Firewall decides, Allow or Block), and programs you always allow or always block, as chips.
 struct DestinationsSection: View {
     @ObservedObject var protection: ProtectionMonitor
+    /// Devices, addresses and ports blocked both ways (the collector's own block), in the same list.
+    @ObservedObject var map: NetworkMapStore
+    /// False without a network map (the demo): no Block both ways.
+    var bothWays = true
+    /// Everywhere's card.
+    @ObservedObject var firewall: FirewallMonitor
+    var showNetwork: () -> Void = {}
+
+    private var networkMap: NetworkMapStore? { bothWays ? map : nil }
     @StateObject private var adding = DestinationDraft()
 
     static let options: [(DestinationChoice, String)] = [(.firewall, "Firewall decides"), (.allow, "Allow"), (.block, "Block")]
+
+    /// A card's choice: the firewall's three, or for an address, Block both ways (the collector's own block: incoming
+    /// too, whatever the firewall's mode, no exceptions). The same address once had two places to be blocked.
+    enum Pick: Hashable { case choice(DestinationChoice), bothWays }
+
+    private func options(_ d: Destination) -> [(Pick, String)] {
+        Self.options.map { (Pick.choice($0.0), $0.1) } + (d.isIP && networkMap != nil ? [(.bothWays, "Block both ways")] : [])
+    }
+
+    private func pick(_ d: Destination, _ binding: @escaping (@escaping (inout Destination) -> Void) -> Void) -> Binding<Pick> {
+        Binding(get: {
+            networkMap?.blockedAddresses.contains(d.target) == true ? .bothWays : .choice(d.others)
+        }, set: { new in
+            switch new {
+            case .bothWays:
+                guard bothWaysRefusal(d.target) == nil else { return }
+                networkMap?.setBlocked(address: d.target, true)
+                binding { $0.others = .block }                     // the firewall's answer too, should the block go
+            case .choice(let c):
+                networkMap?.setBlocked(address: d.target, false)
+                binding { $0.others = c }
+            }
+        })
+    }
+
+    /// Why an address can't be blocked both ways, nil when it can.
+    private func bothWaysRefusal(_ ip: String) -> String? {
+        if ip == networkMap?.routes.gateway { return "That's the router: blocking it would cut this Mac off the network." }
+        if ip.hasPrefix("127.") || ip == "::1" { return "That's this Mac itself." }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Your destinations").font(.headline)
                 Spacer()
-                Button { adding.open = true } label: { Label("Add Destination…", systemImage: "plus") }
+                Button { adding.open = true } label: { Label("Add Domain or Address…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
             }
             Text("A domain (its subdomains too) or an IP address, with what any other program meets there and the programs "
-                 + "you always allow or always block. Your decisions, before threat lists and patterns.")
+                 + "you always allow or always block: your decisions, before threat lists and patterns. An address or a "
+                 + "device can also be blocked both ways: nothing reaches this Mac from it or goes to it, whatever the "
+                 + "firewall's mode.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if adding.open { addRow }
-            if protection.destinations.isEmpty && !adding.open {
+            if networkMap == nil, protection.destinations.isEmpty, !adding.open {
                 Text("None yet. Block a domain for every program, or always allow one app to a server.")
                     .font(.callout).foregroundStyle(.secondary)
             }
+            EverywhereCard(firewall: firewall)
+            Text("Specific destinations").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                .padding(.top, 4)
             ForEach(protection.destinations) { d in card(d) }
+            if let networkMap {
+                // Addresses blocked both ways from the network map, not destinations yet: the same cards, kept as
+                // destinations once you change one.
+                BlockedAddressCards(store: networkMap, known: Set(protection.destinations.map(\.target))) { card($0) }
+                BlockedCards(store: networkMap,
+                             noDestinations: protection.destinations.isEmpty && !adding.open, showNetwork: showNetwork)
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -377,8 +447,10 @@ struct DestinationsSection: View {
 
     /// The same card as a protected place: name and what it covers, on and off, then the choices and the chips.
     private func card(_ d: Destination) -> some View {
+        // Kept as a destination at the first change (one shown from a both-ways block may not be one yet).
         let binding = { (change: @escaping (inout Destination) -> Void) in
             if let i = protection.destinations.firstIndex(where: { $0.id == d.id }) { change(&protection.destinations[i]) }
+            else { var new = d; change(&new); protection.destinations.append(new) }
         }
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
@@ -390,10 +462,13 @@ struct DestinationsSection: View {
                 Spacer()
                 Toggle("", isOn: Binding(get: { d.on }, set: { on in binding { $0.on = on } }))
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
-                Button { protection.destinations.removeAll { $0.id == d.id } } label: { Image(systemName: "minus.circle") }
+                Button {
+                    protection.destinations.removeAll { $0.id == d.id }
+                    if d.isIP { networkMap?.setBlocked(address: d.target, false) }
+                } label: { Image(systemName: "minus.circle") }
                     .buttonStyle(.borderless).help("Remove \(d.target)")
             }
-            PlaceChoices(others: Binding(get: { d.others }, set: { v in binding { $0.others = v } }), options: Self.options,
+            PlaceChoices(others: pick(d, binding), options: options(d),
                          exceptions: Binding(get: { d.exceptions }, set: { e in binding { $0.exceptions = e } }), place: d.target)
                 .disabled(!d.on).opacity(d.on ? 1 : 0.5)
                 .padding(.leading, 32)
@@ -407,4 +482,72 @@ struct DestinationsSection: View {
 final class DestinationDraft: ObservableObject {
     @Published var open = false
     @Published var text = ""
+}
+
+/// Your destinations' first card, always there: every destination, your network too, shaped like the others.
+/// Any other program: Firewall decides (the default) or Block, every program's traffic but the ones you always allow
+/// here. Always block: all of a program's traffic, whatever else you allowed (the firewall checks it first). Always
+/// allow only keeps a program out of this card's Block: not past threat lists or your other destinations.
+struct EverywhereCard: View {
+    @ObservedObject var firewall: FirewallMonitor
+
+    enum Choice: Hashable { case firewall, block }
+
+    private var others: Binding<Choice> {
+        Binding(get: { firewall.everywhereBlocked ? .block : .firewall }, set: { firewall.setEverywhereBlocked($0 == .block) })
+    }
+
+    /// The shared chips and Add Program, bound to the firewall's two lists.
+    private var exceptions: Binding<PlaceExceptions> {
+        Binding(get: { PlaceExceptions(allowed: firewall.everywhereAllowed.sorted(), blocked: firewall.appBlocks.sorted()) },
+                set: { new in
+                    for app in firewall.appBlocks where !new.blocked.contains(app) { firewall.setNoNetwork(false, app: app) }
+                    for app in new.blocked where !firewall.appBlocks.contains(app) { firewall.setNoNetwork(true, app: app) }
+                    for app in firewall.everywhereAllowed where !new.allowed.contains(app) { firewall.setAllowedEverywhere(false, app: app) }
+                    for app in new.allowed where !firewall.everywhereAllowed.contains(app) { firewall.setAllowedEverywhere(true, app: app) }
+                })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Set apart from the destinations below: a seal, a Base rule badge, and red glass while it blocks.
+            HStack(spacing: 12) {
+                Image(systemName: "globe.americas.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background((firewall.everywhereBlocked ? Color.red : Color.blue).gradient, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Everywhere").font(.headline)
+                        Text("Base rule").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.primary.opacity(0.10)))
+                    }
+                    Text("Every destination, your network too. Applies wherever no destination below decides.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                PlaceChoices(others: others, options: [(.firewall, "Firewall decides"), (.block, "Block")],
+                             exceptions: exceptions, place: "any destination")
+                if firewall.everywhereBlocked {
+                    Text("Every program's traffic is blocked, but the programs you always allow here.")
+                        .font(.caption).foregroundStyle(.red)
+                }
+                if firewall.everywhereBlocked || !firewall.appBlocks.isEmpty, firewall.mode == .off || firewall.mode == .watch {
+                    Label(firewall.mode == .off
+                          ? "The firewall is off: nothing is blocked. Ask or Strict blocks it."
+                          : "Watch stops nothing: blocked connections are listed as would block. Ask or Strict blocks them.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+            .padding(.leading, 46)
+        }
+        .padding(14)
+        .protectionGlass(16, tint: firewall.everywhereBlocked ? Color.red.opacity(0.14) : nil)
+    }
 }

@@ -42,7 +42,14 @@ struct LearnedRule: Codable, Identifiable, Equatable {
     var isActive: Bool { pausedReason == nil }
 
     func matches(_ e: SignatureEntry) -> Bool {
-        (kind == nil || e.kind == kind) && Glob.match(process, e.process) && Glob.match(pattern, e.pattern)
+        (kind == nil || e.kind == kind) && Glob.match(pattern, e.pattern) && matchesProgram(e.process)
+    }
+
+    /// A rule that names who did it matches only that ("node via Cursor"). One that doesn't matches the program from
+    /// anyone, as it did before patterns named who (ADR 0019).
+    func matchesProgram(_ program: String) -> Bool {
+        Glob.match(process, program)
+            || (!process.contains(SignatureBuilder.via) && Glob.match(process, SignatureBuilder.programPath(program)))
     }
 
     var matcherText: String {

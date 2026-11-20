@@ -61,15 +61,15 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.20.0**
+- **🕵️ Who did it** – a tool's pattern names the app or AI agent behind it, proven from the kernel: `node via Cursor`
+  and `bash via Claude Code` are decided apart.
+- **🌍 Everywhere** – block all of one program's traffic, or let only the programs you choose connect at all.
+- **🪟 Liquid Glass** – Ask AI, a story's chain, a domain's details, the launch chain and the Events list.
+
 **0.19.1**
 - **🪟 Smooth to the Dock** – minimizing no longer stutters on the network map and Stories.
 - **⚡ Lighter** – about half the processor time with the network map open, and hidden pages rest.
-
-**0.19.0**
-- **🛡️ Stopped before it happens** – with Apple's Endpoint Security, a blocked program never starts and a blocked
-  file is never read. Your shell simply waits for your answer.
-- **🗺️ A clearer network map** – ports and the kind of traffic for every destination, in Liquid Glass.
-- **⚡ Smoother and safer** – smooth Running Now charts, quicker tabs, and Hostwatch built in Swift 6.
 
 Earlier versions: see the [changelog](CHANGELOG.md).
 

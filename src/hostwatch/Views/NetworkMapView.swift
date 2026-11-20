@@ -589,17 +589,5 @@ struct MapNodeView: View {
 /// Behind the network map: soft pools of colour (blue for this Mac, teal for the way out, indigo for the internet)
 /// for the glass to pick up, as Protection's backdrop does.
 struct MapBackdrop: View {
-    var body: some View {
-        ZStack {
-            RadialGradient(colors: [Color.blue.opacity(0.12), .clear], center: UnitPoint(x: 0.3, y: 0.15),
-                           startRadius: 0, endRadius: 520)
-            RadialGradient(colors: [Color.teal.opacity(0.10), .clear], center: UnitPoint(x: 0.75, y: 0.5),
-                           startRadius: 0, endRadius: 480)
-            RadialGradient(colors: [Color.indigo.opacity(0.10), .clear], center: UnitPoint(x: 0.05, y: 0.95),
-                           startRadius: 0, endRadius: 520)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
+    var body: some View { SoftBackdrop(colors: [Color.blue.opacity(0.12), Color.teal.opacity(0.10), Color.indigo.opacity(0.10)]) }
 }

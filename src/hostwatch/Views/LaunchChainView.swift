@@ -19,18 +19,30 @@ struct LaunchChainView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        ScrollView {
+            // One container for the cards' glass (DESIGN.md), spacing 0 so they never melt together.
+            GlassEffectContainer(spacing: 0) {
+                VStack(alignment: .leading, spacing: 14) {
+                    header
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .protectionGlass(18)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("From launchd to \(report.process.name)", systemImage: "arrow.triangle.branch").font(.headline)
+                        tree
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .protectionGlass(16)
+                }
                 .padding(.horizontal, 20)
-                .padding(.top, 30)                         // under the transparent title bar
-                .padding(.bottom, 14)
-            Divider()
-            ScrollView { tree }
-            Divider()
-            footer
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 20)
+            }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+        // Soft colour for the glass to pick up, as on the Network page.
+        .background { SoftBackdrop(colors: [Color.blue.opacity(0.12), Color.indigo.opacity(0.10), Color.teal.opacity(0.08)]) }
         .frame(minWidth: 480, minHeight: 320)
     }
 
@@ -41,8 +53,6 @@ struct LaunchChainView: View {
             }
             if !report.earlier.isEmpty { earlier }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -75,7 +85,7 @@ struct LaunchChainView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary.opacity(0.5)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
         .padding(.leading, 38)
         .padding(.top, 4)
     }
@@ -84,7 +94,7 @@ struct LaunchChainView: View {
         HStack(spacing: 10) {
             Text("Rebuilt from what Hostwatch recorded, so it works after these processes have exited.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Button(copy.done ? "Copied" : "Copy") {
@@ -92,10 +102,18 @@ struct LaunchChainView: View {
                 NSPasteboard.general.setString(report.text, forType: .string)
                 copy.done = true
             }
+            .buttonStyle(.glass)
             Button("Done", action: close)
+                .buttonStyle(.glassProminent)
                 .keyboardShortcut(.defaultAction)
         }
         .controlSize(.large)
+        // A floating glass bar, as in Ask AI and Show Chain: the tree scrolls under it.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
 }
 
@@ -135,7 +153,18 @@ private struct NodeRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
+        // This event, raised in the text colour (DESIGN.md: selection), so it stands out whatever the accent colour.
+        .padding(isThisEvent ? 10 : 0)
+        .background {
+            if isThisEvent {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.08))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.5))
+            }
+        }
+        .padding(.horizontal, isThisEvent ? -10 : 0)
     }
+
+    private var isThisEvent: Bool { if case .process = node { return true } else { return false } }
 
     @ViewBuilder private var icon: some View {
         switch node {
@@ -174,12 +203,12 @@ private struct NodeRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(step.name)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(highlight ? Color.accentColor : .primary)
+                    .foregroundStyle(.primary)          // the tag marks this event: the accent colour can be graphite, grey
                 Text("pid \(String(step.pid))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
-                if origin { Tag(text: "Origin", color: .accentColor) }
-                if highlight { Tag(text: "This event", color: .secondary) }
+                if origin { Tag(text: "Origin", symbol: "flag.fill") }
+                if highlight { Tag(text: "This event", symbol: "smallcircle.filled.circle") }
                 Spacer(minLength: 6)
                 if !highlight && step.pid != 1 { SourceLabel(source: step.source) }
             }
@@ -226,23 +255,26 @@ private struct SourceLabel: View {
         }
         Label(text, systemImage: symbol)
             .font(.caption)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .labelStyle(.titleAndIcon)
             .help(help)
     }
 }
 
+/// Raised in the text colour, at full strength (DESIGN.md: never the accent colour, which can be graphite and
+/// made "Origin" grey on grey).
 private struct Tag: View {
     let text: String
-    let color: Color
+    let symbol: String
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(Capsule().fill(color.opacity(0.14)))
+        Label(text, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.primary.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
     }
 }
 
@@ -262,10 +294,12 @@ private struct OriginTag: View {
         case .unknown: ("questionmark", "Unknown")
         }
         Label(text, systemImage: symbol)
-            .font(.callout.weight(.medium))
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Capsule().fill(.quaternary.opacity(0.6)))
+            .background(Capsule().fill(Color.primary.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
     }
 }
 

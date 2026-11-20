@@ -44,7 +44,7 @@ enum BaselinePolicy {
         let actor = e.kind == .exec ? e.exampleParent : e.exampleProc
         let paths = Array(Set([subject, actor]).filter { !$0.isEmpty })
         if paths.contains(where: StoryEngine.isOwn) { return .ignore }
-        let app = appName(subject.isEmpty ? e.process : subject)
+        let app = appName(subject.isEmpty ? SignatureBuilder.programPath(e.process) : subject)
         if e.risk == .high { return .review(app: app, reason: "high risk" + (e.note.map { ": \($0.replacingOccurrences(of: "⚠︎ ", with: ""))" } ?? "")) }
         // macOS itself: Apple programs on the sealed, read-only system volume. Reading keychains, Mail or
         // Messages is their job (indexing, sync, malware scanning), and nothing can modify them.
@@ -405,7 +405,7 @@ final class BaselineLearner: ObservableObject {
         // Decided patterns sent back because something changed: always listed, with why.
         for e in store.allEntries where e.reopened != nil && store.status(forKey: e.id) == .unclassified {
             let path = SignatureStore.subjectPath(e)
-            report.add(app: BaselinePolicy.appName(path.isEmpty ? e.process : path), reason: "Reopened: " + (e.reopened ?? ""), key: e.id)
+            report.add(app: BaselinePolicy.appName(path.isEmpty ? SignatureBuilder.programPath(e.process) : path), reason: "Reopened: " + (e.reopened ?? ""), key: e.id)
         }
         // Only what happened lately: something seen once a week ago stays New in Patterns, not here.
         let active = newPatterns.filter { now().timeIntervalSince($0.lastSeen) < Self.activeWindow }

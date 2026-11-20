@@ -575,7 +575,7 @@ enum SignatureBuilder {
             sig.pattern = pattern
             sig.key = "\(e.kind.rawValue)|\(process)|\(pattern)"
         }
-        return sig
+        return withWho(sig, e)        // a tool's pattern names who did it: "node via Cursor"
     }
 
     /// "r ~/Documents/work/a/*" + "r ~/Documents/work/b/*" → "r ~/Documents/work/*/*": the patterns' common

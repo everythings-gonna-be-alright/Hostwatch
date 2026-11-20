@@ -126,6 +126,47 @@ final class EventCellView: NSTableCellView {
     }
 }
 
+/// A plain row whose selection is Liquid Glass, as the window's tab bar (DESIGN.md: selection, not the accent colour:
+/// the system's accent fill isn't Liquid Glass, and with a graphite accent it was grey). The text keeps its colours.
+final class GlassRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("glassrow")
+    /// The selection: real Liquid Glass behind the row's cells, as the tab bar's lens, a little larger than a stripe.
+    private var lens: NSGlassEffectView?
+
+    override var isSelected: Bool {
+        didSet { if isSelected != oldValue { updateLens() } }
+    }
+
+    private func updateLens() {
+        guard isSelected else { lens?.removeFromSuperview(); lens = nil; return }
+        guard lens == nil else { return }
+        let glass = NSGlassEffectView(frame: bounds.insetBy(dx: 6, dy: -1))
+        glass.cornerRadius = 8
+        glass.autoresizingMask = [.width, .height]
+        addSubview(glass, positioned: .below, relativeTo: nil)
+        lens = glass
+    }
+
+    override func layout() {
+        super.layout()
+        lens?.frame = bounds.insetBy(dx: 6, dy: -1)
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        if !isSelected { lens?.removeFromSuperview(); lens = nil }
+    }
+
+    /// The glass is the selection: nothing drawn.
+    override func drawSelection(in dirtyRect: NSRect) {}
+
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
+
+    /// Nothing of its own: the table draws the ground and the stripes under the rows (OutlineView.drawBackground). A
+    /// row view fills itself with the table's ground colour and hid the stripes.
+    override func drawBackground(in dirtyRect: NSRect) {}
+}
+
 /// A group row: the band itself, with the same SwiftUI band the other lists draw, laid across the row past the
 /// disclosure triangle. Group rows are few, so hosting SwiftUI here costs nothing noticeable.
 final class GroupRowView: NSTableRowView {
@@ -145,6 +186,13 @@ final class GroupRowView: NSTableRowView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    /// A soft rounded tile on the clear table, like the map's tiles, so a group reads as one block.
+    override func drawBackground(in dirtyRect: NSRect) {
+        let tile = bounds.insetBy(dx: 6, dy: 2)
+        NSColor.labelColor.withAlphaComponent(0.06).setFill()
+        NSBezierPath(roundedRect: tile, xRadius: 10, yRadius: 10).fill()
+    }
+
     func set(_ item: EventItem, links: [BandLink]) {
         // A program group shows the program's icon (an AI session its maker's mark, the catch-all nothing).
         let icon = item.agent == nil && !item.isCatchAll ? ProcessIcons.icon(item.event.proc) : nil
@@ -160,11 +208,13 @@ final class GroupRowView: NSTableRowView {
 final class ClosureMenuItem: NSMenuItem {
     private var handler: () -> Void = {}
 
-    convenience init(_ title: String, enabled: Bool = true, _ handler: @escaping () -> Void) {
+    /// `symbol`: a small SF Symbol before the title, as macOS's own menus show.
+    convenience init(_ title: String, symbol: String? = nil, enabled: Bool = true, _ handler: @escaping () -> Void) {
         self.init(title: title, action: #selector(run), keyEquivalent: "")
         self.handler = handler
         self.target = self
         self.isEnabled = enabled
+        if let symbol { image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
     }
 
     @objc private func run() { handler() }
@@ -178,11 +228,12 @@ extension NSMenu {
         addItem(item)
     }
 
-    func addSubmenu(_ title: String, _ fill: (NSMenu) -> Void) {
+    func addSubmenu(_ title: String, symbol: String? = nil, _ fill: (NSMenu) -> Void) {
         let sub = NSMenu(title: title)
         sub.autoenablesItems = false
         fill(sub)
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
         item.submenu = sub
         addItem(item)
     }

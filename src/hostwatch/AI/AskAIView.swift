@@ -16,10 +16,21 @@ struct AskAIView: View {
             if scrollable { ScrollView { content } } else { content }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { AIAskBar(analysis: analysis) }
+        // Soft colour for the glass to pick up, as on the Network page: the kind of event, then the verdict's.
+        .background { SoftBackdrop(colors: backdrop).animation(.easeInOut(duration: 0.6), value: analysis.verdict) }
         .frame(minWidth: 640, minHeight: 620)
     }
 
+    private var backdrop: [Color] {
+        [event.kind.color.opacity(0.14), (analysis.verdict?.color ?? Color.indigo).opacity(0.12), Color.teal.opacity(0.08)]
+    }
+
     private var content: some View {
+        // One container for all the cards' glass: drawn apart, each was blurred again on every frame (DESIGN.md).
+        GlassEffectContainer(spacing: 0) { cards }
+    }
+
+    private var cards: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
             AIVerdictCard(analysis: analysis)
@@ -232,12 +243,18 @@ struct AskAIView: View {
         let related = analysis.relatedEvents
         if !related.isEmpty {
             Card(title: "Recent activity of this process", symbol: "clock") {
-                ForEach(Array(related.prefix(8).enumerated()), id: \.offset) { _, e in
-                    HStack(spacing: 8) {
-                        Text(e.time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Image(systemName: e.kind.symbol).foregroundStyle(e.kind.color).frame(width: 16)
-                        Text(e.fullDetail).font(.system(size: 11, design: .monospaced))
-                            .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                // Plain tiles on the card's glass, like the map's (no glass on glass).
+                VStack(spacing: 4) {
+                    ForEach(Array(related.prefix(8).enumerated()), id: \.offset) { _, e in
+                        HStack(spacing: 8) {
+                            Image(systemName: e.kind.symbol).foregroundStyle(e.kind.color).frame(width: 16)
+                            Text(e.fullDetail).font(.system(size: 11, design: .monospaced))
+                                .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                            Spacer(minLength: 8)
+                            Text(e.clockTime).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
                     }
                 }
                 if related.count > 8 {
@@ -261,14 +278,26 @@ struct AIVerdictCard: View {
     @ViewBuilder
     private var card: some View {
         if analysis.answer.isEmpty && analysis.state != .asking && !isFailed {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles").foregroundStyle(.secondary)
-                Text(analysis.state == .gathering ? "Collecting evidence…"
-                     : "No verdict yet. Ask \(analysis.engine == .onDevice ? "the on-device model" : "Claude") (⌘↩) whether this is safe.")
-                    .foregroundStyle(.secondary)
-                Spacer()
+            // Before asking: the question this window answers, and who will answer it.
+            HStack(spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(AIGlow.iconGradient)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.purple.opacity(0.12)))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(analysis.state == .gathering ? "Collecting evidence…" : "Is this safe?").font(.headline)
+                    Text(analysis.engine == .onDevice
+                         ? "The on-device model reads the evidence below and gives a verdict. Nothing leaves this Mac. ⌘↩"
+                         : "Claude reads the evidence below and gives a verdict with its reasons. ⌘↩")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if analysis.state == .gathering { ProgressView().controlSize(.small) }
             }
-            .padding(14)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .protectionGlass(16)
         } else {
@@ -304,13 +333,9 @@ struct AIVerdictCard: View {
                 }
             }
             .padding(16)
-            // Tinted with the verdict: glass carries state here.
+            // Tinted with the verdict: glass carries state here. (A stripe down the leading edge stuck out past the
+            // card's rounded corners: a 4-point strip can't follow a 16-point curve.)
             .protectionGlass(16, tint: analysis.verdict == nil ? nil : verdict.color.opacity(0.18))
-            .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
-                    .fill(analysis.verdict == nil ? Color.secondary.opacity(0.4) : verdict.color)
-                    .frame(width: 4)
-            }
         }
     }
 
@@ -352,11 +377,42 @@ struct AIEvidenceSection: View {
     
 
     var body: some View {
-        DisclosureGroup(isExpanded: $analysis.showEvidence) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                // The whole bar opens and closes it, not a small arrow (as a story's steps).
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { analysis.showEvidence.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .rotationEffect(.degrees(analysis.showEvidence ? 90 : 0))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14)
+                        Label("Evidence for the AI", systemImage: "doc.text.magnifyingglass").font(.headline)
+                        Text("\(analysis.context.split(separator: "\n").count) lines").font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Text(analysis.showEvidence ? "Hide" : "Show").font(.callout).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(analysis.showEvidence ? 0.06 : 0.045)))
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(analysis.showEvidence ? "Hide the evidence" : "Show the evidence the AI gets")
+                .accessibilityLabel(analysis.showEvidence ? "Hide the evidence for the AI" : "Show the evidence for the AI")
+                Button { analysis.gather() } label: { Label("Re-collect", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .disabled(analysis.state == .gathering || analysis.state == .asking)
+            }
+            if analysis.showEvidence {
                 Text(analysis.engine == .onDevice
-                     ? "Analysed on this Mac by Apple's on-device model; nothing is sent anywhere."
-                     : "Sent to Claude when you ask. Edit anything first; obvious secrets are masked automatically.")
+                     ? "Analysed on this Mac by Apple's on-device model. Nothing is sent anywhere."
+                     : "Sent to Claude when you ask. Edit anything first. Obvious secrets are masked automatically.")
                     .font(.caption).foregroundStyle(.secondary)
                 TextEditor(text: $analysis.context)
                     .font(.system(size: 11, design: .monospaced))
@@ -364,21 +420,15 @@ struct AIEvidenceSection: View {
                     .frame(minHeight: 200, idealHeight: 260)
                     .scrollContentBackground(.hidden)
                     .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.secondary.opacity(0.08)))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
                     .disabled(analysis.state == .gathering || analysis.state == .asking)
-            }
-            .padding(.top, 6)
-        } label: {
-            HStack {
-                Label("Evidence for the AI", systemImage: "doc.text.magnifyingglass").font(.headline)
-                Text("\(analysis.context.split(separator: "\n").count) lines").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button { analysis.gather() } label: { Label("Re-collect", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(analysis.state == .gathering || analysis.state == .asking)
+                    .transition(.opacity)
             }
         }
+        // A card like the others above it, not a row on the bare window.
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(16)
     }
 
 }
@@ -389,40 +439,40 @@ struct AIAskBar: View {
     
 
     var body: some View {
-        HStack(spacing: 10) {
-            Picker("Engine", selection: $analysis.engine) {
-                Text("Claude").tag(AIEngine.claude)
-                Text("On-device").tag(AIEngine.onDevice)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .help("Claude: strongest analysis, evidence is sent to Anthropic. On-device: Apple's private model, "
-                  + "smaller, evidence shortened to fit. Nothing leaves the Mac.")
+        HStack(spacing: 12) {
+            // A segmented switch with icons (DESIGN.md: IconSegments), as on the Network page.
+            IconSegments(selection: $analysis.engine, items: [
+                .init(value: .claude, title: "Claude", symbol: "sparkles",
+                      help: "Claude: the strongest analysis. The evidence is sent to Anthropic"),
+                .init(value: .onDevice, title: "On-device", symbol: "lock.laptopcomputer",
+                      help: "Apple's private model on this Mac: smaller, the evidence shortened to fit. Nothing leaves the Mac"),
+            ])
             .disabled(analysis.state == .asking)
             if analysis.engine == .claude {
                 Toggle("Read local files", isOn: $analysis.allowFileTools)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
                     .help("Off: Claude only sees the evidence. On: it may read files on this Mac, read-only.")
                     .disabled(analysis.state == .asking)
+                    .fixedSize()
             }
             Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            Spacer()
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(analysis.answer, forType: .string)
-            } label: { Label("Copy Answer", systemImage: "doc.on.doc") }
-                .buttonStyle(.glass)
-                .disabled(analysis.answer.isEmpty)
+            Spacer(minLength: 8)
+            if !analysis.answer.isEmpty {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(analysis.answer, forType: .string)
+                } label: { Label("Copy Answer", systemImage: "doc.on.doc") }
+                    .buttonStyle(.glass)
+            }
             if analysis.state == .asking {
                 Button("Cancel") { analysis.cancel() }.buttonStyle(.glass)
             } else {
-                Button { analysis.ask() } label: {
-                    Label(analysis.answer.isEmpty ? (analysis.engine == .onDevice ? "Ask On-Device" : "Ask Claude") : "Ask Again",
-                          systemImage: "sparkles")
-                }
-                .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.glassProminent)
-                .disabled(analysis.state == .gathering)
+                // The AI action, as Classify with AI: violet light inside the glass when you reach it.
+                AIGlowButton(title: analysis.answer.isEmpty ? (analysis.engine == .onDevice ? "Ask On-Device" : "Ask Claude")
+                                                            : "Ask Again") { analysis.ask() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(analysis.state == .gathering)
             }
         }
         .controlSize(.large)

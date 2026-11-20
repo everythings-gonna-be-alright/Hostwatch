@@ -97,9 +97,9 @@ struct HUDView: View {
                             // Only reachable when Click-Through Overlay is off.
                             .onTapGesture(count: 2) { actions.askAI(event) }
                             .contextMenu {
-                                Button("Ask AI: Is This Dangerous?…") { actions.askAI(event) }
-                                Button("Watch \(event.name) Closely…") { actions.watch(event) }
-                                Menu("Exclude") {
+                                Button("Ask AI: Is This Dangerous?", systemImage: "sparkles") { actions.askAI(event) }
+                                Button("Watch Closely", systemImage: "binoculars") { actions.watch(event) }
+                                Menu("Exclude", systemImage: "eye.slash") {
                                     ForEach(event.exclusionSuggestions, id: \.1) { title, pattern in
                                         Button(title) { actions.exclude(pattern) }
                                     }

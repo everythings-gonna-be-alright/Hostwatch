@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.20.0 – Who did it
+
+### New
+
+- **Patterns say who did it.** A tool's or interpreter's pattern names the app or AI agent behind it:
+  `node via Cursor reads ~/proj/.git/*` and `bash via Claude Code reads /tmp/*` are decided apart, so a Safe for
+  one no longer covers the other. Who is only named when the kernel's facts prove it: Claude Code by its code
+  signature, never its name, and an app only when no agent is anywhere above. Otherwise nobody is named. Your
+  decisions carry over: each new pattern starts with the one it had, and your rules still match. The AI is told who
+  did it too.
+- **Everywhere, in your destinations.** The first card covers every destination, your network too: block all of one
+  program's traffic with Always block (its helpers included, whatever else you allowed), or set it to Block and
+  only the programs you always allow there connect (in Ask and Strict). It's set apart at the top as the base rule.
+- **Firewall rules take effect at once.** Unblocking an app, a domain or Everywhere used to leave the collector's
+  remembered answers in place for up to a minute (five for an allow).
+- **One list of your destinations.** Domains, addresses, devices and ports are one list with one Add Domain or
+  Address…, every entry a card of the same kind. Blocking an address both ways (incoming too, whatever the
+  firewall's mode) is a choice on its card, where it used to be a second, separate way to add the same address.
+
+### Better
+
+- **Ask AI in Liquid Glass**, like the Network page: soft colour behind the page that takes the verdict's colour
+  once Claude answers, a clear title bar, the evidence as a card, recent activity as tiles, an "Is this safe?"
+  prompt before you ask, and Ask Claude with the violet AI light. Evidence for the AI opens from its whole bar, not a
+  small arrow. A story's chain, a domain's details and a launch chain get the same look, and a launch chain's
+  origin and this event read clearly whatever your accent colour. The verdict card lost a stripe that stuck out
+  past its corners, and Ask Again stays on one line.
+- **The Events list in Liquid Glass.** Its ground and stripes match the Patterns list, the selected row is Liquid
+  Glass instead of the system's blue (and keeps its text colours), group bands are soft tiles, and the column
+  header has the system's blur.
+
+### Faster and lighter
+
+- **No more helper programs every half minute.** The network map reads routes and the devices on your network
+  straight from the kernel instead of starting netstat, arp and ndp, and pfctl starts with none of the collector's
+  connections. The collector uses a little less of your Mac.
+
+### Fixes
+
+- **A cleaner right-click menu in Events and the HUD.** Each item has a small icon, none ends in "…", the actions
+  don't repeat the program's name (Watch Closely), and Exclude names what it hides by its short name, never a full
+  path (Hide “curl”, Hide Folder “Documents”).
+- **Hostwatch no longer shows up on the network map** connecting to other apps' destinations. A helper it starts is,
+  for an instant, a copy of the collector holding its sockets (the firewall's relayed connections among them), and
+  those were counted as connections of a program called Hostwatch at `/sbin/pfctl`. They are left out now, and what
+  was stored from them is removed (patterns too, unless you decided one).
+- **Classify with AI works again after a Cancel.** Cancelling left a note that stopped the next run before it asked
+  anything, so pressing the button again showed nothing. A cancelled Claude answering late no longer ends the run
+  you started next either.
+
 ## 0.19.1 – A lighter, smoother window
 
 ### Faster and lighter

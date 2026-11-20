@@ -65,8 +65,22 @@ enum PFRedirect {
                 }
             }
         }
-        if let d = stateTable(tcp: tcp, client: client) { return (d, "state table") }
+        if let d = stateTable(tcp: tcp, client: client) {
+            let n = stateTableUses.add()
+            // Each one starts pfctl and reads every pf state: logged (first, then every 100th) to know how often.
+            if n == 1 || n % 100 == 0 { Agent.log("relay: destination from pf's state table, \(n) so far (latest \(client.isV6 ? "IPv6" : "IPv4") \(tcp ? "TCP" : "UDP"))") }
+            return (d, "state table")
+        }
         return nil
+    }
+
+    /// How many redirected connections needed the state table since the collector started.
+    static let stateTableUses = Counter()
+
+    final class Counter: @unchecked Sendable {      // only touched under its lock
+        private let lock = NSLock()
+        private var value = 0
+        func add() -> Int { lock.lock(); defer { lock.unlock() }; value += 1; return value }
     }
 
     /// struct pfioc_natlook (xnu with Apple's extensions): saddr, daddr, rsaddr, rdaddr (pf_addr, 16 each),
@@ -159,22 +173,9 @@ enum PFRedirect {
 
     static var isLoaded: Bool { !run("/sbin/pfctl", ["-a", anchor, "-s", "rules"]).out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
+    /// pfctl and friends: started without any of the collector's files or sockets (`Spawned.runCapturing`).
     static func run(_ path: String, _ args: [String], input: String? = nil) -> (status: Int32, out: String, err: String) {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: path)
-        p.arguments = args
-        let out = Pipe(), err = Pipe(), inp = Pipe()
-        p.standardOutput = out; p.standardError = err; p.standardInput = input == nil ? FileHandle.nullDevice : inp
-        do { try p.run() } catch { return (-1, "", "\(error)") }
-        if let input { inp.fileHandleForWriting.write(Data(input.utf8)); try? inp.fileHandleForWriting.close() }
-        // stderr on another thread (both pipes must drain, or pfctl blocks), read here only after group.wait().
-        let e = WrittenOnce<Data>()
-        let group = DispatchGroup()
-        group.enter(); DispatchQueue.global().async { e.value = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        let o = out.fileHandleForReading.readDataToEndOfFile()
-        group.wait()
-        p.waitUntilExit()
-        return (p.terminationStatus, String(decoding: o, as: UTF8.self), String(decoding: e.value ?? Data(), as: UTF8.self))
+        Spawned.runCapturing(path, args, input: input)
     }
 }
 

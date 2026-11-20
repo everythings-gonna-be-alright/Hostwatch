@@ -116,15 +116,25 @@ enum FirewallPolicy {
     /// until you decide, even where the pattern on its own would pass (a trusted app's routine web pattern).
     /// `threatException`: you allowed this program to reach this destination despite a threat list (a shared host
     /// such as raw.githubusercontent.com is listed for one bad file among millions). Only your explicit click sets it.
+    /// `blockedApp`: a program you always block Everywhere (Network Firewall ▸ Your destinations): every
+    /// connection of its programs is blocked, on your network too, before any other rule. `blockedEverywhere`:
+    /// Everywhere's Block caught it (any program but the ones you always allow there).
     static func decide(_ f: FirewallFacts, status: SignatureStatus, blockedDomain: String? = nil, askAgain: Bool = false,
-                       threatException: Bool = false, yours: FirewallDecision? = nil,
+                       threatException: Bool = false, yours: FirewallDecision? = nil, blockedApp: String? = nil,
+                       blockedEverywhere: Bool = false,
                        hostwatch: String = Bundle.main.executablePath ?? "") -> FirewallDecision {
+        if !hostwatch.isEmpty, f.program == hostwatch {
+            return FirewallDecision(verdict: .allow, reason: "Hostwatch itself")
+        }
+        if let blockedApp {
+            return FirewallDecision(verdict: .block, reason: "you block \(PlaceExceptions.name(blockedApp)) everywhere")
+        }
+        if blockedEverywhere {
+            return FirewallDecision(verdict: .block, reason: "you block every program everywhere, but the ones you allow")
+        }
         let bucket = SignatureBuilder.hostBucket(f.ip)
         if SignatureBuilder.localBuckets.contains(bucket) {
             return FirewallDecision(verdict: .allow, reason: "local network")
-        }
-        if !hostwatch.isEmpty, f.program == hostwatch {
-            return FirewallDecision(verdict: .allow, reason: "Hostwatch itself")
         }
         // Your destinations (on the Network Firewall page): your decisions, before threat lists and patterns.
         if let yours { return yours }
@@ -248,6 +258,9 @@ final class FirewallMonitor: ObservableObject {
             entries = saved.entries
             allowedCount = saved.allowed
             domainBlocks = Set(saved.domainBlocks ?? [])
+            appBlocks = Set(saved.appBlocks ?? [])
+            everywhereBlocked = saved.everywhereBlocked ?? false
+            everywhereAllowed = Set(saved.everywhereAllowed ?? [])
             askAgain = Set(saved.askAgain ?? [])
             threatExceptions = Set(saved.threatExceptions ?? [])
         }
@@ -259,6 +272,9 @@ final class FirewallMonitor: ObservableObject {
         var domainBlocks: [String]? = nil        // "program name|domain" (older files have none)
         var askAgain: [String]? = nil
         var threatExceptions: [String]? = nil     // "program name|domain" you allowed despite a threat list
+        var appBlocks: [String]? = nil            // apps (or programs) without network
+        var everywhereBlocked: Bool? = nil        // Everywhere ▸ Any other program: Block
+        var everywhereAllowed: [String]? = nil    // Everywhere ▸ Always allow: kept out of that block
     }
 
     /// nil for anything but a connection with a known destination (an inferred "?:?" can't be judged: the firewall
@@ -274,7 +290,8 @@ final class FirewallMonitor: ObservableObject {
     @discardableResult
     func observe(_ e: ActivityEvent, status: SignatureStatus, now: Date = Date()) -> FirewallDecision? {
         guard mode != .off, let f = Self.facts(e) else { return nil }
-        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), yours: yours(f))
+        let decision = FirewallPolicy.decide(f, status: status, blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), yours: yours(f), blockedApp: blockedApp(f),
+                                             blockedEverywhere: blockedEverywhere(f))
         guard decision.verdict != .allow else { allowedCount += 1; return decision }
         let id = [f.program, f.proto, f.host.isEmpty ? f.ip : f.host, f.port].joined(separator: "|")
         if var old = entries[id] {
@@ -292,7 +309,8 @@ final class FirewallMonitor: ObservableObject {
     func list(status: (String) -> SignatureStatus) -> [(FirewallEntry, FirewallDecision)] {
         entries.values.filter { $0.facts.ip != "?" && $0.facts.port != "?" }
             .map { ($0, FirewallPolicy.decide($0.facts, status: status($0.facts.patternKey), blockedDomain: blockedDomain($0.facts),
-                                              askAgain: asksAgain($0.facts), threatException: threatAllowed($0.facts), yours: yours($0.facts))) }
+                                              askAgain: asksAgain($0.facts), threatException: threatAllowed($0.facts), yours: yours($0.facts),
+                                              blockedApp: blockedApp($0.facts), blockedEverywhere: blockedEverywhere($0.facts))) }
             .filter { $0.1.verdict != .allow }
             .sorted { $0.1.verdict != $1.1.verdict ? $0.1.verdict > $1.1.verdict : $0.0.lastSeen > $1.0.lastSeen }
     }
@@ -325,6 +343,53 @@ final class FirewallMonitor: ObservableObject {
     /// "program name|domain", the program named as the Network tab names it, the domain as it groups hosts
     /// (`api.example.com` counts under `example.com`).
     @Published private(set) var domainBlocks: Set<String> = []
+    /// Apps (a bundle covers every program inside it) or programs that may not connect anywhere.
+    @Published private(set) var appBlocks: Set<String> = []
+
+
+    func blockedApp(_ f: FirewallFacts) -> String? {
+        appBlocks.isEmpty ? nil : appBlocks.sorted().first { AccessRules.runs($0, f.program) }
+    }
+
+    /// Everywhere ▸ Any other program: Block. Every program's traffic is blocked but for the ones you always allow
+    /// there (and Hostwatch itself).
+    @Published private(set) var everywhereBlocked = false
+    /// Everywhere ▸ Always allow: kept out of Everywhere's Block. Not past threat lists or your other rules.
+    @Published private(set) var everywhereAllowed: Set<String> = []
+
+    /// Caught by Everywhere's Block: it's on and the program isn't one you always allow there.
+    func blockedEverywhere(_ f: FirewallFacts) -> Bool {
+        everywhereBlocked && !everywhereAllowed.contains { AccessRules.runs($0, f.program) }
+    }
+
+    func setEverywhereBlocked(_ on: Bool) {
+        guard on != everywhereBlocked else { return }
+        everywhereBlocked = on
+        rulesChanged()                           // the collector forgets its answers: in effect at once
+        dirty = true
+        save()
+    }
+
+    func setAllowedEverywhere(_ on: Bool, app: String) {
+        guard on != everywhereAllowed.contains(app) else { return }
+        if on { everywhereAllowed.insert(app) } else { everywhereAllowed.remove(app) }
+        rulesChanged()                           // the collector forgets its answers: in effect at once
+        dirty = true
+        save()
+    }
+
+
+    /// Takes the network away from an app, or gives it back. In effect at once (the collector forgets the answers it
+    /// remembers); a connection already open finishes.
+    /// Hostwatch itself is never blocked (it would stop the firewall's own questions and the update check).
+    func setNoNetwork(_ on: Bool, app: String) {
+        if on, let own = Bundle.main.executablePath, AccessRules.runs(app, own) { return }
+        guard on != appBlocks.contains(app) else { return }
+        if on { appBlocks.insert(app) } else { appBlocks.remove(app) }
+        rulesChanged()                           // the collector forgets its answers: in effect at once
+        dirty = true
+        save()
+    }
 
     nonisolated static func domainBlockKey(program: String, domain: String) -> String {
         displayProcessName(program) + "|" + domain.lowercased()
@@ -392,7 +457,7 @@ final class FirewallMonitor: ObservableObject {
 
     /// One of your firewall rules, from its "program name|domain" key.
     struct Rule: Identifiable, Equatable {
-        enum Kind: String { case domainBlock, threatException, askAgain }
+        enum Kind: String { case domainBlock, threatException, askAgain, appBlock }
         let kind: Kind
         let key: String
         var id: String { kind.rawValue + "|" + key }
@@ -405,6 +470,7 @@ final class FirewallMonitor: ObservableObject {
         domainBlocks.sorted().map { Rule(kind: .domainBlock, key: $0) }
             + threatExceptions.sorted().map { Rule(kind: .threatException, key: $0) }
             + askAgain.sorted().map { Rule(kind: .askAgain, key: $0) }
+            + appBlocks.sorted().map { Rule(kind: .appBlock, key: $0) }
     }
 
     /// Removes one of your rules (Unblock, or undo an exception or a Forget).
@@ -413,8 +479,9 @@ final class FirewallMonitor: ObservableObject {
         case .domainBlock: domainBlocks.remove(rule.key)
         case .threatException: threatExceptions.remove(rule.key)
         case .askAgain: askAgain.remove(rule.key)
+        case .appBlock: appBlocks.remove(rule.key)
         }
-        revision += 1
+        rulesChanged()                           // the collector forgets its answers: in effect at once
         dirty = true
         save()
     }
@@ -423,14 +490,14 @@ final class FirewallMonitor: ObservableObject {
         domainBlocks.contains(Self.domainBlockKey(program: program, domain: domain))
     }
 
-    /// Blocks (or allows again) one domain for one program. New connections are judged by it at once; one already
-    /// open finishes, and one the collector let through in the last five minutes may pass until that answer expires.
+    /// Blocks (or allows again) one domain for one program. In effect at once (the collector forgets the answers it
+    /// remembers); a connection already open finishes.
     func setBlocked(_ blocked: Bool, domain: String, program: String) {
         let key = Self.domainBlockKey(program: program, domain: domain)
         guard blocked != domainBlocks.contains(key) else { return }
         if blocked { domainBlocks.insert(key) } else { domainBlocks.remove(key) }
         askAgain.remove(key)
-        revision += 1
+        rulesChanged()                           // the collector forgets its answers: in effect at once
         dirty = true
         save()                                   // a decision of yours: kept at once, not on the slow schedule
     }
@@ -490,7 +557,8 @@ final class FirewallMonitor: ObservableObject {
         var e = event
         e.knownBad = knownBad(e)
         guard let f = Self.facts(e) else { answer?(key, true, 60); return }
-        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), yours: yours(f))
+        let d = FirewallPolicy.decide(f, status: status(e), blockedDomain: blockedDomain(f), askAgain: asksAgain(f), threatException: threatAllowed(f), yours: yours(f), blockedApp: blockedApp(f),
+                                             blockedEverywhere: blockedEverywhere(f))
         switch d.verdict {
         case .allow:
             answer?(key, true, 300)
@@ -593,7 +661,10 @@ final class FirewallMonitor: ObservableObject {
         guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount,
                                                                  domainBlocks: domainBlocks.sorted(),
                                                                  askAgain: askAgain.sorted(),
-                                                                 threatExceptions: threatExceptions.sorted())) else { return }
+                                                                 threatExceptions: threatExceptions.sorted(),
+                                                                 appBlocks: appBlocks.sorted(),
+                                                                 everywhereBlocked: everywhereBlocked,
+                                                                 everywhereAllowed: everywhereAllowed.sorted())) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
         chmod(fileURL.path, 0o600)

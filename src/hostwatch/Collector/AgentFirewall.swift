@@ -249,6 +249,7 @@ final class AgentFirewall: @unchecked Sendable {
                              ("pid", .int(Int(flow.pid))), ("ppid", .int(agent.pidParent(Int(flow.pid)))),
                              ("name", .str(Self.name(flow))),
                              ("proc", .str(flow.program)), ("target", .str(target)), ("extra", .str(flow.tcp ? "TCP" : "UDP"))])
+        agent.addWho(&ev)                      // the question's pattern names who did it, like the connection's
         if !flow.host.isEmpty { ev.set("host", .str(flow.host)); ev.set("host_src", .str("dns")) }
         else if let (host, source) = agent.resolveHosts([dst.address], budget: 0.2)[dst.address] {
             ev.set("host", .str(host)); ev.set("host_src", .str(source))

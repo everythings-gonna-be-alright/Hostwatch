@@ -820,7 +820,7 @@ private struct DecidedView: View {
         for e in signatures.allEntries {
             guard let who = Who.of(e) else { continue }
             let path = SignatureStore.subjectPath(e)
-            let app = BaselinePolicy.appName(path.isEmpty ? e.process : path)
+            let app = BaselinePolicy.appName(path.isEmpty ? SignatureBuilder.programPath(e.process) : path)
             var g = out[who]?[app] ?? Group(app: app, keys: [], statuses: [:])
             g.keys.append(e.id)
             g.statuses[e.status, default: 0] += 1

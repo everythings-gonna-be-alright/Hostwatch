@@ -19,3 +19,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0012](0012-triage-warning-signs.md) | One triage prompt with checked warning signs, and a warning sign outranks a local model's Safe |
 | [0013](0013-ai-safe-project-reads.md) | An AI may mark Safe a run-anything tool's plain read of an exact project folder |
 | [0018](0018-endpoint-security-client.md) | The collector is its own Endpoint Security client, eslogger only as the fallback |
+| [0019](0019-patterns-name-who-did-it.md) | A tool's or interpreter's pattern names who did it (the app or AI agent behind it) |

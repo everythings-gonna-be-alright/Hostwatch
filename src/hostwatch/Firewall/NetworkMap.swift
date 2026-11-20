@@ -613,7 +613,9 @@ final class NetworkMapStore: ObservableObject {
         guard let s = try? decoder.decode(Saved.self, from: data) else { return }
         devices = Dictionary(s.devices.map { ($0.mac, $0) }, uniquingKeysWith: { a, _ in a })
         inbound = Dictionary(s.inbound.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        outgoing = Dictionary((s.outgoing ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // Never Hostwatch: its own sockets were once counted as a program's when a helper it started was still its
+        // copy (named Hostwatch, path pfctl or netstat).
+        outgoing = Dictionary((s.outgoing ?? []).filter { $0.program != "Hostwatch" }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for c in outgoing.values where c.group != c.ip && c.network == nil { groupForIP[c.ip] = c.group }
         routers = s.routers
         learned = s.learned

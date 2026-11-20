@@ -227,7 +227,7 @@ extension Agent {
     /// A net event, unless this (pid, remote) was already reported.
     func publishConnection(pid: Int, remote: String, proto: String, nameHint: String = "", host: String = "",
                            budget: TimeInterval = 0.3, blocked: Bool = false, path: String = "") {
-        guard !isOurs(pid), !seenConns.seen(PidKey(pid: pid, text: remote)) else { return }
+        guard !isOursOrStarting(pid), !seenConns.seen(PidKey(pid: pid, text: remote)) else { return }
         markNetPid(pid)
         if !path.isEmpty { rememberPid(pid, path: path) }
         let exe = path.isEmpty ? pidPath(pid) : path
@@ -335,7 +335,7 @@ extension Agent {
         netStats = stats
         stats.start { [self] flow, existing in
             // Sockets open before we started were baseline; this Mac talking to itself isn't a destination.
-            guard !existing, !NetAddress.isLocalOnly(flow.remote), !isOurs(flow.pid) else { return }
+            guard !existing, !NetAddress.isLocalOnly(flow.remote), !isOursOrStarting(flow.pid) else { return }
             // A moment for packet capture to report it first (it knows the DNS name that led to it).
             DispatchQueue.global().asyncAfter(deadline: .now() + settle) { [self] in
                 publishConnection(pid: flow.pid, remote: flow.remote, proto: flow.tcp ? "TCP" : "UDP", nameHint: flow.name)
@@ -406,7 +406,7 @@ extension Agent {
             let now = ProcessInfo.processInfo.systemUptime
             if !known.contains(p.pid), p.rx + p.tx > 0 {
                 known.insert(p.pid)
-                if now - started > 3, !isOurs(p.pid) { pending[p.pid] = (now, p.name, p.rx, p.tx) }   // first samples = baseline
+                if now - started > 3, !isOursOrStarting(p.pid) { pending[p.pid] = (now, p.name, p.rx, p.tx) }   // first samples = baseline
             }
             // Anything the socket list or packet capture did not report within `settle` seconds gets inferred.
             for (pid, info) in pending where now - info.seen >= settle {
@@ -453,7 +453,7 @@ extension Agent {
             let current = SocketOwner.connections()
             if let previous {
                 let new = current.keys.filter {
-                    previous[$0] == nil && !isOurs($0.pid) && !seenConns.seen(PidKey(pid: $0.pid, text: $0.remote))
+                    previous[$0] == nil && !isOursOrStarting($0.pid) && !seenConns.seen(PidKey(pid: $0.pid, text: $0.remote))
                 }
                 let hosts = new.isEmpty ? [:] : resolveHosts(new.map { AgentParse.stripHost($0.remote) })
                 for key in new {
@@ -544,7 +544,7 @@ func runCollectorAgent(_ args: [String]) -> Never {
 
     agent.adoptOwnProcesses(ownerPid: ownerPid)              // before events flow: Hostwatch's own processes
     // "exit" only keeps the set of Hostwatch's own pids exact; it is never published.
-    let events = ["exec", "exit"] + (kinds.contains("file") ? ["open"] : [])
+    let events = ["exec", "exit", "fork"] + (kinds.contains("file") ? ["open"] : [])     // fork: who is behind each process
     agent.onShutdown { agent.currentESLogger?.terminate() }
     if ownerPid > 0 { Thread.detachNewThread { agent.watchOwner(ownerPid) } }
     if daemon {

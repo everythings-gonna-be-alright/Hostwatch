@@ -17,10 +17,21 @@ struct DomainDetailView: View {
             if scrollable { ScrollView { content } } else { content }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { AIAskBar(analysis: analysis) }
+        // Soft colour for the glass to pick up, as on the Network page: a connection's, then the risk's or verdict's.
+        .background {
+            SoftBackdrop(colors: [EventKind.net.color.opacity(0.14),
+                                  (analysis.verdict?.color ?? RiskScale.color(details.risk.score)).opacity(0.12), Color.indigo.opacity(0.08)])
+                .animation(.easeInOut(duration: 0.6), value: analysis.verdict)
+        }
         .frame(minWidth: 640, minHeight: 600)
     }
 
     private var content: some View {
+        // One container for all the cards' glass: drawn apart, each was blurred again on every frame (DESIGN.md).
+        GlassEffectContainer(spacing: 0) { cards }
+    }
+
+    private var cards: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
             riskCard
@@ -115,7 +126,8 @@ struct DomainDetailView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(RiskScale.color(details.risk.score).opacity(0.08)))
+        // Glass tinted with the risk: the card whose colour carries state.
+        .protectionGlass(16, tint: RiskScale.color(details.risk.score).opacity(0.14))
     }
 
     // MARK: Cards
@@ -135,7 +147,8 @@ struct DomainDetailView: View {
                     Text("\(record.count)")
                     Spacer()
                     Button { showInTimeline(record.firstSeen) } label: { Label("First contact in Time Travel", systemImage: "clock.arrow.circlepath") }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
                 }
             }
         }
@@ -169,14 +182,20 @@ struct DomainDetailView: View {
     private var connectionsCard: some View {
         if !details.connections.isEmpty {
             Card(title: "Recent connections", symbol: "clock") {
-                ForEach(Array(details.connections.prefix(10).enumerated()), id: \.offset) { _, e in
-                    HStack(spacing: 8) {
-                        Text(e.clockTime).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Text(e.name).fontWeight(.medium).lineLimit(1).frame(width: 140, alignment: .leading)
-                        Text(e.host.isEmpty ? e.target : "\(e.host) [\(e.target)]")
-                            .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
-                            .textSelection(.enabled)
-                        if !e.beacon.isEmpty { Image(systemName: "dot.radiowaves.right").foregroundStyle(.red).help("beacon \(e.beacon)") }
+                // Plain tiles on the card's glass, like the map's.
+                VStack(spacing: 4) {
+                    ForEach(Array(details.connections.prefix(10).enumerated()), id: \.offset) { _, e in
+                        HStack(spacing: 8) {
+                            Text(e.name).fontWeight(.medium).lineLimit(1).frame(width: 140, alignment: .leading)
+                            Text(e.host.isEmpty ? e.target : "\(e.host) [\(e.target)]")
+                                .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                                .textSelection(.enabled)
+                            if !e.beacon.isEmpty { Image(systemName: "dot.radiowaves.right").foregroundStyle(.red).help("beacon \(e.beacon)") }
+                            Spacer(minLength: 8)
+                            Text(e.clockTime).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
                     }
                 }
                 if details.connections.count > 10 {

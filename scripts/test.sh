@@ -15,11 +15,12 @@ if [ "${1:-}" = "--only" ] || [ "${1:-}" = "--changed" ]; then
     changed=$( (git diff --name-only main -- src tests; git diff --name-only -- src tests; git ls-files --others --exclude-standard src tests) | sort -u)
     [ -z "$changed" ] && { echo "nothing changed since main"; exit 0; }
     # Types the changed source files declare, and test files that use them (a changed test file counts as itself).
-    types=$(grep -hoE '^(struct|enum|final class|class|actor|extension) [A-Z][A-Za-z0-9_]+' $(echo "$changed" | grep '^src/' || true) 2>/dev/null \
+    # </dev/null: with no file to read, grep would wait for input that never comes (the run hung for ten minutes).
+    types=$(grep -hoE '^(struct|enum|final class|class|actor|extension) [A-Z][A-Za-z0-9_]+' $(echo "$changed" | grep '^src/' || true) </dev/null 2>/dev/null \
             | awk '{print $NF}' | sort -u | paste -sd'|' -)
     files=$(echo "$changed" | grep '^tests/' || true)
     [ -n "$types" ] && files="$files $(grep -lE "\b($types)\b" tests/swift/*.swift 2>/dev/null)"
-    filter=$(grep -hoE '@Suite(\([^)]*\))? struct [A-Za-z0-9_]+' $files 2>/dev/null | awk '{print $NF}' | sort -u | paste -sd'|' -)
+    filter=$(grep -hoE '@Suite(\([^)]*\))? struct [A-Za-z0-9_]+' $files </dev/null 2>/dev/null | awk '{print $NF}' | sort -u | paste -sd'|' -)
     [ -z "$filter" ] && { echo "no test suite mentions the changed types ($changed)"; exit 0; }
     echo "== Suites for the changed files: $(echo "$filter" | tr '|' ' ')"
   fi

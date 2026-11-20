@@ -22,6 +22,9 @@ final class PatternClassifier: ObservableObject {
     }
     @Published private(set) var bulk: BulkRun?
     @Published private(set) var lastMessage = ""
+    /// The last batch was cancelled or failed: a bulk run stops instead of failing every batch after it. Cleared when a
+    /// new run starts (it was read from `lastMessage`, and "Cancelled." stopped the next Classify with AI before it began).
+    private var halted = false
     @Published private(set) var totalCost: Double = 0
     @Published var autoClassify: Bool {
         didSet { UserDefaults.standard.set(autoClassify, forKey: "autoClassifyPatterns") }
@@ -118,6 +121,7 @@ final class PatternClassifier: ObservableObject {
                 : only == nil ? "Nothing to classify." : "Nothing New to classify there."
             return
         }
+        halted = false
         bulk = BulkRun(total: todo.count, apply: apply, only: only)
         live.start(engine: engineText)
         continueAll()
@@ -190,8 +194,8 @@ final class PatternClassifier: ObservableObject {
         guard var run = bulk, !running else { return }
         // You chose Apply the Verdicts: the AI's answers are applied as your decision (ADR 0013).
         if run.apply, !run.batch.isEmpty { store.acceptSuggestions(keys: run.batch, yours: true) }
-        // Claude unavailable or failing: stop rather than fail every remaining batch.
-        if ["failed", "Cannot start", "not found", "Could not parse", "Cancelled"].contains(where: lastMessage.contains) {
+        // Cancelled, or Claude unavailable or failing: stop rather than fail every remaining batch.
+        if halted {
             bulk = nil
             return
         }
@@ -224,6 +228,7 @@ final class PatternClassifier: ObservableObject {
         process?.terminate()
         process = nil
         running = false
+        halted = true
         lastMessage = "Cancelled."
     }
 
@@ -262,8 +267,8 @@ final class PatternClassifier: ObservableObject {
         let local = localModel.status()
         guard engine.usesOnDevice && local.isReady else {
             if claudeOn { sendToClaude(batch) }
-            else if engine == .onDevice { lastMessage = local.label + " (Settings ▸ AI)." }
-            else { lastMessage = "Claude Code CLI not found." }
+            else if engine == .onDevice { halted = true; lastMessage = local.label + " (Settings ▸ AI)." }
+            else { halted = true; lastMessage = "Claude Code CLI not found." }
             return
         }
         running = true
@@ -312,6 +317,7 @@ final class PatternClassifier: ObservableObject {
     private func sendToClaude(_ batch: [SignatureEntry], prefix: String = "") {
         guard !running else { return }
         guard let claude = ClaudeLocator.path else {
+            halted = true
             lastMessage = "Claude Code CLI not found."
             return
         }
@@ -341,10 +347,12 @@ final class PatternClassifier: ObservableObject {
             let out = stdout.fileHandleForReading.readDataToEndOfFile()
             let err = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             let status = proc.terminationStatus
-            DispatchQueue.main.async { self.finish(out: out, err: err, status: status, batch: batch) }
+            let ended = ObjectIdentifier(proc)
+            DispatchQueue.main.async { self.finish(out: out, err: err, status: status, batch: batch, from: ended) }
         }
         do { try process.run() } catch {
             running = false
+            halted = true
             lastMessage = "Cannot start claude: \(error.localizedDescription)"
             live.finishOpen(.failed("Claude didn't start"))
             return
@@ -356,8 +364,9 @@ final class PatternClassifier: ObservableObject {
         }
     }
 
-    private func finish(out: Data, err: String, status: Int32, batch: [SignatureEntry]) {
-        guard running else { return }
+    private func finish(out: Data, err: String, status: Int32, batch: [SignatureEntry], from ended: ObjectIdentifier) {
+        // Only the current run's Claude: one you cancelled reports in after it's killed, and ended the run you started next.
+        guard running, process.map(ObjectIdentifier.init) == ended else { return }
         running = false
         process = nil
         let parsed = try? JSONSerialization.jsonObject(with: out) as? [String: Any]
@@ -366,6 +375,7 @@ final class PatternClassifier: ObservableObject {
               let obj = parsed,
               let text = obj["result"] as? String
         else {
+            halted = true
             lastMessage = "Claude failed: " + String(err.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200))
             live.finishOpen(.failed("Claude failed"))
             return
@@ -375,6 +385,7 @@ final class PatternClassifier: ObservableObject {
               let data = String(text[start...end]).data(using: .utf8),
               let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else {
+            halted = true
             lastMessage = "Could not parse Claude's answer."
             live.finishOpen(.failed("Claude's answer couldn't be read"))
             return
