@@ -1343,8 +1343,12 @@ Watch everywhere when all is off, then **Pause for 15 Minutes** or **Resume**), 
 what the chosen one does, today's numbers and how many it found, and links to the other pages. *Found* there shows
 both numbers the sidebar uses: what would be stopped, and everything to review. The Help button explains the modes
 and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
-included. *Protected Files and Folders* has Global rules (the cards and your own places) and App rules, *Found* what the
-rehearsal found.
+included. *Protected Files and Folders* and *Network Firewall* open the way the Overview does, for their area only: a
+header with the area's state in its colour (grey off, purple watching, green protecting, orange paused), the mode,
+one sentence and five facts, then **Activity** with the area's chart and numbers over the chosen range beside what it
+**found most**, with *Review in Found*. Below them come **Global rules** (tinted a light blue) and **App rules**.
+The files page's facts are its protected places, the app rules, the place found most in, the last program stopped
+and what waits for you. *Found* lists what the rehearsal found.
 
 Each area's card has a chart: what was stopped (or would be) in red, what was asked about (or would be) in grey.
 *24 Hours | 7 Days | 30 Days* above the cards switches all of them between the last 24 hours by hour and the last
@@ -1353,10 +1357,11 @@ by side compare honestly. Hover over a bar for its numbers. VoiceOver reads each
 Graph. The firewall's chart counts new destinations by when they were first seen. Hourly counts are kept for 31 days.
 
 The firewall is the third area, beside Launches and Files. The Overview's *Network* card has its four modes and the
-same two numbers (what it blocks or would, what it asks about or would). The *Network Firewall* page has the mode
-with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge counts
-them), **Global rules** and **App rules** (every rule you made, on its card), how many connections are left to decide with
-**Review in Found**, and how it decides. *Forget Seen Connections…* (in the ⋯ menu, with a confirmation) starts the list of seen
+same two numbers (what it blocks or would, what it asks about or would). The *Network Firewall* page's header has the mode,
+its facts (blocked or would block, passed, your rules, the relay's status, this network and whether you trust it), and
+how it decides behind the Help button. Then its activity with the destinations found most, the connections waiting
+for your answer (the row's badge counts them), **Global rules** and **App rules** (every rule you made, on its card),
+and Networks. *Forget Seen Connections…* (in the header's ⋯ menu, with a confirmation) starts the list of seen
 connections again and never touches a rule. *Found* is the one place to decide what the firewall found, under
 launches and files, with *Allow* and *Block*, and its badge counts all three. A long section opens in full with
 *Show all*.

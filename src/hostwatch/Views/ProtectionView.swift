@@ -71,6 +71,7 @@ struct ProtectionView: View {
 
     private var files: some View {
         VStack(alignment: .leading, spacing: 18) {
+            ProtectedFilesHeader(protection: protection, go: go)
             general
             AppFileRulesSection(protection: protection)
         }
@@ -292,7 +293,7 @@ enum RuleSections {
 
 extension View {
     /// The Global rules section's panel: glass with the scope's light blue.
-    func globalRulesGlass() -> some View { protectionGlass(16, tint: RuleSections.global.opacity(0.10)) }
+    func globalRulesGlass() -> some View { protectionGlass(16, tint: RuleSections.global.opacity(0.06)) }
 }
 
 /// Found ▸ Forget: clears a long list at once. Only the entries go: decisions, rules and patterns stay, and anything

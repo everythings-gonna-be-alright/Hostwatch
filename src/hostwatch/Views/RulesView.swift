@@ -192,7 +192,8 @@ struct RulesView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
-                if page == .protectionOverview, let protection {
+                // The Overview's pools of colour, on the area pages built like it too.
+                if [.protectionOverview, .protectedFiles, .firewall].contains(page), let protection {
                     ProtectionBackdrop(protection: protection, firewall: firewall)
                 }
             }

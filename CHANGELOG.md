@@ -16,6 +16,11 @@
   in Global rules, so one app can be kept out of a folder every other program may open. The program chips on the places
   moved onto the cards.
 
+- **Files and Network Firewall pages built like the Overview.** Each opens with its area's state in colour, the mode
+  and five facts (protected places, app rules, where most was found, the last stop, what waits, or for the firewall
+  what it blocked and passed, your rules, the relay and this network). Then the area's activity chart beside what it
+  found most, with Review in Found, and below them the global and app rules.
+
 ### Fixes
 
 - **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web
