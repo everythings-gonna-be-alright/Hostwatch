@@ -24,7 +24,7 @@
 - **A new Found page.** Everything to decide, grouped by program with the ones that would be stopped first: filter by
   area and by would stop or question, search, sort, and Decide All for a whole program. Allow, Block and Forget take
   an entry off the list at once (it waited up to a second before), and only the rows in view are drawn, so a long
-  list stays quick.
+  list stays quick. Programs keep their place while you decide, instead of jumping when their counts change.
 
 ### Fixes
 

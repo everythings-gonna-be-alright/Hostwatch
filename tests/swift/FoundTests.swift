@@ -40,4 +40,21 @@ import Testing
         m.forget(["nothing"])
         #expect(m.revision == before + 1)                            // not after the next batch, a second later
     }
+
+    @Test func programsKeepTheirPlaceWhileYouDecide() {
+        let s = FoundState()
+        var items = [finding("/usr/bin/curl", "a", count: 9), finding("/usr/bin/curl", "b", count: 8),
+                     finding("/opt/x", "c", count: 12), finding("/opt/y", "d", count: 1)]
+        #expect(s.arrange(FoundGroup.make(items, sort: .often)).map(\.name) == ["curl", "x", "y"])
+        // Forgetting curl's biggest entry would sort it below x: it stays first, and its other entry keeps its place.
+        items.removeAll { $0.what == "a" }
+        items.append(finding("/opt/z", "e", block: true))          // new, and it would be stopped: after the others
+        let kept = s.arrange(FoundGroup.make(items, sort: .often))
+        #expect(kept.map(\.name) == ["curl", "x", "y", "z"])
+        // A new sort orders everything afresh.
+        s.sort = .name
+        #expect(s.arrange(FoundGroup.make(items, sort: .name)).map(\.name) == ["curl", "x", "y", "z"])
+        s.sort = .often
+        #expect(s.arrange(FoundGroup.make(items, sort: .often)).first?.name == "z")
+    }
 }

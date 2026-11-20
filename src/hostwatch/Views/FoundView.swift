@@ -16,7 +16,7 @@ struct FoundPage: View {
         let _ = protection.revision
         let all = items()
         let shown = state.filter(all)
-        let groups = FoundGroup.make(shown, sort: state.sort)
+        let groups = state.arrange(FoundGroup.make(shown, sort: state.sort))
         VStack(alignment: .leading, spacing: 18) {
             hero(all)
             if all.isEmpty {
@@ -304,6 +304,29 @@ struct FoundGroup: Identifiable {
     }
 
     func unhide(_ ids: [String]) { gone.subtract(ids) }
+
+    /// The order on screen, kept while you work: deciding an entry changes its program's counts, and re-sorting
+    /// moved the program away from under the pointer. Programs and entries keep the place they were first shown in,
+    /// new ones come after. A new sort, filter or search orders everything afresh. Not published: it only remembers.
+    private var groupRank: [String: Int] = [:]
+    private var itemRank: [String: Int] = [:]
+    private var arrangedFor = ""
+
+    func arrange(_ groups: [FoundGroup]) -> [FoundGroup] {
+        let key = [sort.rawValue, area.rawValue, kind.rawValue, search.trimmingCharacters(in: .whitespaces).lowercased()]
+            .joined(separator: "|")
+        if key != arrangedFor { arrangedFor = key; groupRank = [:]; itemRank = [:] }
+        var nextGroup = (groupRank.values.max() ?? -1) + 1
+        var nextItem = (itemRank.values.max() ?? -1) + 1
+        for g in groups {
+            if groupRank[g.id] == nil { groupRank[g.id] = nextGroup; nextGroup += 1 }
+            for i in g.items where itemRank[i.id] == nil { itemRank[i.id] = nextItem; nextItem += 1 }
+        }
+        return groups.sorted { groupRank[$0.id, default: 0] < groupRank[$1.id, default: 0] }.map { g in
+            FoundGroup(program: g.program, name: g.name,
+                       items: g.items.sorted { itemRank[$0.id, default: 0] < itemRank[$1.id, default: 0] })
+        }
+    }
 }
 
 /// Area and kind as segmented controls with counts, the search field and the sort.

@@ -908,7 +908,8 @@ curl and other programs that run whatever they're told are judged by what they r
   first five entries (*Show More* for the rest), and *Decide All* allows, blocks or forgets all of them at once (a
   threat list's match is never allowed in bulk). On each entry, *Allow* marks the pattern Safe, *Block* marks it
   Dangerous (a connection blocks just that destination for that program), and the × forgets it. The entry leaves at
-  once, and the same actions are in its context menu. Deciding it anywhere else does the same.
+  once, and the same actions are in its context menu. While you work, programs and entries keep their place (new
+  ones come after), so nothing moves away from under the pointer: a new sort, filter or search orders them afresh. Deciding it anywhere else does the same.
 - **In Events:** a red no-entry sign after the status marks what would be stopped, with the reason in its tooltip.
   Questions are only counted, so the list stays quiet.
 - **Pause for 15 Minutes** stops everything, rehearsal included. The window's subtitle says *Rehearsing*,
