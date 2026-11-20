@@ -911,7 +911,26 @@ final class StoryEngine: ObservableObject {
         guard let data = Vault.shared.read(fileURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        stories = (try? decoder.decode([Story].self, from: data)) ?? []
+        let saved = (try? decoder.decode([Story].self, from: data)) ?? []
+        stories = Self.withoutPlatformMatches(saved)
+        if stories.count != saved.count || zip(stories, saved).contains(where: { $0.steps.count != $1.steps.count }) {
+            dirty = true
+            save()
+        }
+    }
+
+    /// Known-bad steps about a platform that is never flagged (`FeedCheck.neverFlag`), made before it was: they go,
+    /// and a story left with nothing known-bad and too little else to stand on goes with them (www.youtube.com was
+    /// called malware this way).
+    static func withoutPlatformMatches(_ stories: [Story]) -> [Story] {
+        stories.compactMap { story in
+            var s = story
+            s.steps.removeAll { $0.stage == .knownBad && $0.kind == .net && !$0.host.isEmpty && FeedCheck.neverFlag($0.host) }
+            guard s.steps.count != story.steps.count else { return story }
+            // What made it a story was the match: without one, it needs two stages as any other story does.
+            if s.steps.isEmpty || !s.stages.contains(.knownBad) && s.stages.count < 2 { return nil }
+            return s
+        }
     }
 
     func save() {

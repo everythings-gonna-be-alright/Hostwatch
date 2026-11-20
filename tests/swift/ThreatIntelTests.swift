@@ -75,6 +75,42 @@ import Testing
         #expect(!FeedCheck.platformHost("youtube.com.evil.example"))
     }
 
+    /// A list naming a social network's own host (ThreatFox lists YouTube links used as lures) never flags it: every
+    /// name under the platform is its own. A hosting platform's customer names stay matchable.
+    @Test func aSocialNetworksOwnNamesAreNeverFlagged() async throws {
+        for host in ["www.youtube.com", "m.youtube.com", "music.youtube.com", "www.facebook.com", "www.instagram.com",
+                     "mobile.twitter.com", "www.linkedin.com", "accounts.google.com", "www.apple.com"] {
+            #expect(FeedCheck.neverFlag(host), "\(host)")
+        }
+        for host in ["evil.github.io", "bucket.s3.amazonaws.com", "d111.cloudfront.net", "youtube.com.evil.example",
+                     "notyoutube.com"] {
+            #expect(!FeedCheck.neverFlag(host), "\(host)")
+        }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-intel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("# HaGeZi TIF\nwww.youtube.com\nm.facebook.com\nphish.example\n".utf8).write(to: dir.appendingPathComponent("hagezi"))
+        let tf = ThreatIntel.parseThreatFox(Data(#"{"query_status":"ok","data":[{"ioc":"https://www.youtube.com/watch?v=lure","ioc_type":"url","threat_type":"payload_delivery","malware_printable":"Lumma","first_seen":"2026-11-20 10:00:00 UTC"}]}"#.utf8))
+        try JSONEncoder().encode(tf).write(to: dir.appendingPathComponent("threatfox"))
+        let intel = ThreatIntel(directory: dir, defaults: scratchDefaults("hw-intel-social"))
+        await intel.load()
+        #expect(intel.listedDomain("www.youtube.com") == nil && intel.listedDomain("m.facebook.com") == nil)
+        #expect(intel.listedDomain("phish.example") != nil)
+    }
+
+    /// Stories made by such a match before go when the stories load: the match step, and a story it alone made.
+    @Test func oldPlatformMatchesLeaveTheStories() {
+        let yt = ActivityEvent(kind: .net, time: "1", pid: 5, ppid: 1, name: "Chrome", proc: "/Applications/Chrome.app",
+                               target: "142.251.150.4:443", extra: "UDP", parent: "", host: "www.youtube.com", hostSource: "dns")
+        let bad = ActivityEvent(kind: .net, time: "1", pid: 5, ppid: 1, name: "x", proc: "/tmp/x",
+                                target: "91.2.3.4:8443", extra: "TCP", parent: "", host: "c2.badguys.net", hostSource: "dns")
+        let only = Story(rootPid: 5, originName: "Chrome", originPath: "/Applications/Chrome.app", origin: .app,
+                         steps: [StoryStep(yt, stage: .knownBad, note: "known malware")])
+        let real = Story(rootPid: 6, originName: "x", originPath: "/tmp/x", origin: .app,
+                         steps: [StoryStep(bad, stage: .knownBad, note: "known malware")])
+        let left = StoryEngine.withoutPlatformMatches([only, real])
+        #expect(left.map(\.id) == [real.id])
+    }
+
     /// Lists cached by earlier versions still hold the platform hosts: they're skipped when the index is built.
     @Test func cachedPlatformHostsAreSkipped() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hw-intel-\(UUID().uuidString)")

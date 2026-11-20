@@ -1049,6 +1049,10 @@ domain.
 - Apple, Google, Microsoft, GitHub, AWS, Cloudflare, Akamai, YouTube, the big social networks (Facebook, Instagram,
   WhatsApp, LinkedIn, TikTok, X, Reddit, Pinterest, Snapchat) and a few others are never flagged by their own domain,
   nor by a parent-domain match.
+- The social and video networks, and Apple's, Google's and Microsoft's own domains, run every name under them
+  themselves, so none of those names is flagged either: a list naming `www.youtube.com` (lists include YouTube links
+  used as lures) names the platform, not a malware server. Stories and threat-log entries made that way before are
+  removed when Hostwatch starts.
 - A connection to one of these platforms isn't flagged by its address either. Their servers are shared by everyone
   on them, so an IP list naming one was reported for someone else.
 - A phishing page on a shared host is still flagged by its full name (`login-apple.github.io`).
