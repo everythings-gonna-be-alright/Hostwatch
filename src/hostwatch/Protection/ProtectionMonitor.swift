@@ -91,6 +91,10 @@ final class ProtectionMonitor: ObservableObject {
     @Published var customPlaces: [CustomPlace] {
         didSet { defaults.set(try? JSONEncoder().encode(customPlaces), forKey: Keys.custom); changed() }
     }
+    /// One card per app: its own places, before General's (Protection ▸ Protected Files and Folders ▸ Apps).
+    @Published var appFiles: [AppFileRules] {
+        didSet { defaults.set(try? JSONEncoder().encode(appFiles), forKey: Keys.appFiles); changed() }
+    }
     /// Rules saved by the short-lived separate list: read once, moved into places and destinations, then empty.
     @Published var accessRules: [AccessRule] {
         didSet { defaults.set(try? JSONEncoder().encode(accessRules), forKey: Keys.rules); changed() }
@@ -147,7 +151,7 @@ final class ProtectionMonitor: ObservableObject {
     private enum Keys {
         static let launch = "protectionLaunchMode", file = "protectionFileMode", groups = "protectionGroups"
         static let since = "protectionSince", custom = "protectionCustomPlaces", rules = "protectionAccessRules"
-        static let destinations = "protectionDestinations"
+        static let destinations = "protectionDestinations", appFiles = "protectionAppFiles"
     }
 
     init(defaults: UserDefaults = .standard,
@@ -163,6 +167,7 @@ final class ProtectionMonitor: ObservableObject {
         customPlaces = defaults.data(forKey: Keys.custom).flatMap { try? JSONDecoder().decode([CustomPlace].self, from: $0) } ?? []
         accessRules = defaults.data(forKey: Keys.rules).flatMap { try? JSONDecoder().decode([AccessRule].self, from: $0) } ?? []
         destinations = defaults.data(forKey: Keys.destinations).flatMap { try? JSONDecoder().decode([Destination].self, from: $0) } ?? []
+        appFiles = defaults.data(forKey: Keys.appFiles).flatMap { try? JSONDecoder().decode([AppFileRules].self, from: $0) } ?? []
         let started = defaults.object(forKey: Keys.since) as? Date ?? Date()
         since = started
         defaults.set(started, forKey: Keys.since)
@@ -176,6 +181,16 @@ final class ProtectionMonitor: ObservableObject {
         }
         if accessRules.contains(where: { $0.kind == .files }) { moveFileRulesIntoPlaces() }
         if accessRules.contains(where: { $0.kind == .network }) { moveNetworkRulesIntoDestinations() }
+        if groups.values.contains(where: { !$0.exceptions.isEmpty }) || customPlaces.contains(where: { !$0.exceptions.isEmpty }) {
+            moveExceptionsIntoApps()
+        }
+    }
+
+    /// Program chips on the places, from before cards existed, become places on the apps' cards (ADR 0021).
+    func moveExceptionsIntoApps() {
+        appFiles = AppFileRulesList.migrated(groups: groups, custom: customPlaces, into: appFiles)
+        groups = groups.mapValues { var s = $0; s.exceptions = PlaceExceptions(); return s }
+        customPlaces = customPlaces.map { var c = $0; c.exceptions = PlaceExceptions(); return c }
     }
 
     func mode(_ area: ProtectionArea) -> ProtectionMode { area == .launches ? launchMode : fileMode }
@@ -274,12 +289,10 @@ final class ProtectionMonitor: ObservableObject {
                                                              riskReason: e.signatureReason, knownBad: e.knownBad))
         case .file:
             guard fileMode != .off else { return nil }
-            if let d = ProtectionPolicy.decideFile(pattern: e.signaturePattern, status: status, risk: e.signatureRisk,
-                                                   settings: groups, actor: e.proc) {
-                return (.files, d)
-            }
-            return ProtectionPolicy.decideCustom(path: e.target, actor: e.proc, status: status, places: customPlaces)
-                .map { (.files, $0) }
+            let writes = e.signaturePattern.split(separator: " ").first?.contains("w") == true || e.extra.contains("w")
+            return ProtectionPolicy.decideFileAccess(path: e.target, actor: e.proc, pattern: e.signaturePattern, status: status,
+                                                     risk: e.signatureRisk, writes: writes, settings: groups,
+                                                     places: customPlaces, apps: appFiles).map { (.files, $0) }
         case .net:
             return nil
         }
@@ -344,12 +357,12 @@ final class ProtectionMonitor: ObservableObject {
         let keys = Set(patternKeys)
         let before = findings.count
         findings = findings.filter { !keys.contains($0.value.patternKey) }
-        if findings.count != before { dirty = true; publishSoon() }
+        if findings.count != before { dirty = true; publishNow() }
     }
 
-    /// File rules from the short-lived separate list become what they meant on the places: a program's Allow or Block
-    /// an exception of the place that covers it (a new protected folder when none does), Block for every program a
-    /// protected folder whose others are blocked. Allow for every program only overrode pattern statuses: dropped.
+    /// File rules from the short-lived separate list become what they meant: a program's Allow or Block a place on its
+    /// app's card, Block for every program a protected folder whose others are blocked. Allow for every program only
+    /// overrode pattern statuses: dropped.
     func moveFileRulesIntoPlaces(home: String = NSHomeDirectory()) {
         for rule in accessRules where rule.kind == .files && rule.on {
             let path = rule.target
@@ -359,24 +372,10 @@ final class ProtectionMonitor: ObservableObject {
                 else { customPlaces.append(CustomPlace(path: path, isFolder: true, others: .block)) }
                 continue
             }
-            func add(_ e: inout PlaceExceptions) {
-                if rule.action == .allow { if !e.allowed.contains(program) { e.allowed.append(program) } }
-                else if !e.blocked.contains(program) { e.blocked.append(program) }
-            }
-            if let i = customPlaces.indices.filter({ customPlaces[$0].covers(path) })
-                .max(by: { customPlaces[$0].path.count < customPlaces[$1].path.count }) {
-                add(&customPlaces[i].exceptions)
-            } else if let group = ProtectedGroup.all.first(where: { g in
-                g.prefixes(home: home).contains { AccessRules.covers($0, path) || AccessRules.covers(path, $0) }
-            }) {
-                var s = groups[group.id] ?? ProtectedGroupSetting()
-                add(&s.exceptions)
-                groups[group.id] = s
-            } else {
-                var place = CustomPlace(path: path, isFolder: true)
-                add(&place.exceptions)
-                customPlaces.append(place)
-            }
+            // One program's rule is that app's own: its card names the folder, General needn't protect it.
+            var apps = appFiles
+            AppFileRulesList.add(program, place: path, isFolder: true, rule.action == .allow ? .allow : .block, to: &apps)
+            appFiles = apps
         }
         accessRules.removeAll { $0.kind == .files }
     }
@@ -404,7 +403,7 @@ final class ProtectionMonitor: ObservableObject {
     func forget(_ ids: [String]) {
         for id in ids { findings[id] = nil }
         dirty = true
-        publishSoon()
+        publishNow()
     }
 
     /// Found ▸ Forget: the entries that match leave the list. Decisions and patterns are untouched.
@@ -433,6 +432,23 @@ final class ProtectionMonitor: ObservableObject {
         publishSoon()
     }
 
+    // MARK: Apps' cards
+
+    /// Changes one app's card, made when it has none. Saved and sent to the collector only when something changed.
+    func editAppFiles(_ app: String, _ change: (inout AppFileRules) -> Void) {
+        var apps = appFiles
+        if let i = apps.firstIndex(where: { $0.app == app }) { change(&apps[i]) }
+        else { var r = AppFileRules(app: app); change(&r); apps.append(r) }
+        if apps != appFiles { appFiles = apps }
+    }
+
+    func addAppFiles(_ app: String) {
+        guard !appFiles.contains(where: { $0.app == app }) else { return }
+        appFiles.append(AppFileRules(app: app))
+    }
+
+    func removeAppFiles(_ app: String) { appFiles.removeAll { $0.app == app } }
+
     /// A card's or your place's name, for the question panel and the findings.
     func placeTitle(group: String) -> String? {
         ProtectedGroup.group(id: group)?.title ?? customPlaces.first { $0.groupID == group }?.name
@@ -440,6 +456,13 @@ final class ProtectionMonitor: ObservableObject {
 
     /// Per protected-files card: what was (or would be) stopped there, in the findings kept.
     func findings(group: String) -> [ProtectionFinding] { findings.values.filter { $0.group == group } }
+
+    /// Your own change (Forget, Allow, Block): on screen at once. Batching is for what events change, many a second;
+    /// a click waiting for the next batch looked like a button that didn't work.
+    private func publishNow() {
+        revision += 1
+        publishSoon()
+    }
 
     private func publishSoon() {
         guard !publishScheduled else { return }
@@ -478,25 +501,7 @@ final class ProtectionMonitor: ObservableObject {
     /// What the collector needs to decide on its own: modes, and each protected card's places, expected programs and
     /// choice for everyone else. Launches it can't settle quickly come back as questions.
     func collectorConfig(home: String = NSHomeDirectory()) -> [String: Any] {
-        let cards: [[String: Any]] = ProtectedGroup.all.flatMap { g -> [[String: Any]] in
-            let s = groups[g.id] ?? ProtectedGroupSetting()
-            guard s.on else { return [] }
-            func card(_ prefixes: [String], names: [String] = []) -> [String: Any] {
-                ["id": g.id, "prefixes": prefixes, "owners": g.owners + s.exceptions.allowed, "blocked": s.exceptions.blocked,
-                 "writesOnly": g.writesOnly, "others": s.others.rawValue, "names": names]
-            }
-            // Browser profile folders hold far more than credentials: there, only the credential stores are held.
-            let all = g.prefixes(home: home)
-            let exact = Set(SignatureBuilder.sensitive.filter { g.labels.contains($0.label) }
-                .map { $0.prefix.hasPrefix("~") ? home + $0.prefix.dropFirst() : $0.prefix })
-            let byName = all.filter { !exact.contains($0) }
-            guard g.labels.contains("browser credentials"), !byName.isEmpty else { return [card(all)] }
-            return [card(all.filter(exact.contains)), card(byName, names: Array(SignatureBuilder.credentialFiles).sorted())]
-                .filter { !($0["prefixes"] as? [String] ?? []).isEmpty }
-        } + customPlaces.filter(\.on).map {
-            ["id": $0.groupID, "prefixes": [$0.path], "owners": $0.exceptions.allowed, "blocked": $0.exceptions.blocked,
-             "writesOnly": false, "others": $0.others.rawValue]
-        }
+        let cards = FileHoldCards.cards(groups: groups, custom: customPlaces, apps: appFiles, home: home)
         return ["launches": paused ? "off" : launchMode.rawValue, "files": paused ? "off" : fileMode.rawValue,
                 "groups": cards, "hostwatch": Bundle.main.executablePath ?? ""]
     }

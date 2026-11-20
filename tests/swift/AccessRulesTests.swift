@@ -52,9 +52,8 @@ import Testing
     }
 }
 
-/// Folders and files: one model, places with exceptions. A program you always allow or always block in a place is
-/// decided there before its pattern, Block when it's on both lists, the deepest place first.
-@MainActor @Suite struct PlaceExceptionsDecide {
+/// Folders and files: older program chips and file rules become places on the apps' cards (ADR 0021).
+@MainActor @Suite struct PlaceExceptionsMoveIntoApps {
     func monitor() -> ProtectionMonitor {
         let suite = "places-\(UUID().uuidString)"
         return ProtectionMonitor(defaults: UserDefaults(suiteName: suite)!,
@@ -65,24 +64,21 @@ import Testing
                       target: path, extra: "r", parent: "/bin/zsh")
     }
 
-    @Test func exceptionsComeBeforeThePatternAndBlockWinsBoth() {
+    @Test func chipsBecomeCardsAndBlockWinsBoth() {
+        let m = monitor()
         let preview = "/System/Applications/Preview.app"
         var place = CustomPlace(path: "/tmp/contracts", isFolder: true)
         place.exceptions = PlaceExceptions(allowed: [preview, "/usr/bin/curl"], blocked: ["/usr/bin/curl"])
-        let d1 = ProtectionPolicy.decideCustom(path: "/tmp/contracts/a.pdf", actor: preview + "/Contents/MacOS/Preview",
-                                               status: .dangerous, places: [place])
-        #expect(d1?.verdict == .allow)                                        // your exception over the pattern
-        let d2 = ProtectionPolicy.decideCustom(path: "/tmp/contracts/a.pdf", actor: "/usr/bin/curl", status: .safe, places: [place])
-        #expect(d2?.verdict == .block)                                        // on both lists: blocked
-    }
-
-    @Test func theDeepestPlaceDecides() {
-        let outer = CustomPlace(path: "/tmp/work", isFolder: true, others: .block)
-        var inner = CustomPlace(path: "/tmp/work/site", isFolder: true, others: .ask)
-        inner.exceptions.allowed = ["/usr/local/bin/hugo"]
-        let d = ProtectionPolicy.decideCustom(path: "/tmp/work/site/index.md", actor: "/usr/local/bin/hugo",
-                                              status: .unclassified, places: [outer, inner])
-        #expect(d?.verdict == .allow)
+        m.customPlaces = [place]
+        m.groups = ["ssh": ProtectedGroupSetting(exceptions: PlaceExceptions(blocked: ["/Applications/Slack.app"]))]
+        m.moveExceptionsIntoApps()
+        #expect(m.customPlaces[0].exceptions.isEmpty && m.groups["ssh"]?.exceptions.isEmpty == true)
+        #expect(Set(m.appFiles.map(\.app)) == ["/System/Applications/Preview.app", "/usr/bin/curl", "/Applications/Slack.app"])
+        #expect(m.appFiles.first { $0.app == "/usr/bin/curl" }?.places.map(\.verdict) == [.block])   // on both: Block
+        #expect(m.appFiles.first { $0.app == "/Applications/Slack.app" }?.places.map(\.place) == ["group:ssh"])
+        m.fileMode = .watch
+        #expect(m.decide(open("/tmp/contracts/a.pdf", by: preview + "/Contents/MacOS/Preview"), status: .dangerous)?.1.verdict == .allow)
+        #expect(m.decide(open("/tmp/contracts/a.pdf", by: "/usr/bin/curl"), status: .safe)?.1.verdict == .block)
     }
 
     @Test func settingsSavedBeforeExceptionsStillRead() throws {
@@ -93,16 +89,16 @@ import Testing
         #expect(try JSONDecoder().decode(CustomPlace.self, from: Data(place.utf8)).exceptions.isEmpty)
     }
 
-    @Test func oldFileRulesMoveIntoThePlaces() {
+    @Test func oldFileRulesMoveIntoTheCards() {
         let m = monitor()
         m.customPlaces = [CustomPlace(path: "/tmp/contracts", isFolder: true)]
         m.accessRules = [
-            AccessRule(kind: .files, target: "/tmp/contracts/2026", program: "/usr/bin/curl", action: .block),   // into the place
+            AccessRule(kind: .files, target: "/tmp/contracts/2026", program: "/usr/bin/curl", action: .block),   // curl's card
             AccessRule(kind: .files, target: "/tmp/private", program: nil, action: .block),                      // a blocked place
             AccessRule(kind: .network, target: "example.com", program: nil, action: .block),                     // stays
         ]
         m.moveFileRulesIntoPlaces(home: "/Users/someone")
-        #expect(m.customPlaces.first { $0.path == "/tmp/contracts" }?.exceptions.blocked == ["/usr/bin/curl"])
+        #expect(m.appFiles.first?.app == "/usr/bin/curl" && m.appFiles.first?.places.first?.place == "/tmp/contracts/2026")
         #expect(m.customPlaces.first { $0.path == "/tmp/private" }?.others == .block)
         #expect(m.accessRules.map(\.kind) == [.network])
         m.fileMode = .watch

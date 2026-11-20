@@ -192,8 +192,11 @@ struct RulesView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
-                if page == .protectionOverview, let protection {
-                    ProtectionBackdrop(protection: protection, firewall: firewall)
+                // The Overview's pools of colour, on the area pages built like it too.
+                if [.protectionOverview, .protectedFiles, .firewall, .protectionFound].contains(page), let protection {
+                    ProtectionBackdrop(protection: protection, firewall: firewall,
+                                       accent: page == .firewall ? AreaAccent.network : page == .protectedFiles ? AreaAccent.files
+                                           : page == .protectionFound ? AreaAccent.found : nil)
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport.height = $0 - 32 }   // less the page's padding

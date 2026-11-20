@@ -17,10 +17,18 @@ struct AppRules: Codable, Identifiable, Equatable, Sendable {
     var byPath: Bool { app.contains("/") }
     var name: String { byPath ? PlaceExceptions.name(app) : app }
 
-    /// Whether `program` (a path, or a name as the Network tab gives it) is this app or runs inside it.
+    /// Whether `program` (a path, or a name as the Network tab gives it) is this app or runs inside it. A pattern
+    /// names a program with its versions collapsed and home as "~" (`SignatureBuilder.normalizeExecutable`), so a
+    /// card matches that form of its path too, either way round: python's Block made from a question (the real
+    /// path, cpython-3.12.13) and its blocked connection pattern (cpython-#.#.#) are one card.
     func runs(_ program: String) -> Bool {
         guard program.contains("/") else { return name == program }
-        return byPath ? AccessRules.runs(app, program) : displayProcessName(program) == app
+        guard byPath else { return displayProcessName(program) == app }
+        if AccessRules.runs(app, program) { return true }
+        let pattern = SignatureBuilder.normalizeExecutable(program)
+        return AccessRules.runs(SignatureBuilder.normalizeExecutable(app), pattern)
+            || AccessRules.runs(SignatureBuilder.normalize(app), pattern)
+            || AccessRules.runs(app, pattern)
     }
 
     /// The destination of its own that decides this connection: the most specific one that covers it.

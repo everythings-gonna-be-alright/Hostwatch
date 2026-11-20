@@ -27,6 +27,8 @@ A card is about a path, or about a name when only the name is known (the Network
 as `displayProcessName` does). A change about one program goes to the card that already decides for it, else to a new
 card for its outermost app bundle. A card made only by blocks goes when they do, one you added stays.
 
+The sections were later named **Global rules** and **App rules**, Global rules tinted light blue (DESIGN.md).
+
 **Consequences.** Always Block in a question adds the destination to the app's card, and Allow Anyway adds an Allow
 (the card's own destinations come before threat lists, so it needs no list of its own). The separate Your rules list
 is gone: a program's blocked connection patterns and destinations asked about again show on its card, a card made

@@ -95,3 +95,20 @@ import Testing
         #expect(FirewallPolicy.decide(f, status: .unclassified, app: cards[0], hostwatch: "/hw").verdict == .allow)
     }
 }
+
+/// A program's card and its patterns are one: a pattern names it with versions collapsed and home as "~".
+@Suite struct AppCardsMatchPatterns {
+    @Test func theRealPathAndThePatternsPathAreOneCard() {
+        let real = NSHomeDirectory() + "/.claude/plugins/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12"
+        let pattern = SignatureBuilder.normalizeExecutable(real)
+        #expect(pattern.contains("#") && pattern.hasPrefix("~"))
+        // The card from a question (real path) covers the pattern, and the other way round.
+        #expect(AppRules(app: real).runs(pattern) && AppRules(app: pattern).runs(real))
+        #expect(AppRulesList.cardKey(for: pattern, in: [AppRules(app: real)]) == real)
+        // A bundle's card covers its programs' patterns.
+        let bundle = "/Applications/Tool 2.app"
+        #expect(AppRules(app: bundle).runs(SignatureBuilder.normalizeExecutable(bundle + "/Contents/MacOS/Tool")))
+        // Another program is still another card.
+        #expect(!AppRules(app: real).runs(SignatureBuilder.normalizeExecutable("/usr/bin/python3")))
+    }
+}

@@ -46,13 +46,7 @@ struct ProtectionView: View {
     /// Opens another page of the Rules sidebar (the overview's links).
     var go: (RulesSegment) -> Void = { _ in }
 
-    private static let limit = 40
     static let placeOptions: [(ProtectionVerdict, String)] = [(.ask, "Ask me"), (.block, "Block")]
-    /// "Show all": a long section opens in full on request (the first 40 keep the page quick).
-    @StateObject private var showAll = FoundExpansion()
-    private static let relative: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; f.dateTimeStyle = .named; return f
-    }()
 
     var body: some View {
         let _ = protection.revision
@@ -60,7 +54,9 @@ struct ProtectionView: View {
             VStack(alignment: .leading, spacing: 22) {
                 switch page {
                 case .protectedFiles: files
-                case .protectionFound: findings
+                case .protectionFound:
+                    FoundPage(protection: protection, firewall: firewall, connections: connections,
+                              markConnection: markConnection, mark: mark)
                 default: ProtectionOverview(protection: protection, firewall: firewall, connections: connections, go: go)
                 }
             }
@@ -70,25 +66,37 @@ struct ProtectionView: View {
     // MARK: Protected files
 
     private var files: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ProtectedFilesHeader(protection: protection, go: go)
+            general
+            AppFileRulesSection(protection: protection)
+        }
+    }
+
+    /// Global rules: the places protected for every program, each with the programs expected there and what any other
+    /// program meets. One app's own rules are on its card under App rules.
+    private var general: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Protected files and folders").font(.headline)
-            Text("Each place lists the programs expected there, which always pass. Choose what happens when any other "
-                 + "program opens it, Ask me or Block, and add programs you always allow or always block there. Your "
-                 + "choices come before patterns and AI.")
-                .font(.caption).foregroundStyle(.secondary)
-            ForEach(ProtectedGroup.all) { group in card(group) }
             HStack {
-                Text("Your folders and files").font(.headline)
+                RuleSections.heading(global: true)
                 Spacer()
                 Button { addPlaces() } label: { Label("Add Folder or File…", systemImage: "plus") }
+                    .buttonStyle(.glass).controlSize(.small)
             }
-            .padding(.top, 12)
+            Text("For every program. Each place lists the programs expected there, which always pass. Choose what happens "
+                 + "when any other program opens it, Ask me or Block. An app's own rules below win over these.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(ProtectedGroup.all) { group in card(group) }
+            Text("Your folders and files").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 8)
             if protection.customPlaces.isEmpty {
                 Text("Add a project, a folder of documents or a single file. Only macOS's own programs pass without asking.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(protection.customPlaces) { place in customRow(place) }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .globalRulesGlass()
     }
 
     /// A standard Open panel: folders and files, several at once.
@@ -123,8 +131,8 @@ struct ProtectionView: View {
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
         }
             PlaceChoices(others: Binding(get: { place.others }, set: { v in binding { $0.others = v } }),
-                         options: Self.placeOptions, exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }),
-                         place: place.name)
+                         options: Self.placeOptions, exceptions: .constant(PlaceExceptions()), place: place.name,
+                         showsPrograms: false, othersLabel: "Any other program")
                 .disabled(!place.on).opacity(place.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
@@ -135,9 +143,6 @@ struct ProtectionView: View {
     private func card(_ group: ProtectedGroup) -> some View {
         let setting = protection.groups[group.id] ?? ProtectedGroupSetting()
         let hits = protection.findings(group: group.id).reduce(0) { $0 + $1.count }
-        let exceptions = Binding(get: { setting.exceptions }, set: { e in
-            var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.exceptions = e; protection.groups[group.id] = s
-        })
         return VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 10) {
             Image(systemName: group.symbol).foregroundStyle(.secondary).frame(width: 22)
@@ -154,107 +159,13 @@ struct ProtectionView: View {
         }
             PlaceChoices(others: Binding(get: { setting.others }, set: { v in
                 var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.others = v; protection.groups[group.id] = s
-            }), options: Self.placeOptions, exceptions: exceptions, place: group.title)
+            }), options: Self.placeOptions, exceptions: .constant(PlaceExceptions()), place: group.title,
+                showsPrograms: false, othersLabel: "Any other program")
                 .disabled(!setting.on).opacity(setting.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
-    }
-
-    // MARK: Findings
-
-    private var findings: some View {
-        let all = protection.findings.values.sorted {
-            ($0.verdict == .block ? 0 : 1, -$0.count) < ($1.verdict == .block ? 0 : 1, -$1.count)
-        }
-        let network = connections()
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("What protection found").font(.headline)
-                Spacer()
-                if !all.isEmpty { forgetMenu(all) }
-            }
-            if all.isEmpty && network.isEmpty {
-                Text("Nothing yet. What would be stopped or asked about appears here, so you can decide first.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Allow marks the pattern Safe. Block marks it Dangerous. Either way it leaves this list. "
-                     + "Entries that don't happen again leave by themselves: a question after a week, a stop after a month.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if !all.isEmpty {
-                    Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(showAll.files ? all[...] : all.prefix(Self.limit)) { f in finding(f) }
-                        if all.count > Self.limit {
-                            Button(showAll.files ? "Show fewer" : "Show all \(all.count)") { showAll.files.toggle() }
-                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .protectionGlass(16)
-                }
-                // Connections: the firewall's findings, decided the same way.
-                if !network.isEmpty {
-                    HStack {
-                        Text("Connections").font(.subheadline.weight(.semibold))
-                        Spacer()
-                        if let firewall { ConnectionsForgetMenu(firewall: firewall, found: network) }
-                    }
-                    .padding(.top, 8)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(showAll.connections ? network[...] : network.prefix(Self.limit), id: \.0.id) { entry, decision in
-                            NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
-                                markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
-                            }
-                        }
-                        if network.count > Self.limit {
-                            Button(showAll.connections ? "Show fewer" : "Show all \(network.count)") { showAll.connections.toggle() }
-                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .protectionGlass(16)
-                }
-            }
-        }
-    }
-
-    /// Launches and files: clearing a long list at once (only the entries go, see ForgetMenu).
-    private func forgetMenu(_ all: [ProtectionFinding]) -> some View {
-        let dayAgo = Date().addingTimeInterval(-86_400)
-        return ForgetMenu(questions: all.filter { $0.verdict == .ask }.count, older: all.filter { $0.lastSeen < dayAgo }.count,
-                          all: all.count, forgetQuestions: { protection.forget { $0.verdict == .ask } },
-                          forgetOlder: { protection.forget { $0.lastSeen < dayAgo } }, forgetAll: { protection.forget { _ in true } },
-                          after: "a question after a week, a stop after a month")
-    }
-
-    private func finding(_ f: ProtectionFinding) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(nsImage: ProcessIcons.icon(f.program)).resizable().frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(f.name).fontWeight(.semibold)
-                    Text(f.enforced ? "Stopped" : f.verdict == .block ? "Would stop" : "Would ask")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(f.verdict == .block ? Color.red : Color.orange)
-                    Text("\(f.count)× · \(Self.relative.localizedString(for: f.lastSeen, relativeTo: Date()))")
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                }
-                Text(f.pattern).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle).help(f.pattern)
-                Text(f.reason).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Allow") { mark([f.patternKey], .safe) }
-            Button("Block") { mark([f.patternKey], .dangerous) }
-            Button { protection.forget([f.id]) } label: { Image(systemName: "xmark") }
-                .buttonStyle(.borderless).help("Remove from this list without deciding")
-        }
-        .controlSize(.small)
-        .padding(.vertical, 4)
     }
 }
 
@@ -265,55 +176,25 @@ extension View {
     }
 }
 
-/// Found ▸ Forget: clears a long list at once. Only the entries go: decisions, rules and patterns stay, and anything
-/// that happens again comes back. Old entries also leave by themselves (`after` says when).
-struct ForgetMenu: View {
-    let questions: Int
-    let older: Int
-    let all: Int
-    let forgetQuestions: () -> Void
-    let forgetOlder: () -> Void
-    let forgetAll: () -> Void
-    let after: String
+/// Global rules wear a light blue: they apply to every program, a scope, not a status (DESIGN.md ▸ Glass). Blue is the
+/// one colour no status uses, fixed rather than the accent, which can be graphite.
+enum RuleSections {
+    static let global = Color.blue
 
-    var body: some View {
-        Menu {
-            Button("Forget Questions (\(questions))", action: forgetQuestions).disabled(questions == 0)
-            Button("Forget Older Than a Day (\(older))", action: forgetOlder).disabled(older == 0)
-            Divider()
-            Button("Forget All (\(all))", action: forgetAll).disabled(all == 0)
-        } label: {
-            Label("Forget", systemImage: "eraser")
+    /// "Global rules" with its globe, or "App rules": the two sections' headings on the files and firewall pages.
+    static func heading(global: Bool) -> some View {
+        Label {
+            Text(global ? "Global rules" : "App rules").font(.headline)
+        } icon: {
+            Image(systemName: global ? "globe" : "app.badge.checkmark")
+                .foregroundStyle(global ? Self.global : Color.secondary)
         }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .fixedSize()
-        .help("Clear entries from this list. Decisions, rules and patterns stay. What happens again comes back. "
-              + "Old entries also leave by themselves: \(after).")
     }
 }
 
-/// The firewall's findings, forgotten from the list only (FirewallMonitor.dismiss): what would be blocked or asked.
-struct ConnectionsForgetMenu: View {
-    @ObservedObject var firewall: FirewallMonitor
-    let found: [(FirewallEntry, FirewallDecision)]
-
-    var body: some View {
-        let dayAgo = Date().addingTimeInterval(-86_400)
-        let questions = found.filter { $0.1.verdict == .ask }.map(\.0.id)
-        let older = found.filter { $0.0.lastSeen < dayAgo }.map(\.0.id)
-        ForgetMenu(questions: questions.count, older: older.count, all: found.count,
-                   forgetQuestions: { firewall.dismiss(questions) }, forgetOlder: { firewall.dismiss(older) },
-                   forgetAll: { firewall.dismiss(found.map(\.0.id)) },
-                   after: "a connection not seen for a week")
-    }
-}
-
-/// Which Found sections are open in full (no @State macro with the command line tools).
-final class FoundExpansion: ObservableObject {
-    @Published var files = false
-    @Published var connections = false
+extension View {
+    /// The Global rules section's panel: glass with the scope's light blue.
+    func globalRulesGlass() -> some View { protectionGlass(16, tint: RuleSections.global.opacity(0.06)) }
 }
 
 /// A place's choices, as a sentence: what any other program meets (Ask me or Block), and the programs you always
@@ -325,13 +206,15 @@ struct PlaceChoices<Choice: Hashable>: View {
     let options: [(Choice, String)]
     @Binding var exceptions: PlaceExceptions
     let place: String
-    /// False on the firewall's General cards: what one app meets lives on that app's own card.
+    /// False on the Global rules cards: what one app meets lives on that app's own card.
     var showsPrograms = true
+    /// Who the choice is for, when not the default ("Every program" without programs).
+    var othersLabel: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(showsPrograms ? "Any other program" : "Every program").font(.callout).foregroundStyle(.secondary)
+                Text(othersLabel ?? (showsPrograms ? "Any other program" : "Every program")).font(.callout).foregroundStyle(.secondary)
                 Picker("Any other program", selection: $others) {
                     ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
                 }

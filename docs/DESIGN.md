@@ -31,6 +31,9 @@ the ones a machine can check.
 - **Status colours are reserved:** red for stopped, blocked or critical, orange for attention and warnings, green for
   allowed or safe (and the AI check's progress ring, which leads to "allowed"), grey for pending or a question.
   Never the accent colour for something that must be noticed: it can be graphite. Always with an icon or a word, never colour alone.
+- **Area colours say which page you're on, never a status:** Files indigo, Network Firewall teal (`AreaAccent`). They
+  colour the page header's tile, its wash and hairline, and the backdrop's top pool. The area's state is a pill in its
+  status colour beside the name. The Overview keeps the state's colour: it is about protection as a whole.
 
 ## 3. Type
 
@@ -61,7 +64,10 @@ the ones a machine can check.
   only style: glass drawn apart is blurred again on every frame of the Dock's minimize animation, and the map and
   Stories dropped frames until theirs was grouped.
 - **Don't put glass on glass.** A form inside a glass card uses a plain quaternary fill.
-- **Tint glass only to carry state** (the status panel's green, purple or orange, an orange warning panel).
+- **Tint glass only to carry state** (the status panel's green, purple or orange, an orange warning panel). The one
+  exception is scope: the **Global rules** sections (Protected Files and Folders, Network Firewall) wear a light,
+  fixed blue at 6% (`globalRulesGlass`, `RuleSections.global`), with a globe beside the heading so the colour is never
+  alone. Blue because no status uses it, fixed because the accent can be graphite. Nothing else is blue.
 
 ## 6. Words
 

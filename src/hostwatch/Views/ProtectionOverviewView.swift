@@ -293,7 +293,7 @@ struct StatusFact {
     let detail: String
 }
 
-private struct StatusFactView: View {
+struct StatusFactView: View {
     let fact: StatusFact
 
     var body: some View {
@@ -317,6 +317,8 @@ private struct StatusFactView: View {
 struct ProtectionBackdrop: View {
     @ObservedObject var protection: ProtectionMonitor
     var firewall: FirewallMonitor?
+    /// An area page's own colour, for its top pool instead of the state's (`AreaAccent`).
+    var accent: Color? = nil
 
     private var state: ProtectionState { protection.state(network: firewall?.mode ?? .off) }
 
@@ -331,7 +333,7 @@ struct ProtectionBackdrop: View {
 
     var body: some View {
         ZStack {
-            RadialGradient(colors: [tint.opacity(state == .off ? 0.08 : 0.18), .clear],
+            RadialGradient(colors: [accent.map { $0.opacity(0.16) } ?? tint.opacity(state == .off ? 0.08 : 0.18), .clear],
                            center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 520)
             RadialGradient(colors: [Color.cyan.opacity(0.10), .clear], center: UnitPoint(x: 1, y: 0.35),
                            startRadius: 0, endRadius: 480)
@@ -377,7 +379,7 @@ private struct OverviewRow: View {
 }
 
 /// A card's last row: where to go from here, the same in every card.
-private struct CardFooter: View {
+struct CardFooter: View {
     let title: String
     var count: Int? = nil
     let action: () -> Void
@@ -401,7 +403,7 @@ private struct CardFooter: View {
 }
 
 /// What an Off card shows instead of an empty chart: what turning it on gives you, and the button that does it.
-private struct OffHint: View {
+struct OffHint: View {
     let text: String
     let turnOn: () -> Void
 
@@ -544,7 +546,7 @@ private struct FirewallCard: View {
 
 /// A number in the text colour, with the chart's own colour as a dot beside its label: the pair is the chart's
 /// legend too. Red stays in the bars, where it means "stopped".
-private struct OverviewFigure: View {
+struct OverviewFigure: View {
     let n: Int
     let label: String
     let alarming: Bool

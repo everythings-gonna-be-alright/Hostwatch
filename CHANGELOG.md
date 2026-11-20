@@ -4,11 +4,27 @@
 
 ### New
 
-- **Firewall rules per app.** The Network Firewall page now has General, for every program, and Apps: one card per
-  app with its own Everywhere (Firewall decides, Allow or Block) and its own domains and addresses. An app's own rules
-  win over General's. Everything one app may reach is on its card: the program chips on General's cards, the apps
+- **Firewall rules per app.** The Network Firewall page now has Global rules, for every program (tinted light blue),
+  and App rules: one card per app with its own Everywhere (Firewall decides, Allow or Block) and its own domains and
+  addresses. An app's own rules win over the global ones. Everything one app may reach is on its card: the program
+  chips on the global cards, the apps
   you always allowed or blocked everywhere, the domains you blocked from a question, what you allowed despite a
   threat list, and the connection patterns you blocked. The separate Your rules list is gone.
+- **File rules per app.** Protected Files and Folders is built the same way: Global rules, for every program, and App
+  rules, one card per app with Every protected place (Protection decides, Allow or Block) and its own places, a built-in one
+  or any folder or file. An app's own places win over the global ones, and a place on its card needs no protection
+  in Global rules, so one app can be kept out of a folder every other program may open. The program chips on the places
+  moved onto the cards.
+
+- **Files and Network Firewall pages built like the Overview.** Each opens with a header in its own colour (indigo for
+  files, teal for the firewall), its state as a pill, the mode and five facts (protected places, app rules, where most was found, the last stop, what waits, or for the firewall
+  what it blocked and passed, your rules, the relay and this network). Then the area's activity chart beside what it
+  found most, with Review in Found, and below them the global and app rules.
+
+- **A new Found page.** Everything to decide, grouped by program with the ones that would be stopped first: filter by
+  area and by would stop or question, search, sort, and Decide All for a whole program. Allow, Block and Forget take
+  an entry off the list at once (it waited up to a second before), and only the rows in view are drawn, so a long
+  list stays quick. Programs keep their place while you decide, instead of jumping when their counts change.
 
 ### Fixes
 

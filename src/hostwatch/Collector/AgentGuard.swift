@@ -40,16 +40,20 @@ struct HoldPlace: Equatable, Sendable {
     var blocked: [String]
     var writesOnly = false
     var names: [String] = []    // only these file names count (browser credential stores)
+    /// Held only for the programs listed: a place one app's card names that General doesn't protect.
+    var othersPass = false
 
-    init(id: String, prefixes: [String], owners: [String] = [], blocked: [String] = [], writesOnly: Bool = false, names: [String] = []) {
+    init(id: String, prefixes: [String], owners: [String] = [], blocked: [String] = [], writesOnly: Bool = false,
+         names: [String] = [], othersPass: Bool = false) {
         self.id = id; self.prefixes = prefixes; self.owners = owners; self.blocked = blocked
-        self.writesOnly = writesOnly; self.names = names
+        self.writesOnly = writesOnly; self.names = names; self.othersPass = othersPass
     }
 
     init?(_ d: [String: Any]) {
         guard let id = d["id"] as? String, let prefixes = d["prefixes"] as? [String], !prefixes.isEmpty else { return nil }
         self.init(id: id, prefixes: prefixes, owners: d["owners"] as? [String] ?? [], blocked: d["blocked"] as? [String] ?? [],
-                  writesOnly: d["writesOnly"] as? Bool ?? false, names: d["names"] as? [String] ?? [])
+                  writesOnly: d["writesOnly"] as? Bool ?? false, names: d["names"] as? [String] ?? [],
+                  othersPass: d["othersPass"] as? Bool ?? false)
     }
 
     /// How deep the place covers `path` (the length of the matching prefix), nil when it doesn't.
@@ -103,7 +107,7 @@ struct HoldConfig: Equatable, Sendable {
             if !place.names.isEmpty, !place.names.contains((r.file as NSString).lastPathComponent) { return (true, "") }
             if place.writesOnly, !r.mode.contains("w") { return (true, "") }
             if HoldPlace.names(place.blocked, r.path) { return (false, "you always block it there") }
-            if HoldPlace.names(place.owners, r.path) || Self.systemProgram(r.path) { return (true, "") }
+            if HoldPlace.names(place.owners, r.path) || Self.systemProgram(r.path) || place.othersPass { return (true, "") }
             return nil
         }
     }

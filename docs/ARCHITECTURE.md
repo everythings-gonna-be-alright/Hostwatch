@@ -66,7 +66,9 @@ and edges: pure, ADR 0017). The map is `Views/NetworkMapView.swift` with `Networ
 
 **`Protection/`** — `ProtectionPolicy.swift` (modes, protected-file cards, what a launch or file access gets: pure),
 `ProtectionMonitor.swift` (the Watch rehearsal on the live feed, findings, the collector's settings and questions,
-ADR 0011), `ReactiveEnforcer.swift` (Ask and Strict until Endpoint Security: stop or pause right after the event). The page is `Views/ProtectionView.swift` (Rules ▸ Protection), the question panel
+ADR 0011), `AppFileRules.swift` (one card per app with its own places, and the collector's lists from them: pure,
+ADR 0021), `ReactiveEnforcer.swift` (Ask and Strict until Endpoint Security: stop or pause right after the event).
+The page is `Views/ProtectionView.swift` (Rules ▸ Protection) with `Views/AppFileRulesView.swift`, the question panel
 `Views/ProtectionPromptView.swift`, the wiring `App/AppDelegate+Protection.swift`.
 
 **`History/`** — `HistoryRecorder.swift` (what to write, rotation, the cap), `HistoryStream.swift` (compressed as
