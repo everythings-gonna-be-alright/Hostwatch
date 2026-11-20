@@ -1219,7 +1219,9 @@ Pick a mode in *Protection*, on the Overview's Network card or the *Network Fire
 or **Strict**. The connections themselves are in the **Network** tab (⌘5), next to the domains.
 
 - **Watch:** judges every connection and lists what wouldn't simply pass. Watch blocks nothing.
-- **Ask:** something new waits, with no time limit, while a window asks you **Allow / Block**.
+- **Ask:** something new waits, with no time limit, while a window asks you **Allow / Block**. *Always Block* blocks
+  that destination (its domain, or the address when it has no name) for that program, so its other destinations are
+  still judged. *Always Allow* marks the connection's pattern Safe. Unblock in *Your rules* is in effect at once.
 - **Strict:** something new is refused.
 
 **Everywhere.** On the *Network Firewall* page, *Your destinations* starts with **Everywhere**: every destination,

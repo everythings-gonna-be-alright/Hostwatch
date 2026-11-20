@@ -200,6 +200,11 @@ extension AppDelegate {
             firewall?.decided(patternKeys: keys)
             protection?.decided(patternKeys: keys)
         }
+        // A connection pattern decided or cleared (Unblock, Patterns): in effect at once, not when the collector's
+        // remembered answer runs out (a minute for a block, five for an allow).
+        signatures.onStatusSet = { [weak firewall] keys in
+            if keys.contains(where: { $0.hasPrefix("net|") }) { firewall?.rulesChanged() }
+        }
         firewall.onModeChange = { [weak self] mode in self?.model.firewallMode = mode.collector }
         model.onFirewallAsk = { [weak self] key, event in self?.firewall.handleAsk(key: key, event: event) }
         model.onFirewallStatus = { [weak self] state, detail in self?.firewall.relayStatus(state, detail) }

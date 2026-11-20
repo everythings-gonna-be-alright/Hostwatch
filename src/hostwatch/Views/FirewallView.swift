@@ -124,6 +124,8 @@ struct FirewallPromptView: View {
         if let prompt = firewall.prompts.first(where: { $0.id == id }) {
             let pattern = prompt.patternKey.split(separator: "|").last.map(String.init) ?? ""
             let gateway = SignatureBuilder.vmGateway(prompt.event.proc)
+            // Always Block blocks only this destination (its domain, else its address), Always Allow the pattern.
+            let blocks = FirewallMonitor.facts(prompt.event).flatMap { FirewallMonitor.destination(of: $0) } ?? pattern
             // The question card: the kind's band with the wait, the program and where it goes, what the answer
             // decides, who started it, and the answers as two pairs.
             VStack(alignment: .leading, spacing: 0) {
@@ -164,7 +166,8 @@ struct FirewallPromptView: View {
                     }
                     Text(gateway.map { "It comes through \(prompt.event.name), from inside its virtual machine; which program made it "
                                        + "can't be seen. Your answer decides \($0)s → \(pattern) from now on." }
-                         ?? "Always decides \(prompt.event.name) → \(pattern) from now on, Once only this connection. It waits until you answer.")
+                         ?? "Always Block blocks \(prompt.event.name) → \(blocks) from now on, Always Allow allows \(pattern). "
+                            + "Once decides only this connection. It waits until you answer.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     QuestionAnswers(alwaysBlock: { firewall.resolve(prompt.id, allow: false) },
@@ -172,7 +175,7 @@ struct FirewallPromptView: View {
                                     allowOnce: { firewall.resolve(prompt.id, allow: true, once: true) },
                                     alwaysAllow: { firewall.resolve(prompt.id, allow: true) },
                                     blockOnceIsCancel: true,
-                                    help: ("Block it, and every connection of this pattern from now on",
+                                    help: ("Block \(blocks) for \(prompt.event.name) from now on. Its other destinations are asked about as usual",
                                            "Block this connection. Next time you're asked again",
                                            "Let this connection through. Next time you're asked again",
                                            "Allow it, and every connection of this pattern from now on"))

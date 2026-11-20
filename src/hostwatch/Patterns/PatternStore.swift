@@ -58,6 +58,8 @@ final class SignatureStore: ObservableObject {
     var onDecisionsChanged: (() -> Void)?
     /// You decided these patterns (Safe, Suspicious or Dangerous): the firewall stops asking again about them.
     var onYouDecided: (([String]) -> Void)?
+    /// Any status set here, cleared too (the firewall: the collector forgets the answers it remembers for them).
+    var onStatusSet: (([String]) -> Void)?
 
     var allEntries: [SignatureEntry] { Array(entries.values) }
     var entriesByKey: [String: SignatureEntry] { entries }
@@ -283,6 +285,7 @@ final class SignatureStore: ObservableObject {
         changedNow()
         if source == "you" { onDecisionsChanged?() }
         if source == "you", status != .unclassified { onYouDecided?(keys) }
+        onStatusSet?(keys)
     }
 
     /// Accept AI suggestions by itself (Settings ▸ AI), for patterns that aren't high risk. Off: AI only suggests.
