@@ -403,6 +403,9 @@
   @media (max-width: 900px) { .t-7, .t-5, .t-4, .t-8 { grid-column: span 12; } }
 
   .img.center img { width: 300px; left: 50%; top: 0; transform: translateX(-50%); }
+  /* A question panel: as wide as the tile allows, whole, its buttons not under the fade. */
+  .img.panel img { width: min(calc(100% - 24px), 400px); left: 50%; top: 0; transform: translateX(-50%); }
+  .tile .img.panel::after { display: none; }
   .img.crop-left img { width: 1000px; left: 28px; top: 0; }
   .img.crop-story img { width: 700px; left: 28px; top: 0; }
   .img.crop-watch img { width: 640px; left: 28px; top: -20px; }
@@ -767,7 +770,7 @@
       <div class="tile t-4">
         <div class="text"><h3>Ask, with context</h3>
           <p>Who's connecting, where, and on what port. Ask Claude right in the question.</p></div>
-        <div class="img center"><img src="images/site/firewall.webp" alt="Firewall question: node wants to connect to registry.npmjs.org" loading="lazy"></div>
+        <div class="img panel"><img src="images/site/firewall.webp" alt="Firewall question: node wants to connect to registry.npmjs.org" loading="lazy"></div>
       </div>
       <div class="tile t-8">
         <div class="text"><h3>A map of your network</h3>
