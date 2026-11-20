@@ -20,3 +20,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0013](0013-ai-safe-project-reads.md) | An AI may mark Safe a run-anything tool's plain read of an exact project folder |
 | [0018](0018-endpoint-security-client.md) | The collector is its own Endpoint Security client, eslogger only as the fallback |
 | [0019](0019-patterns-name-who-did-it.md) | A tool's or interpreter's pattern names who did it (the app or AI agent behind it) |
+| [0020](0020-firewall-rules-per-app.md) | Firewall rules per app (its own Everywhere and destinations), next to the general ones |

@@ -174,10 +174,10 @@ import Testing
         let (fw, _) = NetworkTab().firewall()
         let before = fw.entries.count
         let first = try! #require(fw.entries.keys.sorted().first)
-        let blocks = fw.domainBlocks
+        let blocks = fw.apps
         fw.dismiss([first, "not-there"])
         #expect(fw.entries.count == before - 1 && fw.entries[first] == nil)
-        #expect(fw.domainBlocks == blocks)                          // rules untouched
+        #expect(fw.apps == blocks)                                  // rules untouched
         fw.dismiss(Array(fw.entries.keys))
         #expect(fw.entries.isEmpty)
     }

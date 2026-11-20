@@ -704,14 +704,28 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
   still judged. *Always Allow* marks the connection's pattern Safe. Unblock in *Your rules* is in effect at once.
 - **Strict:** something new is refused.
 
-**Everywhere.** On the *Network Firewall* page, *Your destinations* starts with **Everywhere**: every destination,
-your network too, shaped like the others. *Any other program*: **Firewall decides** (the default) or **Block**, which
-blocks every program's traffic but the ones you always allow there. *Add Program* ▸ *Always block* blocks all of one
-program's traffic (its helpers included, for an app), whatever else you allowed. *Always allow* only keeps a program
-out of Everywhere's Block: not past threat lists or your other destinations. Like every firewall rule, it stops
-connections in Ask and Strict, and Watch lists them as would block. A change is in effect at once: a connection
-already open finishes. Hostwatch itself is never blocked. A program you
-block for one destination only goes on that destination's card.
+**General and Apps.** The *Network Firewall* page has your rules in two sections built the same way.
+- **General** is for every program. Its first card, **Everywhere**, covers every destination, your network too:
+  **Firewall decides** (the default) or **Block**, which blocks every program's traffic but the apps you allow
+  everywhere. Below it, specific domains (their subdomains too) and addresses, each **Firewall decides**, **Allow** or
+  **Block**.
+- **Apps** has one card per app. *Add App…* picks an app (it covers every program inside it) or a command-line
+  program. A card has its own **Everywhere** (Firewall decides, Allow or Block) and its own domains and addresses,
+  each Allow or Block. Click a card's bar to open or close it: closed, it reads like "Blocked everywhere · 2 allowed".
+  *Always Block* in a firewall question adds the destination to the app's card.
+
+The first rule that decides wins:
+1. The app's own domains and addresses, the most specific one.
+2. The app's Everywhere ▸ Block, your network too.
+3. General's domains and addresses.
+4. The app's Everywhere ▸ Allow. A threat list still blocks it unless you chose *Allow Anyway*.
+5. General's Everywhere ▸ Block.
+
+So an app's own rules win over General, but an app you allow everywhere still meets a domain General blocks, and an
+app you block everywhere still reaches what its own card allows. Like every firewall rule, they stop connections in
+Ask and Strict, and Watch lists them as would block. A change is in effect at once: a connection already open
+finishes. Hostwatch itself is never blocked. Program exceptions on General's cards from older versions moved to the
+apps' cards.
 
 > [!WARNING]
 > Strict refuses everything new that you haven't allowed, also while Hostwatch isn't open. Start with Watch to see
@@ -836,13 +850,13 @@ curl and other programs that run whatever they're told are judged by what they r
   they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
   protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
   Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
-- **Your destinations:** on the *Network Firewall* page, *Add Domain or Address…* takes a domain (its subdomains
-  too) or an IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
-  and **Add Program**, with the programs as chips. They are your decisions, so they come before threat lists and
-  patterns. The most specific destination decides (`api.example.com` over `example.com`), and a program on both lists
-  is blocked. *Firewall decides* leaves it to your firewall mode. An address has a fourth choice, **Block both
-  ways**: nothing reaches this Mac from it or goes to it, whatever the firewall's mode, with no exceptions (not for
-  the router or this Mac). The devices and ports you blocked from the network map are in the same list.
+- **General destinations:** on the *Network Firewall* page, General's *Add Domain or Address…* takes a domain (its
+  subdomains too) or an IP address, with what every program meets there: *Firewall decides, Allow or Block*. They are
+  your decisions, so they come before threat lists and patterns. The most specific destination decides
+  (`api.example.com` over `example.com`). *Firewall decides* leaves it to your firewall mode. What one app meets is on
+  its own card under Apps, which wins over these. An address has a fourth choice, **Block both ways**: nothing reaches
+  this Mac from it or goes to it, whatever the firewall's mode, with no exceptions (not for the router or this Mac).
+  The devices and ports you blocked from the network map are in the same list.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
   something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
   files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than
