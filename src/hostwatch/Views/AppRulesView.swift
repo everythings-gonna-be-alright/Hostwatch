@@ -97,45 +97,10 @@ private struct AppRulesCard: View {
 
     // MARK: Header
 
-    /// The whole bar opens and closes the card: a small chevron alone was hard to hit.
     private var header: some View {
-        HStack(spacing: 10) {
-            Button {
-                if isOpen { state.open.remove(rules.app) } else { state.open.insert(rules.app) }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                        .frame(width: 10)
-                    icon
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(rules.name).font(.system(size: 13, weight: .semibold))
-                        Text(isOpen ? where_ : summary).font(.caption).foregroundStyle(.secondary)
-                            .lineLimit(1).truncationMode(.middle)
-                    }
-                    Spacer(minLength: 8)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(isOpen ? "Hide \(rules.name)'s rules" : "Show \(rules.name)'s rules")
-            Button { remove() } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.borderless).help("Remove \(rules.name) and its rules")
-        }
-    }
-
-    @ViewBuilder private var icon: some View {
-        if rules.byPath {
-            Image(nsImage: ProcessIcons.icon(rules.app)).resizable().frame(width: 22, height: 22)
-        } else {
-            Image(systemName: "app.dashed").font(.system(size: 17)).foregroundStyle(.secondary).frame(width: 22, height: 22)
-        }
-    }
-
-    /// Where the app is, or that it's known by name only.
-    private var where_: String {
-        rules.byPath ? AccessRules.display(rules.app) : "Every program named \(rules.name)"
+        AppCardHeader(app: rules.app, name: rules.name, byPath: rules.byPath, open: state.open, summary: summary,
+                      toggle: { if isOpen { state.open.remove(rules.app) } else { state.open.insert(rules.app) } },
+                      remove: remove)
     }
 
     /// "Blocked everywhere · 2 destinations", when closed.
@@ -292,4 +257,54 @@ private struct AppRulesCard: View {
         state.adding.remove(rules.app)
         state.drafts[rules.app] = nil
     }
+}
+
+/// An app card's bar, on the firewall's and the files' pages alike: the whole bar opens and closes the card (a small
+/// chevron alone was hard to hit), with the app's icon, name, and a summary closed or where it is open.
+struct AppCardHeader: View {
+    let app: String
+    let name: String
+    let byPath: Bool
+    let open: Set<String>
+    let summary: String
+    let toggle: () -> Void
+    let remove: () -> Void
+
+    private var isOpen: Bool { open.contains(app) }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: toggle) {
+                HStack(spacing: 10) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        .frame(width: 10)
+                    icon
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.system(size: 13, weight: .semibold))
+                        Text(isOpen ? where_ : summary).font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isOpen ? "Hide \(name)'s rules" : "Show \(name)'s rules")
+            Button(action: remove) { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless).help("Remove \(name) and its rules")
+        }
+    }
+
+    @ViewBuilder private var icon: some View {
+        if byPath {
+            Image(nsImage: ProcessIcons.icon(app)).resizable().frame(width: 22, height: 22)
+        } else {
+            Image(systemName: "app.dashed").font(.system(size: 17)).foregroundStyle(.secondary).frame(width: 22, height: 22)
+        }
+    }
+
+    /// Where the app is, or that it's known by name only.
+    private var where_: String { byPath ? AccessRules.display(app) : "Every program named \(name)" }
 }

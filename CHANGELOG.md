@@ -9,6 +9,11 @@
   win over General's. Everything one app may reach is on its card: the program chips on General's cards, the apps
   you always allowed or blocked everywhere, the domains you blocked from a question, what you allowed despite a
   threat list, and the connection patterns you blocked. The separate Your rules list is gone.
+- **File rules per app.** Protected Files and Folders is built the same way: General, for every program, and Apps,
+  one card per app with Every protected place (Protection decides, Allow or Block) and its own places, a built-in one
+  or any folder or file. An app's own places win over General's, and a place on its card needs no protection in
+  General, so one app can be kept out of a folder every other program may open. The program chips on the places
+  moved onto the cards.
 
 ### Fixes
 

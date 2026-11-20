@@ -70,25 +70,36 @@ struct ProtectionView: View {
     // MARK: Protected files
 
     private var files: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            general
+            AppFileRulesSection(protection: protection)
+        }
+    }
+
+    /// General: the places protected for every program, each with the programs expected there and what any other
+    /// program meets. One app's own rules are on its card under Apps.
+    private var general: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Protected files and folders").font(.headline)
-            Text("Each place lists the programs expected there, which always pass. Choose what happens when any other "
-                 + "program opens it, Ask me or Block, and add programs you always allow or always block there. Your "
-                 + "choices come before patterns and AI.")
-                .font(.caption).foregroundStyle(.secondary)
-            ForEach(ProtectedGroup.all) { group in card(group) }
             HStack {
-                Text("Your folders and files").font(.headline)
+                Text("General").font(.headline)
                 Spacer()
                 Button { addPlaces() } label: { Label("Add Folder or File…", systemImage: "plus") }
+                    .buttonStyle(.glass).controlSize(.small)
             }
-            .padding(.top, 12)
+            Text("For every program. Each place lists the programs expected there, which always pass. Choose what happens "
+                 + "when any other program opens it, Ask me or Block. An app's own rules below win over these.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(ProtectedGroup.all) { group in card(group) }
+            Text("Your folders and files").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 8)
             if protection.customPlaces.isEmpty {
                 Text("Add a project, a folder of documents or a single file. Only macOS's own programs pass without asking.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(protection.customPlaces) { place in customRow(place) }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(16)
     }
 
     /// A standard Open panel: folders and files, several at once.
@@ -123,8 +134,8 @@ struct ProtectionView: View {
                 .buttonStyle(.borderless).help("Stop protecting \(place.name)")
         }
             PlaceChoices(others: Binding(get: { place.others }, set: { v in binding { $0.others = v } }),
-                         options: Self.placeOptions, exceptions: Binding(get: { place.exceptions }, set: { e in binding { $0.exceptions = e } }),
-                         place: place.name)
+                         options: Self.placeOptions, exceptions: .constant(PlaceExceptions()), place: place.name,
+                         showsPrograms: false, othersLabel: "Any other program")
                 .disabled(!place.on).opacity(place.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
@@ -135,9 +146,6 @@ struct ProtectionView: View {
     private func card(_ group: ProtectedGroup) -> some View {
         let setting = protection.groups[group.id] ?? ProtectedGroupSetting()
         let hits = protection.findings(group: group.id).reduce(0) { $0 + $1.count }
-        let exceptions = Binding(get: { setting.exceptions }, set: { e in
-            var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.exceptions = e; protection.groups[group.id] = s
-        })
         return VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 10) {
             Image(systemName: group.symbol).foregroundStyle(.secondary).frame(width: 22)
@@ -154,7 +162,8 @@ struct ProtectionView: View {
         }
             PlaceChoices(others: Binding(get: { setting.others }, set: { v in
                 var s = protection.groups[group.id] ?? ProtectedGroupSetting(); s.others = v; protection.groups[group.id] = s
-            }), options: Self.placeOptions, exceptions: exceptions, place: group.title)
+            }), options: Self.placeOptions, exceptions: .constant(PlaceExceptions()), place: group.title,
+                showsPrograms: false, othersLabel: "Any other program")
                 .disabled(!setting.on).opacity(setting.on ? 1 : 0.5)
                 .padding(.leading, 32)
         }
@@ -325,13 +334,15 @@ struct PlaceChoices<Choice: Hashable>: View {
     let options: [(Choice, String)]
     @Binding var exceptions: PlaceExceptions
     let place: String
-    /// False on the firewall's General cards: what one app meets lives on that app's own card.
+    /// False on General's cards: what one app meets lives on that app's own card.
     var showsPrograms = true
+    /// Who the choice is for, when not the default ("Every program" without programs).
+    var othersLabel: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(showsPrograms ? "Any other program" : "Every program").font(.callout).foregroundStyle(.secondary)
+                Text(othersLabel ?? (showsPrograms ? "Any other program" : "Every program")).font(.callout).foregroundStyle(.secondary)
                 Picker("Any other program", selection: $others) {
                     ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
                 }

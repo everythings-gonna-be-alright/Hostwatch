@@ -823,7 +823,8 @@ Watch everywhere when all is off, then **Pause for 15 Minutes** or **Resume**), 
 what the chosen one does, today's numbers and how many it found, and links to the other pages. *Found* there shows
 both numbers the sidebar uses: what would be stopped, and everything to review. The Help button explains the modes
 and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
-included. *Protected Files and Folders* has the cards and your own places, *Found* what the rehearsal found.
+included. *Protected Files and Folders* has General (the cards and your own places) and Apps, *Found* what the
+rehearsal found.
 
 Each area's card has a chart: what was stopped (or would be) in red, what was asked about (or would be) in grey.
 *24 Hours | 7 Days | 30 Days* above the cards switches all of them between the last 24 hours by hour and the last
@@ -844,13 +845,18 @@ Hostwatch can show what it would stop: a launch, or a program reading places lik
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
 curl and other programs that run whatever they're told are judged by what they run.
 
-- **Always allow or always block a program in a place:** every protected place, a built-in group or one of your
-  folders and files, reads as a sentence: the programs expected there (they always pass), *Any other program: Ask me
-  or Block*, and **Add Program** (*Always Allow a Program…* or *Always Block a Program…*). The programs show as chips
-  under the place, green or red, each removable. An app covers the programs inside it. These are your decisions, so
-  they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
-  protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
-  Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
+- **General and Apps for files:** the *Protected Files and Folders* page is built like the firewall's. **General**
+  is for every program: each protected place, a built-in group or one of your folders and files, reads as a
+  sentence, the programs expected there (they always pass) and *Any other program: Ask me or Block*. **Apps** has one
+  card per app (*Add App…*, an app covers every program inside it). A card has **Every protected place**
+  (*Protection decides*, *Allow* or *Block*, for the places General protects) and its own places, each Allow or
+  Block, added with **Add Place** ▸ *Allow In* or *Block From*: a built-in place, or any folder or file. A place on an
+  app's card needs no protection in General: *Block From ~/taxes* keeps that one app out and lets every other program
+  in. The first rule that decides wins: the app's own places (the most specific, so SSH keys over your home folder),
+  then its Every protected place, then General (your decision on the pattern, the programs expected there, the
+  place's choice). Programs you always allowed or blocked in a place before are on their cards now. Block acts in Ask
+  and Strict and shows as "would block" in Watch. To block every program from a folder, protect it in General and set
+  *Any other program* to *Block*.
 - **General destinations:** on the *Network Firewall* page, General's *Add Domain or Address…* takes a domain (its
   subdomains too) or an IP address, with what every program meets there: *Firewall decides, Allow or Block*. They are
   your decisions, so they come before threat lists and patterns. The most specific destination decides
@@ -889,7 +895,7 @@ curl and other programs that run whatever they're told are judged by what they r
   (writes only). The programs expected there pass. For everyone else a card asks, or blocks. A card can be off.
 - **Your folders and files:** *Add Folder or File…* protects any folder (and everything inside it) or a single file.
   Only macOS's own programs (Finder, Spotlight, backups) pass without asking. Each has its own switch, Ask or Block,
-  and a remove button. Allow a program there by marking its pattern Safe.
+  and a remove button. Allow a program there on its card under Apps, or by marking its pattern Safe.
 - **What protection found:** each launch or file access that would be stopped or asked about, folded by pattern.
   *Allow* marks the pattern Safe, *Block* marks it Dangerous, and it leaves the list. Deciding it anywhere else does
   the same.

@@ -93,10 +93,8 @@ struct ProtectedGroup: Identifiable, Sendable {
     var owners: [String] { labels.flatMap { SignatureBuilder.owners[$0] ?? [] } }
 }
 
-/// A folder or file you protect yourself. Nobody is expected there but macOS's own programs: allow one by marking
-/// its pattern Safe, as for any card.
-/// Programs you decided for one place: always let in, or always stopped. Your decisions, so they come before the
-/// pattern's status and the place's choice for others. An app covers the programs inside it.
+/// Programs you decided for one place: always let in, or always stopped. A destination's are read into the apps'
+/// cards (ADR 0020), a protected place's too (ADR 0021): kept so saved settings still read.
 struct PlaceExceptions: Codable, Equatable, Sendable {
     var allowed: [String] = []
     var blocked: [String] = []
@@ -117,6 +115,8 @@ struct PlaceExceptions: Codable, Equatable, Sendable {
     }
 }
 
+/// A folder or file you protect yourself. Nobody is expected there but macOS's own programs: one app's own rules are
+/// on its card (`AppFileRules`).
 struct CustomPlace: Codable, Identifiable, Equatable, Sendable {
     var id = UUID().uuidString
     var path: String                               // absolute, standardized
@@ -198,12 +198,11 @@ enum ProtectionPolicy {
     /// the pattern comes first, then the programs expected there (the pattern's risk already says so), then the
     /// card's choice for everyone else.
     static func decideFile(pattern: String, status: SignatureStatus, risk: PatternRisk,
-                           settings: [String: ProtectedGroupSetting], actor: String = "") -> ProtectionDecision? {
+                           settings: [String: ProtectedGroupSetting]) -> ProtectionDecision? {
         guard let label = label(of: pattern), let group = ProtectedGroup.group(forLabel: label) else { return nil }
         let setting = settings[group.id] ?? ProtectedGroupSetting()
         guard setting.on else { return nil }
         if group.writesOnly, pattern.split(separator: " ").first?.contains("w") != true { return nil }
-        if let v = setting.exceptions.verdict(for: actor) { return exception(v, actor, group.id) }
         switch status {
         case .dangerous, .suspicious:
             return .init(verdict: .block, reason: "its pattern is marked \(status.title)", group: group.id)
@@ -219,9 +218,8 @@ enum ProtectionPolicy {
     /// on the pattern first, then macOS's own programs (Finder, Spotlight, backups) pass, then the place's choice.
     static func decideCustom(path: String, actor: String, status: SignatureStatus, places: [CustomPlace],
                              hostwatch: String = Bundle.main.executablePath ?? "") -> ProtectionDecision? {
-        // The deepest place that covers it: a folder inside a protected folder has its own exceptions.
+        // The deepest place that covers it: a folder inside a protected folder has its own choice.
         guard let place = places.filter({ $0.on && $0.covers(path) }).max(by: { $0.path.count < $1.path.count }) else { return nil }
-        if let v = place.exceptions.verdict(for: actor) { return exception(v, actor, place.groupID) }
         switch status {
         case .dangerous, .suspicious:
             return .init(verdict: .block, reason: "its pattern is marked \(status.title)", group: place.groupID)
@@ -235,9 +233,28 @@ enum ProtectionPolicy {
         return .init(verdict: place.others, reason: "\(place.name): protected by you", group: place.groupID)
     }
 
-    private static func exception(_ v: ProtectionVerdict, _ actor: String, _ group: String) -> ProtectionDecision {
-        let who = PlaceExceptions.name(actor)
-        return .init(verdict: v, reason: v == .allow ? "you always allow \(who) here" : "you always block \(who) here", group: group)
+    /// A file access, all rules together: nil when no rule covers it. The order (ADR 0021): Hostwatch itself, the
+    /// app's own places (the most specific), its Every protected place ▸ Block or Allow, then General (the built-in
+    /// places, then yours). An app's place needs no protection in General.
+    static func decideFileAccess(path: String, actor: String, pattern: String, status: SignatureStatus, risk: PatternRisk,
+                                 writes: Bool, settings: [String: ProtectedGroupSetting], places: [CustomPlace],
+                                 apps: [AppFileRules], home: String = NSHomeDirectory(),
+                                 hostwatch: String = Bundle.main.executablePath ?? "") -> ProtectionDecision? {
+        let general = decideFile(pattern: pattern, status: status, risk: risk, settings: settings)
+            ?? decideCustom(path: path, actor: actor, status: status, places: places, hostwatch: hostwatch)
+        if !hostwatch.isEmpty, actor == hostwatch { return general.map { .init(verdict: .allow, reason: "Hostwatch itself", group: $0.group) } }
+        guard let app = AppFileRulesList.rules(for: actor, in: apps) else { return general }
+        let group = label(of: pattern).flatMap(ProtectedGroup.group(forLabel:))?.id
+        if var own = app.decision(path: path, group: group, writes: writes, home: home) {
+            own.group = general?.group
+            return own
+        }
+        guard let general else { return nil }
+        switch app.everywhere {
+        case .block: return .init(verdict: .block, reason: "you block \(app.name) in every protected place", group: general.group)
+        case .allow: return .init(verdict: .allow, reason: "you allow \(app.name) in every protected place", group: general.group)
+        case .decides: return general
+        }
     }
 
     /// What a mode does with a decision: nil when nothing is shown or done. Strict turns a question into a block,
