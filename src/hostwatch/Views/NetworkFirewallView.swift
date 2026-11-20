@@ -244,7 +244,7 @@ struct NetworkFindingRow: View {
     }
 }
 
-/// General: the rules for every program, shaped like protected places. A domain (its subdomains too) or an IP and what
+/// Global rules: the rules for every program, shaped like protected places. A domain (its subdomains too) or an IP and what
 /// every program meets there (Firewall decides, Allow or Block). One app's rules are on its card (`AppRulesSection`).
 struct DestinationsSection: View {
     @ObservedObject var protection: ProtectionMonitor
@@ -295,7 +295,7 @@ struct DestinationsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("General").font(.headline)
+                RuleSections.heading(global: true)
                 Spacer()
                 Button { adding.open = true } label: { Label("Add Domain or Address…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
@@ -324,7 +324,7 @@ struct DestinationsSection: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .protectionGlass(16)
+        .globalRulesGlass()
     }
 
     private var addRow: some View {
@@ -392,7 +392,7 @@ final class DestinationDraft: ObservableObject {
     @Published var text = ""
 }
 
-/// General's first card, always there: every destination, your network too, shaped like the others. Any program:
+/// The Global rules' first card, always there: every destination, your network too, shaped like the others. Any program:
 /// Firewall decides (the default) or Block, every program's traffic but the apps whose own card allows them everywhere.
 struct EverywhereCard: View {
     @ObservedObject var firewall: FirewallMonitor

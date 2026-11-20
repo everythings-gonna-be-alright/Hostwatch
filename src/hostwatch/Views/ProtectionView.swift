@@ -76,12 +76,12 @@ struct ProtectionView: View {
         }
     }
 
-    /// General: the places protected for every program, each with the programs expected there and what any other
-    /// program meets. One app's own rules are on its card under Apps.
+    /// Global rules: the places protected for every program, each with the programs expected there and what any other
+    /// program meets. One app's own rules are on its card under App rules.
     private var general: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("General").font(.headline)
+                RuleSections.heading(global: true)
                 Spacer()
                 Button { addPlaces() } label: { Label("Add Folder or File…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
@@ -99,7 +99,7 @@ struct ProtectionView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .protectionGlass(16)
+        .globalRulesGlass()
     }
 
     /// A standard Open panel: folders and files, several at once.
@@ -274,6 +274,27 @@ extension View {
     }
 }
 
+/// Global rules wear a light blue: they apply to every program, a scope, not a status (DESIGN.md ▸ Glass). Blue is the
+/// one colour no status uses, fixed rather than the accent, which can be graphite.
+enum RuleSections {
+    static let global = Color.blue
+
+    /// "Global rules" with its globe, or "App rules": the two sections' headings on the files and firewall pages.
+    static func heading(global: Bool) -> some View {
+        Label {
+            Text(global ? "Global rules" : "App rules").font(.headline)
+        } icon: {
+            Image(systemName: global ? "globe" : "app.badge.checkmark")
+                .foregroundStyle(global ? Self.global : Color.secondary)
+        }
+    }
+}
+
+extension View {
+    /// The Global rules section's panel: glass with the scope's light blue.
+    func globalRulesGlass() -> some View { protectionGlass(16, tint: RuleSections.global.opacity(0.10)) }
+}
+
 /// Found ▸ Forget: clears a long list at once. Only the entries go: decisions, rules and patterns stay, and anything
 /// that happens again comes back. Old entries also leave by themselves (`after` says when).
 struct ForgetMenu: View {
@@ -334,7 +355,7 @@ struct PlaceChoices<Choice: Hashable>: View {
     let options: [(Choice, String)]
     @Binding var exceptions: PlaceExceptions
     let place: String
-    /// False on General's cards: what one app meets lives on that app's own card.
+    /// False on the Global rules cards: what one app meets lives on that app's own card.
     var showsPrograms = true
     /// Who the choice is for, when not the default ("Every program" without programs).
     var othersLabel: String? = nil

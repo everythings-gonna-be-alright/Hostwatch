@@ -27,14 +27,14 @@ struct AppRulesSection: View {
         let cards = firewall.apps + extra
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Apps").font(.headline)
+                RuleSections.heading(global: false)
                 Spacer()
                 Button { ProgramPicker.choose(add) } label: { Label("Add App…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
                     .help("Rules for one app or command-line program")
             }
             Text("Rules for one app (an app covers every program inside it): what it meets everywhere, its own "
-                 + "domains and addresses, and the connections you blocked. They win over General. Always Block and "
+                 + "domains and addresses, and the connections you blocked. They win over Global rules. Always Block and "
                  + "Allow Anyway in a firewall question add the destination here.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if cards.isEmpty {
@@ -116,7 +116,7 @@ private struct AppRulesCard: View {
         if blocked > 0 { parts.append("\(blocked) blocked") }
         if allowed > 0 { parts.append("\(allowed) allowed") }
         if !again.isEmpty { parts.append("\(again.count) asked again") }
-        return parts.isEmpty ? "No rules yet: General applies" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "No rules yet: Global rules apply" : parts.joined(separator: " · ")
     }
 
     // MARK: Everywhere
@@ -143,8 +143,8 @@ private struct AppRulesCard: View {
 
     private var everywhereText: String {
         switch rules.everywhere {
-        case .firewall: return "General applies, then threat lists and patterns."
-        case .allow: return "Allowed, also past General's Everywhere Block. Not past a threat list or a General destination you block."
+        case .firewall: return "Global rules apply, then threat lists and patterns."
+        case .allow: return "Allowed, also past the global Everywhere Block. Not past a threat list or a global destination you block."
         case .block: return "Every connection is blocked, your network too, but the destinations you allow below."
         }
     }

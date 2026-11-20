@@ -10,15 +10,15 @@ struct AppFileRulesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Apps").font(.headline)
+                RuleSections.heading(global: false)
                 Spacer()
                 Button { ProgramPicker.choose(add) } label: { Label("Add App…", systemImage: "plus") }
                     .buttonStyle(.glass).controlSize(.small)
                     .help("Rules for one app or command-line program")
             }
             Text("Rules for one app (an app covers every program inside it): what it meets in every protected place, and "
-                 + "its own places, built-in or any folder or file. They win over General. A place here needs no "
-                 + "protection in General.")
+                 + "its own places, built-in or any folder or file. They win over Global rules. A place here needs no "
+                 + "protection in Global rules.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if protection.appFiles.isEmpty {
                 Text("None yet. Add an app to give it its own rules.").font(.callout).foregroundStyle(.secondary)
@@ -74,7 +74,7 @@ private struct AppFileRulesCard: View {
         let allowed = rules.places.count - blocked
         if blocked > 0 { parts.append("\(blocked) blocked") }
         if allowed > 0 { parts.append("\(allowed) allowed") }
-        return parts.isEmpty ? "No rules yet: General applies" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "No rules yet: Global rules apply" : parts.joined(separator: " · ")
     }
 
     // MARK: Every protected place
@@ -90,7 +90,7 @@ private struct AppFileRulesCard: View {
                     ForEach(Self.everywhereOptions, id: \.0) { Text($0.1).tag($0.0) }
                 }
                 .labelsHidden().fixedSize().controlSize(.small)
-                .help("What \(rules.name) meets in General's places wherever none of its own places decides")
+                .help("What \(rules.name) meets in the places Global rules protect wherever none of its own places decides")
             }
             Text(everywhereText).font(.caption)
                 .foregroundStyle(rules.everywhere == .block ? Color.red : Color.secondary)
@@ -101,9 +101,9 @@ private struct AppFileRulesCard: View {
 
     private var everywhereText: String {
         switch rules.everywhere {
-        case .decides: "General applies: the programs expected there pass, then patterns and each place's choice."
-        case .allow: "Allowed in every place General protects, before patterns and each place's choice."
-        case .block: "Blocked from every place General protects, even where it's expected, but the places you allow below."
+        case .decides: "Global rules apply: the programs expected there pass, then patterns and each place's choice."
+        case .allow: "Allowed in every place Global rules protect, before patterns and each place's choice."
+        case .block: "Blocked from every place Global rules protect, even where it's expected, but the places you allow below."
         }
     }
 

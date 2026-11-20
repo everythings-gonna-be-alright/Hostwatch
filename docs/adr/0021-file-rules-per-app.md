@@ -21,6 +21,8 @@ The first rule that decides wins (`ProtectionPolicy.decideFileAccess`):
 Every protected place means the places General protects, not every file: an app blocked from every file couldn't
 run. A place on an app's card needs no protection in General, so one app can be kept out of a folder others use.
 
+On the page the sections are named **Global rules** and **App rules**, as on the firewall's.
+
 **The collector.** It still gets places with lists (`HoldPlace`): an app allowed or blocked in a whole place is on
 its lists and answered without the app. An app with rules of its own inside a place isn't listed there, so the app
 decides. An app's own folders and files are held as places of their own, keeping the lists of the place around them,

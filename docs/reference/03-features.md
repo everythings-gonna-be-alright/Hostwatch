@@ -516,7 +516,7 @@ blocked destination you get **Allow Instead**, and **Show Program in Finder** ta
 **On a threat list.** A destination a threat list names is blocked whatever you decided, and says *On a threat list*
 with the list's reason. Shared hosts (GitHub's raw files, cloud storage) are sometimes listed for one bad file:
 *Allow Anyway…* asks once, explains the risk, and then lets that one program reach that domain: an Allow on the
-program's card in *Network Firewall ▸ Apps*. *Undo Allow Anyway* takes it back.
+program's card in *Network Firewall ▸ App rules*. *Undo Allow Anyway* takes it back.
 
 Right-click a row to **Mark Known** or mark as not known, to Block or Allow, to copy, or to **Forget** the domain.
 
@@ -585,7 +585,7 @@ the list can't show: who tried to reach this Mac.
   - Program and domain blocks are the firewall's, so they stop connections on Ask or Strict. On Watch the map says
     it will only show what it would block.
   - **Everything you blocked is listed in Protection ▸ Network:** domains, addresses, devices and ports in *Your
-    destinations*, what one program may reach on its card in *Apps*, each with its way to unblock. *Add Domain or Address…* there adds one by
+    destinations*, what one program may reach on its card in *App rules*, each with its way to unblock. *Add Domain or Address…* there adds one by
     typing it, and an address's card offers *Block both ways*.
 - **Details:** the panel on the right shows what you selected.
   - A device: its model, maker, all its addresses, its status, when it was first seen, whether its hardware address
@@ -704,12 +704,12 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
   still judged. *Always Allow* marks the connection's pattern Safe. Unblock on the app's card is in effect at once.
 - **Strict:** something new is refused.
 
-**General and Apps.** The *Network Firewall* page has your rules in two sections built the same way.
-- **General** is for every program. Its first card, **Everywhere**, covers every destination, your network too:
+**Global rules and App rules.** The *Network Firewall* page has your rules in two sections built the same way.
+- **Global rules** are for every program. The section is tinted light blue, with a globe beside its name. Its first card, **Everywhere**, covers every destination, your network too:
   **Firewall decides** (the default) or **Block**, which blocks every program's traffic but the apps you allow
   everywhere. Below it, specific domains (their subdomains too) and addresses, each **Firewall decides**, **Allow** or
   **Block**.
-- **Apps** has one card per app. *Add App…* picks an app (it covers every program inside it) or a command-line
+- **App rules** has one card per app. *Add App…* picks an app (it covers every program inside it) or a command-line
   program. A card has its own **Everywhere** (Firewall decides, Allow or Block) and its own domains and addresses,
   each Allow or Block. Click a card's bar to open or close it: closed, it reads like "Blocked everywhere · 2 allowed".
   *Always Block* and *Allow Anyway* in a firewall question add the destination to the app's card, Block or Allow.
@@ -720,14 +720,14 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
 The first rule that decides wins:
 1. The app's own domains and addresses, the most specific one.
 2. The app's Everywhere ▸ Block, your network too.
-3. General's domains and addresses.
+3. The global domains and addresses.
 4. The app's Everywhere ▸ Allow. A threat list still blocks it unless you chose *Allow Anyway* for that domain.
-5. General's Everywhere ▸ Block.
+5. The global Everywhere ▸ Block.
 
-So an app's own rules win over General, but an app you allow everywhere still meets a domain General blocks, and an
+So an app's own rules win over Global rules, but an app you allow everywhere still meets a domain the Global rules block, and an
 app you block everywhere still reaches what its own card allows. Like every firewall rule, they stop connections in
 Ask and Strict, and Watch lists them as would block. A change is in effect at once: a connection already open
-finishes. Hostwatch itself is never blocked. Program exceptions on General's cards from older versions moved to the
+finishes. Hostwatch itself is never blocked. Program exceptions on the global cards from older versions moved to the
 apps' cards.
 
 > [!WARNING]
@@ -823,7 +823,7 @@ Watch everywhere when all is off, then **Pause for 15 Minutes** or **Resume**), 
 what the chosen one does, today's numbers and how many it found, and links to the other pages. *Found* there shows
 both numbers the sidebar uses: what would be stopped, and everything to review. The Help button explains the modes
 and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
-included. *Protected Files and Folders* has General (the cards and your own places) and Apps, *Found* what the
+included. *Protected Files and Folders* has Global rules (the cards and your own places) and App rules, *Found* what the
 rehearsal found.
 
 Each area's card has a chart: what was stopped (or would be) in red, what was asked about (or would be) in grey.
@@ -835,7 +835,7 @@ Graph. The firewall's chart counts new destinations by when they were first seen
 The firewall is the third area, beside Launches and Files. The Overview's *Network* card has its four modes and the
 same two numbers (what it blocks or would, what it asks about or would). The *Network Firewall* page has the mode
 with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge counts
-them), **General** and **Apps** (every rule you made, on its card), how many connections are left to decide with
+them), **Global rules** and **App rules** (every rule you made, on its card), how many connections are left to decide with
 **Review in Found**, and how it decides. *Forget Seen Connections…* (in the ⋯ menu, with a confirmation) starts the list of seen
 connections again and never touches a rule. *Found* is the one place to decide what the firewall found, under
 launches and files, with *Allow* and *Block*, and its badge counts all three. A long section opens in full with
@@ -845,23 +845,23 @@ Hostwatch can show what it would stop: a launch, or a program reading places lik
 the firewall does. Your decision on the pattern comes first, then its risk, then macOS's own programs pass. Shells,
 curl and other programs that run whatever they're told are judged by what they run.
 
-- **General and Apps for files:** the *Protected Files and Folders* page is built like the firewall's. **General**
-  is for every program: each protected place, a built-in group or one of your folders and files, reads as a
-  sentence, the programs expected there (they always pass) and *Any other program: Ask me or Block*. **Apps** has one
+- **Global rules and App rules for files:** the *Protected Files and Folders* page is built like the firewall's. **Global rules**
+  are for every program (tinted light blue, as on the firewall's page): each protected place, a built-in group or one of your folders and files, reads as a
+  sentence, the programs expected there (they always pass) and *Any other program: Ask me or Block*. **App rules** has one
   card per app (*Add App…*, an app covers every program inside it). A card has **Every protected place**
-  (*Protection decides*, *Allow* or *Block*, for the places General protects) and its own places, each Allow or
+  (*Protection decides*, *Allow* or *Block*, for the places Global rules protect) and its own places, each Allow or
   Block, added with **Add Place** ▸ *Allow In* or *Block From*: a built-in place, or any folder or file. A place on an
-  app's card needs no protection in General: *Block From ~/taxes* keeps that one app out and lets every other program
+  app's card needs no protection in Global rules: *Block From ~/taxes* keeps that one app out and lets every other program
   in. The first rule that decides wins: the app's own places (the most specific, so SSH keys over your home folder),
-  then its Every protected place, then General (your decision on the pattern, the programs expected there, the
+  then its Every protected place, then Global rules (your decision on the pattern, the programs expected there, the
   place's choice). Programs you always allowed or blocked in a place before are on their cards now. Block acts in Ask
-  and Strict and shows as "would block" in Watch. To block every program from a folder, protect it in General and set
+  and Strict and shows as "would block" in Watch. To block every program from a folder, protect it in Global rules and set
   *Any other program* to *Block*.
-- **General destinations:** on the *Network Firewall* page, General's *Add Domain or Address…* takes a domain (its
+- **Global destinations:** on the *Network Firewall* page, *Add Domain or Address…* in Global rules takes a domain (its
   subdomains too) or an IP address, with what every program meets there: *Firewall decides, Allow or Block*. They are
   your decisions, so they come before threat lists and patterns. The most specific destination decides
   (`api.example.com` over `example.com`). *Firewall decides* leaves it to your firewall mode. What one app meets is on
-  its own card under Apps, which wins over these. An address has a fourth choice, **Block both ways**: nothing reaches
+  its own card under App rules, which wins over these. An address has a fourth choice, **Block both ways**: nothing reaches
   this Mac from it or goes to it, whatever the firewall's mode, with no exceptions (not for the router or this Mac).
   The devices and ports you blocked from the network map are in the same list.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
@@ -895,7 +895,7 @@ curl and other programs that run whatever they're told are judged by what they r
   (writes only). The programs expected there pass. For everyone else a card asks, or blocks. A card can be off.
 - **Your folders and files:** *Add Folder or File…* protects any folder (and everything inside it) or a single file.
   Only macOS's own programs (Finder, Spotlight, backups) pass without asking. Each has its own switch, Ask or Block,
-  and a remove button. Allow a program there on its card under Apps, or by marking its pattern Safe.
+  and a remove button. Allow a program there on its card under App rules, or by marking its pattern Safe.
 - **What protection found:** each launch or file access that would be stopped or asked about, folded by pattern.
   *Allow* marks the pattern Safe, *Block* marks it Dangerous, and it leaves the list. Deciding it anywhere else does
   the same.

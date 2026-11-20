@@ -61,7 +61,10 @@ the ones a machine can check.
   only style: glass drawn apart is blurred again on every frame of the Dock's minimize animation, and the map and
   Stories dropped frames until theirs was grouped.
 - **Don't put glass on glass.** A form inside a glass card uses a plain quaternary fill.
-- **Tint glass only to carry state** (the status panel's green, purple or orange, an orange warning panel).
+- **Tint glass only to carry state** (the status panel's green, purple or orange, an orange warning panel). The one
+  exception is scope: the **Global rules** sections (Protected Files and Folders, Network Firewall) wear a light,
+  fixed blue (`globalRulesGlass`, `RuleSections.global`), with a globe beside the heading so the colour is never
+  alone. Blue because no status uses it, fixed because the accent can be graphite. Nothing else is blue.
 
 ## 6. Words
 
