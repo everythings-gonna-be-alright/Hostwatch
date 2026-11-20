@@ -232,7 +232,12 @@ struct NetworkFindingRow: View {
                 }
                 .help(blockedDomain.map { "Unblocks \($0) for \(entry.name) and marks the pattern Safe" } ?? "Marks the pattern Safe")
             }
-            Button("Block") { mark(.dangerous) }
+            Button("Block") {
+                // Only this destination for this program: its pattern is often the whole web.
+                if firewall?.blockDestination(entry.facts) != true { mark(.dangerous) }
+            }
+            .help(firewall != nil ? "Blocks \(entry.destination) for \(entry.name). Its other destinations are judged as usual"
+                                  : "Marks the pattern Dangerous")
         }
         .controlSize(.small)
         .padding(.vertical, 4)
@@ -265,7 +270,9 @@ struct FirewallRulesSection: View {
             if !blocks.isEmpty || !patterns.isEmpty {
                 group("Blocked", symbol: "nosign", tint: .red) {
                     ForEach(blocks) { r in
-                        line(program: r.program, what: r.destination, detail: "every connection to this domain") {
+                        line(program: r.program, what: r.destination,
+                             detail: r.destination.contains(":") || r.destination.allSatisfy({ $0.isNumber || $0 == "." })
+                                 ? "every connection to this address" : "every connection to this domain") {
                             Button("Unblock") { firewall.remove(r) }
                         }
                     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web
+  pattern (`TCP internet:443`) Suspicious, which cut the program off from every site. It now blocks just the domain,
+  or the address when the connection has no name, and the program's other destinations are judged as usual. Block
+  in the Network Firewall list works the same way.
+- **Unblock is in effect at once.** Clearing or deciding a connection pattern (Unblock in Your rules, or in
+  Patterns) makes the collector forget its remembered answer, instead of waiting up to a minute.
+
 ## 0.20.0 – Who did it
 
 ### New

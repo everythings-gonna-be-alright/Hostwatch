@@ -400,11 +400,25 @@ final class FirewallMonitor: ObservableObject {
         f.host.isEmpty ? nil : DomainRegistry.registrable(f.host) ?? f.host.lowercased()
     }
 
-    /// The domain you blocked for this connection's program, if this connection goes there.
+    /// Where this connection goes, as one destination you can block: its domain, else its address.
+    nonisolated static func destination(of f: FirewallFacts) -> String? {
+        domain(of: f) ?? (f.ip.isEmpty || f.ip == "?" ? nil : f.ip)
+    }
+
+    /// The domain (or address) you blocked for this connection's program, if this connection goes there.
     func blockedDomain(_ f: FirewallFacts) -> String? {
-        guard !domainBlocks.isEmpty, let domain = Self.domain(of: f),
-              domainBlocks.contains(Self.domainBlockKey(program: f.program, domain: domain)) else { return nil }
-        return domain
+        guard !domainBlocks.isEmpty, let destination = Self.destination(of: f),
+              domainBlocks.contains(Self.domainBlockKey(program: f.program, domain: destination)) else { return nil }
+        return destination
+    }
+
+    /// Always Block on one connection: only its destination, for its program. Its pattern is usually the whole web
+    /// (`TCP internet:443`), and marking that would cut the program off everywhere. False when it has no destination.
+    @discardableResult
+    func blockDestination(_ f: FirewallFacts) -> Bool {
+        guard let destination = Self.destination(of: f) else { return false }
+        setBlocked(true, domain: destination, program: f.program)
+        return true
     }
 
     // MARK: Asked about again after Forget
@@ -625,10 +639,18 @@ final class FirewallMonitor: ObservableObject {
     /// others the same run of the program opens right after: no pattern is marked, so the next time asks.
     func resolve(_ id: UUID, allow: Bool, once: Bool = false) {
         guard let prompt = prompts.first(where: { $0.id == id }) else { return }
-        let same = prompts.filter { $0.patternKey == prompt.patternKey }
+        // Always Block decides one destination, not the pattern: only the questions about that destination go.
+        let facts = !allow && !once ? Self.facts(prompt.event) : nil
+        let destination = facts.flatMap { Self.destination(of: $0) }
+        let same = prompts.filter { p in
+            p.patternKey == prompt.patternKey
+                && (destination == nil || Self.facts(p.event).flatMap { Self.destination(of: $0) } == destination)
+        }
         prompts.removeAll { p in same.contains { $0.id == p.id } }
         dropAdvice(same.map(\.id))
-        if !once {
+        if let facts, destination != nil {
+            blockDestination(facts)
+        } else if !once {
             markPattern(prompt.patternKey, allow ? .safe : .suspicious)
             decided(patternKeys: [prompt.patternKey])
         } else {
