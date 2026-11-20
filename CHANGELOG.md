@@ -1,43 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 – Rules per app
 
 ### New
 
-- **Firewall rules per app.** The Network Firewall page now has Global rules, for every program (tinted light blue),
-  and App rules: one card per app with its own Everywhere (Firewall decides, Allow or Block) and its own domains and
-  addresses. An app's own rules win over the global ones. Everything one app may reach is on its card: the program
-  chips on the global cards, the apps
-  you always allowed or blocked everywhere, the domains you blocked from a question, what you allowed despite a
-  threat list, and the connection patterns you blocked. The separate Your rules list is gone.
-- **File rules per app.** Protected Files and Folders is built the same way: Global rules, for every program, and App
-  rules, one card per app with Every protected place (Protection decides, Allow or Block) and its own places, a built-in one
-  or any folder or file. An app's own places win over the global ones, and a place on its card needs no protection
-  in Global rules, so one app can be kept out of a folder every other program may open. The program chips on the places
-  moved onto the cards.
-
-- **Files and Network Firewall pages built like the Overview.** Each opens with a header in its own colour (indigo for
-  files, teal for the firewall), its state as a pill, the mode and five facts (protected places, app rules, where most was found, the last stop, what waits, or for the firewall
-  what it blocked and passed, your rules, the relay and this network). Then the area's activity chart beside what it
-  found most, with Review in Found, and below them the global and app rules.
-
-- **A new Found page.** Everything to decide, grouped by program with the ones that would be stopped first: filter by
-  area and by would stop or question, search, sort, and Decide All for a whole program. Allow, Block and Forget take
-  an entry off the list at once (it waited up to a second before), and only the rows in view are drawn, so a long
-  list stays quick. Programs keep their place while you decide, instead of jumping when their counts change.
+- **Rules for each app.** Give one app its own firewall and file rules: what it may reach, which folders it may
+  open. They win over the global rules, which apply to every program.
+- **Clearer Protection pages.** Files and Network Firewall each open with their state, their activity and what they
+  found most.
+- **A faster Found page.** Grouped by program, with filters, search and Decide All. An entry leaves the moment you
+  click, and the list stays in place.
 
 ### Fixes
 
-- **YouTube is no longer called a malware site.** A list naming `www.youtube.com` (ThreatFox lists YouTube links used
-  as lures) flagged it, because only the bare `youtube.com` was never flagged. Every name under the big social and
-  video networks, and under Apple's, Google's and Microsoft's own domains, is now never flagged. Hosting platforms
-  where anyone gets a subdomain stay matchable. The stories and threat-log entries made this way are removed at launch.
-- **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web
-  pattern (`TCP internet:443`) Suspicious, which cut the program off from every site. It now blocks just the domain,
-  or the address when the connection has no name, and the program's other destinations are judged as usual. Block
-  in the Network Firewall list works the same way.
-- **Unblock is in effect at once.** Clearing or deciding a connection pattern (Unblock on an app's card, or
-  in Patterns) makes the collector forget its remembered answer, instead of waiting up to a minute.
+- YouTube and other big social networks are no longer flagged as malware.
+- Always Block in a firewall question blocks only that site, not the program's whole internet.
+- Unblocking takes effect at once.
 
 ## 0.20.0 – Who did it
 
