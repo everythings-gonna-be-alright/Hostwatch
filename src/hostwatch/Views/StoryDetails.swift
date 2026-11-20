@@ -165,11 +165,14 @@ struct StoryDetailView: View {
             if scrollable { ScrollView { page } } else { page }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+        // Soft colour for the glass to pick up, as on the Network page: the story's severity first.
+        .background { SoftBackdrop(colors: [story.severity.color.opacity(0.14), Color.indigo.opacity(0.10), Color.teal.opacity(0.08)]) }
         .frame(minWidth: 680, minHeight: 560)
     }
 
     private var page: some View {
-        GlassEffectContainer(spacing: 14) {
+        // Spacing 0: the cards stand 14 apart, and a container merges glass closer than its spacing.
+        GlassEffectContainer(spacing: 0) {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 timeline
@@ -260,6 +263,7 @@ struct StoryDetailView: View {
     private var processCard: some View {
         Card(title: "Processes in this chain", symbol: "arrow.triangle.branch") {
             ForEach(details.processes, id: \.pid) { p in
+                // Plain tiles on the card's glass, like the map's.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(String(repeating: "    ", count: details.depth(p.pid)) + (details.depth(p.pid) > 0 ? "└ " : ""))
                         .font(.system(.callout, design: .monospaced)).foregroundStyle(.tertiary)
@@ -274,6 +278,8 @@ struct StoryDetailView: View {
                     }
                 }
                 .font(.callout)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
             }
         }
     }
@@ -282,8 +288,8 @@ struct StoryDetailView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 8) {
-            Button { actions.askStory(story) } label: { Label("Ask AI About This Story", systemImage: "sparkles") }
-                .buttonStyle(.glassProminent)
+            // The AI action, as Classify with AI and Ask AI: violet light inside the glass when you reach it.
+            AIGlowButton(title: "Ask AI About This Story") { actions.askStory(story) }
             if story.steps.contains(where: { $0.pid > 0 }) {
                 Button { actions.showStoryInTimeline(story) } label: { Label("Show in Timeline", systemImage: "clock.arrow.circlepath") }
                     .buttonStyle(.glass)

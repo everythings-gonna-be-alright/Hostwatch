@@ -48,6 +48,10 @@ struct ActivityEvent: Identifiable, Decodable {
     let args: String             // exec only: command line, secrets masked by the collector
     let inferred: Bool           // net only: seen via traffic stats after it closed; target inferred
     let note: String             // collector's remark (e.g. why a connection is inferred)
+    /// Who did it: the app macOS holds responsible for the process ("" when it's responsible for itself), and the
+    /// nearest AI agent above it (Claude Code in a terminal leaves Terminal responsible). Paths, from the collector.
+    var responsible = ""
+    var agent = ""
     var pstart: Double = 0       // exec only: when the process started (s since 1970), 0 if unknown
     var ts: Double = 0           // when it was recorded (s since 1970), 0 if unknown
     private(set) var signatureKey = ""
@@ -69,17 +73,20 @@ struct ActivityEvent: Identifiable, Decodable {
     var networkSignal: Bool { !newDomain.isEmpty || !beacon.isEmpty || rawIP }
 
     enum CodingKeys: String, CodingKey {
-        case kind, time, pid, ppid, name, proc, target, extra, parent, host, args, inferred, note, pstart
+        case kind, time, pid, ppid, name, proc, target, extra, parent, host, args, inferred, note, pstart, agent
         case hostSource = "host_src"
+        case responsible = "resp"
     }
 
     init(kind: EventKind, time: String, pid: Int, ppid: Int, name: String,
-         proc: String, target: String, extra: String, parent: String, host: String = "", hostSource: String = "", args: String = "") {
+         proc: String, target: String, extra: String, parent: String, host: String = "", hostSource: String = "", args: String = "",
+         responsible: String = "", agent: String = "") {
         self.kind = kind; self.time = time; self.pid = pid; self.ppid = ppid
         self.name = versionedProgramName(proc) ?? name     // "claude", not "2.1.327"
         self.proc = proc; self.target = target; self.extra = extra; self.parent = parent
         self.host = host; self.hostSource = hostSource; self.args = args
         self.inferred = false; self.note = ""
+        self.responsible = responsible; self.agent = agent
         applySignature()
     }
 
@@ -101,6 +108,8 @@ struct ActivityEvent: Identifiable, Decodable {
         inferred = ((try? c.decodeIfPresent(Bool.self, forKey: .inferred)) ?? nil) ?? false
         note = ((try? c.decodeIfPresent(String.self, forKey: .note)) ?? nil) ?? ""
         pstart = ((try? c.decodeIfPresent(Double.self, forKey: .pstart)) ?? nil) ?? 0
+        responsible = ((try? c.decodeIfPresent(String.self, forKey: .responsible)) ?? nil) ?? ""
+        agent = ((try? c.decodeIfPresent(String.self, forKey: .agent)) ?? nil) ?? ""
         applySignature()
     }
 
@@ -141,6 +150,7 @@ struct ActivityEvent: Identifiable, Decodable {
         inferred = (r["inferred"] as? NSNumber)?.boolValue ?? false
         note = str("note")
         pstart = (r["pstart"] as? NSNumber)?.doubleValue ?? 0
+        responsible = str("resp"); agent = str("agent")
         if let stamp = r["ts"] as? String, let date = HistoryArchive.parseISO(Data(stamp.utf8)) {
             ts = date.timeIntervalSince1970
         }

@@ -62,3 +62,38 @@ struct AlwaysSafe: LocalTriageModel {
         #expect(TriagePrompt.warningSigns(entry, context: nil).contains { $0.hasPrefix("reopened because") })
     }
 }
+
+/// A local model that takes a moment, so a run can be cancelled while it's asking.
+struct SlowSafe: LocalTriageModel {
+    func status() -> LocalModelStatus { .ready }
+    func triage(_ prompt: String) async throws -> LocalVerdict {
+        try await Task.sleep(for: .milliseconds(30))
+        return LocalVerdict(verdict: .safe, confidence: .high, reason: "fine")
+    }
+}
+
+/// Cancelling Classify with AI never blocks the next one (it used to stop before asking anything, on "Cancelled.").
+@MainActor @Suite struct ClassifyAfterCancel {
+    @Test func theNextRunAfterACancelClassifies() async throws {
+        let store = SignatureStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("cancel-\(UUID().uuidString)"))
+        store.autoAcceptAI = false
+        let events = ["/go/bin/aaa", "/go/bin/bbb"].map { NSHomeDirectory() + $0 }.map {
+            ActivityEvent(kind: .exec, time: "12:00:00", pid: 10, ppid: 9, name: ($0 as NSString).lastPathComponent,
+                          proc: $0, target: $0, extra: "", parent: "/bin/bash", args: ($0 as NSString).lastPathComponent + " -r x")
+        }
+        for e in events { _ = store.observe(e) }
+        let keys = Set(events.map(\.signatureKey))
+        let c = PatternClassifier(store: store, localModel: SlowSafe())
+        c.engine = .onDevice
+        c.classifyAll(apply: true, only: keys)
+        #expect(c.running)
+        c.cancelAll()
+        #expect(!c.running && c.bulk == nil && c.lastMessage == "Cancelled.")
+
+        c.classifyAll(apply: true, only: keys)
+        #expect(c.bulk != nil && c.running)                        // it starts, instead of stopping at once
+        for _ in 0..<60 where c.bulk != nil || c.running { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(keys.allSatisfy { store.status(forKey: $0) == .safe })
+        #expect(c.lastMessage.hasPrefix("Classified 2 patterns, verdicts applied"))
+    }
+}

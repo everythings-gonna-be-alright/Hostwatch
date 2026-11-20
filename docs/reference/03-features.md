@@ -20,6 +20,15 @@ one **pattern**. There are three kinds:
 | connection | process → proto, host bucket, port | `Slack → TCP internet:443`, `curl → TCP 45.33.*.*:8081` |
 | file | process → mode, folder or file | `rg → r ~/Documents/work/src/*`, `rg → r ~/todo.txt`, `agent → r ~/.ssh/*  [SSH keys]`, `mds → r *  [ordinary files]` |
 
+**Who did it, for tools and interpreters.** When the program alone says little (node, python, bash and other
+shells, git, curl), its pattern also names the app or AI agent behind it: `node via Cursor → r ~/proj/.git/*`,
+`zsh via Claude Code → /bin/cat`. A Safe for one says nothing about the other. Who is only named when it's proven
+from what the kernel reports: an AI agent above the process, recognised by its code signature (Claude Code), else,
+when every process up to launchd is known and none of them looks like an agent, the app macOS holds responsible for
+it. Anything not proven (a link not seen, an agent that runs as a script like Codex) names nobody. Decisions made before
+patterns named who carry over: each new one starts with the decision its pattern had, and your rules that don't
+name who still match the program from anyone. Apps keep their plain patterns.
+
 **Normalization** removes the parts that vary, so similar events really match. Your home folder becomes `~`.
 `$TMPDIR`, UUIDs, hex IDs and version numbers become placeholders, in executable names too
 (`claude/versions/#.#.#`).
@@ -575,9 +584,9 @@ the list can't show: who tried to reach this Mac.
   - **A domain:** *Block example.com* adds it to your destinations in Protection, blocked for any program.
   - Program and domain blocks are the firewall's, so they stop connections on Ask or Strict. On Watch the map says
     it will only show what it would block.
-  - **Everything you blocked is listed in Protection ▸ Network:** domains in *Your destinations*, programs in *Your
-    rules*, and devices, addresses and ports in *Blocked devices and addresses*, each with *Unblock*. *Block an
-    Address…* there blocks one by typing it.
+  - **Everything you blocked is listed in Protection ▸ Network:** domains, addresses, devices and ports in *Your
+    destinations*, programs in *Your rules*, each with its way to unblock. *Add Domain or Address…* there adds one by
+    typing it, and an address's card offers *Block both ways*.
 - **Details:** the panel on the right shows what you selected.
   - A device: its model, maker, all its addresses, its status, when it was first seen, whether its hardware address
     is private, the programs on this Mac that connected to it and its tries by port. *Mark as Mine* means it is never
@@ -693,6 +702,15 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
 - **Ask:** something new waits, with no time limit, while a window asks you **Allow / Block**.
 - **Strict:** something new is refused.
 
+**Everywhere.** On the *Network Firewall* page, *Your destinations* starts with **Everywhere**: every destination,
+your network too, shaped like the others. *Any other program*: **Firewall decides** (the default) or **Block**, which
+blocks every program's traffic but the ones you always allow there. *Add Program* ▸ *Always block* blocks all of one
+program's traffic (its helpers included, for an app), whatever else you allowed. *Always allow* only keeps a program
+out of Everywhere's Block: not past threat lists or your other destinations. Like every firewall rule, it stops
+connections in Ask and Strict, and Watch lists them as would block. A change is in effect at once: a connection
+already open finishes. Hostwatch itself is never blocked. A program you
+block for one destination only goes on that destination's card.
+
 > [!WARNING]
 > Strict refuses everything new that you haven't allowed, also while Hostwatch isn't open. Start with Watch to see
 > what it would block.
@@ -700,13 +718,16 @@ or **Strict**. The connections themselves are in the **Network** tab (⌘5), nex
 **How a connection is judged.** Watch judges every TCP and UDP connection Hostwatch sees. The first rule that matches
 wins:
 
-1. Local network (loopback, LAN, link-local, multicast) and Hostwatch itself pass.
-2. A known malware address blocks, even if Safe.
-3. A pattern marked Suspicious or Dangerous blocks.
-4. Safe passes.
-5. Then by risk: high-risk blocks, and routine (macOS, trusted developers) passes.
-6. A sealed macOS binary that isn't a shell or tool passes.
-7. Anything else new is asked about.
+1. Hostwatch itself passes.
+2. A program you always block Everywhere is blocked (your network too), and with Everywhere on Block, every program
+   but the ones you always allow there.
+3. Local network (loopback, LAN, link-local, multicast) passes.
+4. A known malware address blocks, even if Safe.
+5. A pattern marked Suspicious or Dangerous blocks.
+6. Safe passes.
+7. Then by risk: high-risk blocks, and routine (macOS, trusted developers) passes.
+8. A sealed macOS binary that isn't a shell or tool passes.
+9. Anything else new is asked about.
 
 What wouldn't simply pass is listed in the Network tab: the last 7 days, at most 500, kept in `firewall-watch.json`.
 Each entry is judged again with its pattern's current status. Allow / Block mark the pattern Safe / Suspicious.
@@ -796,7 +817,7 @@ same two numbers (what it blocks or would, what it asks about or would). The *Ne
 with what it does, the relay's status, its numbers, the connections waiting for your answer (the row's badge counts
 them), **Your rules**, how many connections are left to decide with **Review in Found**, and how it decides. *Your
 rules* is the full list: what you blocked (a domain for an app, or a connection pattern marked Suspicious or
-Dangerous, with who decided), what you allowed despite a threat list, and what you asked to be asked about again, each
+Dangerous, with who decided), the programs blocked everywhere, what you allowed despite a threat list, and what you asked to be asked about again, each
 with *Unblock* or *Remove*. *Forget Seen Connections…* (in the ⋯ menu, with a confirmation) starts the list of seen
 connections again and never touches a rule. *Found* is the one place to decide what the firewall found, under
 launches and files, with *Allow* and *Block*, and its badge counts all three. A long section opens in full with
@@ -813,11 +834,13 @@ curl and other programs that run whatever they're told are judged by what they r
   they come before the pattern's status and AI. A program on both lists is blocked, and in a folder inside another
   protected folder, the inner one's exceptions decide. Block acts in Ask and Strict and shows as "would block" in
   Watch. To block every program from a folder, protect it and set *Any other program* to *Block*.
-- **Your destinations:** on the *Network Firewall* page, *Add Destination…* takes a domain (its subdomains too) or an
-  IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
+- **Your destinations:** on the *Network Firewall* page, *Add Domain or Address…* takes a domain (its subdomains
+  too) or an IP address. Each destination reads like a protected place: *Any other program: Firewall decides, Allow or Block*,
   and **Add Program**, with the programs as chips. They are your decisions, so they come before threat lists and
   patterns. The most specific destination decides (`api.example.com` over `example.com`), and a program on both lists
-  is blocked. *Firewall decides* leaves it to your firewall mode.
+  is blocked. *Firewall decides* leaves it to your firewall mode. An address has a fourth choice, **Block both
+  ways**: nothing reaches this Mac from it or goes to it, whatever the firewall's mode, with no exceptions (not for
+  the router or this Mac). The devices and ports you blocked from the network map are in the same list.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
   something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
   files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than

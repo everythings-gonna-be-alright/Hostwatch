@@ -54,7 +54,7 @@ enum TriagePrompt {
         case .exec:
             lines.append("Launch: \(displayProcessName(e.process)) started \(e.pattern)")
             lines.append("Started program: \(program(e.exampleTarget))")
-            lines.append("Its parent: \(program(e.exampleParent.isEmpty ? e.process : e.exampleParent))")
+            lines.append("Its parent: \(program(e.exampleParent.isEmpty ? SignatureBuilder.programPath(e.process) : e.exampleParent))")
         case .file:
             lines.append("File access: \(displayProcessName(e.process)) opened \(e.pattern)")
             lines.append("Program: \(program(e.exampleProc))")
@@ -62,6 +62,10 @@ enum TriagePrompt {
             lines.append("Connection: \(displayProcessName(e.process)) connected to \(e.pattern)"
                          + (e.exampleHost.map { " (host \($0))" } ?? ""))
             lines.append("Program: \(program(e.exampleProc))")
+        }
+        // The pattern is about this program when this app or agent is behind it, not the program from anywhere.
+        if let who = SignatureBuilder.who(inProcess: e.process) {
+            lines.append("Who did it: \(who) (this pattern covers \(displayProcessName(SignatureBuilder.programPath(e.process))) only when \(who) is behind it)")
         }
         if let context {
             lines.append("Started by: \(context.trail). \(context.origin)")
@@ -85,7 +89,7 @@ enum TriagePrompt {
     /// far better than a general rule about Apple signatures (the benchmark showed every model trusting the signer).
     static func warningSigns(_ e: SignatureEntry, context: TriageContext?) -> [String] {
         let subject = e.kind == .exec ? e.exampleTarget : e.exampleProc
-        let actor = e.kind == .exec ? (e.exampleParent.isEmpty ? e.process : e.exampleParent) : e.exampleProc
+        let actor = e.kind == .exec ? (e.exampleParent.isEmpty ? SignatureBuilder.programPath(e.process) : e.exampleParent) : e.exampleProc
         let text = [e.pattern, e.exampleTarget, context?.command ?? ""].joined(separator: " ").lowercased()
         func name(_ p: String) -> String { (p as NSString).lastPathComponent }
         var out: [String] = []

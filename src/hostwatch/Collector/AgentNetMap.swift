@@ -150,30 +150,42 @@ enum NetMapParse {
 
     static let vpnPrefixes = ["utun", "ipsec", "ppp", "tun", "tap", "wg"]
 
-    /// `netstat -rn` (inet and inet6): the default gateway that isn't tied to one interface (flag I: macOS keeps a
-    /// scoped default on every utun for its own services), and routes through VPN interfaces.
-    static func routes(_ text: String) -> NetRoutes {
+    /// `netstat -rn` (inet and inet6) as route entries: what the kernel's table gives directly (`KernelTables`).
+    static func routeEntries(_ text: String) -> [KernelTables.Route] {
+        text.split(separator: "\n").compactMap { line in
+            let w = line.split(separator: " ").map(String.init)
+            guard w.count >= 4, w[0] != "Destination", w[0] != "Internet:", w[0] != "Internet6:" else { return nil }
+            return KernelTables.Route(destination: w[0], gateway: w[1], up: w[2].contains("U"), viaGateway: w[2].contains("G"),
+                                      ifScoped: w[2].contains("I"), iface: w[3])
+        }
+    }
+
+    static func routes(_ text: String) -> NetRoutes { routes(routeEntries(text)) }
+
+    /// The default gateway that isn't tied to one interface (flag I: macOS keeps a scoped default on every utun for
+    /// its own services), and routes through VPN interfaces.
+    static func routes(_ entries: [KernelTables.Route]) -> NetRoutes {
         var out = NetRoutes()
         var vpn: [String: [String]] = [:]
         var order: [String] = []
-        for line in text.split(separator: "\n") {
-            let w = line.split(separator: " ").map(String.init)
-            guard w.count >= 4, w[0] != "Destination", w[0] != "Internet:", w[0] != "Internet6:" else { continue }
-            let (dest, gateway, flags, netif) = (w[0], w[1], w[2], w[3])
-            guard flags.contains("U"), !flags.contains("I") else { continue }
-            if vpnPrefixes.contains(where: netif.hasPrefix), dest != "127", !dest.hasPrefix("fe80"), !dest.hasPrefix("ff0") {
-                if vpn[netif] == nil { order.append(netif) }
-                vpn[netif, default: []].append(dest == "default" ? "0/0" : dest)
+        for r in entries where r.up && !r.ifScoped {
+            let dest = r.destination
+            // Loopback ("127", "127.0.0.0/8"), link-local and multicast aren't a VPN's destinations.
+            if vpnPrefixes.contains(where: r.iface.hasPrefix), dest != "127", !dest.hasPrefix("127."),
+               !dest.hasPrefix("fe80"), !dest.hasPrefix("ff0") {
+                if vpn[r.iface] == nil { order.append(r.iface) }
+                vpn[r.iface, default: []].append(dest == "default" ? "0/0" : dest)
                 continue
             }
-            if dest == "default", out.gateway.isEmpty, flags.contains("G"), ipv4(gateway) != nil {
-                out.gateway = gateway
-                out.iface = netif
+            if dest == "default", out.gateway.isEmpty, r.viaGateway, ipv4(r.gateway) != nil {
+                out.gateway = r.gateway
+                out.iface = r.iface
             }
         }
         out.vpns = order.map { iface in
             let r = vpn[iface] ?? []
-            return NetRoutes.VPN(iface: iface, routes: r, full: r.contains("0/0") || (r.contains("0/1") && r.contains("128.0/1")))
+            return NetRoutes.VPN(iface: iface, routes: r, full: r.contains("0/0") || (r.contains("0/1") && r.contains("128.0/1"))
+                                 || (r.contains("0.0.0.0/1") && r.contains("128.0.0.0/1")))
         }
         // A VPN that carries everything is the way out.
         if let full = out.vpns.first(where: \.full), out.iface.isEmpty { out.iface = full.iface }
@@ -367,11 +379,9 @@ extension Agent {
             autoreleasepool {
                 if tick % 3 == 0 {
                     netMap.setOwn(NetAddress.own())
-                    let text = { (path: String, args: [String]) in String(decoding: (try? Spawned.run(path, args)) ?? Data(), as: UTF8.self) }
-                    neighbors = NetMapParse.merge(NetMapParse.arp(text("/usr/sbin/arp", ["-an"])),
-                                                  NetMapParse.ndp(text("/usr/sbin/ndp", ["-an"])))
-                    routes = NetMapParse.routes(text("/usr/sbin/netstat", ["-rn", "-f", "inet"])
-                                                + "\n" + text("/usr/sbin/netstat", ["-rn", "-f", "inet6"]))
+                    // From the kernel's tables (no arp, ndp or netstat started: see KernelTables).
+                    neighbors = NetMapParse.merge(KernelTables.neighbors())
+                    routes = NetMapParse.routes(KernelTables.routes())
                     routes.subnets = NetAddress.subnets()
                     let now = ProcessInfo.processInfo.systemUptime
                     for i in neighbors.indices {
@@ -405,7 +415,7 @@ extension Agent {
     /// The busiest 400: a report stays small however busy the Mac is.
     func trafficReport(_ raw: [(pid: Int, name: String, remote: String, sent: Int64, received: Int64)]) -> [NetTraffic] {
         var merged: [String: NetTraffic] = [:]
-        for t in raw where !isOurs(t.pid) {
+        for t in raw where !isOursOrStarting(t.pid) {
             let proc = pidPath(t.pid)
             let key = (proc.isEmpty ? t.name : proc) + "|" + t.remote
             var m = merged[key] ?? NetTraffic(proc: proc, name: t.name, remote: t.remote, sent: 0, received: 0)

@@ -78,6 +78,7 @@ final class ESSource: @unchecked Sendable {
         case "exec": return ES_EVENT_TYPE_NOTIFY_EXEC
         case "exit": return ES_EVENT_TYPE_NOTIFY_EXIT
         case "open": return ES_EVENT_TYPE_NOTIFY_OPEN
+        case "fork": return ES_EVENT_TYPE_NOTIFY_FORK
         default: return nil
         }
     }
@@ -86,7 +87,7 @@ final class ESSource: @unchecked Sendable {
 
     /// The fields `Agent.normalize` reads, nothing more: building the whole of eslogger's JSON would cost for nothing.
     static func raw(_ m: es_message_t) -> [String: Any]? {
-        let caller = process(m.process.pointee)
+        let caller = process(m.process.pointee, version: m.version)
         switch m.event_type {
         case ES_EVENT_TYPE_NOTIFY_EXEC:
             var exec = m.event.exec
@@ -94,19 +95,31 @@ final class ESSource: @unchecked Sendable {
             let count = es_exec_arg_count(&exec)
             args.reserveCapacity(Int(min(count, 256)))
             for i in 0..<min(count, 256) { args.append(string(es_exec_arg(&exec, i))) }
-            return ESShape.exec(caller: caller, target: process(exec.target.pointee), args: args)
+            return ESShape.exec(caller: caller, target: process(exec.target.pointee, version: m.version), args: args)
         case ES_EVENT_TYPE_NOTIFY_EXIT:
             return ESShape.exit(caller: caller)
         case ES_EVENT_TYPE_NOTIFY_OPEN:
             return ESShape.open(caller: caller, path: string(m.event.open.file.pointee.path), fflag: Int(m.event.open.fflag))
+        case ES_EVENT_TYPE_NOTIFY_FORK:
+            return ESShape.fork(caller: caller, child: process(m.event.fork.child.pointee, version: m.version))
         default:
             return nil
         }
     }
 
-    private static func process(_ p: es_process_t) -> ESShape.Process {
-        // The audit token's sixth word is the pid (what audit_token_to_pid reads, without linking libbsm).
-        ESShape.Process(path: string(p.executable.pointee.path), pid: Int(p.audit_token.val.5), ppid: Int(p.ppid))
+    private static func process(_ p: es_process_t, version: UInt32) -> ESShape.Process {
+        // An audit token's sixth word is the pid, its eighth the pid's generation (a new one with every exec), so
+        // the pair names one process exactly, never a later one that reused the pid. Parent and responsible process
+        // come with message version 4, the signature the kernel checked with every message.
+        let v4 = version >= 4
+        return ESShape.Process(path: string(p.executable.pointee.path), pid: Int(p.audit_token.val.5), ppid: Int(p.ppid),
+                               generation: Int(p.audit_token.val.7),
+                               responsible: v4 ? Int(p.responsible_audit_token.val.5) : 0,
+                               responsibleGeneration: v4 ? Int(p.responsible_audit_token.val.7) : 0,
+                               parent: v4 ? Int(p.parent_audit_token.val.5) : 0,
+                               parentGeneration: v4 ? Int(p.parent_audit_token.val.7) : 0,
+                               team: string(p.team_id), signing: string(p.signing_id),
+                               csFlags: Int(p.codesigning_flags), originalPpid: Int(p.original_ppid))
     }
 
     static func string(_ t: es_string_token_t) -> String {
@@ -129,10 +142,30 @@ final class ESSource: @unchecked Sendable {
 /// eslogger's JSON shape for the three events, as plain values: pure, so the conversion is testable without a
 /// kernel client.
 enum ESShape {
-    struct Process { let path: String; let pid: Int; let ppid: Int }
+    struct Process {
+        let path: String; let pid: Int; let ppid: Int
+        var generation = 0
+        var responsible = 0, responsibleGeneration = 0
+        var parent = 0, parentGeneration = 0
+        var team = "", signing = ""
+        var csFlags = 0, originalPpid = 0
+    }
 
+    /// eslogger's names for the same fields (`pidversion`, `parent_audit_token`, `team_id`, `signing_id`).
     static func process(_ p: Process) -> [String: Any] {
-        ["executable": ["path": p.path], "audit_token": ["pid": p.pid], "ppid": p.ppid]
+        var out: [String: Any] = ["executable": ["path": p.path], "audit_token": ["pid": p.pid, "pidversion": p.generation],
+                                  "ppid": p.ppid]
+        if p.responsible > 0 { out["responsible_audit_token"] = ["pid": p.responsible, "pidversion": p.responsibleGeneration] }
+        if p.parent > 0 { out["parent_audit_token"] = ["pid": p.parent, "pidversion": p.parentGeneration] }
+        if !p.team.isEmpty { out["team_id"] = p.team }
+        if !p.signing.isEmpty { out["signing_id"] = p.signing }
+        out["codesigning_flags"] = p.csFlags
+        out["original_ppid"] = p.originalPpid
+        return out
+    }
+
+    static func fork(caller: Process, child: Process) -> [String: Any] {
+        ["process": process(caller), "event": ["fork": ["child": process(child)]]]
     }
 
     static func exec(caller: Process, target: Process, args: [String]) -> [String: Any] {

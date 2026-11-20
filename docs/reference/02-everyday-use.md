@@ -48,17 +48,18 @@ what arrived meanwhile appears when the list resumes. To stop protection itself,
 always ends by itself.
 
 **Right-click a row.** This works on events, patterns and domains. It also works in the HUD while click-through is
-off. The menu offers:
+off. Each item has a small icon. The menu offers:
 
-- **Ask AI: Is This Dangerous?…** and **Watch <name> Closely…**
-- **Show Launch Chain…**: who started the process, in its own window. One sentence says where it came from (a
+- **Ask AI: Is This Dangerous?** and **Watch Closely**
+- **Show Launch Chain**: who started the process, in its own window. One sentence says where it came from (a
   terminal, an app, an AI session, macOS itself), then the chain reads top-down from launchd to the process, each
   step with its icon, pid and command line. The step that decided the origin is marked, and each says how Hostwatch
   knows it: a recorded launch, the process list, or running now. It is rebuilt from what Hostwatch recorded, so it
   still works after every process in the chain has exited. *Copy* gives it as text, and Ask AI gets the same chain.
 - Mark its pattern, or **Mark All … From This Process** (with *Clear Rule*). With several events selected, the menu
   marks all their patterns at once.
-- **Exclude ▸** *Hide process*, *Hide spawns of*, *Hide host*, *Hide domain \*.x*, or *Edit Exclusions…*
+- **Exclude ▸** by short name, never a full path: *Hide “curl”*, *Hide What “zsh” Starts*, *Hide api.example.com*,
+  *Hide \*.example.com*, *Hide Folder “Documents”*, or *Edit Exclusions*
 - **Copy Detail**, **Copy Process Path**, **Reveal in Finder**.
 
 **Details panel.** Double-click an event to open its details under the list, as in Running Now: the facts (kind,

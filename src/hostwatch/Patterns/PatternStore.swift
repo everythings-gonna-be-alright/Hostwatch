@@ -121,6 +121,15 @@ final class SignatureStore: ObservableObject {
             exampleName: e.name, examplePid: e.pid, exampleProc: e.proc, exampleTarget: e.target,
             exampleExtra: e.extra, exampleParent: e.parent,
             exampleHost: e.host.isEmpty ? nil : e.host, exampleHostSource: e.host.isEmpty ? nil : e.hostSource)
+        // A tool's pattern now names who did it: it starts with the decision its pattern had before, from anyone, so
+        // nothing you decided is lost (ADR 0019). Not onto a riskier pattern: risk only goes up by itself.
+        var carried = false
+        if let general = SignatureBuilder.keyWithoutWho(e.signatureKey), let before = entries[resolve(general)],
+           before.status != .unclassified, var created = entries[e.signatureKey], created.risk <= before.risk {
+            (created.status, created.source, created.note) = (before.status, before.source, before.note)
+            entries[e.signatureKey] = created
+            carried = true
+        }
         if !learnedRules.isEmpty, var created = entries[e.signatureKey] {
             applyRule(to: &created)
             entries[e.signatureKey] = created
@@ -128,7 +137,7 @@ final class SignatureStore: ObservableObject {
         if entries.count > maxEntries { evict() }
         changedKeys.insert(e.signatureKey)
         markDirty()
-        return !routine
+        return !routine && !carried
     }
 
     private func raise(_ entry: inout SignatureEntry, to risk: PatternRisk, reason: String) {
@@ -217,15 +226,24 @@ final class SignatureStore: ObservableObject {
     func status(forKey key: String) -> SignatureStatus {
         let key = resolve(key)
         if let entry = entries[key], entry.status != .unclassified { return entry.status }
-        if let entry = entries[key] {
-            return processRules[SignatureBuilder.processRuleKey(kind: entry.kind, process: entry.process)]?.status ?? .unclassified
-        }
+        if let entry = entries[key] { return processRule(entry.kind, entry.process)?.status ?? .unclassified }
+        // Not seen with who did it yet (history from before, Time Travel): the pattern it was before.
+        if let general = SignatureBuilder.keyWithoutWho(key), entries[resolve(general)] != nil { return status(forKey: general) }
         return .unclassified
     }
 
     func status(for e: ActivityEvent) -> SignatureStatus {
         if let s = entries[resolve(e.signatureKey)]?.status, s != .unclassified { return s }
-        return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.signatureProcess)]?.status ?? .unclassified
+        if entries[resolve(e.signatureKey)] == nil, let general = SignatureBuilder.keyWithoutWho(e.signatureKey),
+           entries[resolve(general)] != nil { return status(forKey: general) }
+        return processRule(e.kind, e.signatureProcess)?.status ?? .unclassified
+    }
+
+    /// A whole-process rule for this program and who did it, else one for the program from anyone (rules from before
+    /// patterns named who keep their meaning).
+    func processRule(_ kind: EventKind, _ process: String) -> SignatureEntry? {
+        processRules[SignatureBuilder.processRuleKey(kind: kind, process: process)]
+            ?? processRules[SignatureBuilder.processRuleKey(kind: kind, process: SignatureBuilder.programPath(process))]
     }
 
     func entry(_ key: String) -> SignatureEntry? { entries[resolve(key)] }
@@ -237,13 +255,13 @@ final class SignatureStore: ObservableObject {
             // A rule you approved counts as your decision.
             return entry.status == .safe && (entry.source == "you" || entry.source == "rule")
         }
-        return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.signatureProcess)]?.status == .safe
+        return processRule(e.kind, e.signatureProcess)?.status == .safe
     }
 
     func note(forKey key: String) -> (source: String?, note: String?) {
         guard let e = entries[resolve(key)] else { return (nil, nil) }
         if e.status != .unclassified { return (e.source, e.note) }
-        let rule = processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.process)]
+        let rule = processRule(e.kind, e.process)
         return (rule.map { "\($0.source ?? "you"), whole process" }, rule?.note)
     }
 
@@ -541,7 +559,7 @@ final class SignatureStore: ObservableObject {
             let actor = e.kind == .exec ? e.exampleParent : e.exampleProc
             let pattern = Self.rebuilt(e).pattern
             guard pattern != e.pattern, SignatureBuilder.isRegrouped(pattern), !actor.isEmpty,
-                  SignatureBuilder.normalizeExecutable(actor) == e.process else { continue }
+                  SignatureBuilder.normalizeExecutable(actor) == SignatureBuilder.programPath(e.process) else { continue }
             groups["\(e.kind.rawValue)|\(e.process)|\(pattern)", default: []].append(e)
         }
         return groups
@@ -644,6 +662,11 @@ final class SignatureStore: ObservableObject {
                 : e.kind == .net ? interpreter && (e.pattern.contains(" internet:") || e.pattern.contains(".*.*:"))
                 : false
             if wide { entries[key] = nil; changed = true }
+        }
+        // Hostwatch's own sockets, counted as another program's in the instant a helper it starts is still its copy
+        // (named Hostwatch, path pfctl or netstat). They never were anyone's connections: dropped unless you decided one.
+        for (key, e) in entries where e.kind == .net && e.exampleName == "Hostwatch" && !["you", "rule"].contains(e.source ?? "") {
+            entries[key] = nil; changed = true
         }
         for (key, rule) in processRules where rule.status == .safe && !Self.canTrustWholeProcess(rule.process) {
             processRules[key] = nil; changed = true
@@ -766,7 +789,7 @@ final class SignatureStore: ObservableObject {
     func reviewedByYou(_ key: String) -> Bool {
         guard let e = entries[resolve(key)] else { return false }
         if e.status != .unclassified { return e.source == "you" || e.source == "rule" }
-        return processRules[SignatureBuilder.processRuleKey(kind: e.kind, process: e.process)] != nil
+        return processRule(e.kind, e.process) != nil
     }
 
     func count(_ status: SignatureStatus) -> Int {

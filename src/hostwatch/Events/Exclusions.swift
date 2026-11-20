@@ -81,27 +81,28 @@ let defaultExclusions = [
 
 extension ActivityEvent {
     /// Ready-made exclusion patterns for this row: (menu title, pattern).
+    /// Menu titles name what each hides by its short name (a command, a host, a folder's name), never a full path.
     var exclusionSuggestions: [(String, String)] {
-        var out: [(String, String)] = [("Hide process “\(name)”", name)]
+        var out: [(String, String)] = [("Hide “\(name)”", name)]
         switch kind {
         case .exec:
-            out.append(("Hide spawns of \(target)", "proc:\(target)"))
+            out.append(("Hide What “\((target as NSString).lastPathComponent)” Starts", "proc:\(target)"))
         case .net:
             if !host.isEmpty, hostSource == "dns" {
-                out.append(("Hide host \(host)", "net:\(host):*"))
+                out.append(("Hide \(host)", "net:\(host):*"))
                 if let domain = registrableDomain, domain != host {
-                    out.append(("Hide domain *.\(domain)", "net:*.\(domain):*"))
+                    out.append(("Hide *.\(domain)", "net:*.\(domain):*"))
                 }
             }
             if let host = remoteHost {
                 // IPv6 hosts contain [ ], which glob treats as a class, so use substring form.
-                out.append(("Hide host \(host)", host.hasPrefix("[") ? "net:\(host):" : "net:\(host):*"))
+                out.append(("Hide \(host)", host.hasPrefix("[") ? "net:\(host):" : "net:\(host):*"))
             }
-            out.append(("Hide endpoint \(target)", "net:\(target)"))
+            out.append(("Hide \(target)", "net:\(target)"))
         case .file:
             let folder = (target as NSString).deletingLastPathComponent
-            out.append(("Hide folder \(folder)/", "file:\(folder)/*"))
-            out.append(("Hide file \(target)", "file:\(target)"))
+            out.append(("Hide Folder “\((folder as NSString).lastPathComponent)”", "file:\(folder)/*"))
+            out.append(("Hide “\((target as NSString).lastPathComponent)”", "file:\(target)"))
         }
         return out
     }

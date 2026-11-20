@@ -61,11 +61,13 @@ extension AppDelegate {
         let area: ProtectionArea
         if str("what") == "open" {
             event = ActivityEvent(kind: .file, time: time, pid: int("pid"), ppid: int("ppid"), name: name, proc: path,
-                                  target: str("file"), extra: str("mode").isEmpty ? "r" : str("mode"), parent: str("parent"))
+                                  target: str("file"), extra: str("mode").isEmpty ? "r" : str("mode"), parent: str("parent"),
+                                  responsible: str("resp"), agent: str("agent"))
             area = .files
         } else {
             event = ActivityEvent(kind: .exec, time: time, pid: int("pid"), ppid: int("ppid"), name: name, proc: path,
-                                  target: path, extra: "", parent: str("parent"), args: str("args"))
+                                  target: path, extra: "", parent: str("parent"), args: str("args"),
+                                  responsible: str("resp"), agent: str("agent"))
             area = .launches
         }
         let seconds = (obj["deadline"] as? NSNumber)?.doubleValue ?? 10

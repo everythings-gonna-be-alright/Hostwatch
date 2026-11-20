@@ -660,3 +660,23 @@ struct InsetPanel<Content: View>: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 }
+
+/// Soft pools of colour behind a page, for its glass to pick up (DESIGN.md: Liquid Glass): top left, middle right,
+/// bottom left. Without them glass over a plain window reads as grey boxes.
+struct SoftBackdrop: View {
+    let colors: [Color]
+
+    private static let places: [(UnitPoint, CGFloat)] = [(UnitPoint(x: 0.3, y: 0.15), 520), (UnitPoint(x: 0.75, y: 0.5), 480),
+                                                          (UnitPoint(x: 0.05, y: 0.95), 520)]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(zip(colors, Self.places).enumerated()), id: \.offset) { _, pool in
+                RadialGradient(colors: [pool.0, .clear], center: pool.1.0, startRadius: 0, endRadius: pool.1.1)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

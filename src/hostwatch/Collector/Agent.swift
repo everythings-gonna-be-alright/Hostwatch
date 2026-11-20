@@ -282,6 +282,8 @@ final class Agent: @unchecked Sendable {
     private let pidLock = NSLock()
     private var pidPaths = BoundedMap<Int, String>(limit: 8192)
     private var pidParents = BoundedMap<Int, Int>(limit: 8192)
+    /// Every execution seen, from kernel facts: who is behind each process, proven or not named (ADR 0019).
+    let lineage = Lineage()
 
     let processTableLock = NSLock()
     var processTableBefore: ([ProcessInstance: ProcessUsage], TimeInterval)?   // the last Running Now list's usage
@@ -307,7 +309,17 @@ final class Agent: @unchecked Sendable {
     lazy var firewall = AgentFirewall(agent: self)
     let hold = AgentHold()
     /// Protection with Endpoint Security: launches and protected files held before they happen.
-    lazy var guardian: AgentGuard = { let g = AgentGuard(); g.ours = { [unowned self] in self.isOurs($0) }; return g }()
+    lazy var guardian: AgentGuard = {
+        let g = AgentGuard()
+        g.ours = { [unowned self] in self.isOurs($0) }
+        g.send = { [unowned self] client, event in          // a held launch's pattern names who did it, as its event will
+            guard let client else { return }
+            var ev = event
+            self.addWho(&ev)
+            client.lock.lock(); _ = client.send(ev.jsonLine()); client.lock.unlock()
+        }
+        return g
+    }()
     lazy var watch = AgentWatch(agent: self)
 
     init() { ignoredPids = [selfPid] }
@@ -359,6 +371,16 @@ final class Agent: @unchecked Sendable {
         return ignoredPids.contains(pid) || ourTree.contains(pid)
     }
 
+    /// Ours, or a process Hostwatch is starting this moment. A new process begins as a copy of its parent, named
+    /// Hostwatch and holding every socket the collector has open (the firewall relay's connections to other apps'
+    /// destinations among them) until it runs its own program: a socket check in that instant reported each as a
+    /// connection of "Hostwatch". Its parent is remembered, so its byte counts are known as ours after it exits too.
+    func isOursOrStarting(_ pid: Int) -> Bool {
+        if isOurs(pid) { return true }
+        let parent = pidParent(pid)
+        return parent > 0 && isOurs(parent)
+    }
+
     private func isIgnored(_ pid: Int) -> Bool {
         ownLock.lock(); defer { ownLock.unlock() }
         return ignoredPids.contains(pid)
@@ -389,6 +411,8 @@ final class Agent: @unchecked Sendable {
         pidPaths[pid] = path
         if ppid != 0 { pidParents[pid] = ppid }
     }
+
+
 
     func pidPath(_ pid: Int) -> String {
         pidLock.lock()
@@ -453,7 +477,24 @@ final class Agent: @unchecked Sendable {
         return all.contains { c in c.lock.lock(); defer { c.lock.unlock() }; return c.top }
     }
 
-    func publish(_ ev: AgentEvent) {
+    /// Who did it, proven or not at all (`Lineage`): "agent" names a verified AI agent above the process, "resp" the app
+    /// macOS holds responsible when no agent is anywhere up to launchd. On every event and question the app makes a
+    /// pattern of, so their patterns agree.
+    func addWho(_ ev: inout AgentEvent) {
+        let pid = ev.int("pid")
+        guard pid > 0, ev.string("resp").isEmpty, ev.string("agent").isEmpty, let id = lineage.execution(ofPid: pid) else { return }
+        // A launch held for your answer has no execution of its own yet: who is behind what this process launches.
+        let launch = ev.kind.hasPrefix("guard_") && ev.string("what") == "exec"
+        switch launch ? lineage.whoForLaunch(by: id) : lineage.who(id) {
+        case .agent(let name): ev.set("agent", .str(name))
+        case .app(let path): ev.set("resp", .str(path))
+        case .unknown: break
+        }
+    }
+
+    func publish(_ event: AgentEvent) {
+        var ev = event
+        addWho(&ev)
         if ev.kind == "net" { watch.noteConnection(ev) }                    // part of a watched process's profile
         let payload = ev.jsonLine()
         clientsLock.lock()
@@ -583,6 +624,28 @@ final class Agent: @unchecked Sendable {
         ((proc?["executable"] as? [String: Any])?["path"] as? String) ?? ""
     }
 
+    /// One process in a message, as the kernel described it, nil without its generation (an older eslogger). Its
+    /// parent is `parent` when the message says (a fork's child, an exec's new program), else the message's parent
+    /// token, unless that is launchd for a process that started elsewhere: adopted, so its real parent is unknown.
+    static func execFacts(_ proc: [String: Any]?, parent: ExecID? = nil) -> (ExecID, ExecFacts)? {
+        func token(_ t: Any?) -> ExecID? {
+            guard let t = t as? [String: Any], t["pidversion"] != nil else { return nil }
+            return ExecID(pid: intValue(t["pid"]), generation: intValue(t["pidversion"]))
+        }
+        guard let id = token(proc?["audit_token"]), id.pid > 0 else { return nil }
+        var f = ExecFacts(path: exe(proc))
+        if let parent {
+            f.parent = parent
+        } else if let p = token(proc?["parent_audit_token"]) {
+            if p.pid > 1 { f.parent = p } else { f.fromLaunchd = intValue(proc?["original_ppid"]) <= 1 }
+        }
+        f.responsible = token(proc?["responsible_audit_token"])
+        f.team = proc?["team_id"] as? String ?? ""
+        f.signing = proc?["signing_id"] as? String ?? ""
+        f.validSignature = intValue(proc?["codesigning_flags"]) & 0x1 != 0       // CS_VALID
+        return (id, f)
+    }
+
     static func pid(_ proc: [String: Any]?) -> Int {
         let token = proc?["audit_token"] as? [String: Any]
         let p = intValue(token?["pid"])
@@ -593,6 +656,15 @@ final class Agent: @unchecked Sendable {
     func normalize(_ raw: [String: Any]) -> AgentEvent? {
         let event = raw["event"] as? [String: Any] ?? [:]
         let caller = raw["process"] as? [String: Any] ?? [:]
+        // Every process a message mentions joins the lineage: who is behind each, from kernel facts (ADR 0019).
+        let callerExec = Self.execFacts(caller)
+        if let (id, f) = callerExec { lineage.learn(id, f) }
+        if let fork = event["fork"] as? [String: Any] {
+            if let parent = callerExec?.0, let (id, f) = Self.execFacts(fork["child"] as? [String: Any], parent: parent) {
+                lineage.learn(id, f)
+            }
+            return nil
+        }
         if event["exit"] != nil {
             noteExit(Self.pid(caller))
             return nil
@@ -608,9 +680,14 @@ final class Agent: @unchecked Sendable {
             var ppid = Self.intValue(target["ppid"])
             if ppid == 0 { ppid = Self.intValue(caller["ppid"]) }
             rememberPid(pid, path: path, ppid: ppid)
+            let args = Self.formatArgs((exec["args"] as? [Any] ?? []).map { "\($0)" })
+            // The new program came from the one it replaced (the fork's copy of its parent).
+            if let (id, f) = Self.execFacts(target, parent: callerExec?.0) {
+                lineage.learn(id, f)
+                if VerifiedAgent.name(f) == nil, AgentLookalike.matches(path: path, args: args) { lineage.markAgentLike(id) }
+            }
             let callerIgnored = isIgnored(Self.pid(caller))
             if noteExec(pid: pid, ppid: ppid, path: path) || callerIgnored { return nil }
-            let args = Self.formatArgs((exec["args"] as? [Any] ?? []).map { "\($0)" })
             rememberArgs(pid, args)
             let name = Self.base(path)
             var fields: [(String, JValue)] = [

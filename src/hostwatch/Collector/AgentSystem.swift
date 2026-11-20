@@ -112,6 +112,74 @@ struct Spawned {
         if let stdin { close(stdin) }
     }
 
+    /// Runs a program to completion with `input` on its stdin, its output and errors read apart: for pfctl, which
+    /// must never get the collector's sockets (Foundation's Process doesn't promise that; this closes every file
+    /// but the three it is given).
+    static func runCapturing(_ path: String, _ args: [String], input: String? = nil) -> (status: Int32, out: String, err: String) {
+        var outPipe: [Int32] = [-1, -1], errPipe: [Int32] = [-1, -1], inPipe: [Int32] = [-1, -1]
+        guard pipe(&outPipe) == 0, pipe(&errPipe) == 0, input == nil || pipe(&inPipe) == 0 else {
+            for fd in outPipe + errPipe + inPipe where fd >= 0 { close(fd) }
+            return (-1, "", "no pipe")
+        }
+        var actions: posix_spawn_file_actions_t?
+        posix_spawn_file_actions_init(&actions)
+        defer { posix_spawn_file_actions_destroy(&actions) }
+        if input == nil { posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0) }
+        else { posix_spawn_file_actions_adddup2(&actions, inPipe[0], 0) }
+        posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
+        posix_spawn_file_actions_adddup2(&actions, errPipe[1], 2)
+        var attr: posix_spawnattr_t?
+        posix_spawnattr_init(&attr)
+        defer { posix_spawnattr_destroy(&attr) }
+        var all = sigset_t(), none = sigset_t()
+        sigfillset(&all); sigemptyset(&none)
+        posix_spawnattr_setsigdefault(&attr, &all)
+        posix_spawnattr_setsigmask(&attr, &none)
+        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+        let argv = ([path] + args).map { strdup($0) } + [nil]
+        defer { argv.forEach { free($0) } }
+        var pid: pid_t = 0
+        let rc = posix_spawn(&pid, path, &actions, &attr, argv, environ)
+        for fd in [outPipe[1], errPipe[1], inPipe[0]] where fd >= 0 { close(fd) }
+        for fd in [outPipe[0], errPipe[0], inPipe[1]] where fd >= 0 { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+        guard rc == 0 else {
+            for fd in [outPipe[0], errPipe[0], inPipe[1]] where fd >= 0 { close(fd) }
+            return (-1, "", String(cString: strerror(rc)))
+        }
+        if let input, inPipe[1] >= 0 {
+            let data = Array(input.utf8)
+            var at = 0
+            while at < data.count {
+                let n = data[at...].withUnsafeBytes { write(inPipe[1], $0.baseAddress, $0.count) }
+                if n > 0 { at += n } else if n < 0 && errno == EINTR { continue } else { break }
+            }
+            close(inPipe[1])
+        }
+        // Both pipes drained at once (a full one would block pfctl): errors on another thread.
+        let errText = WrittenOnce<Data>()
+        let group = DispatchGroup()
+        let errFD = errPipe[0]
+        group.enter()
+        DispatchQueue.global().async { errText.value = readAll(errFD); group.leave() }
+        let out = readAll(outPipe[0])
+        group.wait()
+        close(outPipe[0]); close(errPipe[0])
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
+        let code = status & 0x7f == 0 ? (status >> 8) & 0xff : -1          // WIFEXITED / WEXITSTATUS
+        return (code, String(decoding: out, as: UTF8.self), String(decoding: errText.value ?? Data(), as: UTF8.self))
+    }
+
+    private static func readAll(_ fd: Int32) -> Data {
+        var data = Data()
+        var buf = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let n = read(fd, &buf, buf.count)
+            if n > 0 { data.append(buf, count: n) } else if n < 0 && errno == EINTR { continue } else { break }
+        }
+        return data
+    }
+
     /// Runs a program to completion and returns its stdout (used for lsof).
     static func run(_ path: String, _ args: [String]) throws -> Data {
         let child = try start(path, args)

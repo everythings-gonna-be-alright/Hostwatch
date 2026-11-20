@@ -31,7 +31,7 @@ import Testing
     }
 
     @Test func onlyTheThreeEventsAreSubscribed() {
-        #expect(["exec", "exit", "open"].allSatisfy { ESSource.eventType($0) != nil })
+        #expect(["exec", "exit", "open", "fork"].allSatisfy { ESSource.eventType($0) != nil })
         #expect(ESSource.eventType("mmap") == nil)
     }
 }
