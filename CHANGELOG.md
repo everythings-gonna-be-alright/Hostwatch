@@ -12,6 +12,10 @@
 
 ### Fixes
 
+- **YouTube is no longer called a malware site.** A list naming `www.youtube.com` (ThreatFox lists YouTube links used
+  as lures) flagged it, because only the bare `youtube.com` was never flagged. Every name under the big social and
+  video networks, and under Apple's, Google's and Microsoft's own domains, is now never flagged. Hosting platforms
+  where anyone gets a subdomain stay matchable. The stories and threat-log entries made this way are removed at launch.
 - **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web
   pattern (`TCP internet:443`) Suspicious, which cut the program off from every site. It now blocks just the domain,
   or the address when the connection has no name, and the program's other destinations are judged as usual. Block

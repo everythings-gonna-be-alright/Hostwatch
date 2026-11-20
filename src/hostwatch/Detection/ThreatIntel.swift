@@ -145,7 +145,8 @@ final class ThreatIntel: ObservableObject {
            let saved = try? JSONDecoder().decode([String: FeedState].self, from: data) { states = saved }
         if let data = Vault.shared.read(directory.appendingPathComponent("hits.json")),
            let saved = try? JSONDecoder().decode([ThreatHit].self, from: data) {
-            hits = saved.filter { !($0.kind == .domain && FeedCheck.sharedHost($0.indicator)) }   // matches made before shared hosts were skipped
+            // Matches made before shared hosts and the platforms' own names were skipped.
+            hits = saved.filter { !($0.kind == .domain && (FeedCheck.sharedHost($0.indicator) || FeedCheck.neverFlag($0.indicator))) }
         }
         osUpdated = Self.lastOSUpdate()
     }
@@ -757,10 +758,33 @@ enum FeedCheck {
         return false
     }
 
+    /// Platforms that run every name under them themselves: the big social and video networks, and Apple, Google and
+    /// Microsoft's own domains. Nobody rents `something.youtube.com`, so a list naming `www.youtube.com` (ThreatFox
+    /// lists YouTube links used as lures) names the platform, not a server of the malware. Hosting platforms, where
+    /// anyone gets a subdomain (`github.io`, `amazonaws.com`, `cloudfront.net`), are not here: their customers'
+    /// names stay matchable.
+    static let ownedPlatforms: Set<String> = [
+        "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtube-nocookie.com",
+        "facebook.com", "facebook.net", "fbcdn.net", "messenger.com", "instagram.com", "cdninstagram.com",
+        "whatsapp.com", "whatsapp.net", "threads.net", "linkedin.com", "licdn.com",
+        "tiktok.com", "tiktokcdn.com", "tiktokv.com", "x.com", "twitter.com", "twimg.com",
+        "reddit.com", "redditmedia.com", "redditstatic.com", "pinterest.com", "pinimg.com",
+        "snapchat.com", "twitch.tv", "ttvnw.net", "spotify.com", "scdn.co", "netflix.com", "nflxvideo.net",
+        "apple.com", "icloud.com", "mzstatic.com", "google.com", "gstatic.com", "gmail.com", "microsoft.com",
+        "office.com", "live.com",
+    ]
+
+    /// Never flagged: a platform on the list by its exact name, or any name under a platform that owns all of its
+    /// names ("www.youtube.com", "m.facebook.com").
     static func neverFlag(_ entry: String) -> Bool {
-        var d = entry.lowercased()
+        var d = entry.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".~≈"))
         if d.hasPrefix("*.") { d.removeFirst(2) }
-        return neverFlagDomains.contains(d)
+        if neverFlagDomains.contains(d) { return true }
+        while true {
+            if ownedPlatforms.contains(d) { return true }
+            guard let dot = d.firstIndex(of: ".") else { return false }
+            d = String(d[d.index(after: dot)...])
+        }
     }
 }
 
