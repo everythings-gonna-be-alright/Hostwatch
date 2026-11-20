@@ -23,11 +23,10 @@ struct NetworkFirewallPage: View {
                 modeCard
                 numbers(found)
                 if !firewall.prompts.isEmpty { waiting }
-                FirewallRulesSection(firewall: firewall, signatures: signatures)
                 if let protection {
                     DestinationsSection(protection: protection, map: networkMap ?? Self.noMap, bothWays: networkMap != nil,
                                         firewall: firewall, showNetwork: showNetwork)
-                    AppRulesSection(firewall: firewall)
+                    AppRulesSection(firewall: firewall, signatures: signatures)
                 }
                 if let networkMap { NetworksSection(store: networkMap) }
                 findings(found)
@@ -242,83 +241,6 @@ struct NetworkFindingRow: View {
         }
         .controlSize(.small)
         .padding(.vertical, 4)
-    }
-}
-
-/// Your rules, always in view: what you blocked, what you allowed despite a threat list, and what you asked to be
-/// asked about again. Independent of the seen-connections list, so forgetting that never hides a rule.
-struct FirewallRulesSection: View {
-    @ObservedObject var firewall: FirewallMonitor
-    @ObservedObject var signatures: SignatureStore
-
-    /// Connection patterns marked Suspicious or Dangerous: blocked whatever the domain.
-    private var blockedPatterns: [SignatureEntry] {
-        signatures.allEntries.filter { $0.kind == .net && [.suspicious, .dangerous].contains(signatures.status(forKey: $0.id)) }
-            .sorted { $0.lastSeen > $1.lastSeen }
-    }
-
-    var body: some View {
-        let _ = signatures.revision
-        let rules = firewall.rules
-        let patterns = blockedPatterns
-        let exceptions = rules.filter { $0.kind == .threatException }, again = rules.filter { $0.kind == .askAgain }
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Your rules").font(.headline)
-            if rules.isEmpty && patterns.isEmpty {
-                Text("None outside your cards below. A connection pattern you block, or an exception to a threat list, is listed here.")
-                    .foregroundStyle(.secondary)
-            }
-            if !patterns.isEmpty {
-                group("Blocked", symbol: "nosign", tint: .red) {
-                    ForEach(patterns) { e in
-                        line(program: displayProcessName(e.process), what: e.pattern,
-                             detail: "marked \(signatures.status(forKey: e.id).title) · \(signatures.decidedBy(e.id))") {
-                            Button("Unblock") { signatures.set(.unclassified, keys: [e.id]) }
-                                .help("Back to New: the firewall asks about it again")
-                        }
-                    }
-                }
-            }
-            if !exceptions.isEmpty {
-                group("Allowed despite a threat list", symbol: "exclamationmark.shield", tint: .orange) {
-                    ForEach(exceptions) { r in
-                        line(program: r.program, what: r.destination, detail: "you chose Allow Anyway") {
-                            Button("Remove") { firewall.remove(r) }.help("Blocked again because of the threat list")
-                        }
-                    }
-                }
-            }
-            if !again.isEmpty {
-                group("Asked about again", symbol: "questionmark.circle", tint: .secondary) {
-                    ForEach(again) { r in
-                        line(program: r.program, what: r.destination, detail: "you forgot your decision here") {
-                            Button("Remove") { firewall.remove(r) }.help("Its pattern decides again")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func group<Content: View>(_ title: String, symbol: String, tint: Color, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold)).foregroundStyle(tint)
-            content()
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .protectionGlass(14)
-    }
-
-    private func line<Action: View>(program: String, what: String, detail: String, @ViewBuilder action: () -> Action) -> some View {
-        HStack(spacing: 8) {
-            Text(program).fontWeight(.semibold).lineLimit(1)
-            Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
-            Text(what).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
-            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            Spacer()
-            action().controlSize(.small)
-        }
     }
 }
 

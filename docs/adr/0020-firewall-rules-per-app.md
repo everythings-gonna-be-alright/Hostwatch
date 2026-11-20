@@ -27,6 +27,9 @@ A card is about a path, or about a name when only the name is known (the Network
 as `displayProcessName` does). A change about one program goes to the card that already decides for it, else to a new
 card for its outermost app bundle. A card made only by blocks goes when they do, one you added stays.
 
-**Consequences.** Always Block in a question adds the destination to the app's card. Your rules lists only what is
-on no card: blocked connection patterns, threat-list exceptions and destinations asked about again. Every card change
+**Consequences.** Always Block in a question adds the destination to the app's card, and Allow Anyway adds an Allow
+(the card's own destinations come before threat lists, so it needs no list of its own). The separate Your rules list
+is gone: a program's blocked connection patterns and destinations asked about again show on its card, a card made
+for them when it has none. The patterns stay patterns, not destinations: they name one port and who did it
+(`python3.12 via Claude Code`), and a destination would block more. Every card change
 flushes the collector's remembered answers, so it is in effect at once.

@@ -7,7 +7,8 @@
 - **Firewall rules per app.** The Network Firewall page now has General, for every program, and Apps: one card per
   app with its own Everywhere (Firewall decides, Allow or Block) and its own domains and addresses. An app's own rules
   win over General's. Everything one app may reach is on its card: the program chips on General's cards, the apps
-  you always allowed or blocked everywhere, and the domains you blocked from a question moved there.
+  you always allowed or blocked everywhere, the domains you blocked from a question, what you allowed despite a
+  threat list, and the connection patterns you blocked. The separate Your rules list is gone.
 
 ### Fixes
 
@@ -15,8 +16,8 @@
   pattern (`TCP internet:443`) Suspicious, which cut the program off from every site. It now blocks just the domain,
   or the address when the connection has no name, and the program's other destinations are judged as usual. Block
   in the Network Firewall list works the same way.
-- **Unblock is in effect at once.** Clearing or deciding a connection pattern (Unblock in Your rules, or in
-  Patterns) makes the collector forget its remembered answer, instead of waiting up to a minute.
+- **Unblock is in effect at once.** Clearing or deciding a connection pattern (Unblock on an app's card, or
+  in Patterns) makes the collector forget its remembered answer, instead of waiting up to a minute.
 
 ## 0.20.0 – Who did it
 

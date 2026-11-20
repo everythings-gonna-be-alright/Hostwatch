@@ -261,10 +261,10 @@ final class FirewallMonitor: ObservableObject {
             allowedCount = saved.allowed
             // Older files kept blocks per app in three lists: they become the apps' cards.
             apps = AppRulesList.migrated(appBlocks: saved.appBlocks ?? [], everywhereAllowed: saved.everywhereAllowed ?? [],
-                                         domainBlocks: saved.domainBlocks ?? [], into: saved.apps ?? [])
+                                         domainBlocks: saved.domainBlocks ?? [], threatExceptions: saved.threatExceptions ?? [],
+                                         into: saved.apps ?? [])
             everywhereBlocked = saved.everywhereBlocked ?? false
             askAgain = Set(saved.askAgain ?? [])
-            threatExceptions = Set(saved.threatExceptions ?? [])
         }
     }
 
@@ -274,7 +274,7 @@ final class FirewallMonitor: ObservableObject {
         var apps: [AppRules]? = nil              // your cards per app
         var domainBlocks: [String]? = nil        // older: "program name|domain", read into the apps' cards
         var askAgain: [String]? = nil
-        var threatExceptions: [String]? = nil     // "program name|domain" you allowed despite a threat list
+        var threatExceptions: [String]? = nil     // older: "program name|domain" allowed anyway, read into the cards
         var appBlocks: [String]? = nil            // older: apps without network, read into the apps' cards
         var everywhereBlocked: Bool? = nil        // Everywhere ▸ Any other program: Block
         var everywhereAllowed: [String]? = nil    // older: kept out of that block, read into the apps' cards
@@ -396,8 +396,8 @@ final class FirewallMonitor: ObservableObject {
     }
 
     /// The card a change about this program goes to: the one that already decides for it, else a new one for its app.
-    private func cardKey(for program: String) -> String {
-        appRules(for: program)?.app ?? AppRulesList.app(of: program)
+    func cardKey(for program: String) -> String {
+        AppRulesList.cardKey(for: program, in: apps)
     }
 
     /// An app's Everywhere: Firewall decides, Allow or Block. Hostwatch itself is never blocked (it would stop the
@@ -462,19 +462,18 @@ final class FirewallMonitor: ObservableObject {
 
     // MARK: Allowed despite a threat list
 
-    /// "program name|domain" (or the address): you allowed it although a threat list names the destination.
-    @Published private(set) var threatExceptions: Set<String> = []
+    /// Allow Anyway is an Allow on the app's card: its own destinations come before threat lists (ADR 0020).
+    func threatAllowed(_ f: FirewallFacts) -> Bool {
+        appRules(for: f.program)?.decision(host: f.host, ip: f.ip)?.verdict == .allow
+    }
 
-    func threatAllowed(_ f: FirewallFacts) -> Bool { !threatExceptions.isEmpty && threatExceptions.contains(Self.askKey(f)) }
-
-    /// Your explicit "Allow Anyway" (or its undo): kept at once, like a domain block.
+    /// Your explicit "Allow Anyway" (or its undo): the destination's Allow on the program's card, in effect at once.
     func setThreatException(_ allowed: Bool, _ f: FirewallFacts) {
-        let key = Self.askKey(f)
-        guard allowed != threatExceptions.contains(key) else { return }
-        if allowed { threatExceptions.insert(key) } else { threatExceptions.remove(key) }
-        revision += 1
-        dirty = true
-        save()
+        let target = Self.domain(of: f) ?? f.ip
+        editApp(cardKey(for: f.program), dropIfEmpty: !allowed) { r in
+            r.destinations.removeAll { $0.target == target }
+            if allowed { r.destinations.append(Destination(target: target, others: .allow)) }
+        }
     }
 
     /// You decided again (Allow or Block, here or in a prompt): those destinations follow the pattern again.
@@ -497,9 +496,9 @@ final class FirewallMonitor: ObservableObject {
 
     // MARK: Your rules, listed
 
-    /// One of your firewall rules outside the cards, from its "program name|domain" key.
+    /// A destination asked about again, shown on its program's card, from its "program name|domain" key.
     struct Rule: Identifiable, Equatable {
-        enum Kind: String { case threatException, askAgain }
+        enum Kind: String { case askAgain }
         let kind: Kind
         let key: String
         var id: String { kind.rawValue + "|" + key }
@@ -507,18 +506,12 @@ final class FirewallMonitor: ObservableObject {
         var destination: String { String(key.split(separator: "|", maxSplits: 1).dropFirst().first ?? "") }
     }
 
-    /// Every rule of yours that is neither a pattern decision nor on a card, whatever the seen-connections list holds.
-    var rules: [Rule] {
-        threatExceptions.sorted().map { Rule(kind: .threatException, key: $0) }
-            + askAgain.sorted().map { Rule(kind: .askAgain, key: $0) }
-    }
+    /// Destinations you asked to be asked about again, whatever the seen-connections list holds.
+    var rules: [Rule] { askAgain.sorted().map { Rule(kind: .askAgain, key: $0) } }
 
     /// Removes one of your rules (Unblock, or undo an exception or a Forget).
     func remove(_ rule: Rule) {
-        switch rule.kind {
-        case .threatException: threatExceptions.remove(rule.key)
-        case .askAgain: askAgain.remove(rule.key)
-        }
+        askAgain.remove(rule.key)
         rulesChanged()                           // the collector forgets its answers: in effect at once
         dirty = true
         save()
@@ -714,7 +707,6 @@ final class FirewallMonitor: ObservableObject {
         guard dirty, let data = try? Self.encoder.encode(Saved(entries: entries, allowed: allowedCount,
                                                                  apps: apps,
                                                                  askAgain: askAgain.sorted(),
-                                                                 threatExceptions: threatExceptions.sorted(),
                                                                  everywhereBlocked: everywhereBlocked)) else { return }
         dirty = false
         try? Vault.shared.write(data, to: fileURL)
