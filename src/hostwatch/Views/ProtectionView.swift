@@ -46,13 +46,7 @@ struct ProtectionView: View {
     /// Opens another page of the Rules sidebar (the overview's links).
     var go: (RulesSegment) -> Void = { _ in }
 
-    private static let limit = 40
     static let placeOptions: [(ProtectionVerdict, String)] = [(.ask, "Ask me"), (.block, "Block")]
-    /// "Show all": a long section opens in full on request (the first 40 keep the page quick).
-    @StateObject private var showAll = FoundExpansion()
-    private static let relative: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; f.dateTimeStyle = .named; return f
-    }()
 
     var body: some View {
         let _ = protection.revision
@@ -60,7 +54,9 @@ struct ProtectionView: View {
             VStack(alignment: .leading, spacing: 22) {
                 switch page {
                 case .protectedFiles: files
-                case .protectionFound: findings
+                case .protectionFound:
+                    FoundPage(protection: protection, firewall: firewall, connections: connections,
+                              markConnection: markConnection, mark: mark)
                 default: ProtectionOverview(protection: protection, firewall: firewall, connections: connections, go: go)
                 }
             }
@@ -171,101 +167,6 @@ struct ProtectionView: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
     }
-
-    // MARK: Findings
-
-    private var findings: some View {
-        let all = protection.findings.values.sorted {
-            ($0.verdict == .block ? 0 : 1, -$0.count) < ($1.verdict == .block ? 0 : 1, -$1.count)
-        }
-        let network = connections()
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("What protection found").font(.headline)
-                Spacer()
-                if !all.isEmpty { forgetMenu(all) }
-            }
-            if all.isEmpty && network.isEmpty {
-                Text("Nothing yet. What would be stopped or asked about appears here, so you can decide first.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Allow marks the pattern Safe. Block marks it Dangerous. Either way it leaves this list. "
-                     + "Entries that don't happen again leave by themselves: a question after a week, a stop after a month.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if !all.isEmpty {
-                    Text("Launches and files").font(.subheadline.weight(.semibold)).padding(.top, 4)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(showAll.files ? all[...] : all.prefix(Self.limit)) { f in finding(f) }
-                        if all.count > Self.limit {
-                            Button(showAll.files ? "Show fewer" : "Show all \(all.count)") { showAll.files.toggle() }
-                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .protectionGlass(16)
-                }
-                // Connections: the firewall's findings, decided the same way.
-                if !network.isEmpty {
-                    HStack {
-                        Text("Connections").font(.subheadline.weight(.semibold))
-                        Spacer()
-                        if let firewall { ConnectionsForgetMenu(firewall: firewall, found: network) }
-                    }
-                    .padding(.top, 8)
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(showAll.connections ? network[...] : network.prefix(Self.limit), id: \.0.id) { entry, decision in
-                            NetworkFindingRow(entry: entry, decision: decision, mode: firewall?.mode ?? .watch, firewall: firewall) { status in
-                                markConnection?(entry, status) ?? mark([entry.facts.patternKey], status)
-                            }
-                        }
-                        if network.count > Self.limit {
-                            Button(showAll.connections ? "Show fewer" : "Show all \(network.count)") { showAll.connections.toggle() }
-                                .buttonStyle(.glass).controlSize(.small).font(.caption).padding(.vertical, 6)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .protectionGlass(16)
-                }
-            }
-        }
-    }
-
-    /// Launches and files: clearing a long list at once (only the entries go, see ForgetMenu).
-    private func forgetMenu(_ all: [ProtectionFinding]) -> some View {
-        let dayAgo = Date().addingTimeInterval(-86_400)
-        return ForgetMenu(questions: all.filter { $0.verdict == .ask }.count, older: all.filter { $0.lastSeen < dayAgo }.count,
-                          all: all.count, forgetQuestions: { protection.forget { $0.verdict == .ask } },
-                          forgetOlder: { protection.forget { $0.lastSeen < dayAgo } }, forgetAll: { protection.forget { _ in true } },
-                          after: "a question after a week, a stop after a month")
-    }
-
-    private func finding(_ f: ProtectionFinding) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(nsImage: ProcessIcons.icon(f.program)).resizable().frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(f.name).fontWeight(.semibold)
-                    Text(f.enforced ? "Stopped" : f.verdict == .block ? "Would stop" : "Would ask")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(f.verdict == .block ? Color.red : Color.orange)
-                    Text("\(f.count)× · \(Self.relative.localizedString(for: f.lastSeen, relativeTo: Date()))")
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                }
-                Text(f.pattern).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle).help(f.pattern)
-                Text(f.reason).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Allow") { mark([f.patternKey], .safe) }
-            Button("Block") { mark([f.patternKey], .dangerous) }
-            Button { protection.forget([f.id]) } label: { Image(systemName: "xmark") }
-                .buttonStyle(.borderless).help("Remove from this list without deciding")
-        }
-        .controlSize(.small)
-        .padding(.vertical, 4)
-    }
 }
 
 extension View {
@@ -294,57 +195,6 @@ enum RuleSections {
 extension View {
     /// The Global rules section's panel: glass with the scope's light blue.
     func globalRulesGlass() -> some View { protectionGlass(16, tint: RuleSections.global.opacity(0.06)) }
-}
-
-/// Found ▸ Forget: clears a long list at once. Only the entries go: decisions, rules and patterns stay, and anything
-/// that happens again comes back. Old entries also leave by themselves (`after` says when).
-struct ForgetMenu: View {
-    let questions: Int
-    let older: Int
-    let all: Int
-    let forgetQuestions: () -> Void
-    let forgetOlder: () -> Void
-    let forgetAll: () -> Void
-    let after: String
-
-    var body: some View {
-        Menu {
-            Button("Forget Questions (\(questions))", action: forgetQuestions).disabled(questions == 0)
-            Button("Forget Older Than a Day (\(older))", action: forgetOlder).disabled(older == 0)
-            Divider()
-            Button("Forget All (\(all))", action: forgetAll).disabled(all == 0)
-        } label: {
-            Label("Forget", systemImage: "eraser")
-        }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .fixedSize()
-        .help("Clear entries from this list. Decisions, rules and patterns stay. What happens again comes back. "
-              + "Old entries also leave by themselves: \(after).")
-    }
-}
-
-/// The firewall's findings, forgotten from the list only (FirewallMonitor.dismiss): what would be blocked or asked.
-struct ConnectionsForgetMenu: View {
-    @ObservedObject var firewall: FirewallMonitor
-    let found: [(FirewallEntry, FirewallDecision)]
-
-    var body: some View {
-        let dayAgo = Date().addingTimeInterval(-86_400)
-        let questions = found.filter { $0.1.verdict == .ask }.map(\.0.id)
-        let older = found.filter { $0.0.lastSeen < dayAgo }.map(\.0.id)
-        ForgetMenu(questions: questions.count, older: older.count, all: found.count,
-                   forgetQuestions: { firewall.dismiss(questions) }, forgetOlder: { firewall.dismiss(older) },
-                   forgetAll: { firewall.dismiss(found.map(\.0.id)) },
-                   after: "a connection not seen for a week")
-    }
-}
-
-/// Which Found sections are open in full (no @State macro with the command line tools).
-final class FoundExpansion: ObservableObject {
-    @Published var files = false
-    @Published var connections = false
 }
 
 /// A place's choices, as a sentence: what any other program meets (Ask me or Block), and the programs you always

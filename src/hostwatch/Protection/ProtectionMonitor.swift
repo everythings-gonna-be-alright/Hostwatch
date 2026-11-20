@@ -357,7 +357,7 @@ final class ProtectionMonitor: ObservableObject {
         let keys = Set(patternKeys)
         let before = findings.count
         findings = findings.filter { !keys.contains($0.value.patternKey) }
-        if findings.count != before { dirty = true; publishSoon() }
+        if findings.count != before { dirty = true; publishNow() }
     }
 
     /// File rules from the short-lived separate list become what they meant: a program's Allow or Block a place on its
@@ -403,7 +403,7 @@ final class ProtectionMonitor: ObservableObject {
     func forget(_ ids: [String]) {
         for id in ids { findings[id] = nil }
         dirty = true
-        publishSoon()
+        publishNow()
     }
 
     /// Found ▸ Forget: the entries that match leave the list. Decisions and patterns are untouched.
@@ -456,6 +456,13 @@ final class ProtectionMonitor: ObservableObject {
 
     /// Per protected-files card: what was (or would be) stopped there, in the findings kept.
     func findings(group: String) -> [ProtectionFinding] { findings.values.filter { $0.group == group } }
+
+    /// Your own change (Forget, Allow, Block): on screen at once. Batching is for what events change, many a second;
+    /// a click waiting for the next batch looked like a button that didn't work.
+    private func publishNow() {
+        revision += 1
+        publishSoon()
+    }
 
     private func publishSoon() {
         guard !publishScheduled else { return }

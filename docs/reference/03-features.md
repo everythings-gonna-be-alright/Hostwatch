@@ -870,10 +870,9 @@ curl and other programs that run whatever they're told are judged by what they r
   this Mac from it or goes to it, whatever the firewall's mode, with no exceptions (not for the router or this Mac).
   The devices and ports you blocked from the network map are in the same list.
 - **Found keeps itself short:** an entry that doesn't happen again leaves by itself, a question after a week,
-  something that would be stopped after a month, a connection not seen for a week. *Forget*, beside launches and
-  files and beside connections (in Found and on the Network Firewall page), clears the questions, entries older than
-  a day, or all of them. Only the list entries go: decisions, rules and patterns stay, and what happens again comes
-  back.
+  something that would be stopped after a month, a connection not seen for a week. *Forget* in Found's header clears
+  what's shown, the questions, entries older than a day, or all of them. Only the list entries go: decisions, rules
+  and patterns stay, and what happens again comes back.
 - **AI checks first (Ask):** a paused launch or file access is first looked at by the AI you chose (the on-device
   model or your own server, within 12 seconds). If it is sure it's safe, the program goes on, this time only, and a
   glass notice at the top right says so. It also shows "Checking … with AI" while it looks, whether or not a window
@@ -901,9 +900,15 @@ curl and other programs that run whatever they're told are judged by what they r
 - **Your folders and files:** *Add Folder or File…* protects any folder (and everything inside it) or a single file.
   Only macOS's own programs (Finder, Spotlight, backups) pass without asking. Each has its own switch, Ask or Block,
   and a remove button. Allow a program there on its card under App rules, or by marking its pattern Safe.
-- **What protection found:** each launch or file access that would be stopped or asked about, folded by pattern.
-  *Allow* marks the pattern Safe, *Block* marks it Dangerous, and it leaves the list. Deciding it anywhere else does
-  the same.
+- **What protection found:** the *Found* page lists each launch, file access and connection that would be stopped or
+  asked about, folded by pattern and grouped by program, the programs that would be stopped first. Its header (in
+  orange, the attention colour) counts what there is to review, what would be stopped, the questions, the program
+  found most and the oldest entry. Filter by *Launches*, *Files* or *Connections* and by *Would Stop* or *Questions*,
+  search by program, pattern or destination, and sort by how often, how recently or by name. A program shows its
+  first five entries (*Show More* for the rest), and *Decide All* allows, blocks or forgets all of them at once (a
+  threat list's match is never allowed in bulk). On each entry, *Allow* marks the pattern Safe, *Block* marks it
+  Dangerous (a connection blocks just that destination for that program), and the × forgets it. The entry leaves at
+  once, and the same actions are in its context menu. Deciding it anywhere else does the same.
 - **In Events:** a red no-entry sign after the status marks what would be stopped, with the reason in its tooltip.
   Questions are only counted, so the list stays quiet.
 - **Pause for 15 Minutes** stops everything, rehearsal included. The window's subtitle says *Rehearsing*,

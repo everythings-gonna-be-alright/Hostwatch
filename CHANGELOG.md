@@ -21,6 +21,11 @@
   what it blocked and passed, your rules, the relay and this network). Then the area's activity chart beside what it
   found most, with Review in Found, and below them the global and app rules.
 
+- **A new Found page.** Everything to decide, grouped by program with the ones that would be stopped first: filter by
+  area and by would stop or question, search, sort, and Decide All for a whole program. Allow, Block and Forget take
+  an entry off the list at once (it waited up to a second before), and only the rows in view are drawn, so a long
+  list stays quick.
+
 ### Fixes
 
 - **Always Block in a firewall question blocks that destination only.** It used to mark the program's whole web

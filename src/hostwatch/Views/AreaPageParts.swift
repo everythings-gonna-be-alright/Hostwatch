@@ -33,6 +33,8 @@ enum AreaState: Equatable {
 enum AreaAccent {
     static let files = Color.indigo
     static let network = Color.teal
+    /// Found is all attention, so it wears the attention colour itself.
+    static let found = Color.orange
 }
 
 /// An area page's header, unlike the Overview's on purpose: the area's tile in its own colour, its name with the state
