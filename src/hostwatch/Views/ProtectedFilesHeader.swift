@@ -18,7 +18,7 @@ struct ProtectedFilesHeader: View {
         let found = protection.findings.values.filter { $0.area == .files }
         let range = ProtectionTimeline.Range(rawValue: rangeRaw) ?? .day
         VStack(alignment: .leading, spacing: 18) {
-            AreaHero(symbol: "lock.doc.fill", title: "Files", state: state, sentence: sentence, facts: facts(found)) {
+            AreaHero(symbol: "lock.doc.fill", title: "Files", accent: AreaAccent.files, state: state, sentence: sentence, facts: facts(found)) {
                 AreaModePicker(title: "Files", mode: Binding(get: { mode }, set: { protection.setMode($0, for: .files) }),
                                modes: ProtectionMode.allCases.map { ($0, $0.short) })
                 HelpLink { help.open.toggle() }

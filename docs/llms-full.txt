@@ -1344,8 +1344,8 @@ what the chosen one does, today's numbers and how many it found, and links to th
 both numbers the sidebar uses: what would be stopped, and everything to review. The Help button explains the modes
 and how quickly Ask and Strict act. The window's subtitle says the same state as the Overview, the firewall
 included. *Protected Files and Folders* and *Network Firewall* open the way the Overview does, for their area only: a
-header with the area's state in its colour (grey off, purple watching, green protecting, orange paused), the mode,
-one sentence and five facts, then **Activity** with the area's chart and numbers over the chosen range beside what it
+header in the area's own colour (indigo for files, teal for the firewall) with its state as a pill (grey off, purple
+watching, green protecting, orange paused), the mode, one sentence and five facts in one strip, then **Activity** with the area's chart and numbers over the chosen range beside what it
 **found most**, with *Review in Found*. Below them come **Global rules** (tinted a light blue) and **App rules**.
 The files page's facts are its protected places, the app rules, the place found most in, the last program stopped
 and what waits for you. *Found* lists what the rehearsal found.

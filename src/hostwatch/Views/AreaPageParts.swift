@@ -28,11 +28,19 @@ enum AreaState: Equatable {
     }
 }
 
-/// An area page's header, the Overview's on a smaller scale: the area's seal in its state's colour, its name and state,
-/// one sentence, the mode, and five facts about this area only.
+/// Each area page's own colour: who the page is about, never a status (DESIGN.md ▸ Colour). Indigo and teal are
+/// colours no status uses. The state shows as a pill in its status colour.
+enum AreaAccent {
+    static let files = Color.indigo
+    static let network = Color.teal
+}
+
+/// An area page's header, unlike the Overview's on purpose: the area's tile in its own colour, its name with the state
+/// as a pill, one sentence and the mode, over a wash of the area's colour, then its facts as one divided strip.
 struct AreaHero<Controls: View, Notice: View>: View {
     let symbol: String
     let title: String
+    let accent: Color
     let state: AreaState
     let sentence: String
     let facts: [StatusFact]
@@ -41,13 +49,12 @@ struct AreaHero<Controls: View, Notice: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 16) {
-                AreaSeal(symbol: symbol, state: state)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .center, spacing: 14) {
+                AreaTile(symbol: symbol, accent: accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 10) {
                         Text(title).font(.title2.weight(.semibold))
-                        Text(state.word).font(.callout.weight(.semibold))
-                            .foregroundStyle(state == .off ? Color.secondary : state.tint)
+                        StatePill(state: state)
                     }
                     Text(sentence).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -55,37 +62,90 @@ struct AreaHero<Controls: View, Notice: View>: View {
                 controls()
             }
             notice()
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                ForEach(facts, id: \.title) { StatusFactView(fact: $0) }
-            }
+            FactStrip(facts: facts)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(state.tint.opacity(state == .off ? 0 : 0.10)),
-                     in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background {
+            // The wash: the area's colour from the leading edge, fading before the middle.
+            LinearGradient(colors: [accent.opacity(0.20), accent.opacity(0.04), .clear],
+                           startPoint: .topLeading, endPoint: UnitPoint(x: 0.7, y: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            // A hairline of the area's colour around the leading edge, fading out.
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(LinearGradient(colors: [accent.opacity(0.55), accent.opacity(0)],
+                                             startPoint: .leading, endPoint: .trailing), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
         .accessibilityElement(children: .contain)
     }
 }
 
-/// The area's symbol on a soft disc of the state's colour, inside two quiet rings (the Overview's seal, per area).
-private struct AreaSeal: View {
+/// The area's symbol on a squircle of its colour, as System Settings draws a pane's icon.
+private struct AreaTile: View {
     let symbol: String
+    let accent: Color
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 52, height: 52)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(accent.gradient))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+            .shadow(color: accent.opacity(0.35), radius: 10, y: 4)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The state in its status colour: a dot and the word, on a soft capsule.
+private struct StatePill: View {
     let state: AreaState
 
     var body: some View {
-        let tint = state == .off ? Color.gray : state.tint
-        ZStack {
-            Circle().strokeBorder(tint.opacity(0.14), lineWidth: 1).frame(width: 66, height: 66)
-            Circle().strokeBorder(tint.opacity(0.24), lineWidth: 1).frame(width: 56, height: 56)
-            Image(systemName: symbol)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(tint.gradient, in: Circle())
-                .shadow(color: tint.opacity(state == .off ? 0 : 0.45), radius: 12, y: 5)
+        let tint = state == .off ? Color.secondary : state.tint
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 7, height: 7)
+            Text(state.word).font(.caption.weight(.semibold))
         }
-        .frame(width: 66, height: 66)
-        .accessibilityHidden(true)
+        .padding(.horizontal, 9).padding(.vertical, 3)
+        .background(Capsule().fill(tint.opacity(0.16)))
+        .foregroundStyle(state == .off ? Color.secondary : Color.primary)
+        .accessibilityLabel("State: \(state.word)")
+    }
+}
+
+/// The facts side by side with hairlines between, the way a stats bar reads, or a grid when the window is narrow.
+private struct FactStrip: View {
+    let facts: [StatusFact]
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(facts.indices, id: \.self) { i in
+                    if i > 0 { Divider().frame(height: 46).padding(.horizontal, 14) }
+                    fact(facts[i]).frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14)], alignment: .leading, spacing: 12) {
+                ForEach(facts, id: \.title) { fact($0) }
+            }
+        }
+        .padding(.top, 12)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func fact(_ f: StatusFact) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(f.title, systemImage: f.symbol).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            Text(f.value).font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
+                .lineLimit(1).truncationMode(.middle).help(f.value)
+            Text(f.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).help(f.detail)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

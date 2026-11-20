@@ -24,7 +24,7 @@ struct NetworkFirewallHeader: View {
             firstSeen: found.map { ($0.0.firstSeen, blocked: $0.1.verdict == .block) }, range: range)
         let top = found.sorted { ($0.0.count, $0.0.lastSeen) > ($1.0.count, $1.0.lastSeen) }.prefix(5).map { FoundConnection(entry: $0.0, decision: $0.1) }
         VStack(alignment: .leading, spacing: 18) {
-            AreaHero(symbol: "network.badge.shield.half.filled", title: "Network Firewall", state: state, sentence: sentence,
+            AreaHero(symbol: "network.badge.shield.half.filled", title: "Network Firewall", accent: AreaAccent.network, state: state, sentence: sentence,
                      facts: facts) {
                 AreaModePicker(title: "Mode", mode: $firewall.mode, modes: FirewallMode.allCases.map { ($0, $0.short) })
                 HelpLink { help.open.toggle() }

@@ -317,6 +317,8 @@ struct StatusFactView: View {
 struct ProtectionBackdrop: View {
     @ObservedObject var protection: ProtectionMonitor
     var firewall: FirewallMonitor?
+    /// An area page's own colour, for its top pool instead of the state's (`AreaAccent`).
+    var accent: Color? = nil
 
     private var state: ProtectionState { protection.state(network: firewall?.mode ?? .off) }
 
@@ -331,7 +333,7 @@ struct ProtectionBackdrop: View {
 
     var body: some View {
         ZStack {
-            RadialGradient(colors: [tint.opacity(state == .off ? 0.08 : 0.18), .clear],
+            RadialGradient(colors: [accent.map { $0.opacity(0.16) } ?? tint.opacity(state == .off ? 0.08 : 0.18), .clear],
                            center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 520)
             RadialGradient(colors: [Color.cyan.opacity(0.10), .clear], center: UnitPoint(x: 1, y: 0.35),
                            startRadius: 0, endRadius: 480)
