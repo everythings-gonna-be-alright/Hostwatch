@@ -180,7 +180,7 @@ import Testing
     }
 }
 
-/// Your firewall rules, listed whatever the seen-connections list holds: forgetting that never hides a rule.
+/// Your firewall rules live on the apps' cards, whatever the seen-connections list holds: forgetting never hides one.
 @MainActor @Suite struct FirewallRulesList {
     @Test func everyRuleIsListedAndRemovableAndSurvivesForgetting() {
         _ = TestEnv.ready
@@ -191,11 +191,12 @@ import Testing
         fw.setBlocked(true, domain: "example.com", program: app)
         fw.setThreatException(true, FirewallFacts(program: app, proto: "TCP", ip: "1.2.3.4", port: "443", host: "raw.githubusercontent.com",
                                                   risk: .normal, riskReason: "", knownBad: "x", patternKey: "k"))
-        #expect(fw.rules.map(\.kind) == [.threatException])                  // the block is on Tool's card
-        #expect(fw.apps.map(\.app) == ["/Applications/Tool.app"] && fw.isBlocked(domain: "example.com", program: app))
+        // Both on Tool's card: the block, and Allow Anyway as an Allow. No list apart.
+        #expect(fw.rules.isEmpty && fw.apps.map(\.app) == ["/Applications/Tool.app"])
+        #expect(fw.apps[0].destinations.map(\.others) == [.block, .allow] && fw.isBlocked(domain: "example.com", program: app))
         fw.clear()                                                        // Forget Seen Connections
-        #expect(fw.rules.count == 1 && fw.apps.count == 1)
+        #expect(fw.apps.first?.destinations.count == 2)
         fw.setBlocked(false, domain: "example.com", program: app)
-        #expect(!fw.isBlocked(domain: "example.com", program: app) && fw.rules.count == 1 && fw.apps.isEmpty)
+        #expect(!fw.isBlocked(domain: "example.com", program: app) && fw.apps.first?.destinations.map(\.others) == [.allow])
     }
 }

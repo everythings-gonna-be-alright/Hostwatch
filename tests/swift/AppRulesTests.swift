@@ -82,3 +82,16 @@ import Testing
         #expect(fw.isBlocked(domain: "tracker.example", program: "/opt/homebrew/bin/kubescape"))
     }
 }
+
+/// Allow Anyway, kept apart by older versions, becomes an Allow on the program's card: it wins over the threat list.
+@Suite struct ThreatExceptionsIntoCards {
+    @Test func anOldExceptionIsAnAllowOnTheCard() {
+        let cards = AppRulesList.migrated(appBlocks: [], everywhereAllowed: [], domainBlocks: ["curl|evil.example"],
+                                          threatExceptions: ["curl|githubusercontent.com"])
+        #expect(cards.count == 1 && cards[0].app == "curl")
+        #expect(cards[0].destinations.map(\.target) == ["evil.example", "githubusercontent.com"])
+        let f = FirewallFacts(program: "/usr/bin/curl", proto: "TCP", ip: "1.2.3.4", port: "443",
+                              host: "objects.githubusercontent.com", risk: .normal, riskReason: "", knownBad: "x", patternKey: "k")
+        #expect(FirewallPolicy.decide(f, status: .unclassified, app: cards[0], hostwatch: "/hw").verdict == .allow)
+    }
+}

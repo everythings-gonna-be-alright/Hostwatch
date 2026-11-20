@@ -2,12 +2,29 @@ import AppKit
 import SwiftUI
 
 /// Network Firewall ▸ Apps: one card per app, under General and on the same principle. Its own Everywhere and its own
-/// destinations, which win over General's (ADR 0020). Collapsed to a summary line, open to change it.
+/// destinations, which win over General's (ADR 0020). Collapsed to a summary line, open to change it. A program's
+/// blocked connection patterns and destinations asked about again are on its card too: there is no other list.
 struct AppRulesSection: View {
     @ObservedObject var firewall: FirewallMonitor
+    @ObservedObject var signatures: SignatureStore
     @StateObject private var state = AppCardsState()
 
+    /// Per card: connection patterns marked Suspicious or Dangerous (blocked whatever the domain), newest first.
+    private func blockedPatterns() -> [String: [SignatureEntry]] {
+        Dictionary(grouping: signatures.allEntries
+            .filter { $0.kind == .net && [.suspicious, .dangerous].contains(signatures.status(forKey: $0.id)) }
+            .sorted { $0.lastSeen > $1.lastSeen }) { firewall.cardKey(for: SignatureBuilder.programPath($0.process)) }
+    }
+
     var body: some View {
+        let _ = signatures.revision
+        let patterns = blockedPatterns()
+        let again = Dictionary(grouping: firewall.rules) { firewall.cardKey(for: $0.program) }
+        // Cards you made first, then programs known only by what you decided in questions.
+        let known = Set(firewall.apps.map(\.app))
+        let extra = Set(patterns.keys).union(again.keys).subtracting(known)
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }.map { AppRules(app: $0) }
+        let cards = firewall.apps + extra
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Apps").font(.headline)
@@ -16,14 +33,17 @@ struct AppRulesSection: View {
                     .buttonStyle(.glass).controlSize(.small)
                     .help("Rules for one app or command-line program")
             }
-            Text("Rules for one app (an app covers every program inside it): what it meets everywhere, and its own "
-                 + "domains and addresses. They win over General. Always Block in a firewall question adds the "
-                 + "destination here.")
+            Text("Rules for one app (an app covers every program inside it): what it meets everywhere, its own "
+                 + "domains and addresses, and the connections you blocked. They win over General. Always Block and "
+                 + "Allow Anyway in a firewall question add the destination here.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if firewall.apps.isEmpty {
+            if cards.isEmpty {
                 Text("None yet. Add an app to give it its own rules.").font(.callout).foregroundStyle(.secondary)
             }
-            ForEach(firewall.apps) { r in AppRulesCard(rules: r, firewall: firewall, state: state) }
+            ForEach(cards) { r in
+                AppRulesCard(rules: r, patterns: patterns[r.app] ?? [], again: again[r.app] ?? [],
+                             firewall: firewall, signatures: signatures, state: state)
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,7 +65,11 @@ final class AppCardsState: ObservableObject {
 
 private struct AppRulesCard: View {
     let rules: AppRules
+    /// Its connection patterns you blocked, and its destinations asked about again.
+    let patterns: [SignatureEntry]
+    let again: [FirewallMonitor.Rule]
     @ObservedObject var firewall: FirewallMonitor
+    let signatures: SignatureStore
     @ObservedObject var state: AppCardsState
 
     private var isOpen: Bool { state.open.contains(rules.app) }
@@ -60,6 +84,8 @@ private struct AppRulesCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     everywhere
                     ForEach(rules.destinations) { d in row(d) }
+                    ForEach(patterns) { e in patternRow(e) }
+                    ForEach(again) { r in againRow(r) }
                     addRow
                 }
                 .padding(.leading, 32)
@@ -94,7 +120,7 @@ private struct AppRulesCard: View {
             }
             .buttonStyle(.plain)
             .help(isOpen ? "Hide \(rules.name)'s rules" : "Show \(rules.name)'s rules")
-            Button { firewall.removeApp(rules.app) } label: { Image(systemName: "minus.circle") }
+            Button { remove() } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.borderless).help("Remove \(rules.name) and its rules")
         }
     }
@@ -120,10 +146,11 @@ private struct AppRulesCard: View {
         case .block: parts.append("Blocked everywhere")
         case .firewall: break
         }
-        let blocked = rules.destinations.filter { $0.others == .block }.count
-        let allowed = rules.destinations.count - blocked
+        let blocked = rules.destinations.filter { $0.others == .block }.count + patterns.count
+        let allowed = rules.destinations.count + patterns.count - blocked
         if blocked > 0 { parts.append("\(blocked) blocked") }
         if allowed > 0 { parts.append("\(allowed) allowed") }
+        if !again.isEmpty { parts.append("\(again.count) asked again") }
         return parts.isEmpty ? "No rules yet: General applies" : parts.joined(separator: " · ")
     }
 
@@ -188,6 +215,43 @@ private struct AppRulesCard: View {
                 .buttonStyle(.borderless).help("Remove \(d.target)")
         }
         .opacity(d.on ? 1 : 0.5)
+    }
+
+    /// The card goes with everything on it: its patterns back to New, its ask-again entries removed.
+    private func remove() {
+        if !patterns.isEmpty { signatures.set(.unclassified, keys: patterns.map(\.id)) }
+        for r in again { firewall.remove(r) }
+        firewall.removeApp(rules.app)
+    }
+
+    /// A connection pattern you blocked: exact, one port and who did it, so it stays a pattern, not a destination.
+    private func patternRow(_ e: SignatureEntry) -> some View {
+        let who = SignatureBuilder.who(inProcess: e.process).map { " · via \($0)" } ?? ""
+        return HStack(spacing: 8) {
+            Image(systemName: "nosign").foregroundStyle(.secondary).frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(e.pattern).font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .lineLimit(1).truncationMode(.middle).help(e.pattern)
+                Text("Blocked connection\(who) · marked \(signatures.status(forKey: e.id).title) by \(signatures.decidedBy(e.id))")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            Button("Unblock") { signatures.set(.unclassified, keys: [e.id]) }
+                .controlSize(.small).help("Back to New: the firewall asks about it again")
+        }
+    }
+
+    /// A destination whose decision you forgot: asked about again until you answer.
+    private func againRow(_ r: FirewallMonitor.Rule) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "questionmark.circle").foregroundStyle(.secondary).frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(r.destination).font(.system(size: 12, weight: .medium, design: .monospaced))
+                Text("Asked about again: you forgot your decision here").font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            Button("Remove") { firewall.remove(r) }.controlSize(.small).help("Its pattern decides again")
+        }
     }
 
     @ViewBuilder private var addRow: some View {

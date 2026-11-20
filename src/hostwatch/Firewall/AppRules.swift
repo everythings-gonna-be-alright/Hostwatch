@@ -46,10 +46,16 @@ enum AppRulesList {
         return String(program[..<r.lowerBound]) + ".app"
     }
 
-    /// Cards from what older versions kept: apps blocked or allowed everywhere, "program name|domain" blocks, and a
-    /// general destination's program chips. One card per app, in that order.
+    /// Cards from what older versions kept: apps blocked or allowed everywhere, "program name|domain" blocks and
+    /// Allow Anyway exceptions, and a general destination's program chips. One card per app, in that order.
+    /// The card a change about this program goes to: the one that already decides for it, else its app's.
+    static func cardKey(for program: String, in apps: [AppRules]) -> String {
+        rules(for: program, in: apps)?.app ?? app(of: program)
+    }
+
     static func migrated(appBlocks: [String], everywhereAllowed: [String], domainBlocks: [String],
-                         destinations: [Destination] = [], into apps: [AppRules] = []) -> [AppRules] {
+                         threatExceptions: [String] = [], destinations: [Destination] = [],
+                         into apps: [AppRules] = []) -> [AppRules] {
         var out = apps
         func edit(_ app: String, _ change: (inout AppRules) -> Void) {
             if let i = out.firstIndex(where: { $0.app == app }) { change(&out[i]) }
@@ -66,6 +72,10 @@ enum AppRulesList {
         for key in domainBlocks {
             let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
             if parts.count == 2 { add(parts[0], parts[1], .block) }
+        }
+        for key in threatExceptions {
+            let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+            if parts.count == 2 { add(parts[0], parts[1], .allow) }
         }
         for d in destinations {
             for p in d.exceptions.allowed { add(p, d.target, .allow) }
