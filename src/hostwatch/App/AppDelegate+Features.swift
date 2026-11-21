@@ -18,6 +18,7 @@ extension AppDelegate {
         model.flushUI()
         firewall.relayStatus("on", "")
         signatures.showSeenOnce = true
+        metrics.demoSample = { Demo.metricSample(at: $0) }
         running.request = { [weak self] in
             self?.running.receive(Demo.runningList())
             return true
@@ -121,6 +122,8 @@ extension AppDelegate {
                     openWatch(for: e)
                     if let (id, w) = watches.first {
                         w.session.receive(WatchMessage(id: id, state: "done", detail: "time limit", profile: Demo.watchProfile()))
+                        w.session.prepareAnalysis()
+                        w.session.analysis?.demoAnswer(Demo.watchAnswer)
                     }
                 }
             case "live":

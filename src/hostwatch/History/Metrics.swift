@@ -277,6 +277,13 @@ final class MetricsStore: ObservableObject {
     private var lastMaintenanceDay = ""
     private let cache = MetricsCache()
 
+    #if DEMO
+    /// The demo's machine instead of this Mac's: its history at once, then a sample of it on every tick.
+    var demoSample: ((Date) -> MetricSample)? {
+        didSet { if demoSample != nil { recent = Demo.metricHistory() } }
+    }
+    #endif
+
     init(directory: @escaping () -> URL) {
         self.directory = directory
     }
@@ -320,6 +327,13 @@ final class MetricsStore: ObservableObject {
 
     private func tick() {
         let now = Date()
+        #if DEMO
+        if let make = demoSample {
+            recent.append(make(now))
+            if let first = recent.first, now.timeIntervalSince(first.date) > 30 * 60 { recent.removeFirst() }
+            return
+        }
+        #endif
         let r = sampler.read()
         var sample = MetricSample(t: now.timeIntervalSince1970.rounded(), cpu: (r.cpu * 10).rounded() / 10,
                                   mem: (r.mem * 1000).rounded() / 1000, pressure: r.pressure,

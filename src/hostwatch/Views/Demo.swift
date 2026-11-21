@@ -111,6 +111,51 @@ enum Demo {
              ago: 4 * 86_400 - 40, user: "alex", cpu: 0.1, mem: 58_000_000, threads: 7),
     ]
 
+    /// Running Now's charts: the machine of the running list, one sample every 5 s. CleanMyDisk climbs to nearly a
+    /// whole core and sends far more than it receives, every 10 s, as the rest of the demo says it does.
+    static func metricSample(at date: Date) -> MetricSample {
+        let t = date.timeIntervalSince1970.rounded()
+        let age = epoch.timeIntervalSince1970 - t
+        func wave(_ seed: Double, _ amount: Double) -> Double { 1 + amount * sin(t / (17 + seed) + seed) * cos(t / (41 + seed * 3)) }
+        let procs = processes.filter { $0.cpu > 0 || $0.mem > 100_000_000 }.map { p -> TopProcess in
+            let seed = Double(p.pid % 97)
+            var cpu = p.cpu * wave(seed, 0.35)
+            if p.path == cleaner { cpu = min(1, max(0.55, 1 - age / 1200)) * p.cpu * wave(seed, 0.06) }
+            return TopProcess(pid: p.pid, name: p.name, path: p.path.hasPrefix("/") ? p.path : p.name,
+                              cpu: (cpu * 10).rounded() / 10, mem: Int64(Double(p.mem) * wave(seed, 0.03)), read: 0, write: 0)
+        }
+        let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
+        let physical = Double(ProcessInfo.processInfo.physicalMemory)
+        let used = min(0.9, procs.reduce(0) { $0 + Double($1.mem) } / physical + 0.18)
+        var sample = MetricSample(t: t, cpu: ((procs.reduce(0) { $0 + $1.cpu } / cores + 2.5) * 10).rounded() / 10,
+                                  mem: (used * 1000).rounded() / 1000, pressure: 1, netIn: 0, netOut: 0)
+        sample.programs = ResourceSeries.programs(procs)
+        do {
+            let kb = 1024.0
+            let rates: [String: [Double]] = [
+                "CleanMyDisk": [14 * kb * wave(3, 0.4), 610 * kb * wave(5, 0.5)],
+                "Safari": [380 * kb * wave(7, 0.7), 22 * kb * wave(8, 0.5)],
+                "Music": [290 * kb * wave(11, 0.2), 4 * kb],
+                "Mail": [40 * kb * wave(13, 0.9), 9 * kb * wave(14, 0.9)],
+                "cloudd": [60 * kb * wave(17, 0.8), 75 * kb * wave(19, 0.8)],
+                ResourceSeries.other: [30 * kb * wave(23, 0.5), 12 * kb * wave(29, 0.5)],
+            ]
+            // The strip's numbers on every sample, the chart's on the ones a traffic report (every 10 s) arrived for.
+            if Int(t) % 10 == 0 { sample.traffic = rates.mapValues { $0.map { $0.rounded() } } }
+            sample.netIn = rates.values.reduce(0) { $0 + $1[0] }.rounded()
+            sample.netOut = rates.values.reduce(0) { $0 + $1[1] }.rounded()
+        }
+        return sample
+    }
+
+    /// The last half hour of that machine, so the charts open full.
+    @MainActor static func metricHistory(until end: Date = Date()) -> [MetricSample] {
+        let last = (end.timeIntervalSince1970 / MetricsStore.interval).rounded(.down) * MetricsStore.interval
+        return stride(from: last - 30 * 60, through: last, by: MetricsStore.interval).map {
+            metricSample(at: Date(timeIntervalSince1970: $0))
+        }
+    }
+
     static func runningList(now: Date = epoch, jitter: Bool = true) -> [RunningProcessInfo] {
         processes.map { p in
             let wobble = jitter ? Double.random(in: 0.9...1.03) : 1
@@ -280,6 +325,25 @@ enum Demo {
     }
 
     // MARK: Watch Closely
+
+    /// What the AI says about that minute, in its usual shape: the screenshot shows a verdict, not an empty card.
+    static let watchAnswer = """
+    VERDICT: DANGEROUS
+    CONFIDENCE: high
+    RISK: 95
+
+    **What it is:** an unsigned app from Downloads that steals browser data and keeps itself running.
+
+    **Why:**
+    - Read the keychain, Chrome's saved logins and Safari's cookies within seconds of starting.
+    - Added a launch agent so it starts at every login, and removed its own download quarantine.
+    - Sent the collected file to update.cleanmydisk-cdn.xyz, a domain first seen today.
+    - Tried to kill Hostwatch.
+
+    **What to do:**
+    - Quit it, delete CleanMyDisk.app and ~/Library/LaunchAgents/com.cleanmydisk.update.plist.
+    - Change the passwords saved in your browser.
+    """
 
     /// What Watch Closely would have recorded of CleanMyDisk for a minute.
     static func watchProfile() -> BehaviorProfile {

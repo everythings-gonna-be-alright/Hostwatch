@@ -430,6 +430,15 @@ final class AIAnalysis: ObservableObject {
         return rest.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
+    #if DEMO
+    /// The demo's answer, shown as if the AI had replied: Watch Closely's screenshot has the verdict in it.
+    func demoAnswer(_ text: String) {
+        answer = text
+        updateVerdict()
+        state = .done
+    }
+    #endif
+
     private func updateVerdict() {
         guard let range = answer.range(of: #"VERDICT:\s*\**\s*(SAFE|SUSPICIOUS|DANGEROUS|UNKNOWN)"#,
                                        options: [.regularExpression, .caseInsensitive]) else { return }
