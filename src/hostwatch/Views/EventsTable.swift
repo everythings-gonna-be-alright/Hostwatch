@@ -329,7 +329,7 @@ struct EventsTable: NSViewRepresentable {
             let e = row.event, badges = BadgeImages.shared
             switch column {
             case "time":
-                cell.set(text: parent.withDay ? e.dayTime : e.shortTime, color: .secondaryLabelColor, font: Self.mono, toolTip: e.time)
+                cell.set(text: parent.withDay ? e.dayTime : e.shortTime, color: TableInk.nsSecondary, font: Self.mono, toolTip: e.time)
             case "kind":
                 var icons = [EventCellView.Icon(image: badges.kindTile(e.kind), toolTip: e.kind.title)]
                 if let agent = row.agent {
@@ -370,11 +370,11 @@ struct EventsTable: NSViewRepresentable {
             case "process":
                 cell.set(text: e.name, font: parent.grouped ? Self.name : Self.nameBold, toolTip: e.proc)
             case "pid":
-                cell.set(text: String(e.pid), color: .secondaryLabelColor, font: Self.mono)
+                cell.set(text: String(e.pid), color: TableInk.nsSecondary, font: Self.mono)
             case "ppid":
-                cell.set(text: String(e.ppid), color: .secondaryLabelColor, font: Self.mono)
+                cell.set(text: String(e.ppid), color: TableInk.nsSecondary, font: Self.mono)
             case "parent":
-                cell.set(text: row.parentName.isEmpty ? nil : row.parentName, color: .secondaryLabelColor, font: Self.name,
+                cell.set(text: row.parentName.isEmpty ? nil : row.parentName, color: TableInk.nsSecondary, font: Self.name,
                          toolTip: row.parentName.isEmpty ? nil : "Started by \(e.parent) (pid \(e.ppid))")
             default:
                 var icons: [EventCellView.Icon] = []
