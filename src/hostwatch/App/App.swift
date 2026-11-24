@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     var guardPanel: NSPanel?
     /// Firewall rules; Watch mode lists what they would block (nothing is blocked yet).
     let firewall = FirewallMonitor()
+    /// Notifications for what must not go unnoticed: the collector or the network filter stopping by itself.
+    let criticalAlerts = CriticalAlerts()
+    /// Keeps the menu bar's red dot following `criticalAlerts.active`.
+    var alertDot: AnyCancellable?
+    /// Checks the collector the moment the connection drops, not at the next tick.
+    var collectorWatch: AnyCancellable?
     /// Launch and file protection: Watch rehearses on the live feed, Ask and Strict need Endpoint Security.
     let protection = ProtectionMonitor()
     var protectionPanel: NSPanel?
@@ -62,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     lazy var settings = SettingsWindowController(context: SettingsContext(
         model: model, collector: collector, history: history, hold: hold, domains: domains, stories: stories,
         signatures: signatures, classifier: classifier, editorDraft: editorDraft, updates: updates,
-        baseline: baseline, intel: intel, claudeGuard: claudeGuard, firewall: firewall, openBaseline: { [weak self] in self?.openBaselineReport() },
+        baseline: baseline, intel: intel, claudeGuard: claudeGuard, firewall: firewall, criticalAlerts: criticalAlerts, openBaseline: { [weak self] in self?.openBaselineReport() },
         showNetwork: { [weak self] in self?.openDomains() },
         toggleCollector: { [weak self] in self?.toggleCollector() },
         resetOverlayFrame: { [weak self] in self?.resetOverlayFrame() },
@@ -135,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             self?.model.overlayEnabled.toggle()
         }
         setUpHold()
+        setUpCriticalAlerts()
         if !AppPaths.isDemo { baseline.schedule() }               // first run: the learning day's waves
         // The welcome guide, once, on a fresh install: after the Full Disk Access window if that's showing.
         if firstRun, !AppPaths.isDemo { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.showWelcomeOnce() } }

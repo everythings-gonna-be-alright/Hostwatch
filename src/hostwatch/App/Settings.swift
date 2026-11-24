@@ -18,6 +18,7 @@ struct SettingsContext {
     let intel: ThreatIntel
     let claudeGuard: ClaudeGuard
     let firewall: FirewallMonitor
+    let criticalAlerts: CriticalAlerts
     let openBaseline: () -> Void
     let showNetwork: () -> Void
     // Actions that need the app (alerts, panels, window frames).
@@ -96,7 +97,7 @@ final class SettingsWindowController: NSWindowController {
         for pane in SettingsPane.allCases {
             let view: AnyView
             switch pane {
-            case .general: view = AnyView(GeneralPane(collector: c.collector, updates: c.updates, ui: state,
+            case .general: view = AnyView(GeneralPane(collector: c.collector, updates: c.updates, alerts: c.criticalAlerts, ui: state,
                                                       toggleCollector: c.toggleCollector, reset: c.reset))
             case .hud: view = AnyView(HUDPane(model: c.model, reset: c.resetOverlayFrame))
             case .detection: view = AnyView(DetectionPane(hold: c.hold, domains: c.domains, stories: c.stories,
@@ -178,6 +179,7 @@ struct Footnote: View {
 private struct GeneralPane: View {
     @ObservedObject var collector: Collector
     @ObservedObject var updates: UpdateChecker
+    @ObservedObject var alerts: CriticalAlerts
     @ObservedObject var ui: SettingsState
     let toggleCollector: () -> Void
     let reset: (ResetPlan) -> Void
@@ -217,6 +219,8 @@ private struct GeneralPane: View {
                 Toggle(collector.usesDaemon ? "Register the collector when Hostwatch opens" : "Start collector when Hostwatch opens",
                        isOn: $collector.startAtLaunch)
                 LabeledContent("Log") { Button("Show Collector Log") { collector.openLog() } }
+                Toggle("Notify me when protection stops", isOn: $alerts.enabled)
+                    .help("A notification when the collector stops, or when the network filter stops by itself in Ask or Strict")
             } header: {
                 Text("Collector")
             } footer: {

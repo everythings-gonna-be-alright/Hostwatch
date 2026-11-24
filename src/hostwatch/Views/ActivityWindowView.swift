@@ -100,6 +100,8 @@ struct ActivityWindowView: View {
     @ObservedObject var rules: RuleBook
     @ObservedObject var baseline: BaselineLearner
     @ObservedObject var collector: Collector
+    /// The collector or the network filter stopped by itself: the same alert as the notification and the red dot.
+    @ObservedObject var alerts: CriticalAlerts
     @ObservedObject var history: HistoryRecorder
     @ObservedObject var signatures: SignatureStore
     @ObservedObject var classifier: PatternClassifier
@@ -138,8 +140,15 @@ struct ActivityWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            let collectorOff = !collector.isRunning && !model.connected
-            VStack(spacing: 0) { if collectorOff { collectorBanner } }.animation(.snappy, value: collectorOff)
+            // Off by your choice (Start), or stopped behind your back while the service still reads as on (the alert).
+            let collectorOff = (!collector.isRunning || alerts.active.contains(.collectorDown)) && !model.connected
+            let filterStopped = alerts.active.contains(.filterStopped) && firewall.fallback == nil
+            VStack(spacing: 0) {
+                if collectorOff { collectorBanner }
+                if filterStopped { filterBanner }
+            }
+            .animation(.snappy, value: collectorOff)
+            .animation(.snappy, value: filterStopped)
             VulnerabilityBanner(intel: intel, sheets: sheets)
             FirewallFallbackBanner(firewall: firewall, openSettings: actions.openFirewallSettings)
             // A search left in the field filters quietly: say so where you look, with the way out.
@@ -212,10 +221,12 @@ struct ActivityWindowView: View {
             case 0:
                 // The Events tab's own bars live in the tab, not above the strip: added and removed on every switch,
                 // they changed the strip's height and made every visited tab (their tables too) lay out again.
-                VStack(spacing: 0) {
-                    eventsBars
+                VStack(spacing: 8) {
+                    VStack(spacing: 0) { eventsBars }
                     eventsBody
                 }
+                .padding(.horizontal, 12).padding(.top, 10)
+                .background(PageBackdrop(accent: AreaAccent.events))
             default:
                 otherTab(tab)
             }
@@ -243,7 +254,8 @@ struct ActivityWindowView: View {
                                 search: model.searchText, sessionTag: { model.sessions.session(forDestination: $0)?.name },
                                 openDetails: actions.openDomain,
                                 openFirewallSettings: actions.openFirewallSettings, knownBad: { intel.reason(forDomain: $0) },
-                                openStories: { model.windowTab = 2 }, hud: actions,
+                                openStories: { model.windowTab = 2 },
+                                storyAbout: { StoryEngine.networkStory(about: $0, in: stories.stories) }, hud: actions,
                                 travelWindow: mapTraveling ? Self.mapWindow(travel) : nil,
                                 onScreen: model.windowShown && model.windowTab == 3)
             default: patternsAndProtection(.protection)
@@ -265,7 +277,7 @@ struct ActivityWindowView: View {
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 Divider()
             }
-            filterBar; Divider()
+            filterBar
             if !runningNow {
                 heavySection
                 Color.clear.frame(height: 0)
@@ -421,7 +433,38 @@ struct ActivityWindowView: View {
     /// inset from the window's edges, nearly neutral so the words keep their contrast.
     private var collectorBanner: some View {
         let starting = collector.state == .starting
-        return HStack(spacing: 12) {
+        // Stopped while the service still reads as on: Start would be Remove…, so the way is Settings.
+        let stopped = collector.isRunning
+        let at = alerts.since[.collectorDown].map { $0.formatted(date: .omitted, time: .standard) }
+        return problemBanner(
+            title: "Hostwatch isn't watching",
+            detail: stopped ? "The collector stopped\(at.map { " at \($0)" } ?? ""). Nothing is recorded or protected until it runs again."
+                : "The collector is off. Start it to see activity again.") {
+            if starting { ProgressView().controlSize(.small) }
+            if stopped {
+                Button("Collector Settings") { alerts.onOpen(.collectorDown) }
+                    .buttonStyle(.glass).controlSize(.large)
+            } else {
+                Button(starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
+                    .buttonStyle(.glass)
+                    .controlSize(.large)
+                    .disabled(starting)
+            }
+        }
+    }
+
+    private var filterBanner: some View {
+        let at = alerts.since[.filterStopped].map { " at \($0.formatted(date: .omitted, time: .standard))" } ?? ""
+        return problemBanner(title: "The network filter stopped",
+                             detail: "It stopped by itself\(at). Connections pass without being checked.") {
+            Button("Network Firewall") { alerts.onOpen(.filterStopped) }.buttonStyle(.glass).controlSize(.large)
+        }
+    }
+
+    /// Protection stopped: an orange card above the tabs, what happened in a line, and the way to fix it.
+    private func problemBanner<Actions: View>(title: String, detail: String,
+                                              @ViewBuilder actions: () -> Actions) -> some View {
+        HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
@@ -430,15 +473,11 @@ struct ActivityWindowView: View {
                 .background(Color.orange.gradient, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Hostwatch isn't watching").font(.headline)
-                Text("The collector is off. Start it to see activity again.").font(.callout).foregroundStyle(.secondary)
+                Text(title).font(.headline)
+                Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 12)
-            if starting { ProgressView().controlSize(.small) }
-            Button(starting ? "Starting…" : "Start Collector", action: actions.toggleCollector)
-                .buttonStyle(.glass)
-                .controlSize(.large)
-                .disabled(starting)
+            actions()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -675,7 +714,9 @@ struct ActivityWindowView: View {
         let rows = derived.rows
         // Search hits span days: their Time column shows the day too.
         let withDay = traveling && travel.showingSearch
+        let detail = model.eventInfo ? Self.selectedEvent(rows, model.eventSelection) : nil
         return VStack(spacing: 0) {
+          HStack(spacing: 10) {
             EventsTable(rows: rows, version: derived.version,
                         feed: traveling ? nil : model.live, derive: traveling ? nil : { liveDerived },
                         onScreen: model.windowTab == 0 && model.windowShown,
@@ -693,13 +734,18 @@ struct ActivityWindowView: View {
                 guard let id, let event = travel.events.first(where: { $0.id == id }) else { return }
                 revealLaunch(event)                 // selecting the row scrolls the list to it
             }
-            Divider()
-            if model.eventInfo, let event = Self.selectedEvent(rows, model.eventSelection) {
-                EventDetailPanel(event: event, signatures: signatures, actions: actions) { model.eventInfo = false }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
+            .listCard()
+            // The details float beside the list, as Network's inspector does: the list keeps its height.
+            if let event = detail {
+                EventDetailPanel(event: event, signatures: signatures, actions: actions, side: true) { model.eventInfo = false }
+                    .frame(width: 360)
+                    .sidePanel()
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+          }
             HStack {
                 MetricsStrip(metrics: metrics, travel: travel, traveling: traveling)
+                if !traveling { BusiestNow(feed: model.live, shown: model.windowTab == 0 && model.windowShown) }
                 Spacer(minLength: 12)
                 // Quiet like the rest of the status bar: it's information, the click is a convenience.
                 Button { history.revealInFinder() } label: {
@@ -720,9 +766,8 @@ struct ActivityWindowView: View {
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 4)
             .padding(.vertical, 6)
-            }
         }
         .animation(.smooth(duration: 0.2), value: model.eventInfo)
     }

@@ -578,9 +578,18 @@ final class FirewallMonitor: ObservableObject {
 
     // MARK: Ask and Strict
 
+    /// The filter stopped by itself while it stops or asks (not because you chose Watch or Off), and started again.
+    var onFilterStopped: ((String) -> Void)?
+    var onFilterRunning: (() -> Void)?
+
     func relayStatus(_ state: String, _ detail: String) {
+        let was = relayState
         relayState = state
         relayDetail = detail
+        if mode == .ask || mode == .strict {
+            if state == "failed" || (was == "on" && state == "off") { onFilterStopped?(detail) }
+        }
+        if state == "on" { onFilterRunning?() }
         if state == "failed", mode == .ask || mode == .strict {                       // it turned itself off
             let from = mode
             fallingBack = true

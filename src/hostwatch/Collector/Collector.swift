@@ -20,6 +20,21 @@ final class Collector: ObservableObject {
         didSet { UserDefaults.standard.set(startAtLaunch, forKey: "startCollectorAtLaunch") }
     }
 
+    /// You want the collector running: you started it and didn't Stop or Remove it since. What macOS reports can't
+    /// say this: a service disabled behind Hostwatch's back (`launchctl disable`) reads as "not enabled", and that is
+    /// exactly when you need to hear about it.
+    private(set) var wanted: Bool {
+        // Not `startAtLaunch`: with the background service that switch is off for many (macOS starts it at boot),
+        // and it read as "you don't want it". Until you Stop or Remove it, you do.
+        get { UserDefaults.standard.object(forKey: "collectorWanted") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "collectorWanted") }
+    }
+    /// It ran and Hostwatch connected to it on this Mac at least once: before that (setting up) nothing is missing.
+    var connectedOnce: Bool {
+        get { UserDefaults.standard.bool(forKey: "collectorConnectedOnce") }
+        set { if newValue != connectedOnce { UserDefaults.standard.set(newValue, forKey: "collectorConnectedOnce") } }
+    }
+
     let logURL: URL
     /// The collector as a background service (Developer ID builds): registered and approved once.
     let daemon = CollectorDaemon()
@@ -71,6 +86,7 @@ final class Collector: ObservableObject {
     // MARK: Start
 
     func start() {
+        wanted = true
         if usesDaemon { startService(); return }
         guard !isRunning, state != .starting else { return }
         let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
@@ -150,6 +166,7 @@ final class Collector: ObservableObject {
             let message = error.localizedDescription
             // -128 = user pressed Cancel in the password dialog.
             state = message.contains("-128") ? .stopped : .failed(message)
+            if message.contains("-128") { wanted = false }                    // you cancelled the password
         }
     }
 
@@ -164,6 +181,7 @@ final class Collector: ObservableObject {
             daemon.register()
             if let problem = daemon.problem {
                 state = problem == "cancelled" ? .stopped : .failed(problem)
+                if problem == "cancelled" { wanted = false }
                 return
             }
         }
@@ -207,6 +225,7 @@ final class Collector: ObservableObject {
 
     /// Removes the service (an admin password): the collector stops and won't start at boot.
     func stopService() {
+        wanted = false
         approvalWatch?.invalidate()
         daemon.unregister()
         state = daemon.isEnabled ? .running(pid: 0) : .stopped
@@ -217,6 +236,7 @@ final class Collector: ObservableObject {
     /// Stops a collector this app started. Uses the shutdown token over the
     /// existing connection; the agent also exits on its own when the app quits.
     func stop(via model: HUDModel, completion: (() -> Void)? = nil) {
+        wanted = false
         if usesDaemon { stopService(); completion?(); return }
         guard isRunning else { completion?(); return }
         let sent = model.sendShutdown(token: token) { completion?() }

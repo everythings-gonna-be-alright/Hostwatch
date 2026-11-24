@@ -178,6 +178,8 @@ struct NetworkView: View {
     var knownBad: (String) -> String? = { _ in nil }
     /// The Stories tab.
     var openStories: () -> Void = {}
+    /// The open story about a device's addresses, and the way to it (the map's "Tried to reach this Mac").
+    var storyAbout: ([String]) -> Story? = { _ in nil }
     /// The window's actions, for the map's process details.
     var hud: HUDActions? = nil
     /// Time Travel's moment while it's on (the map follows the playhead), nil for live.
@@ -201,7 +203,8 @@ struct NetworkView: View {
                 NetworkMapView(store: map, state: state.mapState,
                                outgoing: state.mapState.kept(onScreen, \.keptOutgoing) { state.mapOutgoing(state.mapState.window()) },
                                interfaceName: state.interfaceName,
-                               openDetails: openDetails, openStories: openStories, search: search, actions: state.mapActions,
+                               openDetails: openDetails, openStories: openStories, storyAbout: storyAbout,
+                               openStory: { hud?.openStory($0) }, search: search, actions: state.mapActions,
                                hud: hud, signatures: signatures, onScreen: onScreen)
             }
             // Soft pools of the map's colours behind the whole page, for the glass to pick up (as Protection does).

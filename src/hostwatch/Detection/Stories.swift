@@ -871,6 +871,20 @@ final class StoryEngine: ObservableObject {
         dirty = true; revision += 1
     }
 
+    /// The open story about a device on the network (a port scan, a new or untrusted device reaching this Mac), by
+    /// any of its addresses: nil once you deleted or dismissed it, so nothing links to a story that isn't there.
+    nonisolated static func networkStory(about ips: [String], in stories: [Story]) -> Story? {
+        let ips = Set(ips.filter { !$0.isEmpty })
+        guard !ips.isEmpty else { return nil }
+        return stories.first { story in
+            guard !story.dismissed, story.originPath.hasPrefix("network:") else { return false }
+            return story.steps.contains { step in
+                let target = step.event.target
+                return ips.contains(target) || ips.contains { target.hasPrefix($0 + ":") }
+            }
+        }
+    }
+
     /// Gone for good: the chain it was following is forgotten too, so its next step can't bring the story back.
     func delete(_ id: UUID) {
         stories.removeAll { $0.id == id }

@@ -46,4 +46,21 @@ import Testing
         #expect(report.origin == .unknown && report.originIndex == nil)
         #expect(report.summary.contains("before Hostwatch was recording"))
     }
+    @Test func theCauseIsTheCommandItCameFrom() {
+        // git ran ssh through a shell: git's command says why, not the shell's.
+        let ssh = step(30, 20, "/usr/bin/ssh", "ssh git@gitlab.example.org git-upload-pack 'team/app.git'")
+        let report = LaunchChainReport(process: ssh,
+                                       steps: [step(20, 10, "/bin/bash", "bash -c 'ssh git@gitlab.example.org'"),
+                                               step(10, 5, "/usr/bin/git", "git clone git@gitlab.example.org:team/app.git"),
+                                               step(5, 1, "/Applications/iTerm.app/Contents/MacOS/iTerm2", "iTerm2")],
+                                       broken: false, session: nil)
+        #expect(report.cause?.args == "git clone git@gitlab.example.org:team/app.git")
+    }
+
+    @Test func aTerminalsOwnCommandIsNoCause() {
+        let report = LaunchChainReport(process: step(9, 8, "/usr/bin/ssh", "ssh host"),
+                                       steps: [step(8, 1, "/Applications/iTerm.app/Contents/MacOS/iTerm2", "iTerm2")],
+                                       broken: false, session: nil)
+        #expect(report.cause == nil)
+    }
 }

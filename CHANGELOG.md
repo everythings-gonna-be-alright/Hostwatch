@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.22.0 – Alerts when protection stops
+
+### New
+
+- **Alerts when protection stops.** A notification, a red dot in the menu bar and a banner in the window when the
+  collector or the network filter stops by itself.
+- **Questions show why.** A connection question shows the command behind it, such as `git clone`.
+- **Events and Patterns redesigned.** Glass cards, details beside the list, no header. Parent comes before Process.
+- **Patterns toolbar.** Seen Once is a separate switch, Mark Selected sits with the selection tools.
+
+### Fixes
+
+- The network map links only to stories that still exist.
+
 ## 0.21.0 – Rules per app
 
 ### New

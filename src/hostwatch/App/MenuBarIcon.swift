@@ -33,4 +33,24 @@ enum MenuBarIcon {
         image.accessibilityDescription = "Hostwatch"
         return image
     }()
+
+    /// A red dot on the icon while protection is stopped (`CriticalAlerts`). A layer over the button, not part of
+    /// the image: the image is a template, which macOS tints in one colour, and the dot must stay red.
+    static func showAlert(_ on: Bool, on button: NSStatusBarButton?, why: String) {
+        guard let button else { return }
+        let id = NSUserInterfaceItemIdentifier("hostwatch.alert-dot")
+        let existing = button.subviews.first { $0.identifier == id }
+        button.setAccessibilityLabel(on ? "Hostwatch: \(why)" : "Hostwatch")
+        button.toolTip = on ? why : nil
+        guard on else { existing?.removeFromSuperview(); return }
+        guard existing == nil else { return }
+        let d: CGFloat = 7
+        let dot = NSView(frame: NSRect(x: button.bounds.maxX - d - 2, y: button.bounds.maxY - d - 3, width: d, height: d))
+        dot.identifier = id
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = NSColor.systemRed.cgColor
+        dot.layer?.cornerRadius = d / 2
+        dot.autoresizingMask = [.minXMargin, .minYMargin]
+        button.addSubview(dot)
+    }
 }

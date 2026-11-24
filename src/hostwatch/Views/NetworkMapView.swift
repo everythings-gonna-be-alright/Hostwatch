@@ -101,6 +101,8 @@ struct NetworkMapView: View {
     var interfaceName: (String) -> String = { $0 }
     var openDetails: (String) -> Void = { _ in }
     var openStories: () -> Void = {}
+    var storyAbout: ([String]) -> Story? = { _ in nil }
+    var openStory: (Story) -> Void = { _ in }
     /// The window's search field.
     var search = ""
     var actions = NetworkMapActions()
@@ -158,7 +160,8 @@ struct NetworkMapView: View {
                         if state.room != rows { state.room = rows }
                     }
                     NetworkMapInspector(store: store, state: state, graph: graph, outgoing: outgoing, openDetails: openDetails,
-                                        openStories: openStories, interfaceName: interfaceName, actions: actions,
+                                        openStories: openStories, storyAbout: storyAbout, openStory: openStory,
+                                        interfaceName: interfaceName, actions: actions,
                                         showProcess: hud == nil ? nil : { state.toggleProcess($0) })
                         .frame(width: 300)
                         .padding(.vertical, 12)

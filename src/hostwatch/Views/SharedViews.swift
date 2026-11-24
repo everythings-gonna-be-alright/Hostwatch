@@ -312,9 +312,13 @@ struct RowBand: NSViewRepresentable {
 
     static let groundID = NSUserInterfaceItemIdentifier("rowbandground")
 
+    /// The lists' ground: the table colour, see-through enough that the glass card around a list shows, as the
+    /// Protection pages' cards do.
+    static let ground = NSColor.controlBackgroundColor.withAlphaComponent(0.55)
+
     /// The Events list's ground (AppKit's table background), behind a SwiftUI table that draws none of its own.
     final class GroundView: NSView {
-        override func draw(_ dirtyRect: NSRect) { NSColor.controlBackgroundColor.setFill(); dirtyRect.fill() }
+        override func draw(_ dirtyRect: NSRect) { RowBand.ground.setFill(); dirtyRect.fill() }
     }
 
     /// The band's outline: inset and rounded the way the inset table style draws its alternating rows.

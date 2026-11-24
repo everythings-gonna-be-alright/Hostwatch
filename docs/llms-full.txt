@@ -1930,6 +1930,15 @@ This pane covers startup, the collector, permissions, updates and resetting Host
   Hostwatch connects to it: no password at launch. *Remove…* unregisters it (your password again), for example
   before uninstalling. *Register the collector when Hostwatch opens* is on by default. The pane also shows the
   collector's log (`/var/log/hostwatch-collector.log`).
+- **Notify me when protection stops** (on by default): a macOS notification for the two problems that leave the Mac
+  unwatched. *Hostwatch isn't watching* comes the moment the connection to the collector drops (half a minute after
+  launch, while the service comes up) although you started it and didn't stop or remove it, even if something else
+  stopped it and macOS starts it again seconds later. It says when. *The network filter stopped* comes when the
+  filter stops by itself while the Network Firewall is in Ask or Strict, not when you choose Watch or Off. One
+  notification per problem. It stays in Notification Center as a record, even when the problem lasted seconds. A
+  click opens where to fix it: this pane, or Network Firewall. While either problem lasts, the menu bar icon has a
+  red dot and the main window a banner with the way to fix it, whether this switch is on or off. Nothing else notifies. macOS asks once whether Hostwatch may send
+  notifications.
 - **Permissions:** shows your Full Disk Access status, with an **Open Settings…** button, and *Data on disk*: whether
   Hostwatch's files are encrypted and where the key is kept (see
   [Encryption at rest](06-privacy-security-and-limits.md#encryption-at-rest)).
