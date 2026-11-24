@@ -145,8 +145,10 @@ final class AgentFirewall: @unchecked Sendable {
 
     private var isOn: Bool { lock.lock(); defer { lock.unlock() }; return loaded != nil }
 
-    /// Every 30 s the web through the relay, as the unprivileged user `nobody`; two failures in a row turn the
-    /// redirect off, so a broken relay can't leave you without network.
+    /// Every 30 s the web through the relay, as the unprivileged user `nobody`; two relay failures in a row turn the
+    /// redirect off, so a broken relay can't leave you without network. A failure counts only when the web works
+    /// without the relay (root's own check is exempt from it): with the lid closed or between networks nothing
+    /// gets out either way, and that turned the firewall off on every trip between work and home.
     private func startHealthCheck() {
         lock.lock()
         guard !healthRunning else { lock.unlock(); return }
@@ -160,9 +162,13 @@ final class AgentFirewall: @unchecked Sendable {
                 let out = runOurs("/usr/bin/sudo", ["-n", "-u", "nobody", "/usr/bin/curl", "-s", "-m", "8", "-o", "/dev/null",
                                                     "-w", "%{http_code}", Self.canaryURL])
                 lock.lock(); canaryUntil = 0; lock.unlock()
-                let ok = out.hasPrefix("2") || out.hasPrefix("3")
-                failures = ok ? 0 : failures + 1
-                if failures >= 2 {
+                let relayOK = Self.webOK(out)
+                // Only on a failure: the direct check is the second request, so a healthy relay costs nothing more.
+                let directOK = relayOK ? true : Self.webOK(runOurs("/usr/bin/curl", ["-s", "-m", "8", "-o", "/dev/null",
+                                                                                   "-w", "%{http_code}", Self.canaryURL]))
+                let verdict = Self.health(relayOK: relayOK, directOK: directOK, failures: failures)
+                failures = verdict.failures
+                if verdict.turnOff {
                     Agent.logError("firewall: web check through the relay failed twice; turning the redirect off")
                     disable(reason: "The web check through the relay failed twice, so the firewall turned itself off.")
                     failures = 0
@@ -170,6 +176,17 @@ final class AgentFirewall: @unchecked Sendable {
             }
             lock.lock(); healthRunning = false; lock.unlock()
         }
+    }
+
+    static func webOK(_ httpCode: String) -> Bool { httpCode.hasPrefix("2") || httpCode.hasPrefix("3") }
+
+    /// One web check's effect: a relay failure counts only when the web works directly (otherwise the network is
+    /// down, not the relay), and an outage keeps the count as it was.
+    static func health(relayOK: Bool, directOK: Bool, failures: Int) -> (failures: Int, turnOff: Bool) {
+        if relayOK { return (0, false) }
+        guard directOK else { return (failures, false) }
+        let n = failures + 1
+        return n >= 2 ? (0, true) : (n, false)
     }
 
     /// Runs a check as part of Hostwatch's own process tree, so its activity is never reported or judged.

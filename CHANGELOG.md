@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- The firewall no longer turns itself off when the Mac sleeps or changes networks.
+
 ## 0.22.1 – Alerts when protection stops
 
 ### Fixes
