@@ -35,6 +35,47 @@ enum AreaAccent {
     static let network = Color.teal
     /// Found is all attention, so it wears the attention colour itself.
     static let found = Color.orange
+    static let events = Color.blue
+    static let patterns = Color.pink
+}
+
+/// A page's pools of colour behind its glass, as the Protection pages have them: the page's own colour at the top,
+/// the same cool pools elsewhere, so every tab reads as one app.
+struct PageBackdrop: View {
+    let accent: Color
+
+    var body: some View {
+        ZStack {
+            RadialGradient(colors: [accent.opacity(0.16), .clear], center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 520)
+            RadialGradient(colors: [Color.cyan.opacity(0.10), .clear], center: UnitPoint(x: 1, y: 0.35), startRadius: 0, endRadius: 480)
+            RadialGradient(colors: [Color.indigo.opacity(0.10), .clear], center: UnitPoint(x: 0.1, y: 1), startRadius: 0, endRadius: 520)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A list on a page: a glass card with rounded corners, the list inside clipped to it, as Network's map sits.
+struct ListCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// A detail beside a list: a floating glass panel, as Network's inspector is.
+struct SidePanel: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxHeight: .infinity, alignment: .top)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+extension View {
+    func listCard() -> some View { modifier(ListCard()) }
+    func sidePanel() -> some View { modifier(SidePanel()) }
 }
 
 /// An area page's header, unlike the Overview's on purpose: the area's tile in its own colour, its name with the state
@@ -90,15 +131,17 @@ struct AreaHero<Controls: View, Notice: View>: View {
 private struct AreaTile: View {
     let symbol: String
     let accent: Color
+    var size: CGFloat = 52
 
     var body: some View {
+        let radius = size * 0.27
         Image(systemName: symbol)
-            .font(.system(size: 22, weight: .semibold))
+            .font(.system(size: size * 0.42, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 52, height: 52)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(accent.gradient))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
-            .shadow(color: accent.opacity(0.35), radius: 10, y: 4)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(accent.gradient))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+            .shadow(color: accent.opacity(0.35), radius: size / 5, y: size / 13)
             .accessibilityHidden(true)
     }
 }

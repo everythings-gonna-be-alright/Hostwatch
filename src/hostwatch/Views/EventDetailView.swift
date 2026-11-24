@@ -8,6 +8,8 @@ struct EventDetailPanel: View {
     let event: ActivityEvent
     @ObservedObject var signatures: SignatureStore
     let actions: HUDActions
+    /// Beside a list, one column (Events), rather than under it across the window (the network map).
+    var side = false
     let close: () -> Void
     @StateObject private var chain = ChainState()
 
@@ -15,6 +17,83 @@ struct EventDetailPanel: View {
     private var path: String { event.kind == .exec ? event.target : event.proc }
 
     var body: some View {
+        Group {
+            if side { column } else { wide }
+        }
+        .task(id: event.id) {
+            // A short pause first: arrowing through rows shouldn't rebuild a chain for every row passed.
+            chain.report = nil
+            try? await Task.sleep(for: .milliseconds(250))
+            if !Task.isCancelled { chain.report = actions.launchChain(event) }
+        }
+    }
+
+    /// One column: what it is, its facts, who started it, then what you can do.
+    private var column: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                subject
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                    let decided = signatures.decidedBy(event.signatureKey)
+                    GridRow {
+                        fact("Kind", event.kind == .exec ? "Launch" : event.kind == .net ? "Connection" : "File access")
+                        fact("Time", event.ts > 0 ? event.dayTime + String(event.time.dropFirst(8)) : event.time)
+                    }
+                    GridRow {
+                        fact("PID", String(event.pid))
+                        fact("Parent", event.parent.isEmpty ? String(event.ppid)
+                             : "\((event.parent as NSString).lastPathComponent) (\(event.ppid))")
+                    }
+                    GridRow {
+                        fact("Signed by", SigningCache.shared.cached(path)?.label ?? "–")
+                        fact("Decided by", decided.isEmpty ? "Nobody yet" : decided)
+                    }
+                    GridRow {
+                        fact("Risk", event.signatureReason.isEmpty ? "\(event.signatureRisk)".capitalized : event.signatureReason)
+                            .gridCellColumns(2)
+                    }
+                }
+                if let report = chain.report { LaunchChainStrip(report: report) }
+                columnButtons
+            }
+            .padding(14)
+        }
+    }
+
+    private var columnButtons: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { actions.askAI(event) } label: { Label("Ask AI…", systemImage: "sparkles").frame(maxWidth: .infinity) }
+                .buttonStyle(.glassProminent)
+            HStack(spacing: 8) {
+                Button { actions.showLaunchChain(event) } label: {
+                    Label("Launch Chain…", systemImage: "point.3.connected.trianglepath.dotted").frame(maxWidth: .infinity)
+                }
+                Button { actions.watch(event) } label: { Label("Watch Closely…", systemImage: "eye").frame(maxWidth: .infinity) }
+            }
+            HStack(spacing: 8) {
+                Button { NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "") } label: {
+                    Label("Reveal in Finder", systemImage: "folder").frame(maxWidth: .infinity)
+                }
+                .disabled(path.isEmpty)
+                markMenu.frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+    }
+
+    private var markMenu: some View {
+        Menu {
+            ForEach([SignatureStatus.safe, .suspicious, .dangerous, .unclassified], id: \.self) { s in
+                Button(s == .unclassified ? "New (Undecided)" : s.title) {
+                    signatures.set(s, keys: [event.signatureKey], note: "marked in Events")
+                }
+            }
+        } label: { Label("Mark", systemImage: "checkmark.shield") }
+    }
+
+    private var wide: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             HStack(alignment: .top, spacing: 16) {
@@ -30,12 +109,6 @@ struct EventDetailPanel: View {
             buttons
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .task(id: event.id) {
-            // A short pause first: arrowing through rows shouldn't rebuild a chain for every row passed.
-            chain.report = nil
-            try? await Task.sleep(for: .milliseconds(250))
-            if !Task.isCancelled { chain.report = actions.launchChain(event) }
-        }
     }
 
     private var header: some View {

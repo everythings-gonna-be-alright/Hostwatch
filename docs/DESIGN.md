@@ -31,7 +31,7 @@ the ones a machine can check.
 - **Status colours are reserved:** red for stopped, blocked or critical, orange for attention and warnings, green for
   allowed or safe (and the AI check's progress ring, which leads to "allowed"), grey for pending or a question.
   Never the accent colour for something that must be noticed: it can be graphite. Always with an icon or a word, never colour alone.
-- **Area colours say which page you're on, never a status:** Files indigo, Network Firewall teal (`AreaAccent`). They
+- **Area colours say which page you're on, never a status:** Files indigo, Network Firewall teal, Events blue, Patterns pink (`AreaAccent`). They
   colour the page header's tile, its wash and hairline, and the backdrop's top pool. The area's state is a pill in its
   status colour beside the name. The Overview keeps the state's colour: it is about protection as a whole.
 

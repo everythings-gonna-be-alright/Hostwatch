@@ -61,6 +61,11 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.22.0**
+- **🚨 Alerts when protection stops** – a notification, a red dot and a banner if the collector or network filter stops.
+- **💬 Questions show why** – the command behind a connection, such as `git clone`.
+- **🪟 Events and Patterns redesigned** – glass cards, details beside the list.
+
 **0.21.0**
 - **🧩 Rules for each app** – give one app its own firewall and file rules. They win over the global ones.
 - **🧭 Clearer Protection pages** – Files and Network Firewall show their state, activity and what they found most.

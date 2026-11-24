@@ -61,6 +61,17 @@ struct LaunchChainReport: Sendable {
         steps.firstIndex { CodingAgent.of($0.path) != nil || !ProcessOrigin.passesThrough($0.path) }
     }
 
+    /// Why the program runs: the command above it that says what was asked for (`git clone …`), not a shell passing
+    /// it on. Only below the origin, or the origin itself when it is a plain program: a terminal's, an app's or an
+    /// agent's own command line says nothing about this one.
+    var cause: LaunchStep? {
+        let end = originIndex ?? steps.count
+        var below = Array(steps.prefix(end))
+        if let i = originIndex, origin == .other { below.append(steps[i]) }
+        let candidates = below.reversed().filter { !$0.args.isEmpty && $0.args != process.args }
+        return candidates.first { !ProcessOrigin.passesThrough($0.path) } ?? candidates.first
+    }
+
     /// One sentence for people: who started it, in plain words.
     var summary: String {
         let name = originIndex.map { steps[$0].name } ?? ""

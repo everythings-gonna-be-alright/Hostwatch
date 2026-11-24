@@ -93,29 +93,29 @@ struct PatternsView: View {
     @StateObject private var combine = CombineState()
     @StateObject private var inspector = InspectorState()
     @StateObject private var groups = GroupExpansion()
+    @StateObject private var hint = PatternHint()
     /// Two lines per pattern (four columns that fit the window) or the classic one line with ten columns.
     @AppStorage(PatternsView.twoLineKey) private var twoLine = true
     static let twoLineKey = "patternsTwoLineRows"
 
     var body: some View {
         let rows = list.rows
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             toolbar(count: list.shown)
                 .sheet(isPresented: $combine.show) { CombineSheet(state: combine, signatures: signatures) }
-            Divider()
-            HStack(spacing: 0) {
-            table(rows)
-            if inspector.shown {
-                Divider()
-                PatternInspector(signatures: signatures, actions: actions)
-                    .frame(width: 320)
-                    .background(.background.secondary)
-                    .transition(.move(edge: .trailing))
+            HStack(spacing: 10) {
+                table(rows).listCard()
+                if inspector.shown {
+                    PatternInspector(signatures: signatures, actions: actions)
+                        .frame(width: 320)
+                        .sidePanel()
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
-            }
-            Divider()
             footer(rows)
         }
+        .padding(.horizontal, 12).padding(.top, 10)
+        .background(PageBackdrop(accent: AreaAccent.patterns))
         .onAppear { list.request(signatures) { filter } }
         .onReceive(signatures.listChanges) { list.request(signatures) { filter } }
         .onChange(of: filter) { list.request(signatures) { filter } }
@@ -399,7 +399,7 @@ struct PatternsView: View {
             HStack {
                 Text(!classifier.lastMessage.isEmpty ? classifier.lastMessage
                      : !signatures.tidySummary.isEmpty ? signatures.tidySummary
-                     : "Patterns are fingerprints: the same process doing the same kind of thing is one pattern.")
+                     : hint.line(signatures))
                     .lineLimit(1)
                 Spacer()
                 PatternTally(counts: list.counts.byStatus)
@@ -410,7 +410,7 @@ struct PatternsView: View {
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 4)
             .padding(.vertical, 6)
     }
 
@@ -442,13 +442,13 @@ struct PatternsView: View {
                 if !compact { Text("Show").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
                 ShowFilterPicker(filter: $filter, counts: [.unclassified: list.counts.new, .important: list.counts.important],
                                  allowsMenu: false)
+                // An option on top of Show, not a fourth choice of it: set apart by the divider and marked as a switch
+                // (a check), at the Show buttons' size.
                 let once = list.counts.oneOffs
+                Divider().frame(height: 16)
                 Toggle(isOn: $signatures.showSeenOnce) {
-                    if compact {
-                        Label(once > 0 ? "\(once)" : "", systemImage: "1.circle")
-                    } else {
-                        Label("Seen Once\(once > 0 ? " \(once)" : "")", systemImage: "1.circle")
-                    }
+                    Label(compact ? (once > 0 ? once.formatted() : "") : "Seen Once\(once > 0 ? " \(once.formatted())" : "")",
+                          systemImage: signatures.showSeenOnce ? "checkmark.circle.fill" : "circle")
                 }
                 .toggleStyle(.button)
                 .fixedSize()
@@ -476,8 +476,13 @@ struct PatternsView: View {
                     .disabled(signatures.keys(forSelection: signatures.selection).count < 2)
                 Button("Delete Selected Patterns") { signatures.delete(keys: signatures.keys(forSelection: signatures.selection)) }
             } label: {
-                if compact { Image(systemName: "checkmark.circle") } else { Text("Mark Selected") }
+                if compact { Image(systemName: "checkmark.circle") } else { Label("Mark Selected", systemImage: "checkmark.circle") }
             }
+            // A plain glass pull-down, one size up from the bar's small controls: at small it sat lower than the
+            // Show and Group capsules beside it. With the selection tools on the left, away from Classify with AI.
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .controlSize(.regular)
             .help("Mark the selected patterns")
             .disabled(signatures.selection.isEmpty)
             .fixedSize()

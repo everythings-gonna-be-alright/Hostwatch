@@ -40,10 +40,10 @@ struct EventsTable: NSViewRepresentable {
         Column(id: "time", title: "Time", width: 108, min: 72, max: 240, keyPath: \EventItem.seq),
         Column(id: "kind", title: "Kind", width: 56, min: 20, max: 120, keyPath: \EventItem.kind),
         Column(id: "status", title: "Status", width: 116, min: 100, max: 240, keyPath: \EventItem.statusRank),
+        Column(id: "parent", title: "Parent", width: 100, min: 50, max: 400, keyPath: \EventItem.parentName),
         Column(id: "process", title: "Process", width: 110, min: 60, max: 600, keyPath: \EventItem.name),
         Column(id: "pid", title: "PID", width: 48, min: 38, max: 140, keyPath: \EventItem.pid),
         Column(id: "ppid", title: "PPID", width: 48, min: 38, max: 140, keyPath: \EventItem.ppid),
-        Column(id: "parent", title: "Parent", width: 100, min: 50, max: 400, keyPath: \EventItem.parentName),
         Column(id: "detail", title: "Detail", width: 400, min: 120, max: 10_000, keyPath: \EventItem.detail),
     ]
 
@@ -57,7 +57,7 @@ struct EventsTable: NSViewRepresentable {
         outline.rowSizeStyle = .custom                  // else AppKit picks its own, taller rows
         outline.intercellSpacing = NSSize(width: 3, height: 2)
         outline.usesAlternatingRowBackgroundColors = false
-        outline.backgroundColor = .controlBackgroundColor     // the list's ground, as Patterns has (RowBand.GroundView)
+        outline.backgroundColor = RowBand.ground             // the list's ground, as Patterns has (RowBand.GroundView)
         outline.allowsMultipleSelection = true
         outline.allowsColumnReordering = false
         outline.indentationPerLevel = 12
@@ -80,6 +80,11 @@ struct EventsTable: NSViewRepresentable {
         context.coordinator.restoring = true
         outline.autosaveName = "EventsTable"
         outline.autosaveTableColumns = true
+        // The order is ours (columns can't be dragged): a saved order from an older build would undo a new one.
+        for (i, c) in Self.columns.enumerated() {
+            let at = outline.column(withIdentifier: .init(c.id))
+            if at >= 0, at != i { outline.moveColumn(at, toColumn: i) }
+        }
         context.coordinator.restoring = false
         outline.target = context.coordinator
         outline.doubleAction = #selector(Coordinator.doubleClicked)

@@ -10,6 +10,9 @@ struct NetworkMapInspector: View {
     let outgoing: [MapOutgoing]
     var openDetails: (String) -> Void
     var openStories: () -> Void
+    /// The open story about these addresses, if there is one (deleted or dismissed: none, and no button).
+    var storyAbout: ([String]) -> Story? = { _ in nil }
+    var openStory: (Story) -> Void = { _ in }
     var interfaceName: (String) -> String = { $0 }
     var actions = NetworkMapActions()
     var showProcess: ((ActivityEvent) -> Void)? = nil
@@ -116,7 +119,7 @@ struct NetworkMapInspector: View {
         return text
     }
 
-    private func callout(_ title: String, _ text: String, tint: Color, story: Bool = false) -> some View {
+    private func callout(_ title: String, _ text: String, tint: Color, story: Story? = nil) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
@@ -126,7 +129,7 @@ struct NetworkMapInspector: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.system(size: 13, weight: .semibold))
                 Text(text).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if story { Button("Open Stories", action: openStories).buttonStyle(.glass).controlSize(.small) }
+                if let story { Button("Open Story") { openStory(story) }.buttonStyle(.glass).controlSize(.small) }
             }
         }
         .padding(12)
@@ -148,7 +151,8 @@ struct NetworkMapInspector: View {
                tint: isNew ? .orange : .secondary)
         if !list.isEmpty {
             let scan = Set(list.map(\.port)).count >= NetworkMapPolicy.scanPorts
-            callout(scan ? "Port scan from your network" : "Tried to reach this Mac", triesText(list), tint: .orange, story: scan || isNew)
+            callout(scan ? "Port scan from your network" : "Tried to reach this Mac", triesText(list), tint: .orange,
+                    story: scan || isNew ? storyAbout(ips) : nil)
         }
         VStack(alignment: .leading, spacing: 8) {
             if let d {

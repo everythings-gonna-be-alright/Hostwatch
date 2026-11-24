@@ -268,21 +268,20 @@ struct RunningProcessesView: View {
                                       by: grouping, sessions: sessions)
         let launches = Dictionary(grouping: history.lazy.filter { $0.kind == .exec }, by: \.pid)
         let launchEvent = { (pid: Int, start: Double) in launches[pid].flatMap { TimeTravel.launch(in: $0, pid: pid, start: start) } }
-        VStack(spacing: 0) {
-            if let charts { charts; Divider() }
+        // Cards, as the Events list: the charts, the table and the details each in rounded glass.
+        VStack(spacing: 8) {
+            if let charts { charts.listCard() }
             if running.rows.isEmpty {
                 // Fills the space like the table would: otherwise the window's column shrinks to the
                 // placeholder's height and floats in the middle.
-                placeholder.frame(maxWidth: .infinity, maxHeight: .infinity)
+                placeholder.frame(maxWidth: .infinity, maxHeight: .infinity).listCard()
             } else {
-                table(rows, launchEvent)
-                Divider()
+                table(rows, launchEvent).listCard()
                 if running.showInfo, let row = running.selected {
-                    detail(row, launchEvent).transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    footer(rows)
+                    detail(row, launchEvent).listCard().transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            if !running.rows.isEmpty, !(running.showInfo && running.selected != nil) { footer(rows) }
         }
         .animation(.smooth(duration: 0.2), value: running.showInfo)
     }
@@ -460,7 +459,7 @@ struct RunningProcessesView: View {
         }
         .font(.system(size: 11))                       // the same footer as under the Events list
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 4)                      // under the card, lined up as the Events list's
         .padding(.vertical, 6)
     }
 

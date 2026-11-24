@@ -30,14 +30,23 @@ extension AppDelegate {
             if let p = listed[pid] { return LaunchStep(pid: pid, ppid: p.ppid, path: p.path, args: p.args, source: .list) }
             let path = ProcessList.path(pid)
             guard !path.isEmpty else { return nil }
-            return LaunchStep(pid: pid, ppid: ProcessList.parent(pid), path: path, args: "", source: .live)
+            return LaunchStep(pid: pid, ppid: ProcessList.parent(pid), path: path, args: Self.liveArgs(pid, path), source: .live)
         }
         let session = event.session > 0 ? model.sessions.session(event.session)?.name : nil
         let path = event.kind == .exec && !event.target.isEmpty ? event.target : event.proc
-        let args = event.kind == .exec ? event.args : own?.args ?? listed[event.pid]?.args ?? ""
+        // A question comes while the connection waits: its launch may not have arrived yet, but the process is alive.
+        var args = event.kind == .exec ? event.args : own?.args ?? listed[event.pid]?.args ?? ""
+        if args.isEmpty { args = Self.liveArgs(event.pid, path) }
         let process = LaunchStep(pid: event.pid, ppid: event.ppid, path: path, args: args, source: .launch)
         return LaunchChainReport(process: process, steps: chain.steps, broken: chain.broken, session: session,
                                  earlier: Array(earlier.prefix(3)))
+    }
+
+    /// A running process's command line, masked as history's are. Empty when the pid now runs something else.
+    static func liveArgs(_ pid: Int, _ path: String) -> String {
+        guard pid > 1, !path.isEmpty, ProcessList.path(pid) == path else { return "" }
+        let argv = ProcessTable.commandLine(pid)
+        return argv.isEmpty ? "" : Agent.formatArgs(argv)
     }
 
     /// Today's process list, read once for a batch of lookups (a triage batch asks for 40 chains at once).

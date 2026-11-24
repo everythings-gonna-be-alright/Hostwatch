@@ -193,7 +193,9 @@ struct RulesView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 // The Overview's pools of colour, on the area pages built like it too.
-                if [.protectionOverview, .protectedFiles, .firewall, .protectionFound].contains(page), let protection {
+                if scope == .patterns {
+                    PageBackdrop(accent: AreaAccent.patterns)
+                } else if [.protectionOverview, .protectedFiles, .firewall, .protectionFound].contains(page), let protection {
                     ProtectionBackdrop(protection: protection, firewall: firewall,
                                        accent: page == .firewall ? AreaAccent.network : page == .protectedFiles ? AreaAccent.files
                                            : page == .protectionFound ? AreaAccent.found : nil)

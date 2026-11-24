@@ -328,11 +328,26 @@ struct LaunchChainStrip: View {
                 }
             }
             .lineLimit(1)
-            FullCommand(text: report.process.args.isEmpty ? report.process.path : report.process.args)
+            if let cause = report.cause {
+                // Why it runs at all: the command it came from, then its own.
+                command("\(cause.name) ran", cause.args)
+                command("\(report.process.name) runs", own)
+            } else {
+                FullCommand(text: own)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05)))
+    }
+
+    private var own: String { report.process.args.isEmpty ? report.process.path : report.process.args }
+
+    private func command(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.tertiary)
+            FullCommand(text: text)
+        }
     }
 
     private func crumb(_ step: LaunchStep, last: Bool) -> some View {
