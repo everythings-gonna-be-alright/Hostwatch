@@ -57,6 +57,8 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
+**0.22.1** – easier to read tables.
+
 **0.22.0**
 - **🚨 Alerts when protection stops** – a notification, a red dot and a banner if the collector or network filter stops.
 - **💬 Questions show why** – the command behind a connection, such as `git clone`.

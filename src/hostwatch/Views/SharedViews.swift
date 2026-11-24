@@ -684,3 +684,14 @@ struct SoftBackdrop: View {
         .accessibilityHidden(true)
     }
 }
+
+/// The quiet columns of the tables (time, PIDs, parent, user, seen), a step stronger than the system's secondary text
+/// (55% to 70% in dark, 50% to 62% in light): dense rows of small grey text were hard to read. Tables only, the rest
+/// of the app keeps the system's.
+enum TableInk {
+    static let nsSecondary = NSColor(name: NSColor.Name("hostwatch.table.secondary")) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.70) : NSColor(white: 0, alpha: 0.62)
+    }
+    static let secondary = Color(nsColor: nsSecondary)
+}

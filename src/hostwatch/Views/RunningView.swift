@@ -325,14 +325,14 @@ struct RunningProcessesView: View {
             .width(min: 120, ideal: 190)
             TableColumn("PID", value: \.pid) { row in
                 Group {
-                if !row.isGroup { Text(String(row.pid)).foregroundStyle(.secondary).monospacedDigit() }
+                if !row.isGroup { Text(String(row.pid)).foregroundStyle(TableInk.secondary).monospacedDigit() }
                 }
                 .font(.system(size: 12))
             }
             .width(min: 40, ideal: 54, max: 70)
             TableColumn("User", value: \.sortUser) { row in
                 Group {
-                if !row.isGroup { Text(row.info.user).foregroundStyle(row.info.uid == 0 ? .orange : .secondary).lineLimit(1) }
+                if !row.isGroup { Text(row.info.user).foregroundStyle(row.info.uid == 0 ? .orange : TableInk.secondary).lineLimit(1) }
                 }
                 .font(.system(size: 12))
             }
@@ -365,7 +365,7 @@ struct RunningProcessesView: View {
             TableColumn("Threads", value: \.threads) { row in
                 Group {
                 if !row.isGroup {
-                    Text(String(row.threads)).foregroundStyle(.secondary).monospacedDigit()
+                    Text(String(row.threads)).foregroundStyle(TableInk.secondary).monospacedDigit()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 }
@@ -377,7 +377,7 @@ struct RunningProcessesView: View {
                 let rate = row.info.writeRate
                 if !row.isGroup {
                 Text(rate.map { $0 >= 1 ? Rate.text($0) : "0" } ?? "–").monospacedDigit()
-                    .foregroundStyle((rate ?? 0) >= 1_000_000 ? Color.orange : (rate ?? 0) >= 1 ? .primary : .secondary)
+                    .foregroundStyle((rate ?? 0) >= 1_000_000 ? Color.orange : (rate ?? 0) >= 1 ? .primary : TableInk.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .help(row.info.written.map { "Writing to disk now: bytes per second over the last refresh (or the minute "
                         + "around the Time Travel moment). \(RunningFormat.bytes($0)) written since it started." }
@@ -391,7 +391,7 @@ struct RunningProcessesView: View {
                 Group {
                 if !row.isGroup {
                     Text(row.started.map { RunningFormat.duration(now.timeIntervalSince($0)) } ?? "–")
-                        .foregroundStyle(.secondary).monospacedDigit()
+                        .foregroundStyle(TableInk.secondary).monospacedDigit()
                         .help(row.started.map { "Started \($0.formatted(date: .abbreviated, time: .standard))" } ?? "")
                 }
                 }
@@ -402,7 +402,7 @@ struct RunningProcessesView: View {
                 Group {
                 if !row.isGroup {
                     Text(row.parentName.isEmpty ? String(row.info.ppid) : "\(row.parentName) (\(row.info.ppid))")
-                        .foregroundStyle(.secondary).lineLimit(1)
+                        .foregroundStyle(TableInk.secondary).lineLimit(1)
                 }
                 }
                 .font(.system(size: 12))

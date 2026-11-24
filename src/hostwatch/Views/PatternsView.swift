@@ -214,7 +214,7 @@ struct PatternsView: View {
                                         Text(item.signer.isEmpty ? item.reason : "· \(item.reason)").lineLimit(1).help(item.reason)
                                     }
                                 }
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(TableInk.secondary)
                             }
                             .font(.system(size: 12))
                         }
@@ -225,7 +225,7 @@ struct PatternsView: View {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text("\(item.count)×").monospacedDigit()
                                 Text(Self.relative.localizedString(for: item.lastSeen, relativeTo: Date()))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(TableInk.secondary)
                                     .help("First seen \(item.firstSeen.formatted()), last seen \(item.lastSeen.formatted())")
                             }
                             .font(.system(size: 12))
@@ -324,7 +324,7 @@ struct PatternsView: View {
                 .width(min: 70, ideal: 130, max: 220)
                 TableColumn("Reason", value: \.reason) { item in
                     Group {
-                    if !item.isGroup { Text(item.reason).foregroundStyle(.secondary).help(item.reason) }
+                    if !item.isGroup { Text(item.reason).foregroundStyle(TableInk.secondary).help(item.reason) }
                     }
                     .font(.system(size: 12))
                 }
@@ -340,7 +340,7 @@ struct PatternsView: View {
                     Group {
                     if !item.isGroup {
                         Text(Self.relative.localizedString(for: item.firstSeen, relativeTo: Date()))
-                            .foregroundStyle(.secondary).help(item.firstSeen.formatted())
+                            .foregroundStyle(TableInk.secondary).help(item.firstSeen.formatted())
                     }
                     }
                     .font(.system(size: 12))
@@ -350,7 +350,7 @@ struct PatternsView: View {
                     Group {
                     if !item.isGroup {
                         Text(Self.relative.localizedString(for: item.lastSeen, relativeTo: Date()))
-                            .foregroundStyle(.secondary).help(item.lastSeen.formatted())
+                            .foregroundStyle(TableInk.secondary).help(item.lastSeen.formatted())
                     }
                     }
                     .font(.system(size: 12))

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.1 – Alerts when protection stops
+
+### Fixes
+
+- Grey columns in Events, Running Now and Patterns are easier to read.
+
 ## 0.22.0 – Alerts when protection stops
 
 ### New
