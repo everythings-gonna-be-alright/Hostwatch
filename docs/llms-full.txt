@@ -2158,7 +2158,7 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on
 - the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
-  lets connections through
+  lets connections through (if that fails, a second check without the relay tells a broken relay from no network)
 
 On your own network, the network map asks devices to announce themselves (Bonjour, every 15 minutes, as the Finder
 and AirPlay menus do). Those questions stay on your network and never reach the internet. macOS asks once whether
@@ -2309,7 +2309,7 @@ Full Disk Access stays granted.
 |--------------|------------|
 | **Nothing appears / "Collector off"** | Start it from the menu bar icon. Check *Help ▸ Collector Log*. |
 | **`ERR_NOT_PERMITTED` in the log** | Full Disk Access is missing (see [Built-in collector](01-getting-started.md#built-in-collector)). |
-| **The firewall turned itself to Watch** | Its web check through the relay failed twice. The status line in Protection ▸ Network Firewall says why. |
+| **The firewall turned itself to Watch** | Its web check through the relay failed twice while the web worked without it. No network at all (lid closed, changing networks) doesn't count. The status line in Protection ▸ Network Firewall says why. |
 
 ### Known limitations
 
