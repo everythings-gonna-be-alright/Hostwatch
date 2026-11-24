@@ -37,10 +37,6 @@
   <img src="docs/images/site/network.png" alt="Hostwatch network map: who reaches this Mac, what goes out, the way out and the destinations">
 </p>
 
-<p align="center">
-  <img src="docs/images/site/hud.png" width="360" alt="Hostwatch HUD: live processes, connections and file opens, with a story on top">
-</p>
-
 <p align="center"><sub>Screenshots show made-up demo data.</sub></p>
 
 ---
