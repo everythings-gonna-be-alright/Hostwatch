@@ -83,11 +83,11 @@ Hostwatch needs macOS 26 or later. More in [Features](03-features.md) and the [T
 which lists where Hostwatch is weak. Choosing for a company? See
 [Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](10-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
 
-### Using them together
+### Do you need more than one?
 
-They get along. Set Hostwatch's firewall to Watch and let LuLu or Little Snitch do the asking: Hostwatch still
-records every connection. BlockBlock and Hostwatch can both run. We haven't tested every version together, so if
-two tools clash on your Mac, please [tell us](https://github.com/everythings-gonna-be-alright/Hostwatch/issues).
+Usually not. Hostwatch has its own firewall and notices new startup items, so it does the main job of each of the
+other three. Pick the one that fits and run that. If you do keep a second firewall, let only one of them ask, or
+you'll answer every question twice.
 
 ### Sources
 

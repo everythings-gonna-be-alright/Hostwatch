@@ -85,11 +85,9 @@ with Intune, Jamf or another device manager.
 Looking for a firewall or a small tool for one Mac? See
 [Hostwatch vs LuLu, Little Snitch and BlockBlock](09-hostwatch-vs-lulu-little-snitch-blockblock.md).
 
-### Using them together
+### On a Mac your company manages
 
-Hostwatch needs nothing else to run. On a Mac your company manages, ask whoever looks after it before you install
-anything. We haven't tested Hostwatch next to each of these tools, so if two clash on your Mac, please
-[tell us](https://github.com/everythings-gonna-be-alright/Hostwatch/issues).
+If your company already runs one of these on your Mac, ask whoever looks after it before you install anything else.
 
 ### Sources
 
