@@ -56,6 +56,10 @@ disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 00
   and its tree, by lineage at event time; named from Claude's transcript; replayed from history for Time Travel.
 - `NetSignals.swift`, `Domains.swift`, `DomainDetails.swift` — beaconing, raw IPs, first-seen domains, risk score.
 - `ThreatIntel.swift` — threat lists, matched locally. `Hold.swift` — holding a process while you decide.
+- `PackageGuard.swift` — malicious packages in your projects (ADR 0024): `MaliciousPackages.swift` (OSV's MAL-
+  records as a text index, version ranges), `Lockfiles.swift` (one parser per lockfile format: pure),
+  `ZipReader.swift` (OSV's bulk export, read in place), `PackageScanReport.swift` (`--package-scan`). The page is
+  `Views/PackagesView.swift` (Protection ▸ Packages). `StoryStage.swift` holds the stages, their weights and titles.
 - `Watch.swift` — Watch Closely (a second eslogger on one process). `CommandGuard.swift`, `ClaudeGuard.swift` —
   the Claude Code hook: judge a tool call before it runs.
 

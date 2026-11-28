@@ -129,7 +129,7 @@ extension AppDelegate {
         // Hosting controller bridges the SwiftUI .toolbar/.searchable/title into a native,
         // unified Liquid Glass toolbar.
         let host = NSHostingController(rootView: ActivityWindowView(model: model, stories: stories, domains: domains, networkState: networkState, incoming: networkMap.badge, firewall: firewall, rulesTab: rulesTab, vitals: vitals, heavyStrip: heavyStrip, intel: intel, sheets: sheets, rules: ruleBook, baseline: baseline, collector: collector, alerts: criticalAlerts, history: history,
-                                                                   signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, running: running, actions: actions))
+                                                                   signatures: signatures, classifier: classifier, travel: travel, metrics: metrics, running: running, actions: actions, packages: packages))
         host.sceneBridgingOptions = [.toolbars, .title]
         // Only enforce the minimum size; by default the controller resizes the window to each tab's
         // preferred size (e.g. the small empty Stories view), which reset the window on tab switch.

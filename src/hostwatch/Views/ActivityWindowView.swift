@@ -109,6 +109,8 @@ struct ActivityWindowView: View {
     @ObservedObject var metrics: MetricsStore
     @ObservedObject var running: RunningProcesses
     let actions: HUDActions
+    /// Protection ▸ Packages (ADR 0024).
+    var packages: PackageGuard? = nil
 
     var traveling: Bool { travel.active && model.windowTab == 0 }
     /// Time Travel on the Network tab: the map follows the playhead.
@@ -308,7 +310,7 @@ struct ActivityWindowView: View {
                                                                           actions: actions, filter: $model.signatureFilter,
                                                                           list: patternList, active: model.windowTab == 1
                                                                           )) : nil,
-                  protection: model.protection, networkMap: networkState.map, firewall: firewall,
+                  protection: model.protection, networkMap: networkState.map, firewall: firewall, packages: packages,
                   showPatterns: { app in
                       signatures.scope = nil
                       signatures.search = app

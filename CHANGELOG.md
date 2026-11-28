@@ -6,6 +6,8 @@
 
 - **Uploads on your network** – a large upload to a device on your network that isn't yours is a story.
 - **Not a Threat** – replaces Always Ignore. Only that story's exact signs stop counting.
+- **Malicious packages** – every project's lockfiles checked against OSV's malicious-package list for npm, PyPI,
+  Go, crates.io, RubyGems, Packagist and NuGet. A match is a Dangerous story. In Protection ▸ Packages.
 
 ### Fixes
 

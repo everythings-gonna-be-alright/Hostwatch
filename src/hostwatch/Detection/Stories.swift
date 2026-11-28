@@ -7,88 +7,6 @@ import Foundation
 // scored together. Each step alone is often "normal"; the chain is what matters, e.g.
 // Chrome writes ~/Downloads/x → xattr -d quarantine x → x runs → writes a LaunchAgent → connects out.
 
-// MARK: - Stages
-
-enum StoryStage: String, Codable, CaseIterable, Comparable {
-    case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
-    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad, listed
-    // The network map's: someone on your network trying this Mac (ADR 0017).
-    case portScan, newDevice, routerChanged, largeUpload
-
-    static func < (a: StoryStage, b: StoryStage) -> Bool {
-        allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
-    }
-
-    var weight: Int {
-        switch self {
-        case .drop, .lolbin, .network, .newDevice: return 1
-        case .runFromDrop, .newDomain, .rawIP: return 2
-        case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted, .listed: return 3
-        case .persistence, .portScan, .routerChanged, .largeUpload: return 4
-        case .swappedBinary: return 5
-        case .knownBad: return 8
-        }
-    }
-
-    /// Strong enough to make activity started from your own terminal/IDE worth a story.
-    var isStrong: Bool {
-        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad, .listed]
-            .contains(self)
-    }
-
-    var title: String {
-        switch self {
-        case .drop: return "Download"
-        case .unquarantine: return "Quarantine removed"
-        case .runFromDrop: return "Ran downloaded/temp file"
-        case .appShell: return "App spawned shell"
-        case .lolbin: return "System tool"
-        case .encodedCommand: return "Encoded/piped command"
-        case .persistence: return "Autostart write"
-        case .credential: return "Credential access"
-        case .network: return "Outbound connection"
-        case .unsignedCode: return "Unsigned download ran"
-        case .swappedBinary: return "Binary replaced"
-        case .newDomain: return "New domain"
-        case .beaconing: return "Beaconing"
-        case .rawIP: return "Raw-IP connection"
-        case .heavyUntrusted: return "Heavy untrusted process"
-        case .knownBad: return "Known malware"
-        case .listed: return "On a blocklist"
-        case .portScan: return "Port scan"
-        case .newDevice: return "New device reached this Mac"
-        case .routerChanged: return "Router changed"
-        case .largeUpload: return "Large upload"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .drop: return "arrow.down.circle"
-        case .unquarantine: return "shield.slash"
-        case .runFromDrop: return "play.circle"
-        case .appShell: return "terminal"
-        case .lolbin: return "wrench.and.screwdriver"
-        case .encodedCommand: return "curlybraces"
-        case .persistence: return "arrow.clockwise.circle"
-        case .credential: return "key"
-        case .network: return "network"
-        case .unsignedCode: return "seal"
-        case .swappedBinary: return "arrow.triangle.swap"
-        case .newDomain: return "globe.badge.chevron.backward"
-        case .beaconing: return "dot.radiowaves.right"
-        case .rawIP: return "number"
-        case .heavyUntrusted: return "flame"
-        case .knownBad: return "xmark.octagon"
-        case .listed: return "list.bullet.rectangle"
-        case .portScan: return "dot.radiowaves.left.and.right"
-        case .newDevice: return "questionmark.circle"
-        case .routerChanged: return "wifi.exclamationmark"
-        case .largeUpload: return "arrow.up.circle"
-        }
-    }
-}
-
 // MARK: - Model
 
 struct StoryStep: Codable, Identifiable {
@@ -891,11 +809,13 @@ final class StoryEngine: ObservableObject {
 
     /// A story of one step that isn't a process tree's (the network map's): fired at once, unless you ignored the
     /// same one (same origin and stage) before.
+    /// `kind` `.file`: a file's story (a malicious package in a lockfile), its origin a project rather than a device.
     func raise(_ stage: StoryStage, origin: String, note: String, target: String, severity: SignatureStatus = .suspicious,
-               at date: Date = Date()) {
-        let event = ActivityEvent(kind: .net, time: Agent.nowHMS(), pid: 0, ppid: 0, name: origin, proc: "", target: target,
-                                  extra: "TCP", parent: "", host: "", hostSource: "")
-        var story = Story(rootPid: 0, originName: origin, originPath: "network:" + origin, origin: .background,
+               kind: EventKind = .net, at date: Date = Date()) {
+        let event = ActivityEvent(kind: kind, time: Agent.nowHMS(), pid: 0, ppid: 0, name: origin, proc: "", target: target,
+                                  extra: kind == .net ? "TCP" : "", parent: "", host: "", hostSource: "")
+        var story = Story(rootPid: 0, originName: origin, originPath: (kind == .net ? "network:" : "project:") + origin,
+                          origin: .background,
                           steps: [StoryStep(event, stage: stage, note: note, date: date)], firstSeen: date, lastSeen: date)
         guard !ignored.contains(story.signature), !exceptions.contains(StoryEvidence.exceptionKey(story.steps[0])) else { return }
         story.fired = true

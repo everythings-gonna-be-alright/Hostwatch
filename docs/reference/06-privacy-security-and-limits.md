@@ -6,7 +6,8 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these
 
 - what you send to an AI you chose: Claude, or a custom AI server that isn't on this Mac
 - a daily anonymous update check, if it is on
-- the daily threat-list downloads, if they are on
+- the daily threat-list downloads, if they are on, and the malicious-package lists for the languages your projects
+  use (from OSV.dev: the whole list once, then only what changed. Your projects and packages are never sent)
 - the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
   lets connections through (if that fails, a second check without the relay tells a broken relay from no network)
 
@@ -24,6 +25,7 @@ Here is where everything lives:
 |-------|------|
 | `~/Library/Application Support/Hostwatch/` | patterns (`signatures-v2.json`), stories, domains, rules, signing facts, `collector.token` (0600), `claude-guard.json`, `firewall-watch.json` |
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
+| `…/Hostwatch/packages/` | malicious-package lists (one per language), the lockfiles checked and what was found (sealed) |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (the collector's log when it was started with an admin password prompt instead of as a background service) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |

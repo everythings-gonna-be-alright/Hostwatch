@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     let heavyStrip = HeavyStripState()
     /// Threat lists and exploited macOS vulnerabilities (downloaded daily, matched locally).
     let intel = ThreatIntel()
+    /// Malicious packages in your projects' lockfiles (ADR 0024).
+    let packages = PackageGuard()
     /// Claude Code's actions, checked before they run (a PreToolUse hook asks this app).
     let claudeGuard = ClaudeGuard()
     var guardPanel: NSPanel?
@@ -225,8 +227,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 _ = self.stories.ingest(past, decidedSafe: false)
             }
         }
+        packages.onFinding = { [weak self] f in
+            self?.stories.raise(.maliciousPackage, origin: f.project,
+                                note: "\(f.package.label) (\(f.package.ecosystem.title)) is on the malicious-package list (\(f.malwareID))",
+                                target: f.lockfile, severity: .dangerous, kind: .file)
+        }
         if !AppPaths.isDemo {
             intel.start()
+            packages.start()
             setUpClaudeGuard()
         }
         setUpFirewall()
