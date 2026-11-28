@@ -2814,12 +2814,13 @@ either. Found a mistake? Write to contact@hostwatch.tech.
 
 ## Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender
 
-These three protect a company's Macs from one place. Hostwatch protects the Mac in front of you. Here is what each
-one does, and when to pick it.
+These three protect a company's Macs from one console. Hostwatch starts on a single Mac with nothing to set up,
+and a console for whole teams is planned. Here is what each one does, and when to pick it.
 
 ### In one line
 
-- **Hostwatch:** intrusion detection for your own Mac. You install it, it learns your Mac, and you decide. Free.
+- **Hostwatch:** intrusion detection that learns each Mac and tells the story of an attack. Free today, with a
+  team console and a cloud version planned.
 - **Jamf Protect:** Mac endpoint protection for organisations, sold with Jamf's device management.
 - **CrowdStrike Falcon:** antivirus and attack detection for businesses, in one agent.
 - **Microsoft Defender for Endpoint:** antivirus and attack detection for organisations, run from Microsoft's portal.
@@ -2828,13 +2829,12 @@ one does, and when to pick it.
 
 | | Hostwatch | Jamf Protect | CrowdStrike Falcon | Microsoft Defender |
 |---|---|---|---|---|
-| Made for | Your Mac | Company | Company | Company |
 | Detects attacks on the Mac | Yes | Yes | Yes | Yes |
 | Stops known malware | Yes | Yes | Yes | Yes |
-| Works alone, no server or admin | Yes | – | – | – |
-| Asks you, at your Mac | Yes | – | – | – |
-| What it sees stays on your Mac | Yes | – | – | – |
+| Starts on one Mac, no server needed | Yes | – | – | – |
+| Asks the person at the Mac | Yes | – | – | – |
 | Firewall that asks you first | Yes | – | – | – |
+| Checks an AI coding agent's commands | Yes | – | – | – |
 | Manages many Macs from one place | Planned | Yes | Yes | Yes |
 | USB and device controls | – | Yes | Yes | Yes |
 | Remote investigation by a security team | – | – | Yes | Yes |
@@ -2855,9 +2855,9 @@ with Jamf for Mac, together with Jamf's device management, from 25 devices.
   - you already manage them with Jamf
   - you need compliance alerts and logs sent to your security tools
 - **Pick Hostwatch if**
-  - it is your own Mac, or a few of them
-  - you want to see and decide for yourself what runs
-  - you want it free, with what it sees kept on your Mac
+  - you want to start today, on one Mac or a few, with nothing to set up
+  - you want each Mac's own normal learned, and an attack told as one story
+  - you want it free, with the source code public
 
 ### Hostwatch vs CrowdStrike Falcon
 
@@ -2869,7 +2869,7 @@ and attack detection for businesses in one agent. Its top plan adds CrowdStrike'
   - you have, or want, a security team watching them
   - you need device control and threat hunting
 - **Pick Hostwatch if**
-  - you are one developer or a small team with no security staff
+  - you are a developer or a small team with no security staff yet
   - you want what happened told in plain words
   - you want to be asked before something new connects or reads your keys
 
@@ -2884,7 +2884,7 @@ with Intune, Jamf or another device manager.
   - you need every device in one portal
   - you need remote response and hunting across the company
 - **Pick Hostwatch if**
-  - you have no admin and no portal: you install it and it works by itself
+  - you want protection that needs no portal or device manager to start
   - you use AI coding agents and want their commands checked
   - you want the source code public
 
@@ -2893,14 +2893,15 @@ with Intune, Jamf or another device manager.
 - **Developers** who install packages, extensions and tools written by strangers.
 - **People who use AI coding agents** and want to see, and limit, what the agent runs.
 - **Small teams** with no security department and no device management.
+- **Companies, soon.** A server that watches a whole fleet from one place and a hosted cloud version are planned
+  as a paid edition.
 
-Hostwatch doesn't manage a fleet today. A server that watches many Macs from one place is planned as a paid
-edition for companies. Looking for a firewall or a small tool for your own Mac? See
+Looking for a firewall or a small tool for one Mac? See
 [Hostwatch vs LuLu, Little Snitch and BlockBlock](09-hostwatch-vs-lulu-little-snitch-blockblock.md).
 
 ### Using them together
 
-Hostwatch is made to work by itself. On a Mac your company manages, ask whoever looks after it before you install
+Hostwatch needs nothing else to run. On a Mac your company manages, ask whoever looks after it before you install
 anything. We haven't tested Hostwatch next to each of these tools, so if two clash on your Mac, please
 [tell us](https://github.com/everythings-gonna-be-alright/Hostwatch/issues).
 

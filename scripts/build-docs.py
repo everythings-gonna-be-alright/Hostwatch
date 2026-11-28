@@ -258,7 +258,7 @@ COMPARE = {
                   ("BlockBlock", "https://objective-see.org/products/blockblock.html")]},
     "hostwatch-vs-jamf-protect-crowdstrike-falcon-and-microsoft-defender": {
         "title": "Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender on Mac",
-        "description": "How Hostwatch, free intrusion detection for your own Mac, compares with Jamf Protect, CrowdStrike "
+        "description": "How Hostwatch, free intrusion detection for macOS, compares with Jamf Protect, CrowdStrike "
                        "Falcon and Microsoft Defender for Endpoint: who each is for, a table, price, and when to pick which.",
         "tools": [("Jamf Protect", "https://www.jamf.com/products/jamf-protect/"),
                   ("CrowdStrike Falcon", "https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/"),

@@ -24,7 +24,7 @@ cloud (SaaS) version.
 7. **[For developers](reference/07-for-developers.md)**: building from source, testing, debug tools and demo mode.
 8. **[Threat model and attack coverage](reference/08-threat-model.md)**: what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees.
 9. **[Hostwatch vs LuLu, Little Snitch and BlockBlock](reference/09-hostwatch-vs-lulu-little-snitch-blockblock.md)**: what Hostwatch does, who it is for, and how it compares with three well-known Mac security tools.
-10. **[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](reference/10-hostwatch-vs-jamf-protect-crowdstrike-defender.md)**: how Hostwatch, made for your own Mac, compares with the tools a company buys for all of its Macs.
+10. **[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](reference/10-hostwatch-vs-jamf-protect-crowdstrike-defender.md)**: how Hostwatch compares with the endpoint security tools companies buy for their Macs.
 
 ## Questions and answers
 
@@ -67,9 +67,10 @@ BlockBlock run on older macOS. The full comparison is in
 
 ### How is Hostwatch different from Jamf Protect, CrowdStrike Falcon and Microsoft Defender?
 
-Those three protect a company's Macs from one place: an administrator installs them on every Mac and a security
-team watches the alerts. Hostwatch is for the Mac in front of you. You install it yourself, it asks you, and what it
-sees stays on your Mac. It is free and doesn't manage a fleet today. The full comparison is in
+Those three are bought by a company, installed on every Mac by an administrator and watched from one console.
+Hostwatch starts on a single Mac with nothing to set up: it learns that Mac, asks the person using it and tells an
+attack as one story. It is free. A server for a whole fleet and a hosted cloud version are planned for companies.
+The full comparison is in
 [Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](reference/10-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
 
 ### Can Hostwatch block connections?
