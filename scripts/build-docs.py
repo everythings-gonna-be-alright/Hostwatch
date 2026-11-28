@@ -247,6 +247,7 @@ SECTION_ICONS = {
 GROUP_ICONS.update(SECTION_ICONS)
 
 # One per chapter, for the docs home's cards.
+COMPARE = "hostwatch-vs-lulu-little-snitch-and-blockblock"     # the comparison chapter's id
 CHAPTER_ICONS = {
     "getting-started": '<circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.6l3.8 2.4-3.8 2.4z"/>',
     "everyday-use": '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.2h12M4.4 4.6h.01M6 4.6h.01"/>',
@@ -257,7 +258,22 @@ CHAPTER_ICONS = {
     "privacy-security-and-limits": '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>',
     "for-developers": '<path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5"/>',
     "threat-model-and-attack-coverage": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/><path d="M6 8l1.5 1.5L10.2 6.6"/>',
+    COMPARE: '<path d="M4.5 2.5v11M11.5 2.5v11M2.5 5.5h4M9.5 10.5h4"/>',
 }
+
+
+# Pages people search for by name get their own title and description: the docs' pattern ("… · Hostwatch docs")
+# would hide the names they typed.
+SEO = {
+    COMPARE: ("Hostwatch vs LuLu, Little Snitch and BlockBlock: Mac security tools compared",
+              "What Hostwatch does, who it is for, and how it compares with LuLu, Little Snitch and BlockBlock: "
+              "price, licence, firewall, files, startup items and when another tool is the better choice."),
+}
+
+
+COMPARED = [("LuLu", "https://objective-see.org/products/lulu.html"),
+            ("Little Snitch", "https://www.obdev.at/products/littlesnitch/index.html"),
+            ("BlockBlock", "https://objective-see.org/products/blockblock.html")]
 
 
 def chapter_icon(sid):
@@ -1186,7 +1202,8 @@ def main():
     shelves = [("Using Hostwatch", [c for c in numbered if c[0] <= 4]),
                ("Going deeper", [c for c in numbered if c[1]["id"] in ("advanced-and-command-line", "privacy-security-and-limits",
                                                                       "threat-model-and-attack-coverage")]),
-               ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"])]
+               ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"]),
+               ("Choosing a tool", [c for c in numbered if c[1]["id"] == COMPARE])]
     cards = "".join(f'<h2 class="shelf">{name}</h2><div class="cards">' + "".join(card(n, ch) for n, ch in group) + "</div>"
                     for name, group in shelves if group)
     first = chapters[0]["page"]
@@ -1272,10 +1289,13 @@ def main():
         blurb = sentence(blurbs.get(ch["title"], "")).rstrip(".")
         desc = f"{ch['title']} in the Hostwatch docs: {blurb[:1].lower() + blurb[1:]}. Intrusion detection for macOS."
         title = f'{ch["title"]} · Hostwatch docs'
+        title, desc = SEO.get(ch["id"], (title, desc))
         nodes = [{"@type": "TechArticle", "headline": ch["title"], "name": title, "description": desc, "url": url,
                   "inLanguage": "en", "dateModified": changed, "author": AUTHOR, "about": APP,
                   "isPartOf": {"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url}},
                  crumbs(("Hostwatch", SITE), ("Docs", docs_url), (ch["title"], url))]
+        if ch["id"] == COMPARE:      # the tools it is compared with, by name, for search engines
+            nodes[0]["mentions"] = [{"@type": "SoftwareApplication", "name": n, "url": u, "operatingSystem": "macOS"} for n, u in COMPARED]
         (OUT_DIR / ch["page"]).write_text(PAGE.format(
             **common, title=title, edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
             page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, url=url, description=html.escape(desc),

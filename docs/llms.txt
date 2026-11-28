@@ -19,6 +19,7 @@
 - [Privacy, security and limits](https://hostwatch.tech/docs/privacy-security-and-limits.html): what is stored and sent, how Hostwatch protects itself, reset, troubleshooting, limits. (Markdown: https://hostwatch.tech/reference/06-privacy-security-and-limits.md)
 - [For developers](https://hostwatch.tech/docs/for-developers.html): building from source, testing, debug tools and demo mode. (Markdown: https://hostwatch.tech/reference/07-for-developers.md)
 - [Threat model and attack coverage](https://hostwatch.tech/docs/threat-model.html): what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees. (Markdown: https://hostwatch.tech/reference/08-threat-model.md)
+- [Hostwatch vs LuLu, Little Snitch and BlockBlock](https://hostwatch.tech/docs/hostwatch-vs-lulu-little-snitch-blockblock.html): what Hostwatch does, who it is for, and how it compares with three well-known Mac security tools. (Markdown: https://hostwatch.tech/reference/09-hostwatch-vs-lulu-little-snitch-blockblock.md)
 
 ## Questions and answers
 
@@ -27,6 +28,7 @@
 - **Does Hostwatch send my data anywhere?** No. What it learns stays on your Mac, encrypted on disk. Only a few things leave it: what you choose to send to an AI, a daily anonymous update check, the daily threat-list downloads and, while the firewall is on, a check that it still lets connections through. The update check and the threat lists can be turned off.
 - **Which Macs does it run on?** macOS 26 or later, on Apple silicon and Intel. The app is signed and notarized by Apple. Setup takes about two minutes: Full Disk Access and your administrator password once.
 - **Is Hostwatch an antivirus?** Not exactly. An antivirus looks for known malware files. Hostwatch watches behaviour: what runs, what it touches and where it connects. It also checks public threat lists, so known malware is caught too, and new behaviour that no signature knows yet is flagged.
+- **How is Hostwatch different from LuLu, Little Snitch and BlockBlock?** LuLu and Little Snitch are firewalls: they watch the network. BlockBlock watches what installs itself to start again. Hostwatch is intrusion detection for the whole Mac: programs, files and connections, joined into stories, with a firewall as one part of it. Little Snitch has more network features, such as encrypted DNS, and LuLu and BlockBlock run on older macOS. The full comparison is in Hostwatch vs LuLu, Little Snitch and BlockBlock.
 - **Can Hostwatch block connections?** Yes. Its firewall, built on macOS's own packet filter, can ask you before a program connects somewhere new, or block it. It reads only which server a program asks for and never decrypts traffic.
 - **Does Hostwatch work with AI?** Yes, if you want it to. Apple's on-device model or Claude can explain events and suggest rules. An MCP server lets Claude Code investigate your history, read-only and only with your permission. A Claude Code guard checks Claude Code's commands before they run.
 
