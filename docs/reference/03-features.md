@@ -1115,6 +1115,31 @@ program connects to, not the file, so matching the whole host would flag everyon
 - What a program then does there is still judged: a new domain, beaconing or an untrusted program calling out each
   raise their own story steps.
 
+#### Malicious packages in your projects
+
+A package from npm, PyPI or another registry runs its code as you. When a version turns out to be malicious, it is
+usually already installed somewhere: through a dependency of a dependency, in a project you haven't opened for months.
+
+Hostwatch checks every project on your Mac against the list of known malicious packages and tells you where one is.
+
+- **The list:** OSV.dev's malicious packages, fed by the OpenSSF malicious-packages project, for npm, PyPI, Go,
+  crates.io, RubyGems, Packagist and NuGet. A list is downloaded only for the languages your projects use: the whole
+  list once (npm's is about 220 MB to download and 9 MB kept), then only what changed, daily.
+- **Your projects:** found by Spotlight, plus folders you add in Protection ▸ Packages. Lockfiles are read:
+  `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `requirements*.txt`, `uv.lock`, `poetry.lock`,
+  `Pipfile.lock`, `go.sum`, `Cargo.lock`, `Gemfile.lock`, `composer.lock`, `packages.lock.json`, and the packages in a
+  Python virtual environment. Lockfiles name every dependency, not only the ones you chose.
+- **When:** a lockfile is checked again within the hour after it changes, and every project is checked again whenever
+  a list grows. A bad version already on disk is found the day it is listed.
+- **A match** is an exact name and version, so it is proof, not a sign: a **Dangerous** story with the project, the
+  package and the list's entry. Protection ▸ Packages lists every match with Show in Finder, the advisory, and
+  Dismiss.
+- **What to do:** upgrade or remove the package. If its code ran, change the keys and tokens this Mac holds, from
+  another computer.
+
+The check only finds what is already listed. Stopping a listed package's install scripts and limiting what install
+scripts may do are planned (ADR 0024).
+
 ### AI when you want it
 
 AI explains and helps decide, only when you ask, on your Mac or with Claude.
