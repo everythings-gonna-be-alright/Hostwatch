@@ -45,6 +45,19 @@ enum StoryEvidence {
         })
     }
 
+    // MARK: Browsers
+
+    /// Web browsers and their helpers (and Safari's networking, WebKit's): reaching a domain for the first time is
+    /// what browsing is, so it isn't a sign. An ad network on a blocklist plus a "new" ad domain was a story.
+    static let browserBundles = ["/Google Chrome.app/", "/Google Chrome Beta.app/", "/Google Chrome Canary.app/", "/Chromium.app/",
+                                 "/Safari.app/", "/Safari Technology Preview.app/", "/Firefox.app/", "/Firefox Developer Edition.app/",
+                                 "/Microsoft Edge.app/", "/Brave Browser.app/", "/Arc.app/", "/Opera.app/", "/Vivaldi.app/",
+                                 "/Orion.app/", "/Zen.app/", "/Zen Browser.app/", "/DuckDuckGo.app/"]
+
+    static func isBrowser(_ path: String) -> Bool {
+        browserBundles.contains { path.contains($0) } || path.hasPrefix("/System/Library/Frameworks/WebKit.framework/")
+    }
+
     // MARK: Not a threat
 
     static let exceptionsKey = "storyExceptions"
