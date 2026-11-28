@@ -732,7 +732,7 @@ final class StoryEngine: ObservableObject {
             if !["loopback", "lan", "link-local", "multicast", "any", "cgnat"].contains(bucket) {
                 out.append((.network, "connected to \(e.host.isEmpty ? e.target : "\(e.host):\(e.remotePort)")"))
             }
-            if !e.newDomain.isEmpty {
+            if !e.newDomain.isEmpty, !StoryEvidence.isBrowser(e.proc) {
                 out.append((.newDomain, "first contact with \(e.newDomain)"))
             }
             if !e.beacon.isEmpty {
@@ -951,8 +951,8 @@ final class StoryEngine: ObservableObject {
 
     // MARK: Upkeep and persistence
 
-    private func maintain() {
-        let now = Date()
+    /// `now`: the replay's clock (`--story-replay`), so its open chains are dropped as they would have been live.
+    func maintain(now: Date = Date()) {
         working = working.filter { now.timeIntervalSince($0.value.lastSeen) < window }
         linkable.removeAll { now.timeIntervalSince($0.step.date) > Self.untrustedProgramWindow }
         files = files.filter { now.timeIntervalSince($0.value.date) < fileMemory }

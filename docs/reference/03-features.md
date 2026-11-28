@@ -418,7 +418,7 @@ process tree is one program and the processes it started.
 | Outbound connection | to a public IP/host. Shown in the chain, never counted | 0 |
 | Unsigned download ran | unsigned/ad-hoc code, quarantined or in a download/temp folder | 3 |
 | Binary replaced | a known path whose signer changed (see Code signing) | 5 |
-| New domain | first contact with a domain after the baseline (see New domains) | 2 |
+| New domain | first contact with a domain after the baseline (see New domains). Not for web browsers: reaching new domains is what browsing is | 2 |
 | Beaconing | steady-interval contacts from an untrusted program or to a raw IP/new domain | 3 |
 | Raw-IP connection | public IP, unusual port, no DNS answer, untrusted program | 2 |
 | On a blocklist | a HaGeZi match, or an address-only match other than Feodo Tracker's (see Threat lists) | 3 |

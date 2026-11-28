@@ -55,6 +55,9 @@ cat ~/.zshrc >/dev/null                    # a file
   dev work must stay quiet), code signing on real binaries made in a temp folder, domains, beaconing, the collector's
   parsers, secret masking and the socket's checks. They use in-memory stores and a scratch signing database, so they
   never touch your data.
+- **The story corpus** (`tests/corpus/stories.jsonl`) holds every false story seen on a real Mac, anonymised (`$HOME`
+  for the home folder), beside attack chains. `StoryCorpus` replays it with the live threat-list filters: it fails if
+  a false story comes back or an attack goes quiet. A new false story found with `--story-report` belongs there.
 - **The demo build** is built and its tests run too.
 - **Performance budget** (`PerformanceBudgetTests.swift`) runs realistic workloads (the app's pipeline, the history
   writer, the collector's reader, Time Travel) and compares CPU time, bytes written and memory with
@@ -75,7 +78,7 @@ noted.
 | `--signature-report <history.jsonl>` | How events group into patterns. `REPORT_NOSIGN=1` turns the signing rules off to measure their effect. |
 | `--regroup-report [folder]` | What the next launch's regrouping would do to the saved patterns. |
 | `--origin-report [history folder]` | How many kinds of origin each tool pattern has. `DAYS`, `HOURS`, `LEARN_DAYS` and `REPORT_TOP` shape it. |
-| `--story-replay <history.jsonl>` | Feeds recorded events through the story engine and prints the stories it would raise. `REPLAY_LEARN_MINUTES` sets the learning time (60 by default), `HOSTWATCH_OWN_BUNDLE` the app to treat as Hostwatch. |
+| `--story-replay <history.jsonl>` | Feeds recorded events (a file or a history folder) through the story engine, as live: today's threat lists (from a scratch copy), your patterns for what was everyday, and the domains you knew before. Prints the stories and how many would have alerted. `REPLAY_PLAIN=1` leaves lists, patterns and domains out, `REPLAY_LEARN_MINUTES` sets the learning time then (60 by default), `HOSTWATCH_OWN_BUNDLE` the app to treat as Hostwatch. About 11 minutes and 2 GB for a busy day: replay one day at a time. Run it from the signed app. |
 | `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
 | `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
