@@ -221,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                                          proc: hit.path, target: hit.indicator, extra: "TCP", parent: "", host: hit.indicator,
                                          hostSource: "dns")
                 past.knownBad = hit.summary + " (contacted earlier)"
+                past.listedOnly = !hit.confident
                 _ = self.stories.ingest(past, decidedSafe: false)
             }
         }

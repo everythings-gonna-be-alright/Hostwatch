@@ -328,7 +328,9 @@ final class RuleBook: ObservableObject {
         sentDecisions = decisions.count
         lastResult = nil
         message = "Asking Claude for rules from your \(decisions.count) decisions…"
-        let ignored = UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? []
+        // Chains you muted and signs you marked Not a Threat: what you said isn't worth a story.
+        let ignored = (UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? [])
+            + (UserDefaults.standard.stringArray(forKey: StoryEvidence.exceptionsKey) ?? [])
         let prompt = Self.prompt(decisions: decisions, rules: rules, ignoredChains: ignored)
 
         let process = Process()
@@ -404,7 +406,8 @@ func runRuleSuggestionDryRun() -> Never {
     print("\(file.entries.count) patterns, \(decisions.count) of your decisions")
     guard let claude = ClaudeLocator.path else { print("Claude Code CLI not found"); exit(1) }
     let prompt = RuleBook.prompt(decisions: decisions, rules: [],
-                                 ignoredChains: UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? [])
+                                 ignoredChains: (UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? [])
+                                    + (UserDefaults.standard.stringArray(forKey: StoryEvidence.exceptionsKey) ?? []))
     let p = Process()
     p.executableURL = URL(fileURLWithPath: claude)
     p.arguments = ["-p", "--output-format", "json", "--no-session-persistence", "--setting-sources", "",

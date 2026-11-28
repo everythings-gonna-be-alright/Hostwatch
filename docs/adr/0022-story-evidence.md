@@ -21,5 +21,4 @@ on ThreatFox, one an ad network on HaGeZi's list, and two were the AWS command-l
    tool is the program or the script an interpreter runs, never one in a download or temp folder.
 
 **Consequences.** A single event no longer makes a story, unless it is a malware tracker's match: an unsigned app run
-from Downloads waits for what it does next. Next steps (not done): confidence levels per list and indicator type,
-discounting steps the baseline says are routine, and a "Not a threat" that records a narrow exception.
+from Downloads waits for what it does next. ADR 0023 takes it further: how sure a match is, everyday signs, and Not a Threat.
