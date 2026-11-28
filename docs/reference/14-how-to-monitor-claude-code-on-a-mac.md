@@ -8,7 +8,8 @@ and how to stop the commands you'd never allow. It works for the Cursor agent, C
 - **Permissions.** It asks before it runs a command, unless you told it not to ask.
 - **Transcripts.** Each session is saved under `~/.claude/projects/`.
 
-Both show what the agent said it would do. Neither shows what the programs it started then did.
+> [!NOTE]
+> Both show what the agent said it would do. Neither shows what the programs it started then did.
 
 ### See what a session did
 

@@ -3104,7 +3104,8 @@ So you look for the reading and the sending, not for a file that stays.
 3. See which programs have connections open right now: `lsof -i -P -n`
 4. Look at what arrived last: `ls -lt ~/Downloads | head`
 
-A stealer that has already finished leaves little to find this way. It doesn't need to stay.
+> [!NOTE]
+> A stealer that has already finished leaves little to find this way. It doesn't need to stay.
 
 ### Let Hostwatch watch for it
 
@@ -3151,9 +3152,10 @@ before you install, and how to watch while it runs.
 
 1. See the scripts it would run: `npm view <package> scripts`. Look for `preinstall`, `install` and `postinstall`.
 2. Install without running them: `npm install --ignore-scripts`
-3. Read the code without installing it: `npm pack <package>` downloads the archive for you to open.
+3. Read the code without installing it: `npm pack <package>`. It downloads the archive for you to open.
 
-This shows what the package says it does. Code can hide, and a package brings other packages with it.
+> [!NOTE]
+> This shows what the package says it does. Code can hide, and a package brings other packages with it.
 
 ### Watch it run with Hostwatch
 
@@ -3197,7 +3199,8 @@ and how to stop the commands you'd never allow. It works for the Cursor agent, C
 - **Permissions.** It asks before it runs a command, unless you told it not to ask.
 - **Transcripts.** Each session is saved under `~/.claude/projects/`.
 
-Both show what the agent said it would do. Neither shows what the programs it started then did.
+> [!NOTE]
+> Both show what the agent said it would do. Neither shows what the programs it started then did.
 
 ### See what a session did
 

@@ -433,6 +433,68 @@ def compare_ui(html):
     return re.sub(r"<ul>((?:<li><b>Pick [^<]+</b><ul>.*?</ul></li>)+)</ul>", picks, html, flags=re.S)
 
 
+# Small line icons for the card lists of a guide, by the section they sit under.
+GUIDE_ICONS = {
+    "the-signs": '<path d="M8 2.2 14.3 13H1.7z"/><path d="M8 6.4v3.2"/><circle cx="8" cy="11.3" r=".6" fill="currentColor" stroke="none"/>',
+    "what-to-look-for": '<path d="M1.6 8s2.4-4.4 6.4-4.4S14.4 8 14.4 8s-2.4 4.4-6.4 4.4S1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>',
+}
+RULE_LEVELS = {"Blocked": "can-stop", "You're asked": "alerts"}
+
+
+def qa_ui(html):
+    """The questions at the foot of a page as cards, one per question."""
+    def section(m):
+        items = re.sub(r'(<h4 id="[^"]+">.*?</h4>(?:\s*<p>.*?</p>)+)', r'<div>\1</div>', m.group(2), flags=re.S)
+        return m.group(1) + '<div class="faq">' + items + "</div>"
+    return re.sub(r'(<h3 id="questions-and-answers(?:-\d+)?">.*?</h3>)(.*?)(?=<h3 |\Z)', section, html, flags=re.S)
+
+
+def guide_ui(html):
+    """A guide reads as something to do: numbered steps on one line down the page with each command in a block you
+    can copy, the list that opens a section as cards, "Label: text" lists as rows with a badge, and the way on as
+    links. The Markdown stays plain lists, so it reads on GitHub and in llms.txt too."""
+    def step(li):
+        cmd = re.match(r"^((?:(?!<code>).)+?):\s*<code>([^<]+)</code>(?:\.\s+(.+)|\.?)$", li, re.S)
+        if cmd:
+            after = f"<p>{cmd.group(3)}</p>" if cmd.group(3) else ""
+            return f'<li><p>{cmd.group(1)}</p><pre data-lang="sh"><code>{cmd.group(2)}</code></pre>{after}</li>'
+        named = re.match(r"^<b>([^<]+?)\.?</b>\s*(.+)$", li, re.S)
+        if named:
+            return f"<li><b>{named.group(1)}</b><p>{named.group(2)}</p></li>"
+        return f"<li><p>{li}</p></li>"
+    html = re.sub(r"<ol>(.*?)</ol>", lambda m: '<ol class="gsteps">' + "".join(
+        step(li) for li in re.findall(r"<li>(.*?)</li>", m.group(1), re.S)) + "</ol>", html, flags=re.S)
+
+    def cap(text):                                           # it starts a line of its own now: a sentence
+        return text[:1].upper() + text[1:] if re.match(r"[a-z]+\b", text) else text
+    def card(li, icon):
+        named = re.match(r"^<b>([^<]+?)[.:]?</b>\s*(.*)$", li, re.S)
+        rest = f"<span>{cap(named.group(2))}</span>" if named and named.group(2) else ""
+        text = f"<b>{named.group(1)}</b>{rest}" if named else f"<span>{li}</span>"
+        return f"<div>{icon}<p>{text}</p></div>"
+    def cards(m):
+        shape = GUIDE_ICONS.get(m.group(2))
+        icon = f'<svg class="gicon" viewBox="0 0 16 16" aria-hidden="true">{shape}</svg>' if shape else ""
+        return m.group(1) + '<div class="gcards">' + "".join(
+            card(li, icon) for li in re.findall(r"<li>(.*?)</li>", m.group(3), re.S)) + "</div>"
+    html = re.sub(r'(<h3 id="([^"]+)">(?:(?!</h3>).)*</h3>\s*)<ul>(.*?)</ul>', cards, html, flags=re.S)
+
+    def rules(m):
+        rows = re.findall(r"<li><b>([^<]+?):</b>\s*(.*?)</li>", m.group(1), re.S)
+        if len(rows) != m.group(1).count("<li>"):
+            return m.group(0)
+        return '<div class="grules">' + "".join(
+            f'<div><span class="lvl lvl-{RULE_LEVELS.get(name, "recorded")}">{name}</span><p>{cap(text)}</p></div>'
+            for name, text in rows) + "</div>"
+    html = re.sub(r"<ul>(.*?)</ul>", rules, html, flags=re.S)
+
+    def onward(m):
+        links = re.findall(r"<a [^>]+>.*?</a>", m.group(1))
+        return '<p class="onward"><span>More in the docs</span>' + "".join(links) + "</p>"
+    html = re.sub(r"<p>More in ((?:(?!</p>).)*)</p>", onward, html, flags=re.S)
+    return re.sub(r"\(([⌃⌥⇧⌘]+\w)\)", r"<kbd>\1</kbd>", html)
+
+
 def fold_details(chapter):
     """Features read as a short tour: each section shows its heading and lead, the rest folds under Details."""
     parts = re.split(r'(?=<h[34] id=")', chapter)
@@ -633,6 +695,52 @@ PAGE = """<!doctype html>
     .table.cmp th, .table.cmp td {{ padding: 10px 2px; overflow-wrap: normal; }}
     .table.cmp th {{ font-size: 10.5px; letter-spacing: -0.02em; }}
     .table.cmp th:first-child, .table.cmp td:first-child {{ width: 28%; padding-right: 6px; }}
+  }}
+  /* Guides: steps on a line down the page, commands in their own block, card lists, badge rows, the way on. */
+  ol.gsteps {{ list-style: none; counter-reset: gstep; padding: 0; margin: 22px 0 8px; max-width: 76ch; }}
+  ol.gsteps > li {{ counter-increment: gstep; position: relative; margin: 0; padding: 2px 0 22px 46px; max-width: none; }}
+  ol.gsteps > li::before {{ content: counter(gstep); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+                           border: 1px solid var(--line-strong); background: var(--bg); color: var(--text);
+                           font: 500 12px/26px var(--mono); text-align: center; }}
+  ol.gsteps > li::after {{ content: ""; position: absolute; left: 14px; top: 34px; bottom: 4px; width: 1px; background: var(--line); }}
+  ol.gsteps > li:last-child {{ padding-bottom: 4px; }}
+  ol.gsteps > li:last-child::after {{ display: none; }}
+  ol.gsteps > li > b {{ display: block; font-size: 16px; font-weight: 500; line-height: 1.5; }}
+  ol.gsteps > li > p {{ margin: 0; }}
+  ol.gsteps > li > b + p {{ margin-top: 2px; color: var(--muted); }}
+  ol.gsteps pre {{ margin: 10px 0 0; padding: 12px 64px 12px 16px; }}
+  ol.gsteps pre code {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
+  ol.gsteps pre + p {{ margin-top: 10px; color: var(--muted); font-size: 14.5px; }}
+  ol.gsteps pre .copy {{ opacity: 1; }}
+  .gcards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 8px; max-width: 76ch; }}
+  .gcards > div {{ display: flex; gap: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .gcards .gicon {{ color: var(--muted); margin-top: 4px; }}
+  .gcards p {{ margin: 0; font-size: 14.5px; line-height: 1.55; }}
+  .gcards b {{ display: block; font-size: 15.5px; font-weight: 500; margin-bottom: 2px; }}
+  .gcards b + span {{ color: var(--muted); }}
+  .grules {{ margin: 18px 0 8px; max-width: 76ch; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .grules > div {{ display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px 14px; align-items: start; padding: 14px 18px; }}
+  .grules > div + div {{ border-top: 1px solid var(--line); }}
+  .grules .lvl {{ justify-self: start; margin: 2px 0 0; }}
+  .grules p {{ margin: 0; font-size: 14.5px; line-height: 1.6; }}
+  p.onward {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 26px 0 0; }}
+  p.onward span {{ font: 500 12px var(--mono); color: var(--dim); margin-right: 4px; }}
+  p.onward a {{ display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-control);
+               border: 1px solid var(--line-strong); color: var(--muted); font-size: 14px; text-decoration: none; }}
+  p.onward a::after {{ content: "→"; color: var(--dim); }}
+  p.onward a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
+  main kbd {{ font: 500 12px var(--mono); color: var(--muted); border: 1px solid var(--line-strong); border-radius: 6px; padding: 1px 6px;
+             white-space: nowrap; }}
+  .faq {{ display: grid; gap: 12px; margin: 18px 0 8px; max-width: 76ch; }}
+  .faq > div {{ padding: 16px 20px 18px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .faq h4 {{ margin: 0 0 6px; font-size: 16px; font-weight: 500; }}
+  .faq p {{ margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }}
+  .faq p + p {{ margin-top: 8px; }}
+  @media (max-width: 760px) {{
+    .gcards {{ grid-template-columns: 1fr; }}
+    .grules > div {{ grid-template-columns: 1fr; }}
+    ol.gsteps > li {{ padding-left: 40px; }}
+    ol.gsteps pre {{ margin: 10px 0 0; border-radius: var(--r-control); border: 1px solid var(--line); padding: 12px 68px 12px 14px; }}
   }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
@@ -1266,6 +1374,10 @@ def main():
             body = threat_ui(body)
         if sid in COMPARE:
             body = compare_ui(body)
+        if sid in GUIDES:
+            body = guide_ui(body)
+        if sid in COMPARE or sid in GUIDES:
+            body = qa_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
     ids = {i: ch["page"] for ch in chapters for _, i, _ in ch["toc"]}

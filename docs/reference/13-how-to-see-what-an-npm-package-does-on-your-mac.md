@@ -7,9 +7,10 @@ before you install, and how to watch while it runs.
 
 1. See the scripts it would run: `npm view <package> scripts`. Look for `preinstall`, `install` and `postinstall`.
 2. Install without running them: `npm install --ignore-scripts`
-3. Read the code without installing it: `npm pack <package>` downloads the archive for you to open.
+3. Read the code without installing it: `npm pack <package>`. It downloads the archive for you to open.
 
-This shows what the package says it does. Code can hide, and a package brings other packages with it.
+> [!NOTE]
+> This shows what the package says it does. Code can hide, and a package brings other packages with it.
 
 ### Watch it run with Hostwatch
 

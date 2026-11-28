@@ -17,7 +17,8 @@ So you look for the reading and the sending, not for a file that stays.
 3. See which programs have connections open right now: `lsof -i -P -n`
 4. Look at what arrived last: `ls -lt ~/Downloads | head`
 
-A stealer that has already finished leaves little to find this way. It doesn't need to stay.
+> [!NOTE]
+> A stealer that has already finished leaves little to find this way. It doesn't need to stay.
 
 ### Let Hostwatch watch for it
 
