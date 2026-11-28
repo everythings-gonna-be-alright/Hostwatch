@@ -80,6 +80,7 @@ noted.
 | `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |
 | `--guard-report` | What the Claude Code guard stopped, grouped by reason with how you answered and a few examples, then the same commands through today's rules. Run it from the signed app (the log is sealed). |
+| `--story-report [N]` | The last N stories (default 60) as text, with a count by stages, to study which chains are noise. Read only. Run it from the signed app (stories are sealed). |
 | `--time-travel-probe [folder]` | Times reading and searching history for Time Travel. |
 | `--compress-history <folder>` | Compresses plain history files and prints sizes and timings. |
 | `sudo … --watch-test <pid> [seconds]` | Records a process like Watch Closely (30 s by default) and prints the result. |

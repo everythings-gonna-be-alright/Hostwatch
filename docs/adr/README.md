@@ -22,3 +22,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0019](0019-patterns-name-who-did-it.md) | A tool's or interpreter's pattern names who did it (the app or AI agent behind it) |
 | [0020](0020-firewall-rules-per-app.md) | Firewall rules per app (its own Everywhere and destinations), next to the general ones |
 | [0021](0021-file-rules-per-app.md) | File rules per app (its own Every protected place and places), next to the general ones |
+| [0022](0022-story-evidence.md) | What counts as evidence in a story: no list matches on local or CDN addresses, two signs from two events |

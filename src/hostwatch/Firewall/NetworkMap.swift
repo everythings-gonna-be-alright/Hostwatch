@@ -327,11 +327,14 @@ final class NetworkMapStore: ObservableObject {
         c.receivedHours = (c.receivedHours ?? [:]).merging([hour: t.received], uniquingKeysWith: +)
         outgoing[c.id] = c
         let lastHour = c.sent(since: now.addingTimeInterval(-3600))
+        let device = onNetwork && lastHour >= NetworkMapPolicy.largeUpload ? devices.values.first { $0.ips.contains(t.remote) } : nil
         if NetworkMapPolicy.isLargeUpload(sentLastHour: lastHour, pairFirstSeen: c.firstSeen, mapStarted: started, now: now,
-                                          yourNetwork: onNetwork),
+                                          yourNetwork: onNetwork, deviceYours: device.map { $0.mine || $0.baseline } ?? false,
+                                          systemProgram: SignatureBuilder.isSealedSystem(path)),
            uploadAlerted[c.id].map({ now.timeIntervalSince($0) > 86400 }) ?? true {
             uploadAlerted[c.id] = now
-            onAlert?(.largeUpload(program: c.program, path: c.path, destination: group, bytes: lastHour))
+            let destination = onNetwork ? "\(device?.title ?? "an unknown device") (\(t.remote)) on your network" : group
+            onAlert?(.largeUpload(program: c.program, path: c.path, destination: destination, bytes: lastHour))
         }
         dirty = true
     }

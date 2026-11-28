@@ -412,10 +412,10 @@ process tree is one program and the processes it started.
 | Ran downloaded/temp file | exec from Downloads, temp, `/Users/Shared`, volumes | 2 |
 | App spawned shell | Slack/Office/a browser starting `sh`, `python`, `osascript` | 3 |
 | System tool | `curl`, `nc`, `osascript`, `base64`, `security`, `launchctl` … | 1 |
-| Encoded/piped command | `curl … \| sh`, `base64 -d`, `osascript -e`, `python -c` | 3 |
+| Encoded/piped command | `curl … \| sh`, `base64 -d`, `osascript -e`, `python -c` code that decodes, runs something or goes online (not one reading JSON) | 3 |
 | Autostart write | LaunchAgents/Daemons, login items, shell rc files | 4 |
-| Credential access | keychains, SSH/cloud keys, browser stores, `security find-generic-password` (unless a trusted signed parent reads its own item) | 3 |
-| Outbound connection | to a public IP/host | 1 |
+| Credential access | keychains, SSH/cloud keys, browser stores, `security find-generic-password` (unless a trusted signed parent reads its own item, or a tool reads its own sign-in: `aws` in `~/.aws`, `kubectl` in `~/.kube`, `gcloud`, `az`, `gh`, `docker`) | 3 |
+| Outbound connection | to a public IP/host. Shown in the chain, never counted | 0 |
 | Unsigned download ran | unsigned/ad-hoc code, quarantined or in a download/temp folder | 3 |
 | Binary replaced | a known path whose signer changed (see Code signing) | 5 |
 | New domain | first contact with a domain after the baseline (see New domains) | 2 |
@@ -437,11 +437,14 @@ process tree is one program and the processes it started.
 
 **When a story fires:**
 
+- **Two signs from two events:** one event is one piece of evidence, however many stages it shows. A listed
+  connection is not also a second sign by being a connection.
 - **Normal trees:** at least two stages, score ≥ 5, and a strong stage (quarantine removal, encoded command,
   autostart, credentials) or an app spawning a shell.
 - **Your own terminal/IDE:** trees started there need score ≥ 6 with a strong stage. So `go run` from `$TMPDIR` plus
   `curl` stays quiet.
 - **Dangerous:** at score ≥ 8, or autostart + network, or quarantine removal + running the file.
+- **Once a day:** the same threat-list match for the same program joins the story already told that day, quietly.
 
 **How trees are formed:** each app action, launchd job, or command typed in a terminal is its own tree. Its children
 stay together. A file written by one tree and then run (or un-quarantined) by another joins the stories. Browser
@@ -613,7 +616,8 @@ the list can't show: who tried to reach this Mac.
   connection statistics, every 10 seconds). *Connections | Data Sent* at the top switches what lines, counts and
   order measure. The details panel shows each program's, destination's and device's data sent and received.
   **Large upload** is a story: 100 MB or more sent within an hour to a destination that program first reached today.
-  Uploads to devices on your network are shown but not raised, and the map's first day is its baseline.
+  On your network it counts only to a device that isn't yours (not marked yours, not there from the map's first
+  day), and never for macOS's own programs (Time Machine, AirDrop, AirPlay). The map's first day is its baseline.
 - **Who tried to connect:** the Network tab (and Network in the menu bar menu) shows an orange count of the addresses
   that tried to connect to this Mac since you last looked. The map's *Tried to Connect* menu has *Mark as Seen* (keeps
   the tries, clears the count), *Clear Refused Tries* and *Clear All Incoming Tries*. Right-click a device, an address
@@ -1027,8 +1031,9 @@ C2 means "command and control": servers that attackers use to steer infected mac
   temp folder. The program is hashed (SHA-256, once per file version). With the key, the hash is checked against the
   file lists.
 
-**What a match does.** A match is the story stage *Known malware*. On its own it makes a story and makes it
-**Dangerous**, even for a pattern you marked Safe.
+**What a match does.** A match is the story stage *Known malware*. A malware tracker's match (ThreatFox, Feodo
+Tracker, MalwareBazaar) makes a story on its own and makes it **Dangerous**, even for a pattern you marked Safe. A
+HaGeZi match is broader (ad networks and trackers too), so it needs one more sign from another event.
 
 - The row gets a red `KNOWN BAD` tag in Events and the HUD.
 - The domain gets a red badge and risk score 100, with the reason.
@@ -1072,6 +1077,11 @@ domain.
   removed when Hostwatch starts.
 - A connection to one of these platforms isn't flagged by its address either. Their servers are shared by everyone
   on them, so an IP list naming one was reported for someone else.
+- Local addresses are never matched: private, link-local (`169.254.169.254` is the cloud metadata service), loopback
+  and multicast exist on every network, so a list naming one was reported from someone else's. Infected devices on
+  your own network are caught by what they do instead: port scans, new devices reaching this Mac, large uploads.
+- An IP-only match on a CDN's shared range (Cloudflare, Fastly) is ignored: that address fronts millions of sites.
+  A malware domain behind the CDN is still flagged by its name.
 - A phishing page on a shared host is still flagged by its full name (`login-apple.github.io`).
 - A list can only raise alerts: it can never make Hostwatch trust anything.
 
