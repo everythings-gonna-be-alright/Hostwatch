@@ -80,7 +80,8 @@ sets itself to start again, and can remove it.
 - **Small teams** who want the story of what happened, not only a blocked connection.
 
 Hostwatch needs macOS 26 or later. More in [Features](03-features.md) and the [Threat model](08-threat-model.md),
-which lists where Hostwatch is weak.
+which lists where Hostwatch is weak. Choosing for a company? See
+[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](10-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
 
 ### Using them together
 

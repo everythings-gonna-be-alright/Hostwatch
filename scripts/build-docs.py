@@ -247,7 +247,23 @@ SECTION_ICONS = {
 GROUP_ICONS.update(SECTION_ICONS)
 
 # One per chapter, for the docs home's cards.
-COMPARE = "hostwatch-vs-lulu-little-snitch-and-blockblock"     # the comparison chapter's id
+# The comparison chapters, by id: the title and description people search by, and the tools each one names.
+COMPARE = {
+    "hostwatch-vs-lulu-little-snitch-and-blockblock": {
+        "title": "Hostwatch vs LuLu, Little Snitch and BlockBlock: Mac security tools compared",
+        "description": "How Hostwatch compares with LuLu, Little Snitch and BlockBlock: what each one does, a table of "
+                       "firewall, files, startup items, price and macOS, and when to pick which.",
+        "tools": [("LuLu", "https://objective-see.org/products/lulu.html"),
+                  ("Little Snitch", "https://www.obdev.at/products/littlesnitch/index.html"),
+                  ("BlockBlock", "https://objective-see.org/products/blockblock.html")]},
+    "hostwatch-vs-jamf-protect-crowdstrike-falcon-and-microsoft-defender": {
+        "title": "Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender on Mac",
+        "description": "How Hostwatch, free intrusion detection for your own Mac, compares with Jamf Protect, CrowdStrike "
+                       "Falcon and Microsoft Defender for Endpoint: who each is for, a table, price, and when to pick which.",
+        "tools": [("Jamf Protect", "https://www.jamf.com/products/jamf-protect/"),
+                  ("CrowdStrike Falcon", "https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/"),
+                  ("Microsoft Defender for Endpoint", "https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac")]},
+}
 CHAPTER_ICONS = {
     "getting-started": '<circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.6l3.8 2.4-3.8 2.4z"/>',
     "everyday-use": '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.2h12M4.4 4.6h.01M6 4.6h.01"/>',
@@ -258,22 +274,8 @@ CHAPTER_ICONS = {
     "privacy-security-and-limits": '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>',
     "for-developers": '<path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5"/>',
     "threat-model-and-attack-coverage": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/><path d="M6 8l1.5 1.5L10.2 6.6"/>',
-    COMPARE: '<path d="M4.5 2.5v11M11.5 2.5v11M2.5 5.5h4M9.5 10.5h4"/>',
+    **{sid: '<path d="M4.5 2.5v11M11.5 2.5v11M2.5 5.5h4M9.5 10.5h4"/>' for sid in COMPARE},
 }
-
-
-# Pages people search for by name get their own title and description: the docs' pattern ("… · Hostwatch docs")
-# would hide the names they typed.
-SEO = {
-    COMPARE: ("Hostwatch vs LuLu, Little Snitch and BlockBlock: Mac security tools compared",
-              "What Hostwatch does, who it is for, and how it compares with LuLu, Little Snitch and BlockBlock: "
-              "price, licence, firewall, files, startup items and when another tool is the better choice."),
-}
-
-
-COMPARED = [("LuLu", "https://objective-see.org/products/lulu.html"),
-            ("Little Snitch", "https://www.obdev.at/products/littlesnitch/index.html"),
-            ("BlockBlock", "https://objective-see.org/products/blockblock.html")]
 
 
 def chapter_icon(sid):
@@ -397,7 +399,7 @@ def compare_ui(html):
         return m.group(1) + '<div class="cmp-tools">' + "".join(
             f'<div{" class=ours" if name == "Hostwatch" else ""}><b>{name}</b><span>{text[:1].upper() + text[1:]}</span></div>'
             for name, text in cards) + "</div>"
-    html = re.sub(r'(<h3 id="in-one-line">.*?</h3>\s*)<ul>(.*?)</ul>', tools, html, count=1, flags=re.S)
+    html = re.sub(r'(<h3 id="in-one-line(?:-\d+)?">.*?</h3>\s*)<ul>(.*?)</ul>', tools, html, count=1, flags=re.S)
     tick = ('<td class="yes"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4l3.2 3.2 6.4-7"/></svg>'
             '<span class="sr">Yes</span></td>')
     html = html.replace('<div class="table">', '<div class="table cmp">').replace("<td>Yes</td>", tick)
@@ -604,8 +606,8 @@ PAGE = """<!doctype html>
     /* All four tools on a phone's screen at once: a comparison that scrolls sideways hides what it compares. */
     .table.cmp table {{ min-width: 0; font-size: 12.5px; line-height: 1.35; }}
     .table.cmp th, .table.cmp td {{ padding: 10px 2px; overflow-wrap: normal; }}
-    .table.cmp th {{ font-size: 11.5px; letter-spacing: -0.02em; }}
-    .table.cmp th:first-child, .table.cmp td:first-child {{ width: 31%; padding-right: 6px; }}
+    .table.cmp th {{ font-size: 10.5px; letter-spacing: -0.02em; }}
+    .table.cmp th:first-child, .table.cmp td:first-child {{ width: 28%; padding-right: 6px; }}
   }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
@@ -1225,7 +1227,7 @@ def main():
         sid = next(i for lvl, i, _ in toc if lvl == 2)
         if sid == "threat-model-and-attack-coverage":
             body = threat_ui(body)
-        if sid == COMPARE:
+        if sid in COMPARE:
             body = compare_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
@@ -1254,7 +1256,7 @@ def main():
                ("Going deeper", [c for c in numbered if c[1]["id"] in ("advanced-and-command-line", "privacy-security-and-limits",
                                                                       "threat-model-and-attack-coverage")]),
                ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"]),
-               ("Choosing a tool", [c for c in numbered if c[1]["id"] == COMPARE])]
+               ("Choosing a tool", [c for c in numbered if c[1]["id"] in COMPARE])]
     cards = "".join(f'<h2 class="shelf">{name}</h2><div class="cards">' + "".join(card(n, ch) for n, ch in group) + "</div>"
                     for name, group in shelves if group)
     first = chapters[0]["page"]
@@ -1340,13 +1342,16 @@ def main():
         blurb = sentence(blurbs.get(ch["title"], "")).rstrip(".")
         desc = f"{ch['title']} in the Hostwatch docs: {blurb[:1].lower() + blurb[1:]}. Intrusion detection for macOS."
         title = f'{ch["title"]} · Hostwatch docs'
-        title, desc = SEO.get(ch["id"], (title, desc))
+        compared = COMPARE.get(ch["id"])
+        if compared:      # the names people type, not the docs' pattern ("… · Hostwatch docs") that would hide them
+            title, desc = compared["title"], compared["description"]
         nodes = [{"@type": "TechArticle", "headline": ch["title"], "name": title, "description": desc, "url": url,
                   "inLanguage": "en", "dateModified": changed, "author": AUTHOR, "about": APP,
                   "isPartOf": {"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url}},
                  crumbs(("Hostwatch", SITE), ("Docs", docs_url), (ch["title"], url))]
-        if ch["id"] == COMPARE:      # the tools it is compared with, by name, for search engines
-            nodes[0]["mentions"] = [{"@type": "SoftwareApplication", "name": n, "url": u, "operatingSystem": "macOS"} for n, u in COMPARED]
+        if compared:      # the tools it is compared with, by name, for search engines
+            nodes[0]["mentions"] = [{"@type": "SoftwareApplication", "name": n, "url": u, "operatingSystem": "macOS"}
+                                    for n, u in compared["tools"]]
         (OUT_DIR / ch["page"]).write_text(PAGE.format(
             **common, title=title, edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
             page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, url=url, description=html.escape(desc),
