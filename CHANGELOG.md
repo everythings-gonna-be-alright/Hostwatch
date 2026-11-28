@@ -6,13 +6,18 @@
 
 - **Uploads on your network** – a large upload to a device on your network that isn't yours is a story.
 - **Not a Threat** – replaces Always Ignore. Only that story's exact signs stop counting.
+- **Malicious packages** – every project's lockfiles checked against OSV's malicious-package list for npm, PyPI,
+  Go, crates.io, RubyGems, Packagist and NuGet. A match is a Dangerous story. In Protection ▸ Packages.
+- **Malicious installs stopped** – in Ask, installing a listed package or running its install script is stopped
+  before it starts, and so is Claude Code installing one. Strict also quarantines one that arrived anyway.
 
 ### Fixes
 
 - The firewall no longer turns itself off when the Mac sleeps or changes networks.
 - Fewer false stories: no threat-list matches on local or CDN addresses, one match tells one story a day, `aws` and
   `kubectl` reading their own sign-in aren't credential theft.
-- Blocklist and address-only matches need a second sign. What a program does every day no longer counts.
+- Blocklist and address-only matches need a second sign. Everyday activity and a browser reaching a new domain
+  no longer count.
 
 ## 0.22.1 – Alerts when protection stops
 

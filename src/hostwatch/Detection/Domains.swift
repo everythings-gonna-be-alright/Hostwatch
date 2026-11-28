@@ -40,11 +40,21 @@ final class DomainRegistry: ObservableObject {
     private var timer: Timer?
     private let persistent: Bool
 
-    /// Replays: in memory only, learning until the given time.
-    init(replayLearningUntil: Date) {
+    /// Replays: in memory only, learning until the given time. `known`: domains already seen before the replay starts
+    /// (from your registry), so a domain known for weeks isn't "new" just because the replay began that day.
+    init(replayLearningUntil: Date, known: [DomainRecord] = []) {
         persistent = false
         learningUntil = replayLearningUntil
         fileURL = URL(fileURLWithPath: "/dev/null")
+        records = Dictionary(known.map { ($0.domain, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// Your registry as saved, read only (for replays).
+    static func saved() -> [DomainRecord] {
+        guard let data = Vault.shared.read(AppPaths.support.appendingPathComponent("domains.json")) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([DomainRecord].self, from: data)) ?? []
     }
 
     init() {

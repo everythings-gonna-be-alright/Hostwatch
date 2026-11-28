@@ -17,6 +17,20 @@ an origin and a set of stages, broad enough to hide a real attack that happened 
 3. **Not a Threat** replaces Always Ignore. It records each sign of the story by stage, program and destination,
    folder, command or parent (`StoryEvidence.exceptionKey`), and deletes the story. Old ignored chains still apply.
    Both are sent with rule suggestions as what you said isn't worth a story.
+4. A web browser reaching a domain for the first time isn't a sign (`StoryEvidence.isBrowser`): it is what
+   browsing is. With an ad network on a blocklist it made a story.
+
+**Measured.** One busy day of real history (27 November 2026, 7.2 million events) through `--story-replay`, which now
+uses the threat lists, your patterns and the domains known before the day, and prunes on its own clock:
+
+| | Stories | All false |
+|---|---|---|
+| 0.22.1, live record (threat lists) | 6 | yes |
+| 0.22.1, replay (behaviour) | 8 | yes |
+| After ADR 0022 and this one | 0 | |
+
+The false stories, anonymised, and attack chains that must still alert are in `tests/corpus/stories.jsonl`, checked by
+`StoryCorpus` in the gate.
 
 **Consequences.** Malware that runs unnoticed for three days becomes everyday for its weaker signs, so it is caught by
 what can't become everyday (its autostart write, a threat match, a swapped binary) or by anything new it does. The

@@ -4,7 +4,7 @@ import SwiftUI
 /// suggestion you accepted: *Needs You* is what's still New, *Rules* is what decides automatically, *Decisions* shows
 /// who decided what. Protection's pages are what it does with those decisions.
 enum RulesSegment: Int, CaseIterable {
-    case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall
+    case allPatterns, needsYou, rules, decided, protectionOverview, protectedFiles, protectionFound, firewall, packages
 
     /// The Protection tab's pages; the rest belong to the Patterns tab.
     var isProtection: Bool { rawValue >= RulesSegment.protectionOverview.rawValue }
@@ -56,6 +56,8 @@ struct RulesView: View {
     var networkMap: NetworkMapStore? = nil
     /// The network firewall's settings: protection for connections, next to launches and files.
     var firewall: FirewallMonitor? = nil
+    /// Malicious packages in your projects (ADR 0024).
+    var packages: PackageGuard? = nil
     /// Opens Patterns filtered to an app.
     var showPatterns: (String) -> Void = { _ in }
     /// Opens Patterns showing exactly these patterns.
@@ -124,6 +126,7 @@ struct RulesView: View {
                     ProtectionSidebarRows(protection: protection, firewall: firewall, networkStops: {
                         connections().filter { $0.1.verdict == .block }.count
                     })
+                    if let packages { PackagesSidebarRow(packages: packages) }
                 }
             }
         }
@@ -146,6 +149,7 @@ struct RulesView: View {
                 ProtectionRailItems(protection: protection, firewall: firewall, networkStops: {
                     connections().filter { $0.1.verdict == .block }.count
                 }, page: page, open: { tab.open($0) })
+                if let packages { PackagesRailButton(packages: packages, page: page, open: { tab.open($0) }) }
             }
         }
     }
@@ -173,6 +177,8 @@ struct RulesView: View {
                                                openFound: { tab.open(.protectionFound) }, protection: protection,
                                                networkMap: networkMap)
                         }
+                    case .packages:
+                        if let packages { PackagesPage(packages: packages) }
                     case .protectionOverview, .protectedFiles, .protectionFound:
                         if let protection {
                             ProtectionView(protection: protection, firewall: firewall, connections: connections,
@@ -195,10 +201,10 @@ struct RulesView: View {
                 // The Overview's pools of colour, on the area pages built like it too.
                 if scope == .patterns {
                     PageBackdrop(accent: AreaAccent.patterns)
-                } else if [.protectionOverview, .protectedFiles, .firewall, .protectionFound].contains(page), let protection {
+                } else if [.protectionOverview, .protectedFiles, .firewall, .protectionFound, .packages].contains(page), let protection {
                     ProtectionBackdrop(protection: protection, firewall: firewall,
                                        accent: page == .firewall ? AreaAccent.network : page == .protectedFiles ? AreaAccent.files
-                                           : page == .protectionFound ? AreaAccent.found : nil)
+                                           : page == .protectionFound || page == .packages ? AreaAccent.found : nil)
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport.height = $0 - 32 }   // less the page's padding

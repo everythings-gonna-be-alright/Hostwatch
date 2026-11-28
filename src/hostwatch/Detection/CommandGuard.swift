@@ -36,6 +36,8 @@ struct CommandGuard {
     let home: String
     /// Host or IP → why it's known-bad (the threat lists); nil when not listed.
     var listed: (String) -> String? = { _ in nil }
+    /// A package → the malicious-package record that lists it (ADR 0024); nil when not listed.
+    var listedPackage: (PackageRef) -> String? = { _ in nil }
     /// A script's text (to judge `bash x.sh` by what x.sh does); nil if unreadable or not a small text file.
     var readScript: (String) -> String? = CommandGuard.readSmallTextFile
 
@@ -137,6 +139,12 @@ struct CommandGuard {
                 tokens.removeFirst()
             }
             guard let program = tokens.first.map({ ($0 as NSString).lastPathComponent }) else { continue }
+            for t in InstallContext.namedInstalls(tokens) {
+                if let id = listedPackage(t.package) {
+                    let what = t.package.version.isEmpty ? t.package.name : t.package.label
+                    add(.deny, "\(t.how == .run ? "runs" : "installs") \(what), which is on the malicious-package list (\(id))")
+                }
+            }
             let args = Array(tokens.dropFirst())
             switch program {
             case "cd":

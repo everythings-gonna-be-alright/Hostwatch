@@ -38,6 +38,9 @@ enum Entry {
         if let i = args.firstIndex(of: "--story-report") {   // the stories as text, to study noise (read only)
             runStoryReport(i + 1 < args.count ? Int(args[i + 1]) ?? 60 : 60)
         }
+        if let i = args.firstIndex(of: "--package-scan") {   // malicious packages in your projects, with scratch lists
+            MainActor.assumeIsolated { runPackageScan(i + 1 < args.count ? args[i + 1] : nil) }
+        }
         if args.contains("--metrics-probe") { runMetricsProbe() }
         if args.contains("--vault-probe") { print(Vault.probe()); exit(0) }   // why the data key opens or not (read only)
         if args.contains("--guard-report") {                // what the Claude Code guard stopped, by reason (read only)
