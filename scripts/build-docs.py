@@ -389,6 +389,26 @@ def threat_ui(html):
     return html
 
 
+def compare_ui(html):
+    """The comparison reads at a glance: the four tools as cards, ticks in the table, and each "Pick … if" pair as
+    two cards side by side. The Markdown stays plain lists and a table, so it reads on GitHub and in llms.txt too."""
+    def tools(m):
+        cards = re.findall(r"<li><b>([^<:]+):</b>\s*(.*?)</li>", m.group(2), re.S)
+        return m.group(1) + '<div class="cmp-tools">' + "".join(
+            f'<div{" class=ours" if name == "Hostwatch" else ""}><b>{name}</b><span>{text[:1].upper() + text[1:]}</span></div>'
+            for name, text in cards) + "</div>"
+    html = re.sub(r'(<h3 id="in-one-line">.*?</h3>\s*)<ul>(.*?)</ul>', tools, html, count=1, flags=re.S)
+    tick = ('<td class="yes"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4l3.2 3.2 6.4-7"/></svg>'
+            '<span class="sr">Yes</span></td>')
+    html = html.replace('<div class="table">', '<div class="table cmp">').replace("<td>Yes</td>", tick)
+    html = html.replace("<td>–</td>", '<td class="no"><span aria-hidden="true">–</span><span class="sr">Not mentioned</span></td>')
+    def picks(m):
+        cards = re.findall(r"<li><b>(Pick [^<]+)</b>(<ul>.*?</ul>)</li>", m.group(1), re.S)
+        return '<div class="picks">' + "".join(
+            f'<div{" class=ours" if "Hostwatch" in title else ""}><b>{title}</b>{items}</div>' for title, items in cards) + "</div>"
+    return re.sub(r"<ul>((?:<li><b>Pick [^<]+</b><ul>.*?</ul></li>)+)</ul>", picks, html, flags=re.S)
+
+
 def fold_details(chapter):
     """Features read as a short tour: each section shows its heading and lead, the rest folds under Details."""
     parts = re.split(r'(?=<h[34] id=")', chapter)
@@ -558,6 +578,35 @@ PAGE = """<!doctype html>
   table {{ border-collapse: collapse; font-size: 14px; min-width: 60%; }}
   th, td {{ text-align: left; padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: #c9ccd1; }}
   th {{ font: 500 12px var(--mono); color: var(--dim); }}
+  /* The comparison page: the four tools as cards, a table of ticks with Hostwatch's column lifted, and each
+     "Pick … if" pair side by side. One accent only, the text colour, as everywhere on the site. */
+  .sr {{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }}
+  .cmp-tools, .picks {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 8px; }}
+  .cmp-tools > div, .picks > div {{ padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .cmp-tools > .ours, .picks > .ours {{ border-color: var(--line-strong); background: rgba(255,255,255,0.03); }}
+  .cmp-tools b, .picks b {{ display: block; font-size: 16px; font-weight: 500; color: var(--text); }}
+  .cmp-tools span {{ display: block; margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.55; }}
+  .picks ul {{ margin: 10px 0 0; }}
+  .picks ul > li {{ margin: 8px 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }}
+  .picks .ours ul > li {{ color: #c9ccd1; }}
+  .table.cmp table {{ width: 100%; table-layout: fixed; }}
+  .table.cmp th, .table.cmp td {{ text-align: center; vertical-align: middle; padding: 11px 8px; }}
+  .table.cmp th:first-child, .table.cmp td:first-child {{ text-align: left; width: 36%; padding-left: 0; color: var(--text); }}
+  .table.cmp th {{ font: 500 14px var(--sans); color: var(--muted); }}
+  .table.cmp th:nth-child(2), .table.cmp td:nth-child(2) {{ background: rgba(255,255,255,0.04); color: var(--text); }}
+  .table.cmp th:nth-child(2) {{ border-radius: 10px 10px 0 0; }}
+  .table.cmp td {{ color: var(--muted); }}
+  .table.cmp .yes svg {{ width: 16px; height: 16px; fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round;
+                         stroke-linejoin: round; vertical-align: -3px; }}
+  .table.cmp .no {{ color: var(--dim); }}
+  @media (max-width: 760px) {{
+    .cmp-tools, .picks {{ grid-template-columns: 1fr; }}
+    /* All four tools on a phone's screen at once: a comparison that scrolls sideways hides what it compares. */
+    .table.cmp table {{ min-width: 0; font-size: 12.5px; line-height: 1.35; }}
+    .table.cmp th, .table.cmp td {{ padding: 10px 2px; overflow-wrap: normal; }}
+    .table.cmp th {{ font-size: 11.5px; letter-spacing: -0.02em; }}
+    .table.cmp th:first-child, .table.cmp td:first-child {{ width: 31%; padding-right: 6px; }}
+  }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
   footer p {{ margin: 0 auto 6px; max-width: none; line-height: 1.9; }}
@@ -1176,6 +1225,8 @@ def main():
         sid = next(i for lvl, i, _ in toc if lvl == 2)
         if sid == "threat-model-and-attack-coverage":
             body = threat_ui(body)
+        if sid == COMPARE:
+            body = compare_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
     ids = {i: ch["page"] for ch in chapters for _, i, _ in ch["toc"]}
