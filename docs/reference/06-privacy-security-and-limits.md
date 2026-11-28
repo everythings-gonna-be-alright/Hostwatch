@@ -25,7 +25,7 @@ Here is where everything lives:
 |-------|------|
 | `~/Library/Application Support/Hostwatch/` | patterns (`signatures-v2.json`), stories, domains, rules, signing facts, `collector.token` (0600), `claude-guard.json`, `firewall-watch.json` |
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
-| `…/Hostwatch/packages/` | malicious-package lists (one per language), the lockfiles checked and what was found (sealed) |
+| `…/Hostwatch/packages/` | malicious-package lists (one per language), the lockfiles checked, what was found and stopped (sealed). `quarantine/`: package folders Strict moved out of your projects, as they were |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (the collector's log when it was started with an admin password prompt instead of as a background service) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |

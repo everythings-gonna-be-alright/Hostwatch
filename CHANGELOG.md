@@ -8,6 +8,8 @@
 - **Not a Threat** – replaces Always Ignore. Only that story's exact signs stop counting.
 - **Malicious packages** – every project's lockfiles checked against OSV's malicious-package list for npm, PyPI,
   Go, crates.io, RubyGems, Packagist and NuGet. A match is a Dangerous story. In Protection ▸ Packages.
+- **Malicious installs stopped** – in Ask, installing a listed package or running its install script is stopped
+  before it starts, and so is Claude Code installing one. Strict also quarantines one that arrived anyway.
 
 ### Fixes
 

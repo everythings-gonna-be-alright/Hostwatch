@@ -294,6 +294,8 @@ final class ClaudeGuard: ObservableObject {
 
     /// Host or IP → why it's known-bad (the threat lists).
     var listed: (String) -> String? = { _ in nil }
+    /// A package → the malicious-package record that lists it.
+    var listedPackage: (PackageRef) -> String? = { _ in nil }
     /// Called when prompts appear or go (the app shows or hides the panel).
     var onPromptsChange: (() -> Void)?
 
@@ -322,6 +324,12 @@ final class ClaudeGuard: ObservableObject {
 
     private struct Saved: Codable { var log: [GuardLogEntry]; var checked: Int }
 
+    private var commandGuard: CommandGuard {
+        var g = CommandGuard(listed: listed)
+        g.listedPackage = listedPackage
+        return g
+    }
+
     /// `Hostwatch --guard-report`: what the guard stopped, by reason, with how you answered and a few examples. Read
     /// only, for tuning its rules against real use (the log is sealed, so only the signed app can read it).
     func report(examples: Int = 4) -> String {
@@ -336,7 +344,7 @@ final class ClaudeGuard: ObservableObject {
             }
         }
         // The same commands through today's rules: what would still be stopped.
-        let checker = CommandGuard(listed: listed)
+        let checker = commandGuard
         let shells = log.filter { $0.tool == "Bash" }
         let still = shells.filter { checker.assess(tool: "Bash", input: ["command": $0.subject], cwd: $0.cwd).level != .ok }
         out.append("")
@@ -444,7 +452,7 @@ final class ClaudeGuard: ObservableObject {
     /// Judges a call and answers through `reply` (at once, or after you answer the panel).
     func handle(_ request: GuardRequest, reply: @escaping (GuardReply) -> Void) {
         onRequest?(request)
-        let verdict = CommandGuard(listed: listed).assess(tool: request.tool, input: request.input, cwd: request.cwd)
+        let verdict = commandGuard.assess(tool: request.tool, input: request.input, cwd: request.cwd)
         checked += 1
         switch verdict.level {
         case .ok:

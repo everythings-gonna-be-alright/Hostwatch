@@ -31,6 +31,18 @@ func runPackageScan(_ folder: String?) -> Never {
         print(String(format: "Checked in %.1f s", Date().timeIntervalSince(t)))
         if g.findings.isEmpty { print("No malicious packages found.") }
         for f in g.findings { print("FOUND \(f.package.label) (\(f.package.ecosystem.title)) \(f.malwareID) in \(f.lockfile)") }
+        // The compact lists the collector gets (layer 3): their size, and a lookup's cost.
+        let tl = Date()
+        var listed = ListedPackages()
+        for eco in byEco.keys { if let index = Vault.shared.read(g.indexURL(eco)) { listed.add(index: index, ecosystem: eco) } }
+        let wire = (try? JSONSerialization.data(withJSONObject: listed.payload))?.count ?? 0
+        print(String(format: "Collector lists: %d names, %.1f MB on the wire, built in %.2f s", listed.count,
+                     Double(wire) / 1_048_576, Date().timeIntervalSince(tl)))
+        let probes = (0..<100_000).map { PackageRef(ecosystem: .npm, name: "probe-\($0)", version: "1.0.0") }
+        let tp = Date()
+        let hits = probes.filter { listed.record(for: $0) != nil }.count
+        print(String(format: "Lookups: %.2f µs each (%d hits in 100,000 made-up names)",
+                     Date().timeIntervalSince(tp) / 100_000 * 1_000_000, hits))
         g.save()
         done = true
     }

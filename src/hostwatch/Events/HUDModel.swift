@@ -103,6 +103,8 @@ final class HUDModel: ObservableObject {
     var onGuardAsk: (([String: Any]) -> Void)?
     var onGuardStatus: ((String, String) -> Void)?
     var onGuardBlock: (([String: Any]) -> Void)?
+    /// The collector stopped a malicious package's install script or install (ADR 0024).
+    var onPackageBlock: (([String: Any]) -> Void)?
     /// A held launch or open the collector let go because no quick answer came: (id, pid).
     var onGuardLate: ((Int, Int) -> Void)?
     /// The collector said who it is (`nil`: it said nothing, so it's from before 0.19): version, app path, Endpoint Security.
@@ -110,6 +112,8 @@ final class HUDModel: ObservableObject {
     private var helloTimer: Timer?
     /// Protection's settings for the collector, sent again on every connect.
     var guardConfig: [String: Any] = [:] { didSet { sendGuard() } }
+    /// The package guard's mode and compact lists for the collector, sent again on every connect (about 2 MB).
+    var packageConfig: [String: Any] = [:] { didSet { sendPackages() } }
     /// Threat lists: a connection to a listed domain or IP carries `knownBad` into stories and the rows.
     var intel: ThreatIntel?
     /// The collector's 5-second "top processes" samples (procs, disk read B/s, disk write B/s).
@@ -436,6 +440,7 @@ final class HUDModel: ObservableObject {
         send(["exclude": rules.lines, "kinds": EventKind.allCases.map(\.rawValue), "top": true])
         sendFirewall()
         sendGuard()
+        sendPackages()
         sendBlocks()
     }
 
@@ -461,6 +466,11 @@ final class HUDModel: ObservableObject {
     /// What you blocked on the network map: addresses (both ways) and ports (incoming). Sent again on every connect.
     var blocks: (addresses: [String], ports: [Int]) = ([], []) { didSet { sendBlocks() } }
     func sendBlocks() { send(["block": ["addresses": blocks.addresses, "ports": blocks.ports]]) }
+
+    func sendPackages() {
+        guard !packageConfig.isEmpty else { return }
+        send(["packages": packageConfig])
+    }
 
     func sendGuard() {
         guard !guardConfig.isEmpty else { return }
@@ -567,6 +577,7 @@ final class HUDModel: ObservableObject {
                     case "guard_ask": onGuardAsk?(obj)
                     case "guard_status": onGuardStatus?(obj["state"] as? String ?? "", obj["detail"] as? String ?? "")
                     case "guard_block": onGuardBlock?(obj)
+                    case "guard_package": onPackageBlock?(obj)
                     case "guard_hello": helloTimer?.invalidate(); onCollectorHello?(obj)
                     case "guard_late": onGuardLate?((obj["id"] as? NSNumber)?.intValue ?? 0, (obj["pid"] as? NSNumber)?.intValue ?? 0)
                     default: break

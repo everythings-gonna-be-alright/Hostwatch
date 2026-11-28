@@ -82,14 +82,32 @@ final class PackageGuard: ObservableObject {
         var findings: [PackageFinding] = []
         var dismissed: [String] = []
         var discovered: Date?
+        var stops: [PackageStop]? = []
+        var quarantined: [QuarantinedPackage]? = []
     }
 
     @Published private(set) var findings: [PackageFinding] = []
     @Published private(set) var lists: [String: ListState] = [:]
     @Published private(set) var lockfiles: [String: Date] = [:]
     @Published private(set) var busy = ""            // what it is doing now, empty when idle
-    @Published private(set) var lastError = ""
-    @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "packageGuardEnabled"); if enabled { tick() } } }
+    @Published var lastError = ""
+    /// Watch finds what is installed. Ask also stops listed packages' installs and scripts. Strict also moves a
+    /// listed package that arrived anyway to quarantine.
+    @Published var mode: ProtectionMode {
+        didSet {
+            defaults.set(mode.rawValue, forKey: "packageGuardMode")
+            if mode != .off { tick() }
+            sendToCollector(lists: false)
+        }
+    }
+    var enabled: Bool { mode != .off }
+    @Published var stops: [PackageStop] = []
+    @Published var quarantined: [QuarantinedPackage] = []
+    /// The lists in memory, for the collector and the Claude Code guard.
+    var listed = ListedPackages()
+    /// The collector's part: the mode and the compact lists (`HUDModel.packageConfig`).
+    var onCollectorConfig: (([String: Any]) -> Void)?
+    var collectorLists: [String: Any] = [:]
     /// Folders you added, scanned besides what Spotlight finds.
     @Published private(set) var folders: [String]
 
@@ -118,19 +136,22 @@ final class PackageGuard: ObservableObject {
     init(directory: URL = AppPaths.support.appendingPathComponent("packages", isDirectory: true), defaults: UserDefaults = .standard) {
         self.directory = directory
         self.defaults = defaults
-        enabled = defaults.object(forKey: "packageGuardEnabled") as? Bool ?? true
+        let enabledBefore = defaults.object(forKey: "packageGuardEnabled") as? Bool ?? true
+        mode = defaults.string(forKey: "packageGuardMode").flatMap(ProtectionMode.init(rawValue:)) ?? (enabledBefore ? .ask : .off)
         folders = defaults.stringArray(forKey: "packageGuardFolders") ?? []
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let data = Vault.shared.read(stateURL), let saved = try? JSONDecoder().decode(Saved.self, from: data) {
             lists = saved.lists; lockfiles = saved.lockfiles; findings = saved.findings
             dismissed = Set(saved.dismissed); discovered = saved.discovered
+            stops = saved.stops ?? []; quarantined = saved.quarantined ?? []
         }
     }
 
-    private var stateURL: URL { directory.appendingPathComponent("state.json") }
-    private func indexURL(_ eco: PackageEcosystem) -> URL { directory.appendingPathComponent("\(eco.osv).idx") }
+    var stateURL: URL { directory.appendingPathComponent("state.json") }
+    func indexURL(_ eco: PackageEcosystem) -> URL { directory.appendingPathComponent("\(eco.osv).idx") }
 
     func start() {
+        refreshListed()
         tick()
         timer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -158,6 +179,7 @@ final class PackageGuard: ObservableObject {
                 busy = "Updating the \(eco.title) list"
                 if await updateList(eco) { listsChanged = true }
             }
+            if listsChanged { refreshListed() }
             busy = "Checking projects"
             await scan(all: listsChanged || force)
             save()
@@ -333,7 +355,10 @@ final class PackageGuard: ObservableObject {
         // A lockfile's findings are what it has now: a removed or upgraded package drops out.
         findings.removeAll { scanned.contains($0.lockfile) }
         for var f in result.found where !dismissed.contains(f.id) {
-            if let old = previous[f.id] { f.found = old.found } else { onFinding?(f) }
+            if let old = previous[f.id] { f.found = old.found } else {
+                if mode == .strict { quarantine(f) }
+                onFinding?(f)
+            }
             findings.append(f)
         }
         findings.sort { $0.found > $1.found }
@@ -341,7 +366,8 @@ final class PackageGuard: ObservableObject {
     }
 
     func save() {
-        let saved = Saved(lists: lists, lockfiles: lockfiles, findings: findings, dismissed: Array(dismissed), discovered: discovered)
+        let saved = Saved(lists: lists, lockfiles: lockfiles, findings: findings, dismissed: Array(dismissed), discovered: discovered,
+                          stops: stops, quarantined: quarantined)
         if let data = try? JSONEncoder().encode(saved) { try? Vault.shared.write(data, to: stateURL) }
     }
 

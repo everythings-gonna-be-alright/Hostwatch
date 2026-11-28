@@ -58,7 +58,10 @@ disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 00
 - `ThreatIntel.swift` — threat lists, matched locally. `Hold.swift` — holding a process while you decide.
 - `PackageGuard.swift` — malicious packages in your projects (ADR 0024): `MaliciousPackages.swift` (OSV's MAL-
   records as a text index, version ranges), `Lockfiles.swift` (one parser per lockfile format: pure),
-  `ZipReader.swift` (OSV's bulk export, read in place), `PackageScanReport.swift` (`--package-scan`). The page is
+  `ZipReader.swift` (OSV's bulk export, read in place), `PackageScanReport.swift` (`--package-scan`),
+  `InstallContext.swift` (which launch installs which package: pure), `ListedPackages.swift` (the lists as name
+  hashes, for the collector), `PackageGuard+Stop.swift` (what was stopped, Strict's quarantine). The collector's
+  side is `Collector/AgentPackages.swift`. The page is
   `Views/PackagesView.swift` (Protection ▸ Packages). `StoryStage.swift` holds the stages, their weights and titles.
 - `Watch.swift` — Watch Closely (a second eslogger on one process). `CommandGuard.swift`, `ClaudeGuard.swift` —
   the Claude Code hook: judge a tool call before it runs.

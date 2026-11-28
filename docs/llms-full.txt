@@ -1657,8 +1657,24 @@ Hostwatch checks every project on your Mac against the list of known malicious p
 - **What to do:** upgrade or remove the package. If its code ran, change the keys and tokens this Mac holds, from
   another computer.
 
-The check only finds what is already listed. Stopping a listed package's install scripts and limiting what install
-scripts may do are planned (ADR 0024).
+**Stopping installs.** Packages has the modes of the other areas. Watch only finds. In **Ask** (the default),
+Hostwatch also stops a listed package before its code runs:
+
+- **Install scripts:** npm, pnpm, yarn and bun run a package's `preinstall`, `install`, `postinstall` and `prepare`
+  scripts, Cargo a crate's build script, pip a source package's build, RubyGems a gem's `extconf.rb`. Each is held at
+  launch, and a listed package's script is denied. The install fails with an error, and a Dangerous story says which
+  package and why.
+- **Named installs:** `npm install x`, `npx x`, `pnpm dlx x`, `bunx x`, `pip install x`, `uvx x`, `pipx run x`,
+  `cargo add x`, `gem install x`, `go get x` with a listed name are denied before the package manager starts. Without
+  a version on the command line, only a package listed for every version is stopped (most are).
+- **Claude Code:** with the Claude Code guard on, the same commands are blocked before Claude runs them.
+- **Strict** also moves a listed npm package that arrived anyway out of the project's `node_modules`, into
+  quarantine. Packages ▸ Quarantined puts it back or deletes it. For other languages the story gives the fix.
+
+Stopping needs Endpoint Security, like launch and file protection. Protection ▸ Packages lists what was stopped.
+
+The check only knows what is already listed. Limiting what any install script may do, listed or not, is planned
+(ADR 0024).
 
 ### AI when you want it
 
@@ -2225,7 +2241,7 @@ Here is where everything lives:
 |-------|------|
 | `~/Library/Application Support/Hostwatch/` | patterns (`signatures-v2.json`), stories, domains, rules, signing facts, `collector.token` (0600), `claude-guard.json`, `firewall-watch.json` |
 | `…/Hostwatch/intel/` | threat lists, `state.json`, `hits.json` |
-| `…/Hostwatch/packages/` | malicious-package lists (one per language), the lockfiles checked and what was found (sealed) |
+| `…/Hostwatch/packages/` | malicious-package lists (one per language), the lockfiles checked, what was found and stopped (sealed). `quarantine/`: package folders Strict moved out of your projects, as they were |
 | `…/Hostwatch/ask-claude/` | the empty working folder Claude runs in |
 | `/var/log/hostwatch-collector.log` | the collector service's log (root-owned, readable) |
 | `~/Library/Logs/Hostwatch/` | `agent.log` (the collector's log when it was started with an admin password prompt instead of as a background service) and the `History` folder (by default): `activity-*` events, `metrics-*` resource samples, `processes-*` process lists |
@@ -2461,7 +2477,7 @@ noted.
 | `--regroup-report [folder]` | What the next launch's regrouping would do to the saved patterns. |
 | `--origin-report [history folder]` | How many kinds of origin each tool pattern has. `DAYS`, `HOURS`, `LEARN_DAYS` and `REPORT_TOP` shape it. |
 | `--story-replay <history.jsonl>` | Feeds recorded events (a file or a history folder) through the story engine, as live: today's threat lists (from a scratch copy), your patterns for what was everyday, and the domains you knew before. Prints the stories and how many would have alerted. `REPLAY_PLAIN=1` leaves lists, patterns and domains out, `REPLAY_LEARN_MINUTES` sets the learning time then (60 by default), `HOSTWATCH_OWN_BUNDLE` the app to treat as Hostwatch. About 11 minutes and 2 GB for a busy day: replay one day at a time. Run it from the signed app. |
-| `--package-scan [folder]` | Finds projects (Spotlight, or only `folder`), downloads the malicious-package lists they need into a scratch folder kept between runs, and prints the packages per language, what was found, and timings. Never touches your own lists or findings. Run it from the signed app. |
+| `--package-scan [folder]` | Finds projects (Spotlight, or only `folder`), downloads the malicious-package lists they need into a scratch folder kept between runs, and prints the packages per language, what was found, the size of the lists the collector gets, and timings. Never touches your own lists or findings. Run it from the signed app. |
 | `--suggest-rules` | A dry run of rule suggestions from your decisions. Asks Claude, checks every proposal and writes nothing. |
 | `--triage-benchmark` | Compares AI models on your own decisions: false Safe, how many it settles, speed. `BENCH_MODELS=apple,<ollama model>,claude:haiku` picks them, `BENCH_N` the sample size, `BENCH_OUT` the details file. Run it from the signed app. |
 | `--signing-check <path>…` | Signing facts and the trust decision for files, and records them. |

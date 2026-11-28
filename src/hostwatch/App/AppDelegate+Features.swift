@@ -245,6 +245,7 @@ extension AppDelegate {
                 return intel.listedDomain(host)?.detail
             }
         }
+        claudeGuard.listedPackage = { [weak self] ref in MainActor.assumeIsolated { self?.packages.listedID(ref) } }
         claudeGuard.onPromptsChange = { [weak self] in self?.refreshGuardPanel() }
         claudeGuard.start()
     }
