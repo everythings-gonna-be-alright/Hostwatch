@@ -171,8 +171,8 @@ bridged networking aren't covered.
 
 ## Development
 
-To build Hostwatch from source, run its tests or contribute, see
-[For developers](docs/reference/07-for-developers.md). Every feature, rule and setting is in the
+To build Hostwatch from source or run its tests, see [For developers](docs/reference/07-for-developers.md). To send
+a fix or a feature, read the [contribution rules](CONTRIBUTING.md) first. Every feature, rule and setting is in the
 [reference](docs/reference.md), changes in the [changelog](CHANGELOG.md).
 
 ## License

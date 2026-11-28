@@ -2,6 +2,7 @@
 
 ### Where to start
 
+- `CONTRIBUTING.md` in the repository root: the rules for sending a fix or a feature.
 - `CLAUDE.md` in the repository root: how to build, test and release, the git workflow, and the invariants that bite.
 - `docs/ARCHITECTURE.md`: the flow from the collector to the views and a map of every source file.
 - `docs/DESIGN.md`: the rules for anything you can see, from Apple's guidelines to this app's words.
