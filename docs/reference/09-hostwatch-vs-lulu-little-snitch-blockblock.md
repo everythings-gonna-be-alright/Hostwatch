@@ -81,7 +81,7 @@ sets itself to start again, and can remove it.
 
 Hostwatch needs macOS 26 or later. More in [Features](03-features.md) and the [Threat model](08-threat-model.md),
 which lists where Hostwatch is weak. Choosing for a company? See
-[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](10-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
+[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](11-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
 
 ### Do you need more than one?
 

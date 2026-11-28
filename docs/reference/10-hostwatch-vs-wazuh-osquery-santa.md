@@ -106,4 +106,4 @@ work. The licence doesn't allow building a competing product from it, so it isn'
 Features change, so check the makers' pages before you decide. The names belong to their owners, and Hostwatch
 isn't connected with any of them. Found a mistake? Write to contact@hostwatch.tech. More comparisons:
 [LuLu, Little Snitch and BlockBlock](09-hostwatch-vs-lulu-little-snitch-blockblock.md) and
-[Jamf Protect, CrowdStrike Falcon and Microsoft Defender](10-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
+[Jamf Protect, CrowdStrike Falcon and Microsoft Defender](11-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
