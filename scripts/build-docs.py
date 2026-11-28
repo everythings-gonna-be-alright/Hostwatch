@@ -540,6 +540,7 @@ PAGE = """<!doctype html>
   nav.toc ol {{ list-style: none; margin: 0; padding: 0; }}
   nav.toc li.group {{ font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim);
                      padding: 20px 8px 6px; }}
+  nav.toc li.group:first-child {{ padding-top: 2px; }}
   nav.toc ol ol {{ margin: 2px 0 6px 30px; }}
   nav.toc a {{ display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; line-height: 1.4; }}
   nav.toc a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
@@ -1150,10 +1151,11 @@ def menu(chapters, here):
     labelled = set()
     for n, ch in enumerate(chapters, 1):
         current = ch["page"] == here
-        for label, group in (("Compare", COMPARE), ("Guides", GUIDES)):       # a small label where each group begins
-            if ch["id"] in group and label not in labelled:
-                labelled.add(label)
-                out.append(f'<li class="group" aria-hidden="true">{label}</li>')
+        # A small label where each group begins: the product's own chapters, then the comparisons, then the guides.
+        label = "Compare" if ch["id"] in COMPARE else "Guides" if ch["id"] in GUIDES else "Documentation"
+        if label not in labelled:
+            labelled.add(label)
+            out.append(f'<li class="group" aria-hidden="true">{label}</li>')
         href = f'#{ch["id"]}' if current else ch["page"]
         cls = ' class="here"' if current else ""
         fold = ('<button class="fold" type="button" aria-expanded="true" aria-label="Hide this chapter\'s sections"></button>'
