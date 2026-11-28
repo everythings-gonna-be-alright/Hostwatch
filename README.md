@@ -57,9 +57,14 @@ of what happened. Its firewall and Claude Code guard can stop what you didn't al
 
 ## What's new
 
-**0.22.1** – easier to read tables.
+**0.23.0**
+- **📦 Package guard** – your projects checked against the malicious-package lists for npm, PyPI, Go, crates.io and
+  more. Listed packages are stopped before their install scripts run, Claude Code included.
+- **🧱 Install scripts contained** – no reading your keys, no startup files, no AI assistants, registries only.
+- **🔤 Lookalike names flagged** – `expresss` and `reqeusts` are a story. Optional check for brand-new packages.
+- **🧯 The firewall stays on** through sleep and network changes. Fewer false stories.
 
-**0.22.0**
+**0.22.0** (0.22.1: easier to read tables)
 - **🚨 Alerts when protection stops** – a notification, a red dot and a banner if the collector or network filter stops.
 - **💬 Questions show why** – the command behind a connection, such as `git clone`.
 - **🪟 Events and Patterns redesigned** – glass cards, details beside the list.
