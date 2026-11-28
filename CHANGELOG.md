@@ -10,6 +10,8 @@
   Go, crates.io, RubyGems, Packagist and NuGet. A match is a Dangerous story. In Protection ▸ Packages.
 - **Malicious installs stopped** – in Ask, installing a listed package or running its install script is stopped
   before it starts, and so is Claude Code installing one. Strict also quarantines one that arrived anyway.
+- **Install scripts contained** – scripts can't read your keys, change startup files or start AI assistants, and
+  reach only package registries. Lookalike names are flagged. Optional check for brand-new packages.
 
 ### Fixes
 

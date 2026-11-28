@@ -12,14 +12,35 @@ struct PackageStop: Codable, Identifiable, Equatable, Sendable {
     var program: String
     var args: String
     var date: Date
+    // Containment (layer 4): what it tried (read, write, launch, connect, lookalike), on what, and whether it was
+    // stopped (Ask, Strict) or only recorded (Watch). Nil for a listed package stopped (layer 3).
+    var what: String? = nil
+    var target: String? = nil
+    var enforced: Bool? = nil
 
     var id: String { package.key + "\t" + package.version + "\t" + detail + "\t" + date.ISO8601Format() }
     var advisory: URL? { malwareID.isEmpty ? nil : URL(string: "https://osv.dev/vulnerability/\(malwareID)") }
 
-    /// "Stopped the postinstall script of x 1.0", "Stopped npm install of x".
+    /// "Stopped the postinstall script of x 1.0", "Stopped npm install of x", "The postinstall script of x 1.0
+    /// tried to read ~/.ssh/id_rsa. Stopped."
     var sentence: String {
-        how == "script" ? "Stopped the \(detail) script of \(package.label)"
-            : "Stopped \(detail) of \(package.version.isEmpty ? package.name : package.label)"
+        let name = package.version.isEmpty ? package.name : package.label
+        let who = how == "script" ? "the \(detail) script of \(name)" : "\(detail) of \(name)"
+        guard let what, let target else {
+            return how == "script" ? "Stopped the \(detail) script of \(package.label)" : "Stopped \(detail) of \(name)"
+        }
+        let shown = (target as NSString).abbreviatingWithTildeInPath
+        let tried: String
+        switch what {
+        case "read": tried = "tried to read \(shown)"
+        case "write": tried = "tried to change \(shown)"
+        case "launch": tried = "tried to start \(target)"
+        case "connect": tried = "tried to connect to \(target)"
+        case "new": tried = "was first published \(target)"
+        default: tried = "uses a name that looks like \(target)"
+        }
+        let outcome = enforced == true ? "Stopped." : ["lookalike", "new"].contains(what) ? "" : "Let through (Watch)."
+        return (who.prefix(1).uppercased() + who.dropFirst()) + " " + tried + "." + (outcome.isEmpty ? "" : " " + outcome)
     }
 }
 
@@ -50,15 +71,12 @@ extension PackageGuard {
             }.value
             listed = built
             collectorLists = built.payload
-            sendToCollector(lists: true)
+            sendToCollector()
         }
     }
 
-    /// The collector's config: stop or not, and the lists (kept by the model and sent again on every connect).
-    func sendToCollector(lists: Bool) {
-        guard !collectorLists.isEmpty || !lists else { return }
-        onCollectorConfig?(["enforce": mode.enforces, "lists": collectorLists])
-    }
+    /// The collector's config (`collectorConfig`), kept by the model and sent again on every connect.
+    func sendToCollector() { onCollectorConfig?(collectorConfig()) }
 
     /// The record id listing this package, nil when none does: for the Claude Code guard, before a command runs.
     func listedID(_ ref: PackageRef) -> String? {
@@ -83,12 +101,7 @@ extension PackageGuard {
         let id = str("malware").isEmpty ? recordID(ref) ?? "" : str("malware")
         let stop = PackageStop(package: ref, malwareID: id, how: str("how"), detail: str("detail"),
                                program: str("path"), args: str("args"), date: Date())
-        // One install runs a script many times over (a retry, each workspace): one entry a minute is enough.
-        if let last = stops.first, last.package == ref, last.detail == stop.detail, stop.date.timeIntervalSince(last.date) < 60 { return nil }
-        stops.insert(stop, at: 0)
-        if stops.count > 200 { stops.removeLast(stops.count - 200) }
-        save()
-        return stop
+        return record(stop)
     }
 
     func dismissStop(_ stop: PackageStop) {

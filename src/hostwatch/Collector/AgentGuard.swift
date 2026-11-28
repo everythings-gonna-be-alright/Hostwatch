@@ -19,6 +19,7 @@ struct HoldRequest: Sendable {
     var uid: uid_t
     var seconds: TimeInterval   // until macOS's deadline
     var installs: [InstallTarget] = []   // launches: the packages it installs or runs (read only while packages are guarded)
+    var argv: [String] = []              // launches: the words, while packages are guarded (containment reads them)
 
     /// The same launch or open again: what an answer may be reused for (exact, so `curl a` never answers `curl b`).
     var key: String {
@@ -183,13 +184,8 @@ final class AgentGuard: @unchecked Sendable {
 
     /// A held launch or open: `respond` is called exactly once, on some thread, before macOS's deadline.
     func request(_ r: HoldRequest, respond: @escaping @Sendable (Bool) -> Void) {
-        if !r.installs.isEmpty, !ours(r.pid), !ours(r.ppid), let (target, record) = packages.listedTarget(r.installs) {
-            lock.lock(); let client = decider; lock.unlock()
-            respond(false)
-            send(client, Self.line("guard_package", r, [
-                "ecosystem": .str(target.package.ecosystem.osv), "package": .str(target.package.name),
-                "version": .str(target.package.version), "how": .str(target.how.rawValue),
-                "detail": .str(target.detail), "malware": .str(record.id)]))
+        if packages.isActive, !ours(r.pid), !ours(r.ppid), let allow = packageDecision(r) {
+            respond(allow)
             return
         }
         lock.lock()
@@ -251,6 +247,9 @@ final class AgentGuard: @unchecked Sendable {
         applyClients()
     }
 
+    /// The deciding app's connection (read under `lock`).
+    var currentDecider: AgentClient? { lock.lock(); defer { lock.unlock() }; return decider }
+
     var isDeciding: Bool { lock.lock(); defer { lock.unlock() }; return decider != nil }
 
     /// No quick answer and not being asked: it goes on, and the app pauses it the old way if it must.
@@ -303,8 +302,8 @@ extension AgentGuard {
         clientsLock.lock()
         var state = esState, detail = esDetail
         if state == "available" {
-            let wantExec = deciding && (cfg.launches || packages.isEnforcing)
-            let prefixes = deciding ? cfg.prefixes : []
+            let wantExec = deciding && (cfg.launches || packages.isActive)
+            let prefixes = deciding ? Array(Set(cfg.prefixes + packages.prefixes)).sorted() : []
             if !wantExec { execClient?.stop(); execClient = nil }
             if prefixes.isEmpty || prefixes != openPrefixes { openClient?.stop(); openClient = nil; openPrefixes = [] }
             if wantExec, execClient == nil {

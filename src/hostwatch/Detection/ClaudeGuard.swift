@@ -296,6 +296,9 @@ final class ClaudeGuard: ObservableObject {
     var listed: (String) -> String? = { _ in nil }
     /// A package → the malicious-package record that lists it.
     var listedPackage: (PackageRef) -> String? = { _ in nil }
+    var lookalikePackage: (PackageRef) -> String? = { _ in nil }
+    /// The packages among these first published in the last week (the opt-in age check); nil when it's off.
+    var newPackages: (([PackageRef]) async -> [(PackageRef, Date)])?
     /// Called when prompts appear or go (the app shows or hides the panel).
     var onPromptsChange: (() -> Void)?
 
@@ -327,6 +330,7 @@ final class ClaudeGuard: ObservableObject {
     private var commandGuard: CommandGuard {
         var g = CommandGuard(listed: listed)
         g.listedPackage = listedPackage
+        g.lookalikePackage = lookalikePackage
         return g
     }
 
@@ -454,6 +458,24 @@ final class ClaudeGuard: ObservableObject {
         onRequest?(request)
         let verdict = commandGuard.assess(tool: request.tool, input: request.input, cwd: request.cwd)
         checked += 1
+        // A package installed by name may be days old (a name an AI made up, registered by someone): asked first.
+        if verdict.level == .ok, request.tool == "Bash", let newPackages {
+            let refs = CommandGuard.namedInstalls(in: request.input["command"] as? String ?? "")
+            if !refs.isEmpty {
+                Task { @MainActor [weak self] in
+                    let young = await newPackages(refs)
+                    let v = young.isEmpty ? verdict : GuardVerdict(level: .ask, reasons: young.map { ref, date in
+                        "installs \(ref.name), first published \(date.formatted(.relative(presentation: .named)))"
+                    })
+                    self?.finish(request, v, reply: reply)
+                }
+                return
+            }
+        }
+        finish(request, verdict, reply: reply)
+    }
+
+    private func finish(_ request: GuardRequest, _ verdict: GuardVerdict, reply: @escaping (GuardReply) -> Void) {
         switch verdict.level {
         case .ok:
             reply(.none)

@@ -28,6 +28,7 @@ struct PackagesPage: View {
             if !packages.stops.isEmpty { stopped }
             findings
             if !packages.quarantined.isEmpty { quarantine }
+            containment
             lists
             folders
         }
@@ -40,7 +41,7 @@ struct PackagesPage: View {
             return "Malicious packages are installed in your projects. Remove or upgrade them, then change any keys this Mac holds."
         }
         return packages.mode.enforces
-            ? "No known malicious package in your projects. Installing one, or running its install script, is stopped."
+            ? "No known malicious package in your projects. Listed packages are stopped and install scripts contained."
             : "No known malicious package in your projects. They are checked again when a lockfile changes or a list grows."
     }
 
@@ -101,11 +102,12 @@ struct PackagesPage: View {
 
     private var stopped: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Stopped").font(.headline)
+            Text("Stopped and contained").font(.headline)
             ForEach(packages.stops.prefix(20)) { stop in
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "hand.raised.fill").foregroundStyle(.red).frame(width: 22)
-                        .accessibilityLabel("Stopped")
+                    Image(systemName: stop.enforced == false ? "eye" : "hand.raised.fill")
+                        .foregroundStyle(stop.enforced == false ? Color.secondary : Color.red).frame(width: 22)
+                        .accessibilityLabel(stop.enforced == false ? "Recorded" : "Stopped")
                     VStack(alignment: .leading, spacing: 3) {
                         Text(stop.sentence).fontWeight(.medium)
                         Text("\(stop.package.ecosystem.title), \(stop.date.formatted(.relative(presentation: .named)))")
@@ -150,6 +152,37 @@ struct PackagesPage: View {
                 .protectionGlass(14)
             }
         }
+    }
+
+    // MARK: Containment and name checks
+
+    private var containment: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Install scripts").font(.headline)
+            Text(packages.mode == .off ? "Off."
+                 : packages.mode == .watch ? "Recorded. What Ask would stop is listed above, and nothing is stopped."
+                 : "Contained. A package's install scripts, and what npx, uvx or pnpm dlx runs, can't read your keys, "
+                    + "tokens or browser passwords, change login items or shell startup files, or start AI assistants "
+                    + "and secret scanners. With the firewall on, they reach only the package registries.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Names").font(.headline).padding(.top, 4)
+            Text("An install whose name is one letter off a well-known package, or off one your projects use, is a story. "
+                 + "Claude Code is asked first. Strict refuses it.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Toggle(isOn: $packages.ageCheck) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Check how new a package is")
+                    Text("Asks the public registry when a package installed by name was first published. Only the name "
+                         + "is sent. Scoped npm names are never sent. A package less than a week old is a story, and "
+                         + "Claude Code is asked first.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch).controlSize(.small).disabled(!packages.enabled)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .protectionGlass(14)
     }
 
     // MARK: Lists and folders

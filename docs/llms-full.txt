@@ -1673,8 +1673,31 @@ Hostwatch also stops a listed package before its code runs:
 
 Stopping needs Endpoint Security, like launch and file protection. Protection ▸ Packages lists what was stopped.
 
-The check only knows what is already listed. Limiting what any install script may do, listed or not, is planned
-(ADR 0024).
+**Containing install scripts.** A list only knows yesterday's attacks. So in Ask and Strict, every process a
+package's install script starts, and everything `npx`, `uvx`, `pipx run`, `pnpm dlx`, `yarn dlx` or `bunx` runs, is
+contained while it runs:
+
+- It can't read your keys and tokens: SSH keys, cloud and Kubernetes credentials, `.npmrc`, `.pypirc`, `.netrc`, the
+  GitHub CLI's login, GPG keys, keychains, AI assistants' logins, crypto wallets, browser passwords and cookies.
+  The package manager itself still can: it needs `.npmrc` to log in to your registry.
+- It can't change login items, launch agents or shell startup files.
+- It can't start AI assistants (`claude`, `gemini`, `q`, `codex`, `copilot`), secret scanners (`trufflehog`,
+  `gitleaks`), the keychain tool, `launchctl`, `crontab` or `osascript`.
+- With the firewall on Ask or Strict, it can connect only to the package registries, your own registries (from
+  `.npmrc` and pip's config), and the few hosts native builds download from (nodejs.org, GitHub releases,
+  Puppeteer's and Playwright's browsers). Without the firewall, connections aren't limited.
+
+Each try is a story ("The postinstall script of x 2.0.0 tried to read ~/.ssh/id_rsa. Stopped.") and a line in
+Packages ▸ Stopped and contained. In **Watch**, nothing is stopped and the same lines say what Ask would have stopped:
+try Watch first if your builds download things.
+
+**Names.** An install by name that is one letter off a well-known package, or off one your projects use
+(`expresss`, `reqeusts`), is a story. Claude Code is asked first, and Strict refuses it. An optional check asks the
+public registry when a package was first published: one less than a week old is a story, and Claude Code is asked
+first. It is off until you turn it on, since it sends the package's name.
+
+Limits: code a package runs later, when you build or start your project, isn't contained. Secrets in environment
+variables reach install scripts. A forked process may act for a moment before it is known to belong to a script.
 
 ### AI when you want it
 
@@ -2224,6 +2247,9 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on, and the malicious-package lists for the languages your projects
   use (from OSV.dev: the whole list once, then only what changed. Your projects and packages are never sent)
+- the package age check, only if you turn it on in Protection ▸ Packages: the name of a package installed by name
+  goes to that language's public registry (npm, PyPI, crates.io, RubyGems), to learn when it was first published.
+  Scoped npm names (`@company/x`) are never sent
 - the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
   lets connections through (if that fails, a second check without the relay tells a broken relay from no network)
 

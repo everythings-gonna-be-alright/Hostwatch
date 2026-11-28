@@ -84,6 +84,7 @@ final class PackageGuard: ObservableObject {
         var discovered: Date?
         var stops: [PackageStop]? = []
         var quarantined: [QuarantinedPackage]? = []
+        var projectNames: [String: [String]]? = [:]
     }
 
     @Published private(set) var findings: [PackageFinding] = []
@@ -97,9 +98,15 @@ final class PackageGuard: ObservableObject {
         didSet {
             defaults.set(mode.rawValue, forKey: "packageGuardMode")
             if mode != .off { tick() }
-            sendToCollector(lists: false)
+            sendToCollector()
         }
     }
+    /// Opt-in: ask the public registry when a package installed by name was first published (06-privacy).
+    @Published var ageCheck: Bool { didSet { defaults.set(ageCheck, forKey: "packageAgeCheck") } }
+    /// Names in at least two of your projects, by ecosystem (normalized): lookalikes are compared with them.
+    var projectNames: [String: [String]] = [:]
+    /// A sign about a package (new, by the age check): the app raises its story.
+    var onSign: ((PackageStop) -> Void)?
     var enabled: Bool { mode != .off }
     @Published var stops: [PackageStop] = []
     @Published var quarantined: [QuarantinedPackage] = []
@@ -137,6 +144,7 @@ final class PackageGuard: ObservableObject {
         self.directory = directory
         self.defaults = defaults
         let enabledBefore = defaults.object(forKey: "packageGuardEnabled") as? Bool ?? true
+        ageCheck = defaults.bool(forKey: "packageAgeCheck")
         mode = defaults.string(forKey: "packageGuardMode").flatMap(ProtectionMode.init(rawValue:)) ?? (enabledBefore ? .ask : .off)
         folders = defaults.stringArray(forKey: "packageGuardFolders") ?? []
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -144,6 +152,7 @@ final class PackageGuard: ObservableObject {
             lists = saved.lists; lockfiles = saved.lockfiles; findings = saved.findings
             dismissed = Set(saved.dismissed); discovered = saved.discovered
             stops = saved.stops ?? []; quarantined = saved.quarantined ?? []
+            projectNames = saved.projectNames ?? [:]
         }
     }
 
@@ -332,7 +341,7 @@ final class PackageGuard: ObservableObject {
         let due = lockfiles.filter { path, scanned in all || (PackageScan.stamp(path) ?? .distantPast) > scanned }.map(\.key)
         guard !due.isEmpty else { return }
         let directory = self.directory
-        let result = await Task.detached(priority: .utility) { () -> (found: [PackageFinding], stamps: [String: Date]) in
+        let result = await Task.detached(priority: .utility) { () -> (found: [PackageFinding], stamps: [String: Date], shared: [String: [String]]) in
             var byLockfile: [String: [PackageRef]] = [:], stamps: [String: Date] = [:]
             for path in due {
                 stamps[path] = PackageScan.stamp(path) ?? Date()
@@ -348,8 +357,19 @@ final class PackageGuard: ObservableObject {
             for (path, refs) in byLockfile {
                 for ref in refs { if let r = records[ref] { found.append(PackageFinding(package: ref, malwareID: r.id, lockfile: path, found: Date())) } }
             }
-            return (found, stamps)
+            // Names shared by projects, for lookalikes: only from a full scan, which sees every project.
+            var shared: [String: [String]] = [:]
+            if all {
+                var counts: [String: Int] = [:]
+                for refs in byLockfile.values { for key in Set(refs.map(\.key)) { counts[key, default: 0] += 1 } }
+                for (key, n) in counts where n >= 2 {
+                    let parts = key.split(separator: "\t", maxSplits: 1)
+                    if parts.count == 2 { shared[String(parts[0]), default: []].append(String(parts[1])) }
+                }
+            }
+            return (found, stamps, shared)
         }.value
+        if all { projectNames = result.shared.mapValues { $0.sorted() }; sendToCollector() }
         let scanned = Set(due)
         let previous = Dictionary(findings.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A lockfile's findings are what it has now: a removed or upgraded package drops out.
@@ -367,7 +387,7 @@ final class PackageGuard: ObservableObject {
 
     func save() {
         let saved = Saved(lists: lists, lockfiles: lockfiles, findings: findings, dismissed: Array(dismissed), discovered: discovered,
-                          stops: stops, quarantined: quarantined)
+                          stops: stops, quarantined: quarantined, projectNames: projectNames)
         if let data = try? JSONEncoder().encode(saved) { try? Vault.shared.write(data, to: stateURL) }
     }
 

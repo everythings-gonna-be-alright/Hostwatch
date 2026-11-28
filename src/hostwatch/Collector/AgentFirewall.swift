@@ -207,6 +207,7 @@ final class AgentFirewall: @unchecked Sendable {
     /// Called by the relay for every new flow (on that flow's own thread).
     func decide(_ flow: RelayFlow) -> FirewallRelay.Decision {
         let key = Self.key(flow)
+        if let blocked = containment(flow) { return blocked }
         lock.lock()
         let mode = self.mode
         if flow.program == "/usr/bin/curl", flow.host == Self.canaryHost, now < canaryUntil { lock.unlock(); return .pass }
@@ -242,6 +243,21 @@ final class AgentFirewall: @unchecked Sendable {
         case .off: return .pass
         case .ask: return decider == nil ? .pass : .block
         }
+    }
+
+    /// A connection from a process an install script started: only registries and native builds' download hosts
+    /// (ADR 0024). Its name may come a moment after the connection (see `ask`): waited for up to 0.4 s, on this
+    /// flow's own thread. Nil: not contained, allowed, or only watched.
+    private func containment(_ flow: RelayFlow) -> FirewallRelay.Decision? {
+        let pid = Int(flow.pid)
+        guard pid > 0, agent.guardian.packages.contained(pid) != nil else { return nil }
+        var host = flow.host
+        if host.isEmpty, let dst = flow.original {
+            for _ in 0..<8 where agent.dnsName(dst.address) == nil { usleep(50_000) }
+            host = agent.dnsName(dst.address) ?? dst.address
+        }
+        guard let f = agent.guardian.packageConnect(pid: pid, program: flow.program, host: host) else { return nil }
+        return f.enforced ? .block : nil
     }
 
     private func ask(_ id: Int, key: String, flow: RelayFlow, client: AgentClient) {

@@ -233,12 +233,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                                 target: f.lockfile, severity: .dangerous, kind: .file)
         }
         packages.onCollectorConfig = { [weak self] config in self?.model.packageConfig = config }
-        model.onPackageBlock = { [weak self] obj in
-            guard let self, let stop = self.packages.stopped(obj) else { return }
-            let listed = stop.malwareID.isEmpty ? "the malicious-package list" : "the malicious-package list (\(stop.malwareID))"
-            self.stories.raise(.maliciousPackage, origin: stop.package.name,
-                               note: "\(stop.sentence) (\(stop.package.ecosystem.title)). It is on \(listed).",
-                               target: stop.args.isEmpty ? stop.program : stop.args, severity: .dangerous, kind: .exec)
+        model.onPackageLine = { [weak self] obj in self?.packageLine(obj) }
+        packages.onSign = { [weak self] stop in
+            self?.stories.raise(.packageSign, origin: stop.package.name,
+                                note: "\(stop.detail) installed \(stop.package.name), first published \(stop.target ?? "recently").",
+                                target: stop.args.isEmpty ? stop.program : stop.args, severity: .suspicious, kind: .exec)
         }
         if !AppPaths.isDemo {
             intel.start()
@@ -315,4 +314,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
+}
+
+extension AppDelegate {
+    /// A package-guard line from the collector, as a story (ADR 0024).
+    func packageLine(_ obj: [String: Any]) {
+        switch obj["kind"] as? String {
+        case "guard_package":
+            guard let stop = packages.stopped(obj) else { return }
+            let listed = stop.malwareID.isEmpty ? "the malicious-package list" : "the malicious-package list (\(stop.malwareID))"
+            stories.raise(.maliciousPackage, origin: stop.package.name,
+                          note: "\(stop.sentence) (\(stop.package.ecosystem.title)). It is on \(listed).",
+                          target: stop.args.isEmpty ? stop.program : stop.args, severity: .dangerous, kind: .exec)
+        case "guard_contain":
+            guard let stop = packages.contained(obj) else { return }
+            let sign = stop.what == "lookalike" || stop.what == "connect"
+            stories.raise(stop.what == "lookalike" ? .packageSign : .installScript, origin: stop.package.name,
+                          note: "\(stop.sentence) (\(stop.package.ecosystem.title))", target: stop.target ?? stop.program,
+                          severity: sign ? .suspicious : .dangerous, kind: .exec)
+        case "guard_install":
+            packages.installSeen(obj)
+        default: break
+        }
+    }
 }
