@@ -305,7 +305,7 @@ final class ThreatIntel: ObservableObject {
                     guard let first = line.first, first != "#", first != "!" else { continue }
                     var entry = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     if entry.hasPrefix("*.") { entry.removeFirst(2) }
-                    if inIPs { ipHashes.append(HashedSet.hash(entry)) }
+                    if inIPs { if FeedCheck.matchableIP(entry) { ipHashes.append(HashedSet.hash(entry)) } }
                     else if !FeedCheck.neverFlag(entry) { domainHashes.append(HashedSet.hash(entry)) }
                 }
                 counts[Feed.hagezi.rawValue] = domainHashes.count + ipHashes.count
@@ -314,7 +314,7 @@ final class ThreatIntel: ObservableObject {
                 var n = 0
                 for line in text.split(whereSeparator: \.isNewline) where !line.hasPrefix("#") {
                     let ip = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !ip.isEmpty else { continue }
+                    guard !ip.isEmpty, FeedCheck.matchableIP(ip) else { continue }
                     c2[ip] = c2[ip] ?? "Feodo Tracker: botnet command server"
                     n += 1
                 }
@@ -325,7 +325,7 @@ final class ThreatIntel: ObservableObject {
                       let all = try? JSONDecoder().decode([String: Indicator].self, from: data) else { continue }
                 for (k, v) in all {
                     if v.type == "sha256" { hashes[k] = "\(feed.title): \(v.detail)" }
-                    else if !FeedCheck.neverFlag(k), !FeedCheck.sharedHost(k) { c2[k] = "\(feed.title): \(v.detail)" }
+                    else if !FeedCheck.neverFlag(k), !FeedCheck.sharedHost(k), v.type == "domain" || FeedCheck.matchableIP(k) { c2[k] = "\(feed.title): \(v.detail)" }
                 }
                 counts[feed.rawValue] = all.count
             }
@@ -463,8 +463,10 @@ final class ThreatIntel: ObservableObject {
         }
         // A platform's address is shared by everyone on it: a listed IP there is someone else's (UDP 142.251.150.4:443
         // for www.youtube.com was flagged as malware).
+        // A local or CDN address is everyone's (see SharedNetworks): the list names someone else's network.
         if !FeedCheck.platformHost(e.host),
-           let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")), let detail = listedIP(ip, port: e.remotePort) {
+           let ip = e.remoteHost?.trimmingCharacters(in: CharacterSet(charactersIn: "[]")),
+           !FeedCheck.localAddress(ip), !FeedCheck.sharedNetwork(ip), let detail = listedIP(ip, port: e.remotePort) {
             return hit(.ip, ip, detail, e)
         }
         return nil
@@ -768,6 +770,7 @@ enum FeedCheck {
         "facebook.com", "facebook.net", "fbcdn.net", "messenger.com", "instagram.com", "cdninstagram.com",
         "whatsapp.com", "whatsapp.net", "threads.net", "linkedin.com", "licdn.com",
         "tiktok.com", "tiktokcdn.com", "tiktokv.com", "x.com", "twitter.com", "twimg.com",
+        "discord.gg", "discord.com", "discordapp.com", "discordapp.net", "discord.media",
         "reddit.com", "redditmedia.com", "redditstatic.com", "pinterest.com", "pinimg.com",
         "snapchat.com", "twitch.tv", "ttvnw.net", "spotify.com", "scdn.co", "netflix.com", "nflxvideo.net",
         "apple.com", "icloud.com", "mzstatic.com", "google.com", "gstatic.com", "gmail.com", "microsoft.com",

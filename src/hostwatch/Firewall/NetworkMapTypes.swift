@@ -243,10 +243,13 @@ enum NetworkMapPolicy {
     /// A large upload: at least this much sent within an hour to a destination the program first reached today.
     static let largeUpload: Int64 = 100_000_000
 
-    /// Worth a story: a lot sent to somewhere new for this program, not on your network, and not part of what was
-    /// already there when the map started (its first day is the baseline, as for devices).
-    static func isLargeUpload(sentLastHour: Int64, pairFirstSeen: Date, mapStarted: Date, now: Date, yourNetwork: Bool) -> Bool {
-        !yourNetwork && sentLastHour >= largeUpload && now.timeIntervalSince(pairFirstSeen) < newFor
+    /// Worth a story: a lot sent to somewhere new for this program, and not part of what was already there when the
+    /// map started (its first day is the baseline, as for devices). On your own network only to a device that isn't
+    /// yours (not marked yours, not there from the start), and never from macOS itself (Time Machine, AirDrop and
+    /// AirPlay live on the sealed system volume): files stolen to an infected laptop on the same Wi-Fi count too.
+    static func isLargeUpload(sentLastHour: Int64, pairFirstSeen: Date, mapStarted: Date, now: Date, yourNetwork: Bool,
+                              deviceYours: Bool = true, systemProgram: Bool = false) -> Bool {
+        (!yourNetwork || !deviceYours && !systemProgram) && sentLastHour >= largeUpload && now.timeIntervalSince(pairFirstSeen) < newFor
             && pairFirstSeen.timeIntervalSince(mapStarted) >= newFor
     }
 

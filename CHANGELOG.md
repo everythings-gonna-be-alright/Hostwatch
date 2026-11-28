@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+### New
+
+- **Uploads on your network** – a large upload to a device on your network that isn't yours is a story.
+
 ### Fixes
 
 - The firewall no longer turns itself off when the Mac sleeps or changes networks.
+- Fewer false stories: no threat-list matches on local or CDN addresses, one match tells one story a day, `aws` and
+  `kubectl` reading their own sign-in aren't credential theft.
 
 ## 0.22.1 – Alerts when protection stops
 

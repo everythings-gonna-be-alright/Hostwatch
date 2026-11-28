@@ -154,7 +154,7 @@ struct Story: Codable, Identifiable {
 
     /// Distinct stages count once; a file handed from one tree to another adds a bonus.
     var score: Int {
-        stages.reduce(0) { $0 + $1.weight } + (steps.contains { $0.note.hasPrefix("ran a file") } ? 1 : 0)
+        stages.filter { !$0.isContext }.reduce(0) { $0 + $1.weight } + (steps.contains { $0.note.hasPrefix("ran a file") } ? 1 : 0)
     }
 
     /// "Slack → sh → curl"
@@ -179,7 +179,7 @@ final class StoryEngine: ObservableObject {
     @Published private(set) var stories: [Story] = []
     @Published private(set) var revision = 0
 
-    private struct Proc { var ppid: Int; var path: String; var seen: Date; var start: Date? }
+    private struct Proc { var ppid: Int; var path: String; var seen: Date; var start: Date?; var args = "" }
     private var procs: [Int: Proc] = [:]
     private var working: [UUID: Story] = [:]                 // story id -> story (fired or not)
     /// Recent steps and the story each belongs to: what new steps can link to.
@@ -267,7 +267,7 @@ final class StoryEngine: ObservableObject {
                 extra: [(StoryStage, String)] = [], session: String? = nil) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0, extra.isEmpty {
-            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date)
+            procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date, args: e.args)
             // Replay: a parent that started before the recording is still known by its path.
             if !liveLookups, e.ppid > 1, procs[e.ppid] == nil, !e.parent.isEmpty {
                 procs[e.ppid] = Proc(ppid: 0, path: e.parent, seen: date, start: nil)
@@ -555,7 +555,7 @@ final class StoryEngine: ObservableObject {
         switch s.kind {
         case .file: return (s.target as NSString).deletingLastPathComponent
         case .net: return s.host.isEmpty ? (s.target.split(separator: ":").dropLast().joined(separator: ":")) : s.host
-        case .exec: return s.target
+        case .exec: return s.stage == .encodedCommand ? StoryEvidence.commandKey(s.args) : s.target
         }
     }
 
@@ -563,10 +563,11 @@ final class StoryEngine: ObservableObject {
     /// shell). Downloading+running an app, or an app reading its credentials and going online,
     /// is everyday behaviour on its own. Your own terminal/IDE needs even more.
     private func evaluate(_ story: inout Story) {
-        let stages = Set(story.stages)
-        // On a threat list: a story and Dangerous on its own, whoever started it.
-        let knownBad = stages.contains(.knownBad)
-        guard stages.count >= 2 || knownBad else { return }
+        let stages = Set(story.stages.filter { !$0.isContext })
+        // On a malware tracker's list: a story and Dangerous on its own, whoever started it. Otherwise two signs
+        // from two events (StoryEvidence).
+        let knownBad = StoryEvidence.standsAlone(story.steps)
+        guard knownBad || StoryEvidence.independent(story.steps) else { return }
         let score = story.score
         let fires = knownBad || story.origin == .developer
             ? score >= 6 && stages.contains(where: \.isStrong)
@@ -579,6 +580,7 @@ final class StoryEngine: ObservableObject {
         story.severity = dangerous ? .dangerous : .suspicious
         let wasFired = story.fired
         story.fired = true
+        if !stories.contains(where: { $0.id == story.id }), merge(story) { return }
         if let i = stories.firstIndex(where: { $0.id == story.id }) {
             stories[i] = story
             stories.sort { $0.lastSeen > $1.lastSeen }
@@ -589,6 +591,22 @@ final class StoryEngine: ObservableObject {
         if !wasFired { onFired?(story) }
         dirty = true
         revision += 1
+    }
+
+    /// The same listing for the same program within a day joins the story already told, quietly: one Discord
+    /// listing told the same story every 40 minutes.
+    private func merge(_ story: Story) -> Bool {
+        let keys = StoryEvidence.threatKeys(story)
+        guard !keys.isEmpty, let i = stories.firstIndex(where: { clock.timeIntervalSince($0.lastSeen) < 86_400
+                && !StoryEvidence.threatKeys($0).isDisjoint(with: keys) }) else { return false }
+        let known = Set(stories[i].steps.map(\.id))
+        stories[i].steps += story.steps.filter { !known.contains($0.id) }
+        stories[i].steps.sort { $0.date < $1.date }
+        if stories[i].steps.count > 60 { stories[i].steps.removeFirst(stories[i].steps.count - 60) }
+        stories[i].lastSeen = max(stories[i].lastSeen, story.lastSeen)
+        dirty = true
+        revision += 1
+        return true
     }
 
     // MARK: Stage detection
@@ -604,7 +622,7 @@ final class StoryEngine: ObservableObject {
     private static let downloadTemp: Set<String> = ["crdownload", "download", "part", "partial", "opdownload"]
     private static let encoded: [NSRegularExpression] = [
         #"base64\s+(-d|-D|--decode)"#, #"\|\s*(ba|z|da)?sh\b"#, #"(curl|wget)[^|]*\|\s*\S"#,
-        #"osascript\s+-e"#, #"\b(python3?|perl|ruby)\s+-(c|e)\b"#, #"\beval\b"#, #"-enc(odedcommand)?\b"#,
+        #"osascript\s+-e"#, #"\beval\b"#, #"-enc(odedcommand)?\b"#,
         #"[A-Za-z0-9+/]{120,}={0,2}"#,
     ].map { try! NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
 
@@ -658,7 +676,8 @@ final class StoryEngine: ObservableObject {
             // `security`'s arguments are keychain data (hex tokens), not commands.
             let command = name == "security" ? "" : Self.unwrapAgentCommand(e.args)
             let commandRange = NSRange(command.startIndex..., in: command)
-            if !command.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: command, range: commandRange) != nil }) {
+            if !command.isEmpty, Self.encoded.contains(where: { $0.firstMatch(in: command, range: commandRange) != nil })
+                || StoryEvidence.riskyInline(command) {
                 out.append((.encodedCommand, "suspicious command line"))
             }
             // Reading keychain secrets counts, unless a trusted, validly signed program reads its own
@@ -682,7 +701,9 @@ final class StoryEngine: ObservableObject {
             if writes, e.signaturePattern.hasSuffix("[persistence]") {
                 out.append((.persistence, "wrote \(e.target)"))
             } else if e.signatureRisk == .high, e.signaturePattern.hasSuffix("]"), !sealedActor,
-                      !(signing.identity(e.proc).map { signing.trusts(e.proc, $0) } ?? false) {
+                      !(signing.identity(e.proc).map { signing.trusts(e.proc, $0) } ?? false),
+                      !StoryEvidence.ownsCredential(program: e.proc, args: procs[e.pid]?.args ?? "", file: e.target,
+                                                    home: NSHomeDirectory()) {
                 // A trusted, validly signed program reading credential files (its own config, an
                 // SDK's cache) is not theft; a swapped or modified binary is not trusted.
                 out.append((.credential, "accessed \(e.target)"))
@@ -933,20 +954,6 @@ final class StoryEngine: ObservableObject {
         }
     }
 
-    /// Known-bad steps about a platform that is never flagged (`FeedCheck.neverFlag`), made before it was: they go,
-    /// and a story left with nothing known-bad and too little else to stand on goes with them (www.youtube.com was
-    /// called malware this way).
-    static func withoutPlatformMatches(_ stories: [Story]) -> [Story] {
-        stories.compactMap { story in
-            var s = story
-            s.steps.removeAll { $0.stage == .knownBad && $0.kind == .net && !$0.host.isEmpty && FeedCheck.neverFlag($0.host) }
-            guard s.steps.count != story.steps.count else { return story }
-            // What made it a story was the match: without one, it needs two stages as any other story does.
-            if s.steps.isEmpty || !s.stages.contains(.knownBad) && s.stages.count < 2 { return nil }
-            return s
-        }
-    }
-
     func save() {
         guard dirty, persistent else { return }
         dirty = false
@@ -958,18 +965,5 @@ final class StoryEngine: ObservableObject {
     static func ago(_ date: Date, now: Date = Date()) -> String {
         let s = Int(now.timeIntervalSince(date))
         return s < 60 ? "\(s)s ago" : "\(s / 60) min ago"
-    }
-
-    /// Evidence for Claude: the whole chain in order.
-    static func evidence(for story: Story) -> String {
-        var lines = ["## Story (correlated by Hostwatch)",
-                     "chain: \(story.title)",
-                     "origin: \(story.originName) (\(story.origin.rawValue)) \(story.originPath)",
-                     "stages: \(story.summary)",
-                     "score: \(story.score), severity: \(story.severity.rawValue)", "", "steps:"]
-        for s in story.steps {
-            lines.append("- \(s.time) [\(s.stage.title)] \(s.name) pid \(s.pid) ← \(s.ppid): \(s.detail)  (\(s.note))")
-        }
-        return lines.joined(separator: "\n")
     }
 }
