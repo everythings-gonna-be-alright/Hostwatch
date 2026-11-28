@@ -441,6 +441,11 @@
   .install.road { grid-template-columns: repeat(3, 1fr); }
   .install.road small { text-transform: uppercase; letter-spacing: 0.06em; }
   .install.road .now small { color: var(--text); }
+  /* Compare and guides: the titles are the links, quiet until hovered, and the second row follows the first closely. */
+  .install.more { margin-top: 28px; }
+  #compare .install h3 { line-height: 1.35; }
+  #compare .install h3 a { border-bottom-color: transparent; }
+  #compare .install h3 a:hover { border-bottom-color: var(--line-strong); }
   @media (max-width: 900px) { .install, .install.road { grid-template-columns: 1fr 1fr; } .install div, .install div + div { padding: 24px 16px 24px 0; border-left: 0; } }
 
   .closing { text-align: center; padding: 200px 0 81px; position: relative; }  /* the space under the last line matches the space above "Free for everyone" */
@@ -852,6 +857,23 @@
   </div>
 </section>
 
+<section id="compare">
+  <div class="wrap">
+    <div class="label"><span class="num">8.0</span> Which</div>
+    <h2>How it compares. <span class="quiet">And what it helps you do.</span></h2>
+    <div class="install road">
+      <div><small>Firewalls</small><h3><a href="docs/hostwatch-vs-lulu-little-snitch-blockblock.html">Hostwatch vs LuLu, Little Snitch and BlockBlock</a></h3><p>A free alternative, side by side.</p></div>
+      <div><small>Open source</small><h3><a href="docs/hostwatch-vs-wazuh-osquery-santa.html">Hostwatch vs Wazuh, osquery and Santa</a></h3><p>Intrusion detection with no server to run.</p></div>
+      <div><small>Company tools</small><h3><a href="docs/hostwatch-vs-jamf-protect-crowdstrike-defender.html">Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender</a></h3><p>For one Mac or a small team.</p></div>
+    </div>
+    <div class="install road more">
+      <div><small>Guide</small><h3><a href="docs/how-to-detect-an-infostealer-on-a-mac.html">How to detect an infostealer on a Mac</a></h3><p>The signs, and what to check.</p></div>
+      <div><small>Guide</small><h3><a href="docs/how-to-see-what-an-npm-package-does-on-your-mac.html">How to see what an npm package does</a></h3><p>Before you install, and while it runs.</p></div>
+      <div><small>Guide</small><h3><a href="docs/how-to-monitor-claude-code-on-a-mac.html">How to monitor Claude Code on a Mac</a></h3><p>See what an AI agent ran, and stop the worst.</p></div>
+    </div>
+  </div>
+</section>
+
 <div class="closing">
   <div class="wrap">
     <h2>Know what your Mac is doing.<br><span class="quiet">Starting now.</span></h2>
@@ -888,6 +910,7 @@
       <a href="https://github.com/everythings-gonna-be-alright/Hostwatch">Source code</a>
       <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/CHANGELOG.md">Changelog</a>
       <a href="docs/">Docs</a>
+      <a href="docs/hostwatch-vs-lulu-little-snitch-blockblock.html">Compare</a>
       <a href="https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/LICENSE">Licence</a>
     </div>
   </div>

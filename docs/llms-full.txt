@@ -2749,3 +2749,540 @@ head -c 4 ~/Library/Application\ Support/Hostwatch/stories.json && echo
 The source is public. To report a way around any of these protections, see [SECURITY.md](https://github.com/everythings-gonna-be-alright/Hostwatch/blob/main/SECURITY.md).
 
 
+
+<!-- https://hostwatch.tech/docs/hostwatch-vs-lulu-little-snitch-blockblock.html -->
+
+## Hostwatch vs LuLu, Little Snitch and BlockBlock
+
+Four Mac security tools with four different jobs. Here is what each one does, and when to pick it.
+
+### In one line
+
+- **Hostwatch:** intrusion detection for the whole Mac. It watches programs, files and connections, and has a
+  firewall. Free.
+- **LuLu:** a simple firewall for outgoing connections. Free and open source.
+- **Little Snitch:** a full network monitor and firewall. 59 €.
+- **BlockBlock:** warns you when something sets itself to start again. Free and open source.
+
+### At a glance
+
+| | Hostwatch | LuLu | Little Snitch | BlockBlock |
+|---|---|---|---|---|
+| Asks before a program connects out | Yes | Yes | Yes | – |
+| Incoming connections | Yes | – | Yes | – |
+| Protects files and secrets | Yes | – | – | – |
+| Checks programs before they start | Yes | – | – | Optional |
+| Notices new startup items | Yes | – | – | Yes |
+| Joins events into attack stories | Yes | – | – | – |
+| History you can play back | Yes | – | Traffic charts | – |
+| Lists of known bad servers | Yes | Your own | Yes | – |
+| Encrypted DNS | – | – | Yes | – |
+| AI explanations | Yes | – | – | – |
+| Price | Free | Free | 59 € | Free |
+| Source code | Public | Open source | – | Open source |
+| Runs on macOS | 26 or later | 10.15 or later | See its page | 10.15 or later |
+
+A dash means the maker's page doesn't mention it. Read on 28 November 2026.
+
+### Hostwatch vs LuLu
+
+[LuLu](https://objective-see.org/products/lulu.html), from Objective-See, asks you when a program makes a new
+outgoing connection. It is a firewall and nothing else.
+
+- **Pick LuLu if**
+  - you want only an outgoing firewall
+  - your Mac runs a macOS older than 26
+  - you want a classic open-source licence
+- **Pick Hostwatch if**
+  - you want to know what a program did, not only where it connected
+  - you want your keys and passwords protected too
+  - you want small signs joined into one story
+
+### Hostwatch vs Little Snitch
+
+[Little Snitch](https://www.obdev.at/products/littlesnitch/index.html), from Objective Development, asks when an
+app connects, in or out, and shows it all on a world map. It has the most network features of the four.
+
+- **Pick Little Snitch if**
+  - the network is all you want to watch
+  - you want encrypted DNS and a year of traffic charts
+  - you want rules by port and protocol
+- **Pick Hostwatch if**
+  - you want launches, files and startup items watched too
+  - you want a tool that learns what's normal and asks only about what's new
+  - you want it free, with the source public
+
+### Hostwatch vs BlockBlock
+
+[BlockBlock](https://objective-see.org/products/blockblock.html), from Objective-See, alerts you when a program
+sets itself to start again, and can remove it.
+
+- **Pick BlockBlock if**
+  - you want one quiet check on startup items
+  - you want the new item removed for you
+  - you want what you paste into Terminal checked
+- **Pick Hostwatch if**
+  - you want to see what led to it: the download, the files read, the connection
+  - you want a firewall and file protection as well
+  - you want a history you can search and play back
+
+### Who Hostwatch is for
+
+- **Developers** who install packages, extensions and tools written by strangers.
+- **People who use AI coding agents** and want to see, and limit, what the agent runs.
+- **Anyone with keys and passwords on a Mac**, which is what an infostealer comes for.
+- **Small teams** who want the story of what happened, not only a blocked connection.
+
+Hostwatch needs macOS 26 or later. More in [Features](03-features.md) and the [Threat model](08-threat-model.md),
+which lists where Hostwatch is weak. Choosing for a company? See
+[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](11-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
+
+### Do you need more than one?
+
+Usually not. Hostwatch has its own firewall and notices new startup items, so it does the main job of each of the
+other three. Pick the one that fits and run that. If you do keep a second firewall, let only one of them ask, or
+you'll answer every question twice.
+
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
+### Questions and answers
+
+#### Is Hostwatch a free alternative to Little Snitch?
+
+For asking before a program connects, yes: Hostwatch's firewall does that, and it is free. Little Snitch has more
+network features, such as encrypted DNS and a world map. Hostwatch adds what Little Snitch doesn't watch:
+programs, files and startup items.
+
+#### Is Hostwatch an alternative to LuLu?
+
+Yes. Both are free, and both ask before a program makes a new outgoing connection. Hostwatch also watches
+programs and files. LuLu runs on older versions of macOS.
+
+#### Does Hostwatch replace BlockBlock?
+
+For most people, yes: Hostwatch notices new startup items too. BlockBlock removes the item for you and runs on
+older versions of macOS.
+
+### Sources
+
+- [LuLu](https://objective-see.org/products/lulu.html) and [its source](https://github.com/objective-see/LuLu)
+- [Little Snitch](https://www.obdev.at/products/littlesnitch/index.html) and
+  [Little Snitch Mini](https://www.obdev.at/products/littlesnitch-mini/index.html)
+- [BlockBlock](https://objective-see.org/products/blockblock.html) and
+  [its source](https://github.com/objective-see/BlockBlock)
+
+Prices and features change, so check the makers' pages before you decide. LuLu and BlockBlock are projects of
+Objective-See, Little Snitch is a product of Objective Development Software GmbH, and Hostwatch isn't connected with
+either. Found a mistake? Write to contact@hostwatch.tech.
+
+
+
+<!-- https://hostwatch.tech/docs/hostwatch-vs-wazuh-osquery-santa.html -->
+
+## Hostwatch vs Wazuh, osquery and Santa
+
+Three free, open-source security tools that run on a Mac, each with a different idea of the job. Here is what each
+one does, and when to pick it.
+
+### In one line
+
+- **Hostwatch:** intrusion detection that learns each Mac, asks you about what's new and tells the story of an
+  attack. Free, with the source public.
+- **Wazuh:** a security platform for a whole company. An agent on each machine reports to a Wazuh server.
+- **osquery:** turns the operating system into a database you question in SQL.
+- **Santa:** decides which programs may run on a Mac, and which may read protected files.
+
+### At a glance
+
+| | Hostwatch | Wazuh | osquery | Santa |
+|---|---|---|---|---|
+| Watches | Programs, files, connections | Files, logs, settings | What you ask for | Programs and files |
+| Stops a program before it runs | Yes | – | – | Yes |
+| Keeps other programs out of your files | Yes | – | – | Yes |
+| Firewall for outgoing connections | Yes | – | – | – |
+| Checks for known vulnerabilities | macOS itself | Yes | – | – |
+| Compliance and settings checks | – | Yes | – | – |
+| Answers your own questions in SQL | – | – | Yes | – |
+| A server | Not needed | Needed | Optional | Optional |
+| Price | Free | Free | Free | Free |
+| Source code | Public | Open source | Open source | Open source |
+| Runs on | Mac | Many systems | Mac, Linux, Windows | Mac |
+
+A dash means the maker's page doesn't mention it. Read on 28 November 2026.
+
+### Hostwatch vs Wazuh
+
+[Wazuh](https://wazuh.com/) calls itself the open source security platform, with XDR and SIEM in one. On a Mac it
+is an agent that reports to a Wazuh server, where the checking and the alerts happen.
+
+- **Pick Wazuh if**
+  - you look after many machines of different kinds
+  - you need compliance checks and file integrity reports
+  - you have someone to run its server
+- **Pick Hostwatch if**
+  - you want it working on a Mac in two minutes, with no server
+  - you want to be asked before something new runs or connects
+  - you want an attack told as one story
+
+### Hostwatch vs osquery
+
+[osquery](https://github.com/osquery/osquery) shows the operating system as a database. You write SQL to list
+processes, open connections or startup items, by hand or on a schedule across many machines.
+
+- **Pick osquery if**
+  - you want to ask your own questions, in SQL
+  - you already collect the answers in a fleet or logging tool
+  - you want one tool for Mac, Linux and Windows
+- **Pick Hostwatch if**
+  - you want answers without writing queries
+  - you want to be told when something is wrong
+  - you want a tool that can stop a program or a connection
+
+### Hostwatch vs Santa
+
+[Santa](https://github.com/northpolesec/santa), from North Pole Security, is a binary and file access
+authorization system for macOS. Rules name the programs that may run. In Lockdown mode only listed programs run.
+
+- **Pick Santa if**
+  - you want to say exactly which programs may run
+  - you keep the rules for many Macs on a sync server
+  - you want a classic open-source licence
+- **Pick Hostwatch if**
+  - you want the network watched too
+  - you'd rather it learns what's normal than keep a list yourself
+  - you want a history you can search and play back
+
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
+### Questions and answers
+
+#### Is Hostwatch a host intrusion detection system (HIDS) for Mac?
+
+Yes. It watches programs, files and connections on the Mac itself, learns what is normal and flags what isn't.
+
+#### Is Hostwatch an alternative to Wazuh on a single Mac?
+
+Yes. Wazuh needs a server for its agents to report to. Hostwatch needs nothing else: you install it and it starts
+watching. For many machines of different kinds, Wazuh is the better fit today.
+
+#### Is Hostwatch open source?
+
+Its source code is public under the PolyForm Shield licence. You may read, use, change and share it, at home and at
+work. The licence doesn't allow building a competing product from it, so it isn't open source in the strict sense.
+
+### Sources
+
+- [Wazuh](https://wazuh.com/) and
+  [its macOS agent](https://documentation.wazuh.com/current/installation-guide/wazuh-agent/wazuh-agent-package-macos.html)
+- [osquery](https://github.com/osquery/osquery)
+- [Santa](https://github.com/northpolesec/santa)
+
+Features change, so check the makers' pages before you decide. The names belong to their owners, and Hostwatch
+isn't connected with any of them. Found a mistake? Write to contact@hostwatch.tech. More comparisons:
+[LuLu, Little Snitch and BlockBlock](09-hostwatch-vs-lulu-little-snitch-blockblock.md) and
+[Jamf Protect, CrowdStrike Falcon and Microsoft Defender](11-hostwatch-vs-jamf-protect-crowdstrike-defender.md).
+
+
+
+<!-- https://hostwatch.tech/docs/hostwatch-vs-jamf-protect-crowdstrike-defender.html -->
+
+## Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender
+
+These three protect a company's Macs from one console. Hostwatch starts on a single Mac with nothing to set up,
+and a console for whole teams is planned. Here is what each one does, and when to pick it.
+
+### In one line
+
+- **Hostwatch:** intrusion detection that learns each Mac and tells the story of an attack. Free today, with a
+  team console and a cloud version planned.
+- **Jamf Protect:** Mac endpoint protection for organisations, sold with Jamf's device management.
+- **CrowdStrike Falcon:** antivirus and attack detection for businesses, in one agent.
+- **Microsoft Defender for Endpoint:** antivirus and attack detection for organisations, run from Microsoft's portal.
+
+### At a glance
+
+| | Hostwatch | Jamf Protect | CrowdStrike Falcon | Microsoft Defender |
+|---|---|---|---|---|
+| Detects attacks on the Mac | Yes | Yes | Yes | Yes |
+| Stops known malware | Yes | Yes | Yes | Yes |
+| Starts on one Mac, no server needed | Yes | – | – | – |
+| Asks the person at the Mac | Yes | – | – | – |
+| Firewall that asks you first | Yes | – | – | – |
+| Checks an AI coding agent's commands | Yes | – | – | – |
+| Manages many Macs from one place | Planned | Yes | Yes | Yes |
+| USB and device controls | – | Yes | Yes | Yes |
+| Remote investigation by a security team | – | – | Yes | Yes |
+| Price for one Mac | Free | $12.50 a month | From $59.99 a year | By subscription |
+| Smallest order | One Mac | 25 devices | – | – |
+| Source code | Public | – | – | – |
+| Runs on macOS | 26 or later | See its page | See its page | 15 or later |
+
+A dash means the maker's page doesn't mention it. Read on 28 November 2026.
+
+### Hostwatch vs Jamf Protect
+
+[Jamf Protect](https://www.jamf.com/products/jamf-protect/) is Mac endpoint protection for organisations. It comes
+with Jamf for Mac, together with Jamf's device management, from 25 devices.
+
+- **Pick Jamf Protect if**
+  - you look after a company's Macs
+  - you already manage them with Jamf
+  - you need compliance alerts and logs sent to your security tools
+- **Pick Hostwatch if**
+  - you want to start today, on one Mac or a few, with nothing to set up
+  - you want each Mac's own normal learned, and an attack told as one story
+  - you want it free, with the source code public
+
+### Hostwatch vs CrowdStrike Falcon
+
+[CrowdStrike Falcon](https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/) is antivirus
+and attack detection for businesses in one agent. Its top plan adds CrowdStrike's own experts hunting for threats.
+
+- **Pick CrowdStrike Falcon if**
+  - you protect a whole company's computers
+  - you have, or want, a security team watching them
+  - you need device control and threat hunting
+- **Pick Hostwatch if**
+  - you are a developer or a small team with no security staff yet
+  - you want what happened told in plain words
+  - you want to be asked before something new connects or reads your keys
+
+### Hostwatch vs Microsoft Defender for Endpoint
+
+[Microsoft Defender for Endpoint](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac)
+is antivirus and attack detection for organisations. It is run from the Microsoft Defender portal and rolled out
+with Intune, Jamf or another device manager.
+
+- **Pick Microsoft Defender if**
+  - your company already runs on Microsoft 365
+  - you need every device in one portal
+  - you need remote response and hunting across the company
+- **Pick Hostwatch if**
+  - you want protection that needs no portal or device manager to start
+  - you use AI coding agents and want their commands checked
+  - you want the source code public
+
+### Who Hostwatch is for
+
+- **Developers** who install packages, extensions and tools written by strangers.
+- **People who use AI coding agents** and want to see, and limit, what the agent runs.
+- **Small teams** with no security department and no device management.
+- **Companies, soon.** A server that watches a whole fleet from one place and a hosted cloud version are planned
+  as a paid edition.
+
+Looking for a firewall or a small tool for one Mac? See
+[Hostwatch vs LuLu, Little Snitch and BlockBlock](09-hostwatch-vs-lulu-little-snitch-blockblock.md).
+
+### On a Mac your company manages
+
+If your company already runs one of these on your Mac, ask whoever looks after it before you install anything else.
+
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
+### Questions and answers
+
+#### Is Hostwatch an alternative to Jamf Protect for one Mac or a small team?
+
+Yes. Jamf Protect comes with Jamf for Mac, from 25 devices. Hostwatch installs on a single Mac and is free.
+
+#### Is Hostwatch an EDR?
+
+It does the detecting on the Mac itself: it watches behaviour, joins events into stories and can stop a program or
+a connection. What a company's EDR adds, one console and a security team's tools for every Mac, is planned.
+
+#### Can a company use Hostwatch?
+
+Yes. It is free at work too. Each Mac runs by itself today, and a server for the whole fleet and a hosted cloud
+version are planned as a paid edition.
+
+### Sources
+
+- [Jamf Protect](https://www.jamf.com/products/jamf-protect/) and [Jamf pricing](https://www.jamf.com/pricing/)
+- [CrowdStrike Falcon for macOS](https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/) and
+  [CrowdStrike pricing](https://www.crowdstrike.com/en-us/pricing/)
+- [Microsoft Defender for Endpoint on Mac](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac)
+  and [its requirements](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac-prerequisites)
+
+Prices are list prices in US dollars, and they and the features change, so check the makers' pages before you
+decide. Jamf's price is for Jamf for Mac, the bundle Jamf Protect comes in. The names belong to their owners, and
+Hostwatch isn't connected with any of them. Found a mistake? Write to contact@hostwatch.tech.
+
+
+
+<!-- https://hostwatch.tech/docs/how-to-detect-an-infostealer-on-a-mac.html -->
+
+## How to detect an infostealer on a Mac
+
+An infostealer runs once, copies your passwords, browser cookies and keys, sends them out and often deletes itself.
+So you look for the reading and the sending, not for a file that stays.
+
+### The signs
+
+- A program you just downloaded showed its own window asking for your Mac password.
+- A web page told you to paste a command into Terminal "to fix" or "to verify" something.
+- A program that has no reason to reads your keychain, browser data or SSH keys.
+- Right after, a connection goes to a server your Mac has never talked to.
+
+### Check by hand
+
+1. Open *System Settings ▸ General ▸ Login Items & Extensions* and look for anything you don't know.
+2. List what starts by itself: `ls -la ~/Library/LaunchAgents /Library/LaunchAgents /Library/LaunchDaemons`
+3. See which programs have connections open right now: `lsof -i -P -n`
+4. Look at what arrived last: `ls -lt ~/Downloads | head`
+
+> [!NOTE]
+> A stealer that has already finished leaves little to find this way. It doesn't need to stay.
+
+### Let Hostwatch watch for it
+
+1. **It records who reads your secrets.** Keychains, SSH and cloud keys, browser passwords and cookies are marked
+   as sensitive places, and every program that opens them is listed.
+2. **It joins the steps.** A download, a removed quarantine flag, a read of your keys and a new server become one
+   story, with a sound and a banner.
+3. **It can ask first.** Set *Protection ▸ Protected Files and Folders* to Ask, and a program waits for your answer
+   before it reads a protected place.
+4. **It lets you look back.** Time Travel plays back what ran and where it connected, hours or days later.
+
+More in [Features](03-features.md).
+
+### If you find one
+
+1. Disconnect the Mac from the network.
+2. From another device, change your passwords, starting with email and your password manager.
+3. Sign out other sessions and revoke tokens: browser logins, GitHub, cloud accounts.
+4. Replace your SSH and cloud keys.
+5. Then clean the Mac, or erase and reinstall it if you can't tell what was changed.
+
+### Questions and answers
+
+#### Can a Mac get an infostealer?
+
+Yes. Stealers for macOS are sold as a service and arrive as fake apps, cracked software and commands you are asked
+to paste into Terminal.
+
+#### Does antivirus catch infostealers?
+
+It catches the ones it already knows. A new build with no known signature gets through, which is why watching
+what a program does matters: reading your keychain and browser data is the same whatever the file is called.
+
+
+
+<!-- https://hostwatch.tech/docs/how-to-see-what-an-npm-package-does-on-your-mac.html -->
+
+## How to see what an npm package does on your Mac
+
+`npm install` can run a package's own scripts, with your access to your files, keys and tokens. Here is how to look
+before you install, and how to watch while it runs.
+
+### Before you install
+
+1. See the scripts it would run: `npm view <package> scripts`. Look for `preinstall`, `install` and `postinstall`.
+2. Install without running them: `npm install --ignore-scripts`
+3. Read the code without installing it: `npm pack <package>`. It downloads the archive for you to open.
+
+> [!NOTE]
+> This shows what the package says it does. Code can hide, and a package brings other packages with it.
+
+### Watch it run with Hostwatch
+
+1. In Hostwatch, right-click your terminal's shell in *Events* and choose *Watch Selected Process Closely…* (⌥⌘W).
+2. Run `npm install` in that terminal. Hostwatch records the shell and everything it starts, for up to 5 minutes.
+3. Read the summary. **What stands out** comes first, then the processes as a tree, the network and the files.
+
+Hostwatch watches without being asked too. A story is raised when an install pipes a download into a shell, reads
+your keys or sets something to start at login. A server your Mac has never contacted is marked new.
+
+### What to look for
+
+- **Reads of your secrets:** `~/.ssh`, `~/.aws`, your npm token, browser data.
+- **Connections to anything but the package registry.**
+- **Files written outside the project folder.**
+- **Changes to what starts by itself:** launch agents, login items, your shell's startup files.
+
+More in [Watch Closely](03-features.md#watch-closely) and [Stories](03-features.md#stories-chains-not-single-events).
+
+### Questions and answers
+
+#### Can an npm package steal my SSH keys?
+
+Yes. An install script runs as you, so it can read anything you can read, such as `~/.ssh`, and send it out.
+
+#### Does this work for pip, Homebrew and other package managers?
+
+Yes. Hostwatch watches programs, not package managers. Watch the shell you install from, whatever the tool.
+
+
+
+<!-- https://hostwatch.tech/docs/how-to-monitor-claude-code-on-a-mac.html -->
+
+## How to monitor Claude Code on a Mac
+
+A coding agent runs shells, `git`, builds and `curl` as you, many times a minute. Here is how to see what it did,
+and how to stop the commands you'd never allow. It works for the Cursor agent, Codex and Gemini CLI too.
+
+### What Claude Code gives you
+
+- **Permissions.** It asks before it runs a command, unless you told it not to ask.
+- **Transcripts.** Each session is saved under `~/.claude/projects/`.
+
+> [!NOTE]
+> Both show what the agent said it would do. Neither shows what the programs it started then did.
+
+### See what a session did
+
+1. In Hostwatch's *Events*, set *Group* to *By AI Session*. Each session is one row, with everything it started
+   under it.
+2. Click *Only this session* to keep just that one.
+3. Open the *Network* tab: a server the session reached carries a *via Claude* tag.
+4. For yesterday's sessions, use *Time Travel*. The grouping works there too.
+
+### Stop the dangerous commands
+
+Turn on *Settings ▸ AI ▸ Claude Code guard*. Hostwatch then checks each command before it runs.
+
+- **Blocked:** deleting your home folder, switching off macOS protections, sending a secret to a paste site,
+  reaching a known malware server.
+- **You're asked:** `curl … | sh`, `sudo`, reading SSH keys or cloud credentials, adding a launch agent.
+- **Everything else:** Claude Code's own permissions apply. The guard can only make it stricter.
+
+### Ask Claude Code about itself
+
+Hostwatch has an MCP server. Connect it, and you can ask Claude Code what ran on your Mac yesterday. It reads
+Hostwatch's history and can't change anything.
+
+More in [AI sessions](03-features.md#ai-sessions-what-claude-code-did),
+[Claude Code guard](03-features.md#claude-code-guard) and [MCP server](03-features.md#mcp-server).
+
+### Questions and answers
+
+#### Is it safe to let Claude Code run commands on my Mac?
+
+It runs with your access, so a command it is tricked into running can read your keys or delete your files. Keep
+its permission prompts on, and add a second check that sees what the commands really do.
+
+#### Can I see what Claude Code did while I wasn't looking?
+
+Yes. Hostwatch records every program a session starts and every server it reaches, and Time Travel plays it back.
+
+

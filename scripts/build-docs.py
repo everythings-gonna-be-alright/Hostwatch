@@ -247,6 +247,44 @@ SECTION_ICONS = {
 GROUP_ICONS.update(SECTION_ICONS)
 
 # One per chapter, for the docs home's cards.
+# The comparison chapters, by id: the title and description people search by, and the tools each one names.
+COMPARE = {
+    "hostwatch-vs-lulu-little-snitch-and-blockblock": {
+        "title": "Hostwatch vs LuLu, Little Snitch, BlockBlock: a free alternative",
+        "description": "Hostwatch as a free alternative to Little Snitch, LuLu and BlockBlock: what each one does, a table "
+                       "of firewall, files, startup items, price and macOS, and when to pick which.",
+        "tools": [("LuLu", "https://objective-see.org/products/lulu.html"),
+                  ("Little Snitch", "https://www.obdev.at/products/littlesnitch/index.html"),
+                  ("BlockBlock", "https://objective-see.org/products/blockblock.html")]},
+    "hostwatch-vs-jamf-protect-crowdstrike-falcon-and-microsoft-defender": {
+        "title": "Hostwatch vs Jamf Protect, CrowdStrike Falcon, Microsoft Defender",
+        "description": "Hostwatch as a free alternative to Jamf Protect, CrowdStrike Falcon and Microsoft Defender for "
+                       "one Mac or a small team: who each is for, a table, price, and when to pick which.",
+        "tools": [("Jamf Protect", "https://www.jamf.com/products/jamf-protect/"),
+                  ("CrowdStrike Falcon", "https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/"),
+                  ("Microsoft Defender for Endpoint", "https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac")]},
+    "hostwatch-vs-wazuh-osquery-and-santa": {
+        "title": "Hostwatch vs Wazuh, osquery and Santa: a HIDS for one Mac",
+        "description": "Hostwatch as an alternative to Wazuh, osquery and Santa on a Mac: host intrusion detection with "
+                       "no server to run. What each one does, a table, and when to pick which.",
+        "tools": [("Wazuh", "https://wazuh.com/"), ("osquery", "https://github.com/osquery/osquery"),
+                  ("Santa", "https://github.com/northpolesec/santa")]},
+}
+# The guides, by id: pages named after the problem someone searches for, with their title and description.
+GUIDES = {
+    "how-to-detect-an-infostealer-on-a-mac": {
+        "title": "How to detect an infostealer on a Mac",
+        "description": "The signs of an infostealer on macOS, what to check by hand, how Hostwatch watches for one, and "
+                       "what to do if you find it."},
+    "how-to-see-what-an-npm-package-does-on-your-mac": {
+        "title": "How to see what an npm package does on your Mac",
+        "description": "Check an npm package's install scripts before you install, then watch the install run: the files "
+                       "it reads, the servers it reaches and what it sets to start."},
+    "how-to-monitor-claude-code-on-a-mac": {
+        "title": "How to monitor Claude Code on a Mac",
+        "description": "See what Claude Code and other AI coding agents ran on your Mac, session by session, and stop "
+                       "the dangerous commands before they run."},
+}
 CHAPTER_ICONS = {
     "getting-started": '<circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.6l3.8 2.4-3.8 2.4z"/>',
     "everyday-use": '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.2h12M4.4 4.6h.01M6 4.6h.01"/>',
@@ -257,6 +295,8 @@ CHAPTER_ICONS = {
     "privacy-security-and-limits": '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>',
     "for-developers": '<path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5"/>',
     "threat-model-and-attack-coverage": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/><path d="M6 8l1.5 1.5L10.2 6.6"/>',
+    **{sid: '<path d="M4.5 2.5v11M11.5 2.5v11M2.5 5.5h4M9.5 10.5h4"/>' for sid in COMPARE},
+    **{sid: '<circle cx="8" cy="8" r="6.2"/><path d="M10.4 5.6 9 9l-3.4 1.4L7 7z"/>' for sid in GUIDES},
 }
 
 
@@ -373,6 +413,88 @@ def threat_ui(html):
     return html
 
 
+def compare_ui(html):
+    """The comparison reads at a glance: the four tools as cards, ticks in the table, and each "Pick … if" pair as
+    two cards side by side. The Markdown stays plain lists and a table, so it reads on GitHub and in llms.txt too."""
+    def tools(m):
+        cards = re.findall(r"<li><b>([^<:]+):</b>\s*(.*?)</li>", m.group(2), re.S)
+        return m.group(1) + '<div class="cmp-tools">' + "".join(
+            f'<div{" class=ours" if name == "Hostwatch" else ""}><b>{name}</b><span>{text[:1].upper() + text[1:]}</span></div>'
+            for name, text in cards) + "</div>"
+    html = re.sub(r'(<h3 id="in-one-line(?:-\d+)?">.*?</h3>\s*)<ul>(.*?)</ul>', tools, html, count=1, flags=re.S)
+    tick = ('<td class="yes"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4l3.2 3.2 6.4-7"/></svg>'
+            '<span class="sr">Yes</span></td>')
+    html = html.replace('<div class="table">', '<div class="table cmp">').replace("<td>Yes</td>", tick)
+    html = html.replace("<td>–</td>", '<td class="no"><span aria-hidden="true">–</span><span class="sr">Not mentioned</span></td>')
+    def picks(m):
+        cards = re.findall(r"<li><b>(Pick [^<]+)</b>(<ul>.*?</ul>)</li>", m.group(1), re.S)
+        return '<div class="picks">' + "".join(
+            f'<div{" class=ours" if "Hostwatch" in title else ""}><b>{title}</b>{items}</div>' for title, items in cards) + "</div>"
+    return re.sub(r"<ul>((?:<li><b>Pick [^<]+</b><ul>.*?</ul></li>)+)</ul>", picks, html, flags=re.S)
+
+
+# Small line icons for the card lists of a guide, by the section they sit under.
+GUIDE_ICONS = {
+    "the-signs": '<path d="M8 2.2 14.3 13H1.7z"/><path d="M8 6.4v3.2"/><circle cx="8" cy="11.3" r=".6" fill="currentColor" stroke="none"/>',
+    "what-to-look-for": '<path d="M1.6 8s2.4-4.4 6.4-4.4S14.4 8 14.4 8s-2.4 4.4-6.4 4.4S1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>',
+}
+RULE_LEVELS = {"Blocked": "can-stop", "You're asked": "alerts"}
+
+
+def qa_ui(html):
+    """The questions at the foot of a page as cards, one per question."""
+    def section(m):
+        items = re.sub(r'(<h4 id="[^"]+">.*?</h4>(?:\s*<p>.*?</p>)+)', r'<div>\1</div>', m.group(2), flags=re.S)
+        return m.group(1) + '<div class="faq">' + items + "</div>"
+    return re.sub(r'(<h3 id="questions-and-answers(?:-\d+)?">.*?</h3>)(.*?)(?=<h3 |\Z)', section, html, flags=re.S)
+
+
+def guide_ui(html):
+    """A guide reads as something to do: numbered steps on one line down the page with each command in a block you
+    can copy, the list that opens a section as cards, "Label: text" lists as rows with a badge, and the way on as
+    links. The Markdown stays plain lists, so it reads on GitHub and in llms.txt too."""
+    def step(li):
+        cmd = re.match(r"^((?:(?!<code>).)+?):\s*<code>([^<]+)</code>(?:\.\s+(.+)|\.?)$", li, re.S)
+        if cmd:
+            after = f"<p>{cmd.group(3)}</p>" if cmd.group(3) else ""
+            return f'<li><p>{cmd.group(1)}</p><pre data-lang="sh"><code>{cmd.group(2)}</code></pre>{after}</li>'
+        named = re.match(r"^<b>([^<]+?)\.?</b>\s*(.+)$", li, re.S)
+        if named:
+            return f"<li><b>{named.group(1)}</b><p>{named.group(2)}</p></li>"
+        return f"<li><p>{li}</p></li>"
+    html = re.sub(r"<ol>(.*?)</ol>", lambda m: '<ol class="gsteps">' + "".join(
+        step(li) for li in re.findall(r"<li>(.*?)</li>", m.group(1), re.S)) + "</ol>", html, flags=re.S)
+
+    def cap(text):                                           # it starts a line of its own now: a sentence
+        return text[:1].upper() + text[1:] if re.match(r"[a-z]+\b", text) else text
+    def card(li, icon):
+        named = re.match(r"^<b>([^<]+?)[.:]?</b>\s*(.*)$", li, re.S)
+        rest = f"<span>{cap(named.group(2))}</span>" if named and named.group(2) else ""
+        text = f"<b>{named.group(1)}</b>{rest}" if named else f"<span>{li}</span>"
+        return f"<div>{icon}<p>{text}</p></div>"
+    def cards(m):
+        shape = GUIDE_ICONS.get(m.group(2))
+        icon = f'<svg class="gicon" viewBox="0 0 16 16" aria-hidden="true">{shape}</svg>' if shape else ""
+        return m.group(1) + '<div class="gcards">' + "".join(
+            card(li, icon) for li in re.findall(r"<li>(.*?)</li>", m.group(3), re.S)) + "</div>"
+    html = re.sub(r'(<h3 id="([^"]+)">(?:(?!</h3>).)*</h3>\s*)<ul>(.*?)</ul>', cards, html, flags=re.S)
+
+    def rules(m):
+        rows = re.findall(r"<li><b>([^<]+?):</b>\s*(.*?)</li>", m.group(1), re.S)
+        if len(rows) != m.group(1).count("<li>"):
+            return m.group(0)
+        return '<div class="grules">' + "".join(
+            f'<div><span class="lvl lvl-{RULE_LEVELS.get(name, "recorded")}">{name}</span><p>{cap(text)}</p></div>'
+            for name, text in rows) + "</div>"
+    html = re.sub(r"<ul>(.*?)</ul>", rules, html, flags=re.S)
+
+    def onward(m):
+        links = re.findall(r"<a [^>]+>.*?</a>", m.group(1))
+        return '<p class="onward"><span>More in the docs</span>' + "".join(links) + "</p>"
+    html = re.sub(r"<p>More in ((?:(?!</p>).)*)</p>", onward, html, flags=re.S)
+    return re.sub(r"\(([⌃⌥⇧⌘]+\w)\)", r"<kbd>\1</kbd>", html)
+
+
 def fold_details(chapter):
     """Features read as a short tour: each section shows its heading and lead, the rest folds under Details."""
     parts = re.split(r'(?=<h[34] id=")', chapter)
@@ -478,6 +600,9 @@ PAGE = """<!doctype html>
   mark {{ background: rgba(255,255,255,0.18); color: var(--text); border-radius: 3px; padding: 0 1px; }}
   main mark.hit {{ background: rgba(255,255,255,0.22); box-shadow: 0 0 0 2px rgba(255,255,255,0.22); }}
   nav.toc ol {{ list-style: none; margin: 0; padding: 0; }}
+  nav.toc li.group {{ font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim);
+                     padding: 20px 8px 6px; }}
+  nav.toc li.group:first-child {{ padding-top: 2px; }}
   nav.toc ol ol {{ margin: 2px 0 6px 30px; }}
   nav.toc a {{ display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; line-height: 1.4; }}
   nav.toc a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
@@ -542,6 +667,81 @@ PAGE = """<!doctype html>
   table {{ border-collapse: collapse; font-size: 14px; min-width: 60%; }}
   th, td {{ text-align: left; padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: #c9ccd1; }}
   th {{ font: 500 12px var(--mono); color: var(--dim); }}
+  /* The comparison page: the four tools as cards, a table of ticks with Hostwatch's column lifted, and each
+     "Pick … if" pair side by side. One accent only, the text colour, as everywhere on the site. */
+  .sr {{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }}
+  .cmp-tools, .picks {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 8px; }}
+  .cmp-tools > div, .picks > div {{ padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .cmp-tools > .ours, .picks > .ours {{ border-color: var(--line-strong); background: rgba(255,255,255,0.03); }}
+  .cmp-tools b, .picks b {{ display: block; font-size: 16px; font-weight: 500; color: var(--text); }}
+  .cmp-tools span {{ display: block; margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.55; }}
+  .picks ul {{ margin: 10px 0 0; }}
+  .picks ul > li {{ margin: 8px 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }}
+  .picks .ours ul > li {{ color: #c9ccd1; }}
+  .table.cmp table {{ width: 100%; table-layout: fixed; }}
+  .table.cmp th, .table.cmp td {{ text-align: center; vertical-align: middle; padding: 11px 8px; }}
+  .table.cmp th:first-child, .table.cmp td:first-child {{ text-align: left; width: 36%; padding-left: 0; color: var(--text); }}
+  .table.cmp th {{ font: 500 14px var(--sans); color: var(--muted); }}
+  .table.cmp th:nth-child(2), .table.cmp td:nth-child(2) {{ background: rgba(255,255,255,0.04); color: var(--text); }}
+  .table.cmp th:nth-child(2) {{ border-radius: 10px 10px 0 0; }}
+  .table.cmp td {{ color: var(--muted); }}
+  .table.cmp .yes svg {{ width: 16px; height: 16px; fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round;
+                         stroke-linejoin: round; vertical-align: -3px; }}
+  .table.cmp .no {{ color: var(--dim); }}
+  @media (max-width: 760px) {{
+    .cmp-tools, .picks {{ grid-template-columns: 1fr; }}
+    /* All four tools on a phone's screen at once: a comparison that scrolls sideways hides what it compares. */
+    .table.cmp table {{ min-width: 0; font-size: 12.5px; line-height: 1.35; }}
+    .table.cmp th, .table.cmp td {{ padding: 10px 2px; overflow-wrap: normal; }}
+    .table.cmp th {{ font-size: 10.5px; letter-spacing: -0.02em; }}
+    .table.cmp th:first-child, .table.cmp td:first-child {{ width: 28%; padding-right: 6px; }}
+  }}
+  /* Guides: steps on a line down the page, commands in their own block, card lists, badge rows, the way on. */
+  ol.gsteps {{ list-style: none; counter-reset: gstep; padding: 0; margin: 22px 0 8px; max-width: 76ch; }}
+  ol.gsteps > li {{ counter-increment: gstep; position: relative; margin: 0; padding: 2px 0 22px 46px; max-width: none; }}
+  ol.gsteps > li::before {{ content: counter(gstep); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+                           border: 1px solid var(--line-strong); background: var(--bg); color: var(--text);
+                           font: 500 12px/26px var(--mono); text-align: center; }}
+  ol.gsteps > li::after {{ content: ""; position: absolute; left: 14px; top: 34px; bottom: 4px; width: 1px; background: var(--line); }}
+  ol.gsteps > li:last-child {{ padding-bottom: 4px; }}
+  ol.gsteps > li:last-child::after {{ display: none; }}
+  ol.gsteps > li > b {{ display: block; font-size: 16px; font-weight: 500; line-height: 1.5; }}
+  ol.gsteps > li > p {{ margin: 0; }}
+  ol.gsteps > li > b + p {{ margin-top: 2px; color: var(--muted); }}
+  ol.gsteps pre {{ margin: 10px 0 0; padding: 12px 64px 12px 16px; }}
+  ol.gsteps pre code {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
+  ol.gsteps pre + p {{ margin-top: 10px; color: var(--muted); font-size: 14.5px; }}
+  ol.gsteps pre .copy {{ opacity: 1; }}
+  .gcards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 8px; max-width: 76ch; }}
+  .gcards > div {{ display: flex; gap: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .gcards .gicon {{ color: var(--muted); margin-top: 4px; }}
+  .gcards p {{ margin: 0; font-size: 14.5px; line-height: 1.55; }}
+  .gcards b {{ display: block; font-size: 15.5px; font-weight: 500; margin-bottom: 2px; }}
+  .gcards b + span {{ color: var(--muted); }}
+  .grules {{ margin: 18px 0 8px; max-width: 76ch; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .grules > div {{ display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px 14px; align-items: start; padding: 14px 18px; }}
+  .grules > div + div {{ border-top: 1px solid var(--line); }}
+  .grules .lvl {{ justify-self: start; margin: 2px 0 0; }}
+  .grules p {{ margin: 0; font-size: 14.5px; line-height: 1.6; }}
+  p.onward {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 26px 0 0; }}
+  p.onward span {{ font: 500 12px var(--mono); color: var(--dim); margin-right: 4px; }}
+  p.onward a {{ display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-control);
+               border: 1px solid var(--line-strong); color: var(--muted); font-size: 14px; text-decoration: none; }}
+  p.onward a::after {{ content: "→"; color: var(--dim); }}
+  p.onward a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
+  main kbd {{ font: 500 12px var(--mono); color: var(--muted); border: 1px solid var(--line-strong); border-radius: 6px; padding: 1px 6px;
+             white-space: nowrap; }}
+  .faq {{ display: grid; gap: 12px; margin: 18px 0 8px; max-width: 76ch; }}
+  .faq > div {{ padding: 16px 20px 18px; border: 1px solid var(--line); border-radius: var(--r-surface); }}
+  .faq h4 {{ margin: 0 0 6px; font-size: 16px; font-weight: 500; }}
+  .faq p {{ margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }}
+  .faq p + p {{ margin-top: 8px; }}
+  @media (max-width: 760px) {{
+    .gcards {{ grid-template-columns: 1fr; }}
+    .grules > div {{ grid-template-columns: 1fr; }}
+    ol.gsteps > li {{ padding-left: 40px; }}
+    ol.gsteps pre {{ margin: 10px 0 0; border-radius: var(--r-control); border: 1px solid var(--line); padding: 12px 68px 12px 14px; }}
+  }}
   footer {{ border-top: 1px solid var(--line); padding: 32px 24px 48px; color: var(--dim); font-size: 13px; text-align: center; }}
   footer a {{ color: var(--muted); }}
   footer p {{ margin: 0 auto 6px; max-width: none; line-height: 1.9; }}
@@ -1056,8 +1256,14 @@ def search_entries(html_body, page, chapter):
 def menu(chapters, here):
     """Chapters (numbered); the one on this page expanded with its sections (and a group's features)."""
     out = ["<ol>"]
+    labelled = set()
     for n, ch in enumerate(chapters, 1):
         current = ch["page"] == here
+        # A small label where each group begins: the product's own chapters, then the comparisons, then the guides.
+        label = "Compare" if ch["id"] in COMPARE else "Guides" if ch["id"] in GUIDES else "Documentation"
+        if label not in labelled:
+            labelled.add(label)
+            out.append(f'<li class="group" aria-hidden="true">{label}</li>')
         href = f'#{ch["id"]}' if current else ch["page"]
         cls = ' class="here"' if current else ""
         fold = ('<button class="fold" type="button" aria-expanded="true" aria-label="Hide this chapter\'s sections"></button>'
@@ -1102,6 +1308,12 @@ def plain(html_text):
 def faq(md):
     """'### Question' followed by its answer: (question, answer as Markdown) pairs."""
     return [(q.strip(), a.strip()) for q, a in re.findall(r"^### (.+?)\n(.*?)(?=^### |\Z)", md, re.S | re.M)]
+
+
+def page_faq(md):
+    """A chapter's own "### Questions and answers": each "#### Question" with its answer, as (question, Markdown)."""
+    m = re.search(r"^### Questions and answers\n(.*?)(?=^### |\Z)", md, re.S | re.M)
+    return [(q.strip(), a.strip()) for q, a in re.findall(r"^#### (.+?)\n(.*?)(?=^#### |\Z)", m.group(1), re.S | re.M)] if m else []
 
 
 def write_sitemap(pages):
@@ -1160,6 +1372,12 @@ def main():
         sid = next(i for lvl, i, _ in toc if lvl == 2)
         if sid == "threat-model-and-attack-coverage":
             body = threat_ui(body)
+        if sid in COMPARE:
+            body = compare_ui(body)
+        if sid in GUIDES:
+            body = guide_ui(body)
+        if sid in COMPARE or sid in GUIDES:
+            body = qa_ui(body)
         chapters.append({"file": f.name, "page": PAGES[f.name], "title": title, "id": sid, "toc": toc, "body": body})
     index = [e for ch in chapters for e in search_entries(ch["body"], ch["page"], ch["title"])]
     ids = {i: ch["page"] for ch in chapters for _, i, _ in ch["toc"]}
@@ -1186,7 +1404,9 @@ def main():
     shelves = [("Using Hostwatch", [c for c in numbered if c[0] <= 4]),
                ("Going deeper", [c for c in numbered if c[1]["id"] in ("advanced-and-command-line", "privacy-security-and-limits",
                                                                       "threat-model-and-attack-coverage")]),
-               ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"])]
+               ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"]),
+               ("Compare", [c for c in numbered if c[1]["id"] in COMPARE]),
+               ("Guides", [c for c in numbered if c[1]["id"] in GUIDES])]
     cards = "".join(f'<h2 class="shelf">{name}</h2><div class="cards">' + "".join(card(n, ch) for n, ch in group) + "</div>"
                     for name, group in shelves if group)
     first = chapters[0]["page"]
@@ -1272,10 +1492,22 @@ def main():
         blurb = sentence(blurbs.get(ch["title"], "")).rstrip(".")
         desc = f"{ch['title']} in the Hostwatch docs: {blurb[:1].lower() + blurb[1:]}. Intrusion detection for macOS."
         title = f'{ch["title"]} · Hostwatch docs'
+        compared = COMPARE.get(ch["id"])
+        named = compared or GUIDES.get(ch["id"])
+        if named:         # the words people type, not the docs' pattern ("… · Hostwatch docs") that would hide them
+            title, desc = named["title"], named["description"]
         nodes = [{"@type": "TechArticle", "headline": ch["title"], "name": title, "description": desc, "url": url,
                   "inLanguage": "en", "dateModified": changed, "author": AUTHOR, "about": APP,
                   "isPartOf": {"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url}},
                  crumbs(("Hostwatch", SITE), ("Docs", docs_url), (ch["title"], url))]
+        if compared:      # the tools it is compared with, by name, for search engines
+            nodes[0]["mentions"] = [{"@type": "SoftwareApplication", "name": n, "url": u, "operatingSystem": "macOS"}
+                                    for n, u in compared["tools"]]
+        asked = page_faq((CHAPTERS / ch["file"]).read_text())
+        if asked:         # the page's own questions and answers, as data search engines can show
+            nodes.append({"@type": "FAQPage", "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": plain(convert(a)[0])}}
+                for q, a in asked]})
         (OUT_DIR / ch["page"]).write_text(PAGE.format(
             **common, title=title, edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
             page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, url=url, description=html.escape(desc),
