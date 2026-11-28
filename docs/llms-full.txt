@@ -2796,6 +2796,15 @@ Usually not. Hostwatch has its own firewall and notices new startup items, so it
 other three. Pick the one that fits and run that. If you do keep a second firewall, let only one of them ask, or
 you'll answer every question twice.
 
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
 ### Questions and answers
 
 #### Is Hostwatch a free alternative to Little Snitch?
@@ -2921,6 +2930,15 @@ Looking for a firewall or a small tool for one Mac? See
 
 If your company already runs one of these on your Mac, ask whoever looks after it before you install anything else.
 
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
 ### Questions and answers
 
 #### Is Hostwatch an alternative to Jamf Protect for one Mac or a small team?
@@ -3025,6 +3043,15 @@ authorization system for macOS. Rules name the programs that may run. In Lockdow
   - you want the network watched too
   - you'd rather it learns what's normal than keep a list yourself
   - you want a history you can search and play back
+
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
 
 ### Questions and answers
 

@@ -71,6 +71,15 @@ authorization system for macOS. Rules name the programs that may run. In Lockdow
   - you'd rather it learns what's normal than keep a list yourself
   - you want a history you can search and play back
 
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
 ### Questions and answers
 
 #### Is Hostwatch a host intrusion detection system (HIDS) for Mac?

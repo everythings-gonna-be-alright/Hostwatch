@@ -89,6 +89,15 @@ Usually not. Hostwatch has its own firewall and notices new startup items, so it
 other three. Pick the one that fits and run that. If you do keep a second firewall, let only one of them ask, or
 you'll answer every question twice.
 
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
 ### Questions and answers
 
 #### Is Hostwatch a free alternative to Little Snitch?

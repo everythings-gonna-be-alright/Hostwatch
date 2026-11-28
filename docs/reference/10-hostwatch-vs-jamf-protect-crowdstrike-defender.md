@@ -89,6 +89,15 @@ Looking for a firewall or a small tool for one Mac? See
 
 If your company already runs one of these on your Mac, ask whoever looks after it before you install anything else.
 
+### Where Hostwatch is going
+
+AI is part of how Hostwatch works, not an extra. Today it explains an event in plain words, takes a first look at a
+program that was paused, suggests rules and answers Claude Code's questions about your Mac's history, with Apple's
+on-device model or with Claude.
+
+The aim is to take AI deep into the security work itself: sorting alerts, investigating and responding, with you
+making the decisions.
+
 ### Questions and answers
 
 #### Is Hostwatch an alternative to Jamf Protect for one Mac or a small team?
