@@ -9,6 +9,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
     case portScan, newDevice, routerChanged, largeUpload
     // A project's lockfile names a version on the malicious-package list (ADR 0024).
     case maliciousPackage
+    // An install script tried what scripts don't need, or a package's name or age looks wrong (ADR 0024, layer 4).
+    case installScript, packageSign
 
     static func < (a: StoryStage, b: StoryStage) -> Bool {
         allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -17,6 +19,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
     var weight: Int {
         switch self {
         case .drop, .lolbin, .network, .newDevice: return 1
+        case .packageSign: return 3
+        case .installScript: return 6
         case .runFromDrop, .newDomain, .rawIP: return 2
         case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted, .listed: return 3
         case .persistence, .portScan, .routerChanged, .largeUpload: return 4
@@ -27,7 +31,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 
     /// Strong enough to make activity started from your own terminal/IDE worth a story.
     var isStrong: Bool {
-        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad, .listed, .maliciousPackage]
+        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad, .listed, .maliciousPackage, .installScript]
             .contains(self)
     }
 
@@ -55,6 +59,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .routerChanged: return "Router changed"
         case .largeUpload: return "Large upload"
         case .maliciousPackage: return "Malicious package"
+        case .installScript: return "Install script contained"
+        case .packageSign: return "Unusual package"
         }
     }
 
@@ -82,6 +88,8 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .routerChanged: return "wifi.exclamationmark"
         case .largeUpload: return "arrow.up.circle"
         case .maliciousPackage: return "shippingbox"
+        case .installScript: return "shippingbox.and.arrow.backward"
+        case .packageSign: return "questionmark.app"
         }
     }
 }

@@ -8,6 +8,9 @@ Hostwatch keeps what it learns on your Mac. Nothing is sent anywhere, with these
 - a daily anonymous update check, if it is on
 - the daily threat-list downloads, if they are on, and the malicious-package lists for the languages your projects
   use (from OSV.dev: the whole list once, then only what changed. Your projects and packages are never sent)
+- the package age check, only if you turn it on in Protection ▸ Packages: the name of a package installed by name
+  goes to that language's public registry (npm, PyPI, crates.io, RubyGems), to learn when it was first published.
+  Scoped npm names (`@company/x`) are never sent
 - the firewall's web check, every 30 seconds while the firewall is on Ask or Strict, which confirms that its relay still
   lets connections through (if that fails, a second check without the relay tells a broken relay from no network)
 

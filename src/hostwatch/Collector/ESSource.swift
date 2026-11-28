@@ -269,7 +269,8 @@ final class ESAuthClient: @unchecked Sendable {
             var r = HoldRequest(what: .exec, path: path, pid: Int(target.audit_token.val.5), ppid: Int(target.ppid),
                                 parent: ESSource.string(caller.executable.pointee.path),
                                 args: Agent.formatArgs(args), uid: uid, seconds: seconds)
-            if g.packages.isEnforcing {
+            if g.packages.isActive {
+                r.argv = Array(args.prefix(8))
                 let cwd = m.version >= 3 ? ESSource.string(exec.cwd.pointee.path) : ""
                 r.installs = InstallContext.targets(path: path, args: args, env: Self.packageEnv(&exec), cwd: cwd,
                                                     read: Self.readHead)

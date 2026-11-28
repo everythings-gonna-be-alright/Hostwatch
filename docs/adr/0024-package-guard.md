@@ -1,6 +1,6 @@
 # 0024 Package guard: know the bad packages, stop their scripts, contain the rest
 
-**Status.** Accepted. Layers 1, 2 and 3 are built (Protection ▸ Packages). Layer 4 is next.
+**Status.** Accepted. All four layers are built (Protection ▸ Packages).
 
 ## Context
 
@@ -70,9 +70,9 @@ Built as below, with these choices (28 Nov 2026):
   backend by `PKG-INFO` in its working folder, a gem by its `/gems/<name>-<version>/ext` folder. Named installs by
   the manager among the first words and its verb. The environment is read only while packages are guarded, and a
   variable is copied only when its first byte could start a wanted name.
-- **Ask and Strict hold launches for this even when Launches is Off or Watch**: the exec client runs, and anything
-  that isn't a listed install is answered at once by the existing local rule. Watch holds nothing: the lockfile
-  scan already tells you, and a hold only to watch would put every launch through the client for nothing.
+- **Packages holds launches whenever it isn't Off, even with Launches Off**: the exec client runs, and anything
+  that isn't a listed install is answered at once by the existing local rule. Watch holds too, since layer 4 must
+  see every install script to record what it would stop, and never denies.
 - **Unknown versions**: `npm install x` names no version. Only an every-version record covers it (209,000 of npm's
   225,000 records are).
 - **Quarantine is npm only**: a project's `node_modules/<name>` and one level of nesting, when the version in its
@@ -117,15 +117,37 @@ Name checks for things that aren't known bad, used as signs, never as proof:
   to what leaves the Mac (06-privacy, CLAUDE.md).
 - Lookalike or new, plus an install script: asked first for AI agents, a story sign for you.
 
+Built as above, with these choices (28 Nov 2026):
+- **Who is contained**: a launch carrying an install script's package (layer 3's environment rules), a child of a
+  contained process (by the parent pid at exec), and a fork of one (from the event feed's fork events, removed on
+  exit). A package run at once (npx, uvx, pipx run, dlx, bunx) contains what it starts, not itself: the runner reads
+  `.npmrc` to log in. A pid that execs without a contained parent stops being contained, so a reused pid is clean.
+- **Where the checks run**: opens in the AUTH_OPEN hold (its muted-path prefixes gain the contained places), launches
+  in the AUTH_EXEC hold, connections in the firewall relay's `decide`, so the network is limited only while the
+  firewall is on Ask or Strict. Without it, connections are neither limited nor reported: the event feed's
+  connections carry no lineage the collector could check in time.
+- **Browsers**: only their password, cookie and form stores in four profiles are contained places. A whole profile
+  folder is opened thousands of times a minute, and every open under a contained prefix passes through the hold.
+- **Hosts are exact names**, not suffixes: `github.com` serves release downloads, `api.github.com` is where nx's
+  script published what it stole. `storage.googleapis.com` is allowed for Puppeteer's browsers and could carry data
+  out to a bucket: a known gap, kept for the builds it would break.
+- **Lookalikes**: one edit (insert, delete, change, swap neighbours) or the same letters without separators, against a
+  built-in list of about 350 names and every name shared by two of your projects. Names under five letters are only
+  compared without separators: short names one edit apart are mostly different packages.
+- **The age check** runs after the fact for your installs (a story) and before the command for Claude Code (asked
+  first), never in a hold: a registry request can't promise to finish inside macOS's deadline. Scoped npm names are
+  never sent: they are often a company's private packages.
+- Each contained try is reported once a minute per process, action and target, and recorded once an hour.
+
 ### Modes and place in the app
 
 A new area in Protection, **Packages**, with the same modes as the others (0011):
 
 | Mode | Known bad | Install scripts | Arrived bad package |
 |---|---|---|---|
-| Watch | Story | Recorded, what would be stopped is listed | Story |
+| Watch | Story (from the lockfile scan) | Recorded, what would be stopped is listed | Story |
 | Ask (default) | Denied | Contained | Story with the fix |
-| Strict | Denied | Contained, lookalikes denied | Quarantined |
+| Strict | Denied | Contained, lookalikes denied | Quarantined (npm) |
 
 Watch first, as with files and launches (0011): it rehearses containment on real installs and shows what would have
 broken before anything is enforced.

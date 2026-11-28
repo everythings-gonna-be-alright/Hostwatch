@@ -60,7 +60,9 @@ disk sealed with the data key kept in the Secure Enclave or the keychain, ADR 00
   records as a text index, version ranges), `Lockfiles.swift` (one parser per lockfile format: pure),
   `ZipReader.swift` (OSV's bulk export, read in place), `PackageScanReport.swift` (`--package-scan`),
   `InstallContext.swift` (which launch installs which package: pure), `ListedPackages.swift` (the lists as name
-  hashes, for the collector), `PackageGuard+Stop.swift` (what was stopped, Strict's quarantine). The collector's
+  hashes, for the collector), `PackageGuard+Stop.swift` (what was stopped, Strict's quarantine),
+  `InstallContainment.swift` (what contained install scripts may not do: pure), `PackageNames.swift` (lookalike
+  names), `PackageGuard+Signs.swift` (containment lines, the age check). The collector's
   side is `Collector/AgentPackages.swift`. The page is
   `Views/PackagesView.swift` (Protection ▸ Packages). `StoryStage.swift` holds the stages, their weights and titles.
 - `Watch.swift` — Watch Closely (a second eslogger on one process). `CommandGuard.swift`, `ClaudeGuard.swift` —

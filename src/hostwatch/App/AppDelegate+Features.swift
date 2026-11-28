@@ -246,6 +246,13 @@ extension AppDelegate {
             }
         }
         claudeGuard.listedPackage = { [weak self] ref in MainActor.assumeIsolated { self?.packages.listedID(ref) } }
+        claudeGuard.lookalikePackage = { [weak self] ref in
+            MainActor.assumeIsolated {
+                guard let p = self?.packages, p.enabled else { return nil }
+                return PackageNames.lookalike(ref.name, ref.ecosystem, known: p.known[ref.ecosystem.osv] ?? [])
+            }
+        }
+        claudeGuard.newPackages = { [weak self] refs in await self?.packages.newPackages(refs) ?? [] }
         claudeGuard.onPromptsChange = { [weak self] in self?.refreshGuardPanel() }
         claudeGuard.start()
     }

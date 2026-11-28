@@ -58,6 +58,7 @@ HOSTWATCH_PERF_RECORD=1 ./scripts/test.sh    # new performance baseline (tests/p
   otherwise. It talks over a Unix socket that accepts only Hostwatch's own code (audit token + designated requirement). Everything it sends is masked
   (`Secrets`) before it reaches history or any prompt. Nothing leaves the Mac except: Claude calls you enabled,
   a custom AI server you configured off this Mac, threat-list downloads, the update check, the firewall relay's self-check,
+  the package age check you turned on (a package name to its public registry, ADR 0024),
   and the network map's Bonjour questions, which stay on the local network (ADR 0017).
 - **Every file is sealed through `Vault.shared`** (`read`/`write`/`appendLine`/`lines`, history blocks as records):
   never `Data(contentsOf:)` or `write(to:)` a Hostwatch data file directly. Tests get an in-memory key; the real

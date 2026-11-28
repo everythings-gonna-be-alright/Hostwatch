@@ -663,10 +663,12 @@ final class Agent: @unchecked Sendable {
             if let parent = callerExec?.0, let (id, f) = Self.execFacts(fork["child"] as? [String: Any], parent: parent) {
                 lineage.learn(id, f)
             }
+            guardian.packages.forked(parent: Self.pid(caller), child: Self.pid(fork["child"] as? [String: Any]))
             return nil
         }
         if event["exit"] != nil {
             noteExit(Self.pid(caller))
+            guardian.packages.exited(Self.pid(caller))
             return nil
         }
         let callerOurs = isOurs(Self.pid(caller)) || Self.intValue(caller["ppid"]) == selfPid

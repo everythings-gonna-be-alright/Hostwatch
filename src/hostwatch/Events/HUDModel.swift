@@ -103,8 +103,8 @@ final class HUDModel: ObservableObject {
     var onGuardAsk: (([String: Any]) -> Void)?
     var onGuardStatus: ((String, String) -> Void)?
     var onGuardBlock: (([String: Any]) -> Void)?
-    /// The collector stopped a malicious package's install script or install (ADR 0024).
-    var onPackageBlock: (([String: Any]) -> Void)?
+    /// The package guard's lines (ADR 0024): a listed package stopped, a contained script's try, an install by name.
+    var onPackageLine: (([String: Any]) -> Void)?
     /// A held launch or open the collector let go because no quick answer came: (id, pid).
     var onGuardLate: ((Int, Int) -> Void)?
     /// The collector said who it is (`nil`: it said nothing, so it's from before 0.19): version, app path, Endpoint Security.
@@ -577,7 +577,7 @@ final class HUDModel: ObservableObject {
                     case "guard_ask": onGuardAsk?(obj)
                     case "guard_status": onGuardStatus?(obj["state"] as? String ?? "", obj["detail"] as? String ?? "")
                     case "guard_block": onGuardBlock?(obj)
-                    case "guard_package": onPackageBlock?(obj)
+                    case "guard_package", "guard_contain", "guard_install": onPackageLine?(obj)
                     case "guard_hello": helloTimer?.invalidate(); onCollectorHello?(obj)
                     case "guard_late": onGuardLate?((obj["id"] as? NSNumber)?.intValue ?? 0, (obj["pid"] as? NSNumber)?.intValue ?? 0)
                     default: break

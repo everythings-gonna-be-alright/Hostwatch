@@ -38,6 +38,8 @@ struct CommandGuard {
     var listed: (String) -> String? = { _ in nil }
     /// A package → the malicious-package record that lists it (ADR 0024); nil when not listed.
     var listedPackage: (PackageRef) -> String? = { _ in nil }
+    /// A package → the well-known package its name looks like (ADR 0024, layer 4); nil when none.
+    var lookalikePackage: (PackageRef) -> String? = { _ in nil }
     /// A script's text (to judge `bash x.sh` by what x.sh does); nil if unreadable or not a small text file.
     var readScript: (String) -> String? = CommandGuard.readSmallTextFile
 
@@ -140,9 +142,11 @@ struct CommandGuard {
             }
             guard let program = tokens.first.map({ ($0 as NSString).lastPathComponent }) else { continue }
             for t in InstallContext.namedInstalls(tokens) {
+                let what = t.package.version.isEmpty ? t.package.name : t.package.label
                 if let id = listedPackage(t.package) {
-                    let what = t.package.version.isEmpty ? t.package.name : t.package.label
                     add(.deny, "\(t.how == .run ? "runs" : "installs") \(what), which is on the malicious-package list (\(id))")
+                } else if let like = lookalikePackage(t.package) {
+                    add(.ask, "\(t.how == .run ? "runs" : "installs") \(what), a name that looks like \(like) (how wrong packages get installed)")
                 }
             }
             let args = Array(tokens.dropFirst())
@@ -178,6 +182,17 @@ struct CommandGuard {
             }
         }
         return found
+    }
+
+    /// The packages a shell command installs or runs by name, command by command.
+    static func namedInstalls(in command: String) -> [PackageRef] {
+        segments(command).flatMap { segment -> [PackageRef] in
+            var tokens = tokens(segment)
+            while let f = tokens.first, f.contains("=") || ["sudo", "command", "exec", "env", "time", "nohup"].contains(f) {
+                tokens.removeFirst()
+            }
+            return InstallContext.namedInstalls(tokens).map(\.package)
+        }
     }
 
     /// A deletion worth stopping: everything (deny), or a path outside the project (ask).
