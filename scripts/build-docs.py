@@ -250,19 +250,40 @@ GROUP_ICONS.update(SECTION_ICONS)
 # The comparison chapters, by id: the title and description people search by, and the tools each one names.
 COMPARE = {
     "hostwatch-vs-lulu-little-snitch-and-blockblock": {
-        "title": "Hostwatch vs LuLu, Little Snitch and BlockBlock: Mac security tools compared",
-        "description": "How Hostwatch compares with LuLu, Little Snitch and BlockBlock: what each one does, a table of "
-                       "firewall, files, startup items, price and macOS, and when to pick which.",
+        "title": "Hostwatch vs LuLu, Little Snitch, BlockBlock: a free alternative",
+        "description": "Hostwatch as a free alternative to Little Snitch, LuLu and BlockBlock: what each one does, a table "
+                       "of firewall, files, startup items, price and macOS, and when to pick which.",
         "tools": [("LuLu", "https://objective-see.org/products/lulu.html"),
                   ("Little Snitch", "https://www.obdev.at/products/littlesnitch/index.html"),
                   ("BlockBlock", "https://objective-see.org/products/blockblock.html")]},
     "hostwatch-vs-jamf-protect-crowdstrike-falcon-and-microsoft-defender": {
-        "title": "Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender on Mac",
-        "description": "How Hostwatch, free intrusion detection for macOS, compares with Jamf Protect, CrowdStrike "
-                       "Falcon and Microsoft Defender for Endpoint: who each is for, a table, price, and when to pick which.",
+        "title": "Hostwatch vs Jamf Protect, CrowdStrike Falcon, Microsoft Defender",
+        "description": "Hostwatch as a free alternative to Jamf Protect, CrowdStrike Falcon and Microsoft Defender for "
+                       "one Mac or a small team: who each is for, a table, price, and when to pick which.",
         "tools": [("Jamf Protect", "https://www.jamf.com/products/jamf-protect/"),
                   ("CrowdStrike Falcon", "https://www.crowdstrike.com/en-us/platform/endpoint-security/falcon-for-macos/"),
                   ("Microsoft Defender for Endpoint", "https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-mac")]},
+    "hostwatch-vs-wazuh-osquery-and-santa": {
+        "title": "Hostwatch vs Wazuh, osquery and Santa: a HIDS for one Mac",
+        "description": "Hostwatch as an alternative to Wazuh, osquery and Santa on a Mac: host intrusion detection with "
+                       "no server to run. What each one does, a table, and when to pick which.",
+        "tools": [("Wazuh", "https://wazuh.com/"), ("osquery", "https://github.com/osquery/osquery"),
+                  ("Santa", "https://github.com/northpolesec/santa")]},
+}
+# The guides, by id: pages named after the problem someone searches for, with their title and description.
+GUIDES = {
+    "how-to-detect-an-infostealer-on-a-mac": {
+        "title": "How to detect an infostealer on a Mac",
+        "description": "The signs of an infostealer on macOS, what to check by hand, how Hostwatch watches for one, and "
+                       "what to do if you find it."},
+    "how-to-see-what-an-npm-package-does-on-your-mac": {
+        "title": "How to see what an npm package does on your Mac",
+        "description": "Check an npm package's install scripts before you install, then watch the install run: the files "
+                       "it reads, the servers it reaches and what it sets to start."},
+    "how-to-monitor-claude-code-on-a-mac": {
+        "title": "How to monitor Claude Code on a Mac",
+        "description": "See what Claude Code and other AI coding agents ran on your Mac, session by session, and stop "
+                       "the dangerous commands before they run."},
 }
 CHAPTER_ICONS = {
     "getting-started": '<circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.6l3.8 2.4-3.8 2.4z"/>',
@@ -275,6 +296,7 @@ CHAPTER_ICONS = {
     "for-developers": '<path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5"/>',
     "threat-model-and-attack-coverage": '<path d="M8 1.8l5 2v4.1c0 3-2.2 5.2-5 6.3-2.8-1.1-5-3.3-5-6.3V3.8z"/><path d="M6 8l1.5 1.5L10.2 6.6"/>',
     **{sid: '<path d="M4.5 2.5v11M11.5 2.5v11M2.5 5.5h4M9.5 10.5h4"/>' for sid in COMPARE},
+    **{sid: '<circle cx="8" cy="8" r="6.2"/><path d="M10.4 5.6 9 9l-3.4 1.4L7 7z"/>' for sid in GUIDES},
 }
 
 
@@ -516,6 +538,8 @@ PAGE = """<!doctype html>
   mark {{ background: rgba(255,255,255,0.18); color: var(--text); border-radius: 3px; padding: 0 1px; }}
   main mark.hit {{ background: rgba(255,255,255,0.22); box-shadow: 0 0 0 2px rgba(255,255,255,0.22); }}
   nav.toc ol {{ list-style: none; margin: 0; padding: 0; }}
+  nav.toc li.group {{ font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim);
+                     padding: 20px 8px 6px; }}
   nav.toc ol ol {{ margin: 2px 0 6px 30px; }}
   nav.toc a {{ display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; line-height: 1.4; }}
   nav.toc a:hover {{ color: var(--text); background: rgba(255,255,255,0.03); }}
@@ -1123,8 +1147,13 @@ def search_entries(html_body, page, chapter):
 def menu(chapters, here):
     """Chapters (numbered); the one on this page expanded with its sections (and a group's features)."""
     out = ["<ol>"]
+    labelled = set()
     for n, ch in enumerate(chapters, 1):
         current = ch["page"] == here
+        for label, group in (("Compare", COMPARE), ("Guides", GUIDES)):       # a small label where each group begins
+            if ch["id"] in group and label not in labelled:
+                labelled.add(label)
+                out.append(f'<li class="group" aria-hidden="true">{label}</li>')
         href = f'#{ch["id"]}' if current else ch["page"]
         cls = ' class="here"' if current else ""
         fold = ('<button class="fold" type="button" aria-expanded="true" aria-label="Hide this chapter\'s sections"></button>'
@@ -1169,6 +1198,12 @@ def plain(html_text):
 def faq(md):
     """'### Question' followed by its answer: (question, answer as Markdown) pairs."""
     return [(q.strip(), a.strip()) for q, a in re.findall(r"^### (.+?)\n(.*?)(?=^### |\Z)", md, re.S | re.M)]
+
+
+def page_faq(md):
+    """A chapter's own "### Questions and answers": each "#### Question" with its answer, as (question, Markdown)."""
+    m = re.search(r"^### Questions and answers\n(.*?)(?=^### |\Z)", md, re.S | re.M)
+    return [(q.strip(), a.strip()) for q, a in re.findall(r"^#### (.+?)\n(.*?)(?=^#### |\Z)", m.group(1), re.S | re.M)] if m else []
 
 
 def write_sitemap(pages):
@@ -1256,7 +1291,8 @@ def main():
                ("Going deeper", [c for c in numbered if c[1]["id"] in ("advanced-and-command-line", "privacy-security-and-limits",
                                                                       "threat-model-and-attack-coverage")]),
                ("Building it", [c for c in numbered if c[1]["id"] == "for-developers"]),
-               ("Choosing a tool", [c for c in numbered if c[1]["id"] in COMPARE])]
+               ("Compare", [c for c in numbered if c[1]["id"] in COMPARE]),
+               ("Guides", [c for c in numbered if c[1]["id"] in GUIDES])]
     cards = "".join(f'<h2 class="shelf">{name}</h2><div class="cards">' + "".join(card(n, ch) for n, ch in group) + "</div>"
                     for name, group in shelves if group)
     first = chapters[0]["page"]
@@ -1343,8 +1379,9 @@ def main():
         desc = f"{ch['title']} in the Hostwatch docs: {blurb[:1].lower() + blurb[1:]}. Intrusion detection for macOS."
         title = f'{ch["title"]} · Hostwatch docs'
         compared = COMPARE.get(ch["id"])
-        if compared:      # the names people type, not the docs' pattern ("… · Hostwatch docs") that would hide them
-            title, desc = compared["title"], compared["description"]
+        named = compared or GUIDES.get(ch["id"])
+        if named:         # the words people type, not the docs' pattern ("… · Hostwatch docs") that would hide them
+            title, desc = named["title"], named["description"]
         nodes = [{"@type": "TechArticle", "headline": ch["title"], "name": title, "description": desc, "url": url,
                   "inLanguage": "en", "dateModified": changed, "author": AUTHOR, "about": APP,
                   "isPartOf": {"@type": "CollectionPage", "name": "Hostwatch docs", "url": docs_url}},
@@ -1352,6 +1389,11 @@ def main():
         if compared:      # the tools it is compared with, by name, for search engines
             nodes[0]["mentions"] = [{"@type": "SoftwareApplication", "name": n, "url": u, "operatingSystem": "macOS"}
                                     for n, u in compared["tools"]]
+        asked = page_faq((CHAPTERS / ch["file"]).read_text())
+        if asked:         # the page's own questions and answers, as data search engines can show
+            nodes.append({"@type": "FAQPage", "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": plain(convert(a)[0])}}
+                for q, a in asked]})
         (OUT_DIR / ch["page"]).write_text(PAGE.format(
             **common, title=title, edit_url=f'{REPO}/blob/main/docs/reference/{ch["file"]}',
             page=ch["page"], toc=menu(chapters, ch["page"]), hero=hero, url=url, description=html.escape(desc),

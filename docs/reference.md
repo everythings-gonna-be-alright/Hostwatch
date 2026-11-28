@@ -25,6 +25,10 @@ cloud (SaaS) version.
 8. **[Threat model and attack coverage](reference/08-threat-model.md)**: what Hostwatch defends against and what it doesn't, how it protects itself, and which MITRE ATT&CK techniques it sees.
 9. **[Hostwatch vs LuLu, Little Snitch and BlockBlock](reference/09-hostwatch-vs-lulu-little-snitch-blockblock.md)**: what Hostwatch does, who it is for, and how it compares with three well-known Mac security tools.
 10. **[Hostwatch vs Jamf Protect, CrowdStrike Falcon and Microsoft Defender](reference/10-hostwatch-vs-jamf-protect-crowdstrike-defender.md)**: how Hostwatch compares with the endpoint security tools companies buy for their Macs.
+11. **[Hostwatch vs Wazuh, osquery and Santa](reference/11-hostwatch-vs-wazuh-osquery-santa.md)**: how Hostwatch compares with three free, open-source security tools that run on a Mac.
+12. **[How to detect an infostealer on a Mac](reference/12-how-to-detect-an-infostealer-on-a-mac.md)**: the signs, what to check by hand, and how Hostwatch watches for one.
+13. **[How to see what an npm package does on your Mac](reference/13-how-to-see-what-an-npm-package-does-on-your-mac.md)**: what to check before you install, and how to watch an install run.
+14. **[How to monitor Claude Code on a Mac](reference/14-how-to-monitor-claude-code-on-a-mac.md)**: see what an AI coding agent did, and stop the commands you'd never allow.
 
 ## Questions and answers
 

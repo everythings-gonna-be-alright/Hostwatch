@@ -89,6 +89,24 @@ Usually not. Hostwatch has its own firewall and notices new startup items, so it
 other three. Pick the one that fits and run that. If you do keep a second firewall, let only one of them ask, or
 you'll answer every question twice.
 
+### Questions and answers
+
+#### Is Hostwatch a free alternative to Little Snitch?
+
+For asking before a program connects, yes: Hostwatch's firewall does that, and it is free. Little Snitch has more
+network features, such as encrypted DNS and a world map. Hostwatch adds what Little Snitch doesn't watch:
+programs, files and startup items.
+
+#### Is Hostwatch an alternative to LuLu?
+
+Yes. Both are free, and both ask before a program makes a new outgoing connection. Hostwatch also watches
+programs and files. LuLu runs on older versions of macOS.
+
+#### Does Hostwatch replace BlockBlock?
+
+For most people, yes: Hostwatch notices new startup items too. BlockBlock removes the item for you and runs on
+older versions of macOS.
+
 ### Sources
 
 - [LuLu](https://objective-see.org/products/lulu.html) and [its source](https://github.com/objective-see/LuLu)

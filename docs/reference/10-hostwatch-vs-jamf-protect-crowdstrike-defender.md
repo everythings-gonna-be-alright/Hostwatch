@@ -89,6 +89,22 @@ Looking for a firewall or a small tool for one Mac? See
 
 If your company already runs one of these on your Mac, ask whoever looks after it before you install anything else.
 
+### Questions and answers
+
+#### Is Hostwatch an alternative to Jamf Protect for one Mac or a small team?
+
+Yes. Jamf Protect comes with Jamf for Mac, from 25 devices. Hostwatch installs on a single Mac and is free.
+
+#### Is Hostwatch an EDR?
+
+It does the detecting on the Mac itself: it watches behaviour, joins events into stories and can stop a program or
+a connection. What a company's EDR adds, one console and a security team's tools for every Mac, is planned.
+
+#### Can a company use Hostwatch?
+
+Yes. It is free at work too. Each Mac runs by itself today, and a server for the whole fleet and a hosted cloud
+version are planned as a paid edition.
+
 ### Sources
 
 - [Jamf Protect](https://www.jamf.com/products/jamf-protect/) and [Jamf pricing](https://www.jamf.com/pricing/)
