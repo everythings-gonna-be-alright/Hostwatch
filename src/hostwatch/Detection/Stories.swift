@@ -11,7 +11,7 @@ import Foundation
 
 enum StoryStage: String, Codable, CaseIterable, Comparable {
     case drop, unquarantine, runFromDrop, appShell, lolbin, encodedCommand, persistence, credential, network
-    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad
+    case unsignedCode, swappedBinary, newDomain, beaconing, rawIP, heavyUntrusted, knownBad, listed
     // The network map's: someone on your network trying this Mac (ADR 0017).
     case portScan, newDevice, routerChanged, largeUpload
 
@@ -23,7 +23,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         switch self {
         case .drop, .lolbin, .network, .newDevice: return 1
         case .runFromDrop, .newDomain, .rawIP: return 2
-        case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted: return 3
+        case .unquarantine, .appShell, .encodedCommand, .credential, .unsignedCode, .beaconing, .heavyUntrusted, .listed: return 3
         case .persistence, .portScan, .routerChanged, .largeUpload: return 4
         case .swappedBinary: return 5
         case .knownBad: return 8
@@ -32,7 +32,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
 
     /// Strong enough to make activity started from your own terminal/IDE worth a story.
     var isStrong: Bool {
-        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad]
+        [.unquarantine, .encodedCommand, .persistence, .credential, .unsignedCode, .swappedBinary, .beaconing, .heavyUntrusted, .knownBad, .listed]
             .contains(self)
     }
 
@@ -54,6 +54,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .rawIP: return "Raw-IP connection"
         case .heavyUntrusted: return "Heavy untrusted process"
         case .knownBad: return "Known malware"
+        case .listed: return "On a blocklist"
         case .portScan: return "Port scan"
         case .newDevice: return "New device reached this Mac"
         case .routerChanged: return "Router changed"
@@ -79,6 +80,7 @@ enum StoryStage: String, Codable, CaseIterable, Comparable {
         case .rawIP: return "number"
         case .heavyUntrusted: return "flame"
         case .knownBad: return "xmark.octagon"
+        case .listed: return "list.bullet.rectangle"
         case .portScan: return "dot.radiowaves.left.and.right"
         case .newDevice: return "questionmark.circle"
         case .routerChanged: return "wifi.exclamationmark"
@@ -96,6 +98,7 @@ struct StoryStep: Codable, Identifiable {
     var processStart: Date?
     var stage: StoryStage
     var note: String              // one-line explanation
+    var routine: Bool?            // everyday on this Mac: shown, not counted (ADR 0023)
     // Event snapshot, for display and Ask Claude.
     var kind: EventKind
     var time: String
@@ -154,7 +157,7 @@ struct Story: Codable, Identifiable {
 
     /// Distinct stages count once; a file handed from one tree to another adds a bonus.
     var score: Int {
-        stages.filter { !$0.isContext }.reduce(0) { $0 + $1.weight } + (steps.contains { $0.note.hasPrefix("ran a file") } ? 1 : 0)
+        Set(steps.filter(StoryEvidence.counts).map(\.stage)).reduce(0) { $0 + $1.weight } + (steps.contains { $0.note.hasPrefix("ran a file") } ? 1 : 0)
     }
 
     /// "Slack → sh → curl"
@@ -230,6 +233,7 @@ final class StoryEngine: ObservableObject {
         let dir = AppPaths.support
         fileURL = dir.appendingPathComponent("stories.json")
         ignored = persistent ? Set(UserDefaults.standard.stringArray(forKey: "ignoredStories") ?? []) : []
+        exceptions = persistent ? Set(UserDefaults.standard.stringArray(forKey: StoryEvidence.exceptionsKey) ?? []) : []
         guard persistent else { return }
         load()
         loadLoginItems()
@@ -263,8 +267,10 @@ final class StoryEngine: ObservableObject {
     @discardableResult
     /// `extra`: stages found outside the event itself (a launched process that later runs heavy); the
     /// event was seen before, so its process isn't registered again.
+    /// `routine`: the event's pattern is everyday on this Mac (`SignatureStore.isRoutine`): its weaker signs are shown
+    /// but don't count (ADR 0023).
     func ingest(_ e: ActivityEvent, decidedSafe: Bool, at date: Date = Date(),
-                extra: [(StoryStage, String)] = [], session: String? = nil) -> [(StoryStage, String)] {
+                extra: [(StoryStage, String)] = [], session: String? = nil, routine: Bool = false) -> [(StoryStage, String)] {
         clock = date
         if e.kind == .exec, e.pid > 0, extra.isEmpty {
             procs[e.pid] = Proc(ppid: e.ppid, path: e.target, seen: date, start: date, args: e.args)
@@ -276,10 +282,14 @@ final class StoryEngine: ObservableObject {
         // A pattern you marked Safe never builds a story; neither does Hostwatch's own evidence
         // gathering (codesign, spctl, lsof… started by this app).
         // (On a threat list it counts even if you marked the pattern Safe.)
-        guard !decidedSafe || !e.knownBad.isEmpty || !extra.isEmpty, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
+        guard !decidedSafe || !e.knownBad.isEmpty && !e.listedOnly || !extra.isEmpty, !Self.isOwn(e.parent), !Self.isOwn(e.proc) else { return [] }
 
         if e.kind == .file, e.extra.contains("w") { rememberWrite(e) }
         var found = extra.isEmpty ? stages(for: e) : extra
+        // Signs you said are not a threat, for this program and this destination, file or command.
+        if !exceptions.isEmpty {
+            found.removeAll { exceptions.contains(StoryEvidence.exceptionKey(StoryStep(e, stage: $0.0, note: $0.1, date: clock))) }
+        }
         guard !found.isEmpty else { return [] }
         if let q = found.first(where: { $0.0 == .unquarantine }) {
             unquarantines.append(StoryStep(e, stage: .unquarantine, note: q.1, date: clock))
@@ -291,7 +301,11 @@ final class StoryEngine: ObservableObject {
 
         let now = clock
         let start = node(e.pid)?.start
-        let candidate = found.map { StoryStep(e, stage: $0.0, note: $0.1, date: now) }
+        let candidate = found.map { f in
+            var step = StoryStep(e, stage: f.0, note: f.1, date: now)
+            if routine, f.0.discountable { step.routine = true }
+            return step
+        }
 
         // Steps this event is linked to: by cause (see `related`), by a file it runs, or by the login
         // item that started it.
@@ -563,7 +577,7 @@ final class StoryEngine: ObservableObject {
     /// shell). Downloading+running an app, or an app reading its credentials and going online,
     /// is everyday behaviour on its own. Your own terminal/IDE needs even more.
     private func evaluate(_ story: inout Story) {
-        let stages = Set(story.stages.filter { !$0.isContext })
+        let stages = Set(story.steps.filter(StoryEvidence.counts).map(\.stage))
         // On a malware tracker's list: a story and Dangerous on its own, whoever started it. Otherwise two signs
         // from two events (StoryEvidence).
         let knownBad = StoryEvidence.standsAlone(story.steps)
@@ -647,7 +661,7 @@ final class StoryEngine: ObservableObject {
 
     private func stages(for e: ActivityEvent) -> [(StoryStage, String)] {
         var out: [(StoryStage, String)] = []
-        if !e.knownBad.isEmpty { out.append((.knownBad, e.knownBad)) }
+        if !e.knownBad.isEmpty { out.append((e.listedOnly ? .listed : .knownBad, e.knownBad)) }
         let sealedActor = SignatureBuilder.isSealedSystem(e.kind == .exec ? e.parent : e.proc)
         // Signing facts about the binary that runs (exec) or acts (file/net).
         let subject = e.kind == .exec ? e.target : e.proc
@@ -883,7 +897,7 @@ final class StoryEngine: ObservableObject {
                                   extra: "TCP", parent: "", host: "", hostSource: "")
         var story = Story(rootPid: 0, originName: origin, originPath: "network:" + origin, origin: .background,
                           steps: [StoryStep(event, stage: stage, note: note, date: date)], firstSeen: date, lastSeen: date)
-        guard !ignored.contains(story.signature) else { return }
+        guard !ignored.contains(story.signature), !exceptions.contains(StoryEvidence.exceptionKey(story.steps[0])) else { return }
         story.fired = true
         story.severity = severity
         stories.insert(story, at: 0)
@@ -917,11 +931,16 @@ final class StoryEngine: ObservableObject {
     /// Those chains alert again from now. The revision tells the window: without it the button stayed, unchanged.
     func clearIgnored() {
         ignored.removeAll()
+        exceptions.removeAll()
         UserDefaults.standard.removeObject(forKey: "ignoredStories")
+        UserDefaults.standard.removeObject(forKey: StoryEvidence.exceptionsKey)
         revision += 1
     }
 
-    var ignoredCount: Int { ignored.count }
+    /// Muted chains and signs marked Not a Threat.
+    var ignoredCount: Int { ignored.count + exceptions.count }
+    /// Exact signs you said are not a threat (`StoryEvidence.exceptionKey`).
+    var exceptions: Set<String>
 
     private func update(_ id: UUID, _ change: (inout Story) -> Void) {
         guard let i = stories.firstIndex(where: { $0.id == id }) else { return }

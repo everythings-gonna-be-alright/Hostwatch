@@ -614,12 +614,13 @@ final class HUDModel: ObservableObject {
                 if let domain = domains.observe(event) { event.newDomain = domain }
                 if let beacon = beacons.observe(event) { event.beacon = beacon }
                 event.rawIP = NetSignals.isRawIP(event)
-                if let hit = intel?.check(event) { event.knownBad = hit.summary }
+                if let hit = intel?.check(event) { event.knownBad = hit.summary; event.listedOnly = !hit.confident }
             } else if event.kind == .exec {
                 intel?.checkLaunch(event)       // untrusted programs: SHA-256 against the file lists
             }
             let stages = stories.ingest(event, decidedSafe: signatures.markedSafeByYou(event),
-                                        session: event.session > 0 ? sessions.session(event.session)?.name : nil)
+                                        session: event.session > 0 ? sessions.session(event.session)?.name : nil,
+                                        routine: signatures.isRoutine(event))
             let status = signatures.status(for: event)
             hold?.consider(event, stages: stages, status: status)
             protection?.consider(&event, status: status)

@@ -297,8 +297,8 @@ struct StoryDetailView: View {
             }
             Spacer()
             if !story.dismissed { Button("Dismiss", action: dismiss).buttonStyle(.glass) }
-            Button("Always Ignore This Chain", action: ignore).buttonStyle(.glass)
-                .help("Never alert again for \(story.originName) with these stages")
+            Button("Not a Threat", action: ignore).buttonStyle(.glass)
+                .help("These exact signs never count again: this program with this destination, folder or command")
         }
         .controlSize(.regular)
         // A floating glass bar, as the AI bar in Watch Closely: the chain scrolls under it.
@@ -406,6 +406,10 @@ private struct TimelineRow: View {
             }
             if case .step(let s) = item, !s.note.isEmpty {
                 Label(s.note, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+            }
+            if case .step(let s) = item, s.routine == true {
+                Label("Everyday on this Mac, not counted", systemImage: "clock.arrow.circlepath")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .opacity(isStep ? 1 : 0.7)

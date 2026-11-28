@@ -488,7 +488,7 @@ private struct DetectionPane: View {
                         if domains.isLearning { Button("End Now") { domains.endLearning(); ui.refresh += 1 } }
                     }
                 }
-                LabeledContent("Ignored stories") {
+                LabeledContent("Marked not a threat") {
                     HStack {
                         Text("\(stories.ignoredCount)").foregroundStyle(.secondary).monospacedDigit()
                         Button("Reset") { stories.clearIgnored(); ui.refresh += 1 }
@@ -768,7 +768,8 @@ private struct ThreatSections: View {
             } footer: {
                 Footnote("Lists are downloaded once a day and every connection's domain and IP, and the SHA-256 of new "
                          + "unsigned or downloaded programs (with the key), are checked on this Mac. Nothing about your Mac "
-                         + "is sent. A match is a Dangerous story, a red KNOWN BAD tag and risk 100 for the domain.")
+                         + "is sent. A match is a red KNOWN BAD tag and risk 100 for the domain. A malware tracker's match "
+                         + "is a Dangerous story by itself, a HaGeZi or address-only match needs one more sign.")
             }
             Section {
                 Toggle("Watch for exploited macOS vulnerabilities", isOn: $intel.vulnerabilitiesEnabled)

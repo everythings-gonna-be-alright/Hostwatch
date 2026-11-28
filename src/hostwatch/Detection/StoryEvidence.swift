@@ -9,16 +9,25 @@ extension StoryStage {
     /// Detail, not evidence: shown in the chain, never what makes it a story or adds to its score. Every connection
     /// is one, so it was a free second sign beside whatever a connection itself proved.
     var isContext: Bool { self == .network }
+
+    /// Signs the baseline can make everyday (ADR 0023). Never: a threat match, a swapped or unsigned binary, an
+    /// autostart write or quarantine removal, which stay evidence however often they happen.
+    var discountable: Bool {
+        ![.knownBad, .listed, .swappedBinary, .unsignedCode, .persistence, .unquarantine].contains(self)
+    }
 }
 
 enum StoryEvidence {
     /// Two signs from two different events: one event (a listed connection, a launch) is one piece of evidence,
     /// however many stages it shows.
     static func independent(_ steps: [StoryStep]) -> Bool {
-        let signs = steps.filter { !$0.stage.isContext }.map { (event: eventKey($0), stage: $0.stage) }
+        let signs = steps.filter(counts).map { (event: eventKey($0), stage: $0.stage) }
         for a in signs where signs.contains(where: { $0.stage != a.stage && $0.event != a.event }) { return true }
         return false
     }
+
+    /// Evidence: not context, and not a weaker sign the baseline says is everyday.
+    static func counts(_ s: StoryStep) -> Bool { !s.stage.isContext && s.routine != true }
 
     static func eventKey(_ s: StoryStep) -> String { "\(s.kind)|\(s.pid)|\(s.target)|\(s.time)" }
 
@@ -30,10 +39,28 @@ enum StoryEvidence {
 
     /// The listed destinations in a story, by program: the same listing for the same program is one story a day.
     static func threatKeys(_ story: Story) -> Set<String> {
-        Set(story.steps.filter { $0.stage == .knownBad }.map { s in
+        Set(story.steps.filter { $0.stage == .knownBad || $0.stage == .listed }.map { s in
             let dest = s.host.isEmpty ? s.target.split(separator: ":").dropLast().joined(separator: ":") : s.host.lowercased()
             return "\(s.name)|\(dest.isEmpty ? s.target : dest)"
         })
+    }
+
+    // MARK: Not a threat
+
+    static let exceptionsKey = "storyExceptions"
+
+    /// One exact sign: its stage, the program, and the destination (net), folder (file), command (inline code) or
+    /// parent (other launches). Marking a story Not a Threat records these, so the same thing never counts again,
+    /// while the same program doing anything else, or another program doing this, still does.
+    static func exceptionKey(_ s: StoryStep) -> String {
+        let program = s.kind == .exec ? s.target : s.proc
+        let what: String
+        switch s.kind {
+        case .file: what = (s.target as NSString).deletingLastPathComponent
+        case .net: what = s.host.isEmpty ? s.target.split(separator: ":").dropLast().joined(separator: ":") : s.host.lowercased()
+        case .exec: what = s.stage == .encodedCommand ? commandKey(s.args) : s.parent
+        }
+        return "\(s.stage.rawValue)|\(s.name)|\(program)|\(what)"
     }
 
     // MARK: Inline code
@@ -123,5 +150,13 @@ extension StoryEngine {
             lines.append("- \(s.time) [\(s.stage.title)] \(s.name) pid \(s.pid) ← \(s.ppid): \(s.detail)  (\(s.note))")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Not a threat: this story's exact signs never count again (`StoryEvidence.exceptionKey`), and it goes.
+    func notAThreat(_ id: UUID) {
+        guard let story = stories.first(where: { $0.id == id }) else { return }
+        exceptions.formUnion(story.steps.filter { !$0.stage.isContext }.map(StoryEvidence.exceptionKey))
+        if persistent { UserDefaults.standard.set(Array(exceptions.sorted().suffix(5000)), forKey: StoryEvidence.exceptionsKey) }
+        delete(id)
     }
 }

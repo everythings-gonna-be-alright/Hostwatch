@@ -473,7 +473,7 @@ extension AppDelegate {
         window.contentView = NSHostingView(rootView: StoryDetailView(
             details: details, actions: actions,
             dismiss: { [weak self, weak window] in self?.stories.dismiss(story.id); window?.close() },
-            ignore: { [weak self, weak window] in self?.stories.ignoreAlways(story.id); window?.close() }))
+            ignore: { [weak self, weak window] in self?.stories.notAThreat(story.id); window?.close() }))
         window.center()
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
         let closing = ObjectIdentifier(window)            // which window: the notification itself stays on its side

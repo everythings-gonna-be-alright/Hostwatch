@@ -22,6 +22,16 @@ struct ThreatHit: Codable, Equatable, Identifiable {
     var retro = false            // found when the lists were updated, in what was seen before
 
     var summary: String { "\(source): \(detail)" }
+
+    /// Proof, not just a sign (ADR 0023): a known malware file, a malware tracker's exact domain, or a Feodo Tracker
+    /// address (dedicated botnet servers, curated). HaGeZi's broad list and other address-only matches are a sign.
+    var confident: Bool {
+        switch kind {
+        case .file: return true
+        case .domain: return source != ThreatIntel.Feed.hagezi.title
+        case .ip: return source == ThreatIntel.Feed.feodo.title
+        }
+    }
 }
 
 /// An actively exploited Apple vulnerability (CISA KEV).

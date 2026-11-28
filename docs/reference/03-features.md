@@ -308,7 +308,7 @@ On-Device*.
 
 - your decisions (patterns *you* marked), with secrets masked
 - your existing rules
-- the story chains you always ignore.
+- the story chains you muted and the signs you marked *Not a Threat*.
 
 Claude's own verdicts are deliberately not used, so rules don't amplify the AI.
 
@@ -421,6 +421,8 @@ process tree is one program and the processes it started.
 | New domain | first contact with a domain after the baseline (see New domains) | 2 |
 | Beaconing | steady-interval contacts from an untrusted program or to a raw IP/new domain | 3 |
 | Raw-IP connection | public IP, unusual port, no DNS answer, untrusted program | 2 |
+| On a blocklist | a HaGeZi match, or an address-only match other than Feodo Tracker's (see Threat lists) | 3 |
+| Known malware | a malware tracker's exact domain, a Feodo Tracker address, or a known malware file | 8 |
 
 **Where you see stories:**
 
@@ -431,7 +433,9 @@ process tree is one program and the processes it started.
 
 **What you can do in a story:**
 
-- **Mute:** **Always Ignore This Chain** mutes the same origin + set of stages.
+- **Not a Threat:** the story goes, and its exact signs never count again: this program with this destination, folder
+  or command. The same program doing anything else, or another program doing this, still counts. Settings ▸
+  Detection ▸ *Marked not a threat* forgets them all.
 - **Delete:** the trash button deletes it.
 - **Related:** *Possibly related (within 30 min, no direct link)* lists stories that may belong to the same attack.
 
@@ -444,6 +448,10 @@ process tree is one program and the processes it started.
 - **Your own terminal/IDE:** trees started there need score ≥ 6 with a strong stage. So `go run` from `$TMPDIR` plus
   `curl` stays quiet.
 - **Dangerous:** at score ≥ 8, or autostart + network, or quarantine removal + running the file.
+- **Everyday signs don't count:** a pattern seen for three days or more and at least ten times, and not in doubt (not
+  Suspicious or Dangerous, not sent back to you), is everyday on this Mac. Its weaker signs are shown in the chain as
+  *Everyday on this Mac, not counted*. Threat matches, swapped or unsigned binaries, autostart writes and quarantine
+  removal always count.
 - **Once a day:** the same threat-list match for the same program joins the story already told that day, quietly.
 
 **How trees are formed:** each app action, launchd job, or command typed in a terminal is its own tree. Its children
@@ -470,7 +478,7 @@ Double-click a story (or **Show Chain**) to read it like a timeline: what ran, w
   from history, or from what's still in memory when history is off. These events are dimmed between the suspicious
   steps.
 - **Per step:** double-click or right-click a step to ask AI about it, show it in the timeline, or copy it.
-- **At the bottom:** *Ask AI About This Story*, *Show in Timeline*, *Dismiss* and *Always Ignore This Chain*.
+- **At the bottom:** *Ask AI About This Story*, *Show in Timeline*, *Dismiss* and *Not a Threat*.
 
 ### Watches the network
 
@@ -1031,9 +1039,16 @@ C2 means "command and control": servers that attackers use to steer infected mac
   temp folder. The program is hashed (SHA-256, once per file version). With the key, the hash is checked against the
   file lists.
 
-**What a match does.** A match is the story stage *Known malware*. A malware tracker's match (ThreatFox, Feodo
-Tracker, MalwareBazaar) makes a story on its own and makes it **Dangerous**, even for a pattern you marked Safe. A
-HaGeZi match is broader (ad networks and trackers too), so it needs one more sign from another event.
+**What a match does.** How sure a match is decides its story stage:
+
+- **Known malware** (proof): a known malware file, a malware tracker's exact domain (ThreatFox, MalwareBazaar), or a
+  Feodo Tracker address (dedicated botnet servers). It makes a story on its own and makes it **Dangerous**, even for
+  a pattern you marked Safe.
+- **On a blocklist** (a sign): any HaGeZi match (its list is broad, ad networks and trackers too) and any other
+  address-only match (one address serves many sites). It needs one more sign from another event, and a pattern you
+  marked Safe stays quiet.
+
+Either way the firewall blocks the destination.
 
 - The row gets a red `KNOWN BAD` tag in Events and the HUD.
 - The domain gets a red badge and risk score 100, with the reason.

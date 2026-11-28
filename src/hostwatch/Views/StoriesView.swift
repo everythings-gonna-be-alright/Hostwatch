@@ -58,7 +58,7 @@ struct StoriesView: View {
             Text("\(stories.activeCount) open · \(stories.stories.count) total")
             if stories.ignoredCount > 0 {
                 Text("·")
-                Button("Reset \(stories.ignoredCount) ignored chains") { stories.clearIgnored() }
+                Button("Forget Not a Threat (\(stories.ignoredCount))") { stories.clearIgnored() }
                     .buttonStyle(.glass).controlSize(.small)
             }
             Spacer()
@@ -219,8 +219,8 @@ private struct StoryCard: View {
                 .help("Open Time Travel at this story, showing only its own events")
             }
             Spacer(minLength: 8)
-            Button { stories.ignoreAlways(story.id) } label: { Label("Always Ignore", systemImage: "bell.slash") }
-                .help("Never alert again for \(story.originName) with these stages")
+            Button { stories.notAThreat(story.id) } label: { Label("Not a Threat", systemImage: "checkmark.shield") }
+                .help("These exact signs never count again: this program with this destination, folder or command")
             Button(role: .destructive) { stories.delete(story.id) } label: { Label("Delete", systemImage: "trash") }
                 .help("Remove this story from the list")
         }

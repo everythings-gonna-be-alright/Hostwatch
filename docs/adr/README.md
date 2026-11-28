@@ -23,3 +23,4 @@ Add one when a change settles a question that the next person (or AI) would othe
 | [0020](0020-firewall-rules-per-app.md) | Firewall rules per app (its own Everywhere and destinations), next to the general ones |
 | [0021](0021-file-rules-per-app.md) | File rules per app (its own Every protected place and places), next to the general ones |
 | [0022](0022-story-evidence.md) | What counts as evidence in a story: no list matches on local or CDN addresses, two signs from two events |
+| [0023](0023-story-confidence.md) | How sure a sign is: blocklist matches are signs not proof, everyday signs don't count, Not a Threat remembers exact signs |
