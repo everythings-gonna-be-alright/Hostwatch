@@ -2835,7 +2835,7 @@ one does, and when to pick it.
 | Asks you, at your Mac | Yes | – | – | – |
 | What it sees stays on your Mac | Yes | – | – | – |
 | Firewall that asks you first | Yes | – | – | – |
-| Manages many Macs from one place | – | Yes | Yes | Yes |
+| Manages many Macs from one place | Planned | Yes | Yes | Yes |
 | USB and device controls | – | Yes | Yes | Yes |
 | Remote investigation by a security team | – | – | Yes | Yes |
 | Price for one Mac | Free | $12.50 a month | From $59.99 a year | By subscription |
