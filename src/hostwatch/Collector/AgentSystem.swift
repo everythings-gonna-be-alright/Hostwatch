@@ -441,6 +441,7 @@ extension Agent {
                 if let b = cfg["block"] as? [String: Any] { blocks.set(b); return }
                 if let h = cfg["hold"] as? [String: Any] { hold.hold(h, from: client); return }
                 if let g = cfg["guard"] as? [String: Any] { guardian.configure(g, from: client); return }
+                if let p = cfg["packages"] as? [String: Any] { guardian.packages.configure(p); guardian.applyClients(); return }
                 if let a = cfg["guard_answer"] as? [String: Any] { guardian.answer(a); return }
                 if let w = cfg["guard_wait"] as? [String: Any] { guardian.wait(w); return }
                 if let r = cfg["release"] as? [String: Any] { hold.release(r, from: client); return }

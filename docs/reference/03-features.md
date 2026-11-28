@@ -1137,8 +1137,24 @@ Hostwatch checks every project on your Mac against the list of known malicious p
 - **What to do:** upgrade or remove the package. If its code ran, change the keys and tokens this Mac holds, from
   another computer.
 
-The check only finds what is already listed. Stopping a listed package's install scripts and limiting what install
-scripts may do are planned (ADR 0024).
+**Stopping installs.** Packages has the modes of the other areas. Watch only finds. In **Ask** (the default),
+Hostwatch also stops a listed package before its code runs:
+
+- **Install scripts:** npm, pnpm, yarn and bun run a package's `preinstall`, `install`, `postinstall` and `prepare`
+  scripts, Cargo a crate's build script, pip a source package's build, RubyGems a gem's `extconf.rb`. Each is held at
+  launch, and a listed package's script is denied. The install fails with an error, and a Dangerous story says which
+  package and why.
+- **Named installs:** `npm install x`, `npx x`, `pnpm dlx x`, `bunx x`, `pip install x`, `uvx x`, `pipx run x`,
+  `cargo add x`, `gem install x`, `go get x` with a listed name are denied before the package manager starts. Without
+  a version on the command line, only a package listed for every version is stopped (most are).
+- **Claude Code:** with the Claude Code guard on, the same commands are blocked before Claude runs them.
+- **Strict** also moves a listed npm package that arrived anyway out of the project's `node_modules`, into
+  quarantine. Packages ▸ Quarantined puts it back or deletes it. For other languages the story gives the fix.
+
+Stopping needs Endpoint Security, like launch and file protection. Protection ▸ Packages lists what was stopped.
+
+The check only knows what is already listed. Limiting what any install script may do, listed or not, is planned
+(ADR 0024).
 
 ### AI when you want it
 

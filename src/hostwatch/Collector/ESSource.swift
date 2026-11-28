@@ -265,10 +265,16 @@ final class ESAuthClient: @unchecked Sendable {
             var args: [String] = []
             let count = min(es_exec_arg_count(&exec), 256)
             for i in 0..<count { args.append(ESSource.string(es_exec_arg(&exec, i))) }
-            request = HoldRequest(what: .exec, path: ESSource.string(target.executable.pointee.path),
-                                   pid: Int(target.audit_token.val.5), ppid: Int(target.ppid),
-                                   parent: ESSource.string(caller.executable.pointee.path),
-                                   args: Agent.formatArgs(args), uid: uid, seconds: seconds)
+            let path = ESSource.string(target.executable.pointee.path)
+            var r = HoldRequest(what: .exec, path: path, pid: Int(target.audit_token.val.5), ppid: Int(target.ppid),
+                                parent: ESSource.string(caller.executable.pointee.path),
+                                args: Agent.formatArgs(args), uid: uid, seconds: seconds)
+            if g.packages.isEnforcing {
+                let cwd = m.version >= 3 ? ESSource.string(exec.cwd.pointee.path) : ""
+                r.installs = InstallContext.targets(path: path, args: args, env: Self.packageEnv(&exec), cwd: cwd,
+                                                    read: Self.readHead)
+            }
+            request = r
         case .open:
             let flags = Int(m.event.open.fflag)
             request = HoldRequest(what: .open, path: ESSource.string(caller.executable.pointee.path),
@@ -293,6 +299,29 @@ final class ESAuthClient: @unchecked Sendable {
         // Last resort, whatever happens in the guard: let it go just before macOS's deadline.
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + max(0, seconds - 0.4)) { respond(true) }
         g.request(request, respond: respond)
+    }
+
+    /// The few environment variables an install script carries its package in. Every launch on the Mac passes here
+    /// while packages are guarded, so a variable is copied only when its first byte could start one of them.
+    private static func packageEnv(_ exec: inout es_event_exec_t) -> [String: String] {
+        var env: [String: String] = [:]
+        let count = min(es_exec_env_count(&exec), 1024)
+        for i in 0..<count {
+            let token = es_exec_env(&exec, i)
+            guard token.length > 8, let first = token.data?.pointee, first == 0x6E || first == 0x43 else { continue }  // n, C
+            let pair = ESSource.string(token)
+            guard let eq = pair.firstIndex(of: "=") else { continue }
+            let name = String(pair[..<eq])
+            if InstallContext.envNames.contains(name) { env[name] = String(pair[pair.index(after: eq)...]) }
+        }
+        return env
+    }
+
+    /// The start of a small file (a source package's PKG-INFO), read as root inside the hold: 8 KB at most.
+    private static func readHead(_ path: String) -> String? {
+        guard let h = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? h.close() }
+        return (try? h.read(upToCount: 8192)).map { String(decoding: $0, as: UTF8.self) }
     }
 
     /// One retained message, answered the first time only, then released.

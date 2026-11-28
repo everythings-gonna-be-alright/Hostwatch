@@ -18,6 +18,7 @@ struct HoldRequest: Sendable {
     var mode = "r"
     var uid: uid_t
     var seconds: TimeInterval   // until macOS's deadline
+    var installs: [InstallTarget] = []   // launches: the packages it installs or runs (read only while packages are guarded)
 
     /// The same launch or open again: what an answer may be reused for (exact, so `curl a` never answers `curl b`).
     var key: String {
@@ -147,6 +148,7 @@ final class AgentGuard: @unchecked Sendable {
     var openPrefixes: [String] = []
     var reported = ("", "", "")
     private(set) var config = HoldConfig()
+    let packages = PackageHold()
     private weak var decider: AgentClient?
     private var deciderUID: uid_t?
     private var pending: [Int: Pending] = [:]
@@ -181,6 +183,15 @@ final class AgentGuard: @unchecked Sendable {
 
     /// A held launch or open: `respond` is called exactly once, on some thread, before macOS's deadline.
     func request(_ r: HoldRequest, respond: @escaping @Sendable (Bool) -> Void) {
+        if !r.installs.isEmpty, !ours(r.pid), !ours(r.ppid), let (target, record) = packages.listedTarget(r.installs) {
+            lock.lock(); let client = decider; lock.unlock()
+            respond(false)
+            send(client, Self.line("guard_package", r, [
+                "ecosystem": .str(target.package.ecosystem.osv), "package": .str(target.package.name),
+                "version": .str(target.package.version), "how": .str(target.how.rawValue),
+                "detail": .str(target.detail), "malware": .str(record.id)]))
+            return
+        }
         lock.lock()
         if let (allow, reason) = config.local(r, userUID: deciderUID, ours: ours) {
             let client = decider
@@ -292,7 +303,7 @@ extension AgentGuard {
         clientsLock.lock()
         var state = esState, detail = esDetail
         if state == "available" {
-            let wantExec = deciding && cfg.launches
+            let wantExec = deciding && (cfg.launches || packages.isEnforcing)
             let prefixes = deciding ? cfg.prefixes : []
             if !wantExec { execClient?.stop(); execClient = nil }
             if prefixes.isEmpty || prefixes != openPrefixes { openClient?.stop(); openClient = nil; openPrefixes = [] }

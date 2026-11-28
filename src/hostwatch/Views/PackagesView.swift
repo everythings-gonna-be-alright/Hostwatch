@@ -9,10 +9,10 @@ struct PackagesPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             AreaHero(symbol: "shippingbox.fill", title: "Packages", accent: AreaAccent.found,
-                     state: AreaState(paused: false, off: !packages.enabled, enforces: false),
+                     state: AreaState(paused: false, off: !packages.enabled, enforces: packages.mode.enforces),
                      sentence: sentence, facts: facts) {
-                Toggle("Check packages", isOn: $packages.enabled).toggleStyle(.switch).controlSize(.small).labelsHidden()
-                    .help("Check your projects for known malicious packages")
+                AreaModePicker(title: "Packages", mode: $packages.mode, modes: ProtectionMode.allCases.map { ($0, $0.short) })
+                    .help(packages.mode.packagesHelp)
                 Button { packages.scanNow() } label: { Label("Check Now", systemImage: "arrow.clockwise") }
                     .buttonStyle(.glass).controlSize(.small).disabled(!packages.enabled || !packages.busy.isEmpty)
             } notice: {
@@ -25,7 +25,9 @@ struct PackagesPage: View {
                     Label(packages.lastError, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if !packages.stops.isEmpty { stopped }
             findings
+            if !packages.quarantined.isEmpty { quarantine }
             lists
             folders
         }
@@ -34,9 +36,12 @@ struct PackagesPage: View {
     private var sentence: String {
         guard packages.enabled else { return "Your projects aren't checked for malicious packages." }
         if packages.lists.isEmpty { return "Your projects are checked once the lists for their languages are downloaded." }
-        return packages.findings.isEmpty
-            ? "No known malicious package in your projects. They are checked again when a lockfile changes or a list grows."
-            : "Malicious packages are installed in your projects. Remove or upgrade them, then change any keys this Mac holds."
+        if !packages.findings.isEmpty {
+            return "Malicious packages are installed in your projects. Remove or upgrade them, then change any keys this Mac holds."
+        }
+        return packages.mode.enforces
+            ? "No known malicious package in your projects. Installing one, or running its install script, is stopped."
+            : "No known malicious package in your projects. They are checked again when a lockfile changes or a list grows."
     }
 
     private var facts: [StatusFact] {
@@ -90,6 +95,61 @@ struct PackagesPage: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .protectionGlass(14)
+    }
+
+    // MARK: Stopped and quarantined
+
+    private var stopped: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Stopped").font(.headline)
+            ForEach(packages.stops.prefix(20)) { stop in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "hand.raised.fill").foregroundStyle(.red).frame(width: 22)
+                        .accessibilityLabel("Stopped")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(stop.sentence).fontWeight(.medium)
+                        Text("\(stop.package.ecosystem.title), \(stop.date.formatted(.relative(presentation: .named)))")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !stop.args.isEmpty {
+                            Text(stop.args).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle).help(stop.args)
+                        }
+                    }
+                    Spacer()
+                    if let url = stop.advisory {
+                        Button("Advisory") { NSWorkspace.shared.open(url) }.controlSize(.small)
+                    }
+                    Button("Dismiss") { packages.dismissStop(stop) }.controlSize(.small)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .protectionGlass(14)
+            }
+        }
+    }
+
+    private var quarantine: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Quarantined").font(.headline)
+            Text("Strict moved these out of your projects. Restore one only if the advisory was withdrawn.")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(packages.quarantined) { q in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "archivebox.fill").foregroundStyle(.secondary).frame(width: 22)
+                        .accessibilityLabel("Quarantined")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(q.package.label).font(.body.monospaced()).fontWeight(.medium)
+                        Text(q.original).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle).help(q.original)
+                    }
+                    Spacer()
+                    Button("Restore") { packages.restore(q) }.controlSize(.small)
+                        .help("Put it back in \(PackageScan.projectName(q.original))")
+                    Button("Delete") { packages.deleteQuarantined(q) }.controlSize(.small)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .protectionGlass(14)
+            }
+        }
     }
 
     // MARK: Lists and folders
@@ -172,6 +232,18 @@ struct PackagesRailButton: View {
     var body: some View {
         RailButton(symbol: "shippingbox", title: "Packages", badge: packages.findings.count, selected: page == .packages) {
             open(.packages)
+        }
+    }
+}
+
+extension ProtectionMode {
+    /// What each mode does on the Packages page.
+    var packagesHelp: String {
+        switch self {
+        case .off: "Off: projects aren't checked"
+        case .watch: "Watch: find malicious packages in your projects, stop nothing"
+        case .ask: "Ask: also stop installing a listed package and its install scripts"
+        case .strict: "Strict: also move a listed package that arrived anyway to quarantine"
         }
     }
 }

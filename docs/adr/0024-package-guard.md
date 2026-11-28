@@ -1,6 +1,6 @@
 # 0024 Package guard: know the bad packages, stop their scripts, contain the rest
 
-**Status.** Accepted. Layers 1 and 2 are built (Protection ▸ Packages). Layers 3 and 4 are next.
+**Status.** Accepted. Layers 1, 2 and 3 are built (Protection ▸ Packages). Layer 4 is next.
 
 ## Context
 
@@ -58,6 +58,27 @@ Four layers. Each works without the ones after it.
   through which dependency), and a fix: the safe version, or remove it.
 
 ### 3. Stop: deny what is known bad, before it runs
+
+Built as below, with these choices (28 Nov 2026):
+- **The collector decides alone.** The app turns its indexes into `ListedPackages`: per ecosystem, the sorted 64-bit
+  FNV-1a hashes of names listed for every version, plus the few records that name versions. On one Mac: 241,000
+  names, 3.4 MB on the socket once (and on every reconnect), built in 0.35 s, 0.13 µs a lookup. The collector can't
+  read the vault, and a round trip to the app per script would let a busy app's silence through (`quickAnswer`).
+  A hash collision would stop an unlisted package: at this size, about one chance in 10^14 per lookup.
+- **What is an install**: `InstallContext`, pure. Scripts by environment (`npm_lifecycle_event` among preinstall,
+  install, postinstall, prepare, with `npm_package_name`; `CARGO_PKG_NAME` only for a `build-script-*`), pip's build
+  backend by `PKG-INFO` in its working folder, a gem by its `/gems/<name>-<version>/ext` folder. Named installs by
+  the manager among the first words and its verb. The environment is read only while packages are guarded, and a
+  variable is copied only when its first byte could start a wanted name.
+- **Ask and Strict hold launches for this even when Launches is Off or Watch**: the exec client runs, and anything
+  that isn't a listed install is answered at once by the existing local rule. Watch holds nothing: the lockfile
+  scan already tells you, and a hold only to watch would put every launch through the client for nothing.
+- **Unknown versions**: `npm install x` names no version. Only an every-version record covers it (209,000 of npm's
+  225,000 records are).
+- **Quarantine is npm only**: a project's `node_modules/<name>` and one level of nesting, when the version in its
+  `package.json` matches. PyPI, Go and Cargo keep packages in shared places (site-packages, module caches), where
+  moving one breaks other projects: the story gives the fix. Quarantined folders are your files, moved as they were,
+  not Hostwatch data: they are not sealed.
 
 - **Install scripts.** Package managers start each script as a new process: npm, pnpm, yarn and bun run
   `sh -c <script>` with `npm_package_name`, `npm_package_version` and `npm_lifecycle_event` in its environment, pip
@@ -136,6 +157,4 @@ values, tested with fixtures in `tests/corpus/packages/`.
 2. Containment covers `npx`, `uvx`, `pipx run`, `pnpm dlx`, `yarn dlx` and `bunx` too: they run a package at once.
 3. The registry age check comes as an opt-in setting, with layer 4.
 
-Layer 3 needs the index in the collector, for lookups within the Endpoint Security deadline. Reading 9 MB per
-launch won't do: the collector keeps a set of the names of listed packages (only the ones on this Mac's lists) and
-reads a record only on a name match.
+Layer 3 needs the lists in the collector, for lookups within the Endpoint Security deadline: name hashes, as above.

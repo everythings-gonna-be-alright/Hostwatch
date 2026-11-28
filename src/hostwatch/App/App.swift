@@ -232,6 +232,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                                 note: "\(f.package.label) (\(f.package.ecosystem.title)) is on the malicious-package list (\(f.malwareID))",
                                 target: f.lockfile, severity: .dangerous, kind: .file)
         }
+        packages.onCollectorConfig = { [weak self] config in self?.model.packageConfig = config }
+        model.onPackageBlock = { [weak self] obj in
+            guard let self, let stop = self.packages.stopped(obj) else { return }
+            let listed = stop.malwareID.isEmpty ? "the malicious-package list" : "the malicious-package list (\(stop.malwareID))"
+            self.stories.raise(.maliciousPackage, origin: stop.package.name,
+                               note: "\(stop.sentence) (\(stop.package.ecosystem.title)). It is on \(listed).",
+                               target: stop.args.isEmpty ? stop.program : stop.args, severity: .dangerous, kind: .exec)
+        }
         if !AppPaths.isDemo {
             intel.start()
             packages.start()

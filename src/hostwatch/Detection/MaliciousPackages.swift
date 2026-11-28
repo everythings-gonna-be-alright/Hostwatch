@@ -47,8 +47,10 @@ struct MalwareRecord: Equatable, Sendable {
     var versions: Set<String> = []
     var ranges: [Range] = []
 
+    /// An empty version is unknown (`npm install x`): only a record for every version covers it.
     func covers(_ version: String) -> Bool {
         if allVersions || versions.contains(version) { return true }
+        if version.isEmpty { return false }
         let v = version.hasPrefix("v") ? String(version.dropFirst()) : version
         if versions.contains(v) { return true }
         return ranges.contains { r in
